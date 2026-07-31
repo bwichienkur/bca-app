@@ -1,4 +1,4 @@
-import type { UserPreferences } from "./types";
+import type { ReportTab, UserPreferences } from "./types";
 
 export const LMS_BASE = "https://lms.fargorate.com";
 
@@ -21,12 +21,12 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
 };
 
 export const PREFERENCES_STORAGE_KEY = "tableside.preferences.v1";
+export const LINEUP_PRESETS_STORAGE_KEY = "tableside.lineups.v1";
 
-export const REPORT_TABS = [
-  { id: "teams", label: "Teams" },
-  { id: "players", label: "Players" },
-  { id: "players-by-team", label: "By Team" },
-  { id: "player-list", label: "Ratings" },
-  { id: "schedule", label: "Schedule" },
-  { id: "handicap", label: "Handicap" },
-] as const;
+export const REPORT_TABS: { id: ReportTab; label: string; hint: string }[] = [
+  { id: "teams", label: "Teams", hint: "Standings" },
+  { id: "players", label: "Players", hint: "Division leaders" },
+  { id: "player-list", label: "Ratings", hint: "Fargo list" },
+  { id: "schedule", label: "Schedule", hint: "By team" },
+  { id: "handicap", label: "Handicap", hint: "This week" },
+];

@@ -1,23 +1,29 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  DEFAULT_PLAYERS_PER_TEAM,
-} from "@/lib/constants";
+import { DEFAULT_PLAYERS_PER_TEAM } from "@/lib/constants";
 import {
   buildDefaultFivePlayerFormat,
   calculateRoundBasedHandicaps,
   type ParsedMatchFormat,
   type RoundHandicapResult,
 } from "@/lib/handicap";
+import { findWeeklyMatchupForTeam } from "@/lib/matchups";
+import {
+  deleteLineupPreset,
+  loadLineupPresets,
+  upsertLineupPreset,
+} from "@/lib/preferences";
 import type {
   CalculatorMatchup,
   DivisionTeam,
+  LineupPreset,
   RosterPlayer,
   UserPreferences,
 } from "@/lib/types";
 import { EmptyState } from "./EmptyState";
 import { LoadingState } from "./LoadingState";
+import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
 type CalculatorPayload = {
   format: {
@@ -38,87 +44,58 @@ type HandicapCalculatorProps = {
   divisionId: string;
   divisionName: string;
   prefs: UserPreferences;
-  onSaveIdentity: (identity: {
-    playerId: string;
-    playerName: string;
-    teamId: string;
-    teamName: string;
-  }) => void;
+  onSelectTeam: (team: { teamId: string; teamName: string }) => void;
 };
 
 function playerLabel(player: RosterPlayer): string {
   return `${player.firstName} ${player.lastName}`.trim();
 }
 
-function findWeeklyMatchup(
-  matchups: CalculatorMatchup[],
-  teamId: string,
-): CalculatorMatchup | null {
-  if (!matchups.length) return null;
-  const today = new Date();
-  const todayStart = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  ).getTime();
-
-  const mine = matchups.filter(
-    (match) => match.homeTeamId === teamId || match.awayTeamId === teamId,
-  );
-  if (!mine.length) return null;
-
-  const withTime = mine.map((match) => ({
-    match,
-    time: new Date(match.date).getTime(),
-  }));
-
-  const upcoming = withTime
-    .filter((item) => !Number.isNaN(item.time) && item.time >= todayStart)
-    .sort((a, b) => a.time - b.time);
-  if (upcoming[0]) return upcoming[0].match;
-
-  const past = withTime
-    .filter((item) => !Number.isNaN(item.time) && item.time < todayStart)
-    .sort((a, b) => b.time - a.time);
-  return past[0]?.match ?? mine[0];
-}
-
-function defaultLineup(
+function defaultTopLineup(
   team: DivisionTeam | null,
   slots: number,
-): Array<RosterPlayer | null> {
-  if (!team) return Array.from({ length: slots }, () => null);
-  const sorted = [...team.players].sort(
-    (a, b) => b.fargoRating - a.fargoRating,
-  );
-  const picked = sorted.slice(0, slots);
-  return Array.from({ length: slots }, (_, index) => picked[index] ?? null);
+): RosterPlayer[] {
+  if (!team) return [];
+  return [...team.players]
+    .sort((a, b) => b.fargoRating - a.fargoRating)
+    .slice(0, slots);
+}
+
+function lineupFromIds(
+  team: DivisionTeam | null,
+  ids: string[],
+  slots: number,
+): RosterPlayer[] {
+  if (!team) return [];
+  const map = new Map(team.players.map((player) => [player.id, player]));
+  return ids
+    .map((id) => map.get(id))
+    .filter((player): player is RosterPlayer => Boolean(player))
+    .slice(0, slots);
 }
 
 export function HandicapCalculator({
   divisionId,
   divisionName,
   prefs,
-  onSaveIdentity,
+  onSelectTeam,
 }: HandicapCalculatorProps) {
   const [data, setData] = useState<CalculatorPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [playerQuery, setPlayerQuery] = useState("");
-  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(
-    prefs.playerId,
-  );
-  const [homeTeamId, setHomeTeamId] = useState<string | null>(null);
-  const [awayTeamId, setAwayTeamId] = useState<string | null>(null);
-  const [homeLineup, setHomeLineup] = useState<Array<RosterPlayer | null>>([]);
-  const [awayLineup, setAwayLineup] = useState<Array<RosterPlayer | null>>([]);
-  const [activeSlot, setActiveSlot] = useState<{
-    side: "home" | "away";
-    index: number;
-  } | null>(null);
-  const [weekMatchup, setWeekMatchup] = useState<CalculatorMatchup | null>(
-    null,
-  );
+  const [myTeamId, setMyTeamId] = useState<string | null>(prefs.teamId);
+  const [opponentTeamId, setOpponentTeamId] = useState<string | null>(null);
+  const [iAmHome, setIAmHome] = useState(true);
+  const [myLineup, setMyLineup] = useState<RosterPlayer[]>([]);
+  const [oppLineup, setOppLineup] = useState<RosterPlayer[]>([]);
+  const [weekMatchup, setWeekMatchup] = useState<CalculatorMatchup | null>(null);
+  const [presets, setPresets] = useState<LineupPreset[]>([]);
+  const [presetName, setPresetName] = useState("Default lineup");
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    setPresets(loadLineupPresets());
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -126,9 +103,7 @@ export function HandicapCalculator({
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(
-          `/api/divisions/${divisionId}/calculator`,
-        );
+        const response = await fetch(`/api/divisions/${divisionId}/calculator`);
         if (!response.ok) {
           const payload = (await response.json().catch(() => null)) as {
             error?: string;
@@ -139,44 +114,15 @@ export function HandicapCalculator({
         if (cancelled) return;
         setData(payload);
 
-        const slots =
-          payload.playersPerTeam ||
-          payload.parsedFormat.numOfPlayers ||
-          DEFAULT_PLAYERS_PER_TEAM;
+        const teamId =
+          prefs.teamId &&
+          payload.teams.some((team) => team.id === prefs.teamId)
+            ? prefs.teamId
+            : null;
+        setMyTeamId(teamId);
 
-        if (prefs.playerId) {
-          const me = payload.players.find(
-            (player) => player.id === prefs.playerId,
-          );
-          if (me) {
-            setSelectedPlayerId(me.id);
-            const matchup = findWeeklyMatchup(payload.matchups, me.teamId);
-            setWeekMatchup(matchup);
-            if (matchup) {
-              setHomeTeamId(matchup.homeTeamId);
-              setAwayTeamId(matchup.awayTeamId);
-              const home =
-                payload.teams.find((team) => team.id === matchup.homeTeamId) ??
-                null;
-              const away =
-                payload.teams.find((team) => team.id === matchup.awayTeamId) ??
-                null;
-              setHomeLineup(defaultLineup(home, slots));
-              setAwayLineup(defaultLineup(away, slots));
-            } else {
-              setHomeTeamId(me.teamId);
-              setHomeLineup(
-                defaultLineup(
-                  payload.teams.find((team) => team.id === me.teamId) ?? null,
-                  slots,
-                ),
-              );
-              setAwayLineup(Array.from({ length: slots }, () => null));
-            }
-          }
-        } else {
-          setHomeLineup(Array.from({ length: slots }, () => null));
-          setAwayLineup(Array.from({ length: slots }, () => null));
+        if (teamId) {
+          applyTeamMatchup(payload, teamId);
         }
       } catch (err) {
         if (!cancelled) {
@@ -190,37 +136,37 @@ export function HandicapCalculator({
     return () => {
       cancelled = true;
     };
-  }, [divisionId, prefs.playerId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [divisionId, prefs.teamId]);
 
   const slots =
     data?.playersPerTeam ||
     data?.parsedFormat.numOfPlayers ||
     DEFAULT_PLAYERS_PER_TEAM;
 
-  const homeTeam = data?.teams.find((team) => team.id === homeTeamId) ?? null;
-  const awayTeam = data?.teams.find((team) => team.id === awayTeamId) ?? null;
+  const myTeam = data?.teams.find((team) => team.id === myTeamId) ?? null;
+  const oppTeam =
+    data?.teams.find((team) => team.id === opponentTeamId) ?? null;
 
-  const filteredPlayers = useMemo(() => {
-    if (!data) return [];
-    const q = playerQuery.trim().toLowerCase();
-    const list = [...data.players].sort((a, b) =>
-      playerLabel(a).localeCompare(playerLabel(b)),
-    );
-    if (!q) return list;
-    return list.filter((player) => {
-      const label = `${playerLabel(player)} ${player.teamName}`.toLowerCase();
-      return label.includes(q);
-    });
-  }, [data, playerQuery]);
+  const teamOptions: TypeaheadOption<DivisionTeam>[] = useMemo(
+    () =>
+      (data?.teams ?? []).map((team) => ({
+        id: team.id,
+        label: team.name,
+        meta: `${team.players.length} players`,
+        value: team,
+      })),
+    [data],
+  );
+
+  const homeTeam = iAmHome ? myTeam : oppTeam;
+  const awayTeam = iAmHome ? oppTeam : myTeam;
+  const homeLineup = iAmHome ? myLineup : oppLineup;
+  const awayLineup = iAmHome ? oppLineup : myLineup;
 
   const results: RoundHandicapResult[] | null = useMemo(() => {
     if (!data || !homeTeam || !awayTeam) return null;
-    if (
-      homeLineup.some((player) => !player) ||
-      awayLineup.some((player) => !player)
-    ) {
-      return null;
-    }
+    if (homeLineup.length !== slots || awayLineup.length !== slots) return null;
 
     const format =
       data.parsedFormat.rounds.length > 0
@@ -229,95 +175,119 @@ export function HandicapCalculator({
 
     return calculateRoundBasedHandicaps({
       format,
-      teamOneRatings: homeLineup.map((player) => player!.fargoRating),
-      teamTwoRatings: awayLineup.map((player) => player!.fargoRating),
+      teamOneRatings: homeLineup.map((player) => player.fargoRating),
+      teamTwoRatings: awayLineup.map((player) => player.fargoRating),
       pointSystem: data.format.pointSystem || "10",
       handicapPercent: data.format.handicapPercent ?? 1,
       handicapCap: data.format.handicapCap ?? 50,
     });
   }, [data, homeTeam, awayTeam, homeLineup, awayLineup, slots]);
 
-  const choosePlayer = (player: RosterPlayer) => {
-    if (!data) return;
-    setSelectedPlayerId(player.id);
-    onSaveIdentity({
-      playerId: player.id,
-      playerName: playerLabel(player),
-      teamId: player.teamId,
-      teamName: player.teamName,
-    });
-
-    const matchup = findWeeklyMatchup(data.matchups, player.teamId);
+  function applyTeamMatchup(payload: CalculatorPayload, teamId: string) {
+    const team = payload.teams.find((item) => item.id === teamId) ?? null;
+    const matchup = findWeeklyMatchupForTeam(payload.matchups, teamId);
     setWeekMatchup(matchup);
+    const slotCount =
+      payload.playersPerTeam ||
+      payload.parsedFormat.numOfPlayers ||
+      DEFAULT_PLAYERS_PER_TEAM;
+
+    const saved = loadLineupPresets().find(
+      (preset) =>
+        preset.divisionId === divisionId &&
+        preset.teamId === teamId &&
+        preset.playerIds.length === slotCount,
+    );
+
     if (matchup) {
-      setHomeTeamId(matchup.homeTeamId);
-      setAwayTeamId(matchup.awayTeamId);
-      setHomeLineup(
-        defaultLineup(
-          data.teams.find((team) => team.id === matchup.homeTeamId) ?? null,
-          slots,
-        ),
+      const home = matchup.homeTeamId === teamId;
+      setIAmHome(home);
+      const opponentId = home ? matchup.awayTeamId : matchup.homeTeamId;
+      setOpponentTeamId(opponentId);
+      const opponent =
+        payload.teams.find((item) => item.id === opponentId) ?? null;
+      setMyLineup(
+        saved
+          ? lineupFromIds(team, saved.playerIds, slotCount)
+          : defaultTopLineup(team, slotCount),
       );
-      setAwayLineup(
-        defaultLineup(
-          data.teams.find((team) => team.id === matchup.awayTeamId) ?? null,
-          slots,
-        ),
-      );
+      setOppLineup(defaultTopLineup(opponent, slotCount));
     } else {
-      setHomeTeamId(player.teamId);
-      setAwayTeamId(null);
-      setHomeLineup(
-        defaultLineup(
-          data.teams.find((team) => team.id === player.teamId) ?? null,
-          slots,
-        ),
+      setOpponentTeamId(null);
+      setOppLineup([]);
+      setMyLineup(
+        saved
+          ? lineupFromIds(team, saved.playerIds, slotCount)
+          : defaultTopLineup(team, slotCount),
       );
-      setAwayLineup(Array.from({ length: slots }, () => null));
     }
-    setActiveSlot(null);
+  }
+
+  const chooseMyTeam = (team: DivisionTeam) => {
+    setMyTeamId(team.id);
+    onSelectTeam({ teamId: team.id, teamName: team.name });
+    if (data) applyTeamMatchup(data, team.id);
   };
 
-  const selectTeam = (side: "home" | "away", teamId: string) => {
-    if (!data) return;
-    if (side === "home") {
-      if (teamId === awayTeamId) setAwayTeamId(null);
-      setHomeTeamId(teamId);
-      setHomeLineup(
-        defaultLineup(
-          data.teams.find((team) => team.id === teamId) ?? null,
-          slots,
-        ),
-      );
-    } else {
-      if (teamId === homeTeamId) setHomeTeamId(null);
-      setAwayTeamId(teamId);
-      setAwayLineup(
-        defaultLineup(
-          data.teams.find((team) => team.id === teamId) ?? null,
-          slots,
-        ),
-      );
-    }
+  const chooseOpponent = (team: DivisionTeam) => {
+    setOpponentTeamId(team.id);
     setWeekMatchup(null);
-    setActiveSlot(null);
+    setOppLineup(defaultTopLineup(team, slots));
   };
 
-  const assignPlayerToSlot = (player: RosterPlayer) => {
-    if (!activeSlot) return;
-    const update = (lineup: Array<RosterPlayer | null>) => {
-      const next = [...lineup];
-      // Remove if already in another slot on same side
-      for (let i = 0; i < next.length; i += 1) {
-        if (next[i]?.id === player.id) next[i] = null;
-      }
-      next[activeSlot.index] = player;
-      return next;
-    };
-    if (activeSlot.side === "home") setHomeLineup(update);
-    else setAwayLineup(update);
-    setActiveSlot(null);
+  const togglePlayer = (
+    side: "mine" | "opp",
+    player: RosterPlayer,
+  ) => {
+    const current = side === "mine" ? myLineup : oppLineup;
+    const setter = side === "mine" ? setMyLineup : setOppLineup;
+    const exists = current.some((item) => item.id === player.id);
+    if (exists) {
+      setter(current.filter((item) => item.id !== player.id));
+      return;
+    }
+    if (current.length >= slots) return;
+    setter([...current, player]);
   };
+
+  const moveInLineup = (
+    side: "mine" | "opp",
+    from: number,
+    to: number,
+  ) => {
+    const current = side === "mine" ? [...myLineup] : [...oppLineup];
+    const setter = side === "mine" ? setMyLineup : setOppLineup;
+    if (from < 0 || to < 0 || from >= current.length || to >= current.length) {
+      return;
+    }
+    const [item] = current.splice(from, 1);
+    current.splice(to, 0, item);
+    setter(current);
+  };
+
+  const savePreset = () => {
+    if (!myTeamId || myLineup.length !== slots) return;
+    const preset: LineupPreset = {
+      id: `${myTeamId}-${Date.now()}`,
+      name: presetName.trim() || "Lineup",
+      divisionId,
+      teamId: myTeamId,
+      playerIds: myLineup.map((player) => player.id),
+      updatedAt: new Date().toISOString(),
+    };
+    setPresets(upsertLineupPreset(preset));
+  };
+
+  const applyPreset = (preset: LineupPreset) => {
+    if (!myTeam) return;
+    setMyLineup(lineupFromIds(myTeam, preset.playerIds, slots));
+    setPresetName(preset.name);
+  };
+
+  const teamPresets = presets.filter(
+    (preset) =>
+      preset.divisionId === divisionId && preset.teamId === myTeamId,
+  );
 
   if (loading) {
     return <LoadingState label="Loading teams, ratings, and format…" />;
@@ -332,248 +302,260 @@ export function HandicapCalculator({
     );
   }
 
-  const selectedPlayer =
-    data.players.find((player) => player.id === selectedPlayerId) ?? null;
-
   return (
     <div className="animate-panel space-y-5">
-      <section className="rounded-[1.4rem] border border-[var(--line)] bg-white/80 px-4 py-4 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-          FargoRate handicap
-        </p>
-        <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-          Round calculator
-        </h3>
-        <p className="mt-2 text-sm text-[var(--muted)]">
-          {divisionName} · {data.format.pointSystem || "10"}-point ·{" "}
-          {slots} players/side · {data.format.fargoRateHandicapType || "RoundBased"}
-        </p>
+      <section className="rounded-[1.4rem] border border-[var(--line)] bg-white/85 px-4 py-4 shadow-sm md:px-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
+              This week’s handicap
+            </p>
+            <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)] md:text-3xl">
+              {divisionName}
+            </h3>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              {data.format.pointSystem || "10"}-point · {slots} players/side ·{" "}
+              {data.format.fargoRateHandicapType || "RoundBased"}
+            </p>
+          </div>
+          {weekMatchup ? (
+            <div className="rounded-2xl bg-[var(--felt)] px-4 py-3 text-white md:min-w-[280px]">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-white/70">
+                Auto-matched · {weekMatchup.date}
+              </p>
+              <p className="mt-1 font-semibold">
+                {weekMatchup.homeTeamName} vs {weekMatchup.awayTeamName}
+              </p>
+              {weekMatchup.location ? (
+                <p className="mt-1 text-xs text-white/75">{weekMatchup.location}</p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </section>
 
-      <section className="space-y-3">
-        <div>
-          <h4 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
-            Who are you?
-          </h4>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Pick yourself to auto-load this week&apos;s matchup and teams.
-          </p>
-        </div>
+      <section className="grid gap-4 md:grid-cols-2">
+        <Typeahead
+          label="My team"
+          placeholder="Select your team"
+          value={
+            myTeam
+              ? {
+                  id: myTeam.id,
+                  label: myTeam.name,
+                  meta: `${myTeam.players.length} players`,
+                  value: myTeam,
+                }
+              : null
+          }
+          options={teamOptions}
+          onChange={(option) => {
+            if (option) chooseMyTeam(option.value);
+          }}
+        />
+        <Typeahead
+          label="Opponent"
+          placeholder="Select opponent"
+          value={
+            oppTeam
+              ? {
+                  id: oppTeam.id,
+                  label: oppTeam.name,
+                  meta: `${oppTeam.players.length} players`,
+                  value: oppTeam,
+                }
+              : null
+          }
+          options={teamOptions.filter((option) => option.id !== myTeamId)}
+          onChange={(option) => {
+            if (option) chooseOpponent(option.value);
+          }}
+          disabled={!myTeam}
+        />
+      </section>
 
-        {selectedPlayer ? (
-          <div className="rounded-2xl border border-[var(--felt-soft)] bg-[color-mix(in_srgb,var(--felt)_8%,white)] px-4 py-3">
-            <p className="font-medium text-[var(--ink)]">
-              {playerLabel(selectedPlayer)}
+      {myTeam && oppTeam ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIAmHome(true)}
+            className={[
+              "rounded-full px-3 py-1.5 text-xs font-semibold",
+              iAmHome
+                ? "bg-[var(--felt)] text-white"
+                : "border border-[var(--line)] bg-white text-[var(--muted)]",
+            ].join(" ")}
+          >
+            We’re home (Team One)
+          </button>
+          <button
+            type="button"
+            onClick={() => setIAmHome(false)}
+            className={[
+              "rounded-full px-3 py-1.5 text-xs font-semibold",
+              !iAmHome
+                ? "bg-[var(--felt)] text-white"
+                : "border border-[var(--line)] bg-white text-[var(--muted)]",
+            ].join(" ")}
+          >
+            We’re away (Team Two)
+          </button>
+        </div>
+      ) : null}
+
+      {!myTeam ? (
+        <EmptyState
+          title="Select your team"
+          body="Handicap starts from your team. We’ll auto-fill this week’s opponent from the schedule."
+        />
+      ) : (
+        <section className="grid gap-4 xl:grid-cols-[1.1fr_1.1fr_0.9fr]">
+          <LineupPicker
+            title={myTeam.name}
+            subtitle={`Pick ${slots} · order = H/A slots`}
+            roster={myTeam.players}
+            lineup={myLineup}
+            slots={slots}
+            onToggle={(player) => togglePlayer("mine", player)}
+            onMove={(from, to) => moveInLineup("mine", from, to)}
+            dragIndex={dragIndex}
+            setDragIndex={setDragIndex}
+          />
+          {oppTeam ? (
+            <LineupPicker
+              title={oppTeam.name}
+              subtitle={`Pick ${slots} opponents`}
+              roster={oppTeam.players}
+              lineup={oppLineup}
+              slots={slots}
+              onToggle={(player) => togglePlayer("opp", player)}
+              onMove={(from, to) => moveInLineup("opp", from, to)}
+              dragIndex={dragIndex}
+              setDragIndex={setDragIndex}
+            />
+          ) : (
+            <EmptyState
+              title="Select an opponent"
+              body="Or wait for schedule auto-match once your team is set."
+            />
+          )}
+
+          <div className="space-y-3 rounded-[1.3rem] border border-[var(--line)] bg-white/85 p-4 shadow-sm">
+            <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
+              Saved lineups
+            </h4>
+            <p className="text-sm text-[var(--muted)]">
+              Preset your {slots} for quick handicap checks before league night.
             </p>
-            <p className="mt-1 text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
-              {selectedPlayer.teamName} · Fargo {selectedPlayer.fargoRating}
-            </p>
-            {weekMatchup ? (
-              <p className="mt-2 text-sm text-[var(--felt-deep)]">
-                This week: {weekMatchup.homeTeamName} vs{" "}
-                {weekMatchup.awayTeamName}
-                <span className="text-[var(--muted)]">
-                  {" "}
-                  · {weekMatchup.date}
-                  {weekMatchup.location ? ` · ${weekMatchup.location}` : ""}
-                </span>
-              </p>
-            ) : (
-              <p className="mt-2 text-sm text-[var(--muted)]">
-                No scheduled match found for your team — pick opponents below.
-              </p>
-            )}
+            <input
+              value={presetName}
+              onChange={(event) => setPresetName(event.target.value)}
+              placeholder="Preset name"
+              className="w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--felt-soft)]"
+            />
             <button
               type="button"
-              onClick={() => {
-                setSelectedPlayerId(null);
-                setPlayerQuery("");
-              }}
-              className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--chalk)]"
+              disabled={myLineup.length !== slots}
+              onClick={savePreset}
+              className="w-full rounded-full bg-[var(--felt)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-40"
             >
-              Change player
+              Save current lineup
             </button>
-          </div>
-        ) : (
-          <>
-            <input
-              value={playerQuery}
-              onChange={(event) => setPlayerQuery(event.target.value)}
-              placeholder="Search your name"
-              className="w-full rounded-2xl border border-[var(--line)] bg-white/85 px-4 py-3 outline-none ring-[var(--felt-soft)] transition focus:ring-2"
-            />
-            <ul className="max-h-64 space-y-2 overflow-y-auto">
-              {filteredPlayers.slice(0, 40).map((player) => (
-                <li key={player.id}>
-                  <button
-                    type="button"
-                    onClick={() => choosePlayer(player)}
-                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[var(--line)] bg-white/80 px-4 py-3 text-left transition hover:border-[var(--felt-soft)]"
+            <ul className="space-y-2">
+              {teamPresets.length === 0 ? (
+                <li className="text-sm text-[var(--muted)]">No presets yet.</li>
+              ) : (
+                teamPresets.map((preset) => (
+                  <li
+                    key={preset.id}
+                    className="rounded-xl border border-[var(--line)] px-3 py-2"
                   >
-                    <div>
-                      <p className="font-medium text-[var(--ink)]">
-                        {playerLabel(player)}
-                      </p>
-                      <p className="mt-0.5 text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
-                        {player.teamName}
-                      </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => applyPreset(preset)}
+                        className="text-left text-sm font-medium text-[var(--ink)]"
+                      >
+                        {preset.name}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPresets(deleteLineupPreset(preset.id))}
+                        className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--chalk)]"
+                      >
+                        Delete
+                      </button>
                     </div>
-                    <span className="tabular-nums text-sm font-semibold text-[var(--felt)]">
-                      {player.fargoRating}
-                    </span>
-                  </button>
-                </li>
-              ))}
+                    <p className="mt-1 text-[11px] text-[var(--muted)]">
+                      {preset.playerIds.length} players ·{" "}
+                      {new Date(preset.updatedAt).toLocaleDateString()}
+                    </p>
+                  </li>
+                ))
+              )}
             </ul>
-          </>
-        )}
-      </section>
-
-      <section className="space-y-3">
-        <div>
-          <h4 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
-            Teams playing
-          </h4>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Home is Team One in the scoresheet rotation. Tap a team to select.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <TeamPickerColumn
-            label="Home"
-            selectedId={homeTeamId}
-            teams={data.teams}
-            disabledId={awayTeamId}
-            onSelect={(teamId) => selectTeam("home", teamId)}
-          />
-          <TeamPickerColumn
-            label="Away"
-            selectedId={awayTeamId}
-            teams={data.teams}
-            disabledId={homeTeamId}
-            onSelect={(teamId) => selectTeam("away", teamId)}
-          />
-        </div>
-      </section>
-
-      {homeTeam && awayTeam ? (
-        <section className="space-y-4">
-          <div>
-            <h4 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
-              Lineups ({slots} players)
-            </h4>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              Order matters — slot 1 plays as H1/A1 in round 1. Tap a slot, then
-              a roster player.
-            </p>
-          </div>
-
-          <div className="grid gap-4">
-            <LineupEditor
-              title={homeTeam.name}
-              side="home"
-              lineup={homeLineup}
-              roster={homeTeam.players}
-              activeSlot={activeSlot}
-              onActivate={(index) => setActiveSlot({ side: "home", index })}
-              onPick={assignPlayerToSlot}
-              onClear={(index) => {
-                setHomeLineup((prev) => {
-                  const next = [...prev];
-                  next[index] = null;
-                  return next;
-                });
-              }}
-            />
-            <LineupEditor
-              title={awayTeam.name}
-              side="away"
-              lineup={awayLineup}
-              roster={awayTeam.players}
-              activeSlot={activeSlot}
-              onActivate={(index) => setActiveSlot({ side: "away", index })}
-              onPick={assignPlayerToSlot}
-              onClear={(index) => {
-                setAwayLineup((prev) => {
-                  const next = [...prev];
-                  next[index] = null;
-                  return next;
-                });
-              }}
-            />
           </div>
         </section>
-      ) : null}
+      )}
 
       <section className="space-y-3">
         <h4 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
           Handicap by round
         </h4>
-        {!homeTeam || !awayTeam ? (
+        {!results ? (
           <EmptyState
-            title="Select both teams"
-            body="Choose home and away to calculate per-round handicaps."
-          />
-        ) : !results ? (
-          <EmptyState
-            title="Fill every lineup slot"
-            body={`Pick ${slots} players for each team. Ratings come from LMS.`}
+            title="Finish both lineups"
+            body={`Select exactly ${slots} players for each team. Drag to reorder slots.`}
           />
         ) : (
-          <div className="space-y-3">
+          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
             {results.map((result) => {
+              const points = Math.max(result.teamOne, result.teamTwo);
               const gets =
                 result.teamOne > 0
-                  ? homeTeam.name
+                  ? homeTeam?.name
                   : result.teamTwo > 0
-                    ? awayTeam.name
+                    ? awayTeam?.name
                     : "Even";
-              const points = Math.max(result.teamOne, result.teamTwo);
               return (
                 <article
                   key={result.round}
-                  className="rounded-2xl border border-[var(--line)] bg-white/85 px-4 py-3 shadow-sm"
+                  className="rounded-2xl border border-[var(--line)] bg-white/90 px-4 py-3 shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
                         Round {result.round}
                       </p>
                       <p className="mt-1 font-medium text-[var(--ink)]">
                         {points === 0
                           ? "No handicap"
-                          : `${gets} gets ${points} pts`}
+                          : `${gets} +${points}`}
                       </p>
                       <p className="mt-1 text-xs text-[var(--muted)]">
-                        Expected{" "}
-                        {result.teamOneExpected.toFixed(1)} –{" "}
-                        {result.teamTwoExpected.toFixed(1)}
+                        Exp {result.teamOneExpected.toFixed(1)}–{result.teamTwoExpected.toFixed(1)}
                       </p>
                     </div>
                     <div className="rounded-full bg-[var(--felt)] px-3 py-1 text-sm font-semibold text-white">
                       {points}
                     </div>
                   </div>
-                  <ul className="mt-3 space-y-1.5 border-t border-[var(--line)] pt-3">
+                  <ul className="mt-3 space-y-1 border-t border-[var(--line)] pt-3">
                     {result.matchups.map((matchup, index) => {
-                      const home =
-                        homeLineup[matchup.homeIndexes[0] - 1];
-                      const away =
-                        awayLineup[matchup.awayIndexes[0] - 1];
+                      const home = homeLineup[matchup.homeIndexes[0] - 1];
+                      const away = awayLineup[matchup.awayIndexes[0] - 1];
                       return (
                         <li
                           key={`${result.round}-${index}`}
-                          className="flex items-center justify-between gap-2 text-sm"
+                          className="flex justify-between gap-2 text-sm"
                         >
-                          <span className="text-[var(--ink)]">
+                          <span>
                             {home ? playerLabel(home) : `H${matchup.homeIndexes[0]}`}{" "}
                             <span className="text-[var(--muted)]">vs</span>{" "}
                             {away ? playerLabel(away) : `A${matchup.awayIndexes[0]}`}
                           </span>
                           <span className="tabular-nums text-xs text-[var(--muted)]">
-                            {Math.round(matchup.homeRating)}–
-                            {Math.round(matchup.awayRating)}
+                            {Math.round(matchup.homeRating)}–{Math.round(matchup.awayRating)}
                           </span>
                         </li>
                       );
@@ -582,12 +564,6 @@ export function HandicapCalculator({
                 </article>
               );
             })}
-            <p className="text-xs leading-relaxed text-[var(--muted)]">
-              Uses the official FargoRate expected-score model from the league
-              calculator. Matchups follow this division&apos;s LMS rotation
-              template. If a sub changes after round 1, update the lineup and
-              recalculate.
-            </p>
           </div>
         )}
       </section>
@@ -595,160 +571,120 @@ export function HandicapCalculator({
   );
 }
 
-function TeamPickerColumn({
-  label,
-  selectedId,
-  disabledId,
-  teams,
-  onSelect,
-}: {
-  label: string;
-  selectedId: string | null;
-  disabledId: string | null;
-  teams: DivisionTeam[];
-  onSelect: (teamId: string) => void;
-}) {
-  return (
-    <div>
-      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-        {label}
-      </p>
-      <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
-        {teams.map((team) => {
-          const selected = team.id === selectedId;
-          const disabled = team.id === disabledId;
-          return (
-            <li key={team.id}>
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => onSelect(team.id)}
-                className={[
-                  "w-full rounded-2xl border px-3 py-2.5 text-left text-sm transition",
-                  selected
-                    ? "border-[var(--felt)] bg-[var(--felt)] text-white"
-                    : "border-[var(--line)] bg-white/80 text-[var(--ink)] hover:border-[var(--felt-soft)]",
-                  disabled ? "opacity-40" : "",
-                ].join(" ")}
-              >
-                <span className="font-medium">{team.name}</span>
-                <span
-                  className={[
-                    "mt-1 block text-[10px] uppercase tracking-[0.12em]",
-                    selected ? "text-white/75" : "text-[var(--muted)]",
-                  ].join(" ")}
-                >
-                  {team.players.length} players
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
-function LineupEditor({
+function LineupPicker({
   title,
-  side,
-  lineup,
+  subtitle,
   roster,
-  activeSlot,
-  onActivate,
-  onPick,
-  onClear,
+  lineup,
+  slots,
+  onToggle,
+  onMove,
+  dragIndex,
+  setDragIndex,
 }: {
   title: string;
-  side: "home" | "away";
-  lineup: Array<RosterPlayer | null>;
+  subtitle: string;
   roster: RosterPlayer[];
-  activeSlot: { side: "home" | "away"; index: number } | null;
-  onActivate: (index: number) => void;
-  onPick: (player: RosterPlayer) => void;
-  onClear: (index: number) => void;
+  lineup: RosterPlayer[];
+  slots: number;
+  onToggle: (player: RosterPlayer) => void;
+  onMove: (from: number, to: number) => void;
+  dragIndex: number | null;
+  setDragIndex: (index: number | null) => void;
 }) {
-  const isActiveSide = activeSlot?.side === side;
-  const usedIds = new Set(
-    lineup.filter(Boolean).map((player) => player!.id),
-  );
+  const selectedIds = new Set(lineup.map((player) => player.id));
 
   return (
-    <div className="rounded-[1.3rem] border border-[var(--line)] bg-white/80 p-3 shadow-sm">
-      <p className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
-        {title}
-      </p>
-      <ol className="mt-3 space-y-2">
-        {lineup.map((player, index) => {
-          const active = isActiveSide && activeSlot?.index === index;
+    <div className="rounded-[1.3rem] border border-[var(--line)] bg-white/85 p-4 shadow-sm">
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <div>
+          <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
+            {title}
+          </h4>
+          <p className="text-xs text-[var(--muted)]">{subtitle}</p>
+        </div>
+        <span
+          className={[
+            "rounded-full px-2.5 py-1 text-xs font-semibold",
+            lineup.length === slots
+              ? "bg-[var(--felt)] text-white"
+              : "bg-[var(--paper-2)] text-[var(--muted)]",
+          ].join(" ")}
+        >
+          {lineup.length}/{slots}
+        </span>
+      </div>
+
+      <ol className="mb-3 space-y-1.5">
+        {Array.from({ length: slots }).map((_, index) => {
+          const player = lineup[index];
           return (
-            <li key={`${side}-${index}`}>
-              <button
-                type="button"
-                onClick={() => onActivate(index)}
-                className={[
-                  "flex w-full items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition",
-                  active
-                    ? "border-[var(--amber)] bg-[color-mix(in_srgb,var(--amber)_12%,white)]"
-                    : "border-[var(--line)] bg-[var(--paper)]/70",
-                ].join(" ")}
-              >
-                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                  {side === "home" ? "H" : "A"}
-                  {index + 1}
-                </span>
-                <span className="flex-1 font-medium text-[var(--ink)]">
-                  {player ? playerLabel(player) : "Tap to assign"}
-                </span>
-                {player ? (
-                  <span className="tabular-nums text-sm text-[var(--felt)]">
-                    {player.fargoRating}
-                  </span>
-                ) : null}
-              </button>
+            <li
+              key={index}
+              draggable={Boolean(player)}
+              onDragStart={() => setDragIndex(index)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={() => {
+                if (dragIndex !== null) onMove(dragIndex, index);
+                setDragIndex(null);
+              }}
+              className="flex items-center gap-2 rounded-xl border border-dashed border-[var(--line)] bg-[var(--paper)]/70 px-3 py-2 text-sm"
+            >
+              <span className="w-8 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                #{index + 1}
+              </span>
+              <span className="flex-1 font-medium text-[var(--ink)]">
+                {player ? playerLabel(player) : "Open slot"}
+              </span>
               {player ? (
-                <button
-                  type="button"
-                  onClick={() => onClear(index)}
-                  className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--chalk)]"
-                >
-                  Clear slot
-                </button>
+                <span className="tabular-nums text-[var(--felt)]">
+                  {player.fargoRating}
+                </span>
               ) : null}
             </li>
           );
         })}
       </ol>
 
-      {isActiveSide ? (
-        <div className="mt-3 border-t border-[var(--line)] pt-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
-            Assign to slot {(activeSlot?.index ?? 0) + 1}
-          </p>
-          <ul className="max-h-40 space-y-1.5 overflow-y-auto">
-            {roster.map((player) => {
-              const used = usedIds.has(player.id);
-              return (
-                <li key={player.id}>
-                  <button
-                    type="button"
-                    onClick={() => onPick(player)}
+      <ul className="max-h-64 space-y-1 overflow-y-auto">
+        {roster.map((player) => {
+          const selected = selectedIds.has(player.id);
+          const full = !selected && lineup.length >= slots;
+          return (
+            <li key={player.id}>
+              <button
+                type="button"
+                disabled={full}
+                onClick={() => onToggle(player)}
+                className={[
+                  "flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition",
+                  selected
+                    ? "bg-[color-mix(in_srgb,var(--felt)_12%,white)] font-medium text-[var(--felt-deep)]"
+                    : "hover:bg-[var(--paper)]",
+                  full ? "opacity-40" : "",
+                ].join(" ")}
+              >
+                <span className="flex items-center gap-2">
+                  <span
                     className={[
-                      "flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm",
-                      used
-                        ? "bg-[var(--paper-2)] text-[var(--muted)]"
-                        : "bg-white hover:bg-[var(--paper)]",
+                      "inline-flex h-4 w-4 items-center justify-center rounded border text-[10px]",
+                      selected
+                        ? "border-[var(--felt)] bg-[var(--felt)] text-white"
+                        : "border-[var(--line)]",
                     ].join(" ")}
                   >
-                    <span>{playerLabel(player)}</span>
-                    <span className="tabular-nums">{player.fargoRating}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ) : null}
+                    {selected ? "✓" : ""}
+                  </span>
+                  {playerLabel(player)}
+                </span>
+                <span className="tabular-nums text-[var(--muted)]">
+                  {player.fargoRating}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

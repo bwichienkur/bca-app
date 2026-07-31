@@ -85,6 +85,15 @@ export type CalculatorMatchup = {
   awayTeamName: string;
 };
 
+export type LineupPreset = {
+  id: string;
+  name: string;
+  divisionId: string;
+  teamId: string;
+  playerIds: string[];
+  updatedAt: string;
+};
+
 export type UserPreferences = {
   leagueId: string;
   leagueName: string;
@@ -99,7 +108,6 @@ export type UserPreferences = {
 export type ReportTab =
   | "teams"
   | "players"
-  | "players-by-team"
   | "player-list"
   | "schedule"
   | "handicap";

@@ -1,19 +1,17 @@
 # Tableside
 
-Mobile-friendly web app for browsing public FargoRate LMS league data — standings, players, ratings, and schedules.
+Web app for browsing public FargoRate LMS league data — standings, players, ratings, schedules, and handicaps. Works on phone and desktop.
 
-Defaults to **Palm Beach County BCA Pool League**, with the ability to pick any public league/division and save your division as a default.
+Defaults to **Palm Beach County BCA Pool League**.
 
 ## Features
 
-- Search all public LMS leagues
-- Select a division (optionally set as default)
-- Team standings
-- Player standings
-- Player standings by team
-- Player ratings list
-- Division schedule (match links open on FargoRate LMS)
-- **Handicap calculator** (FargoRate leaguecalc logic): pick who you are, auto-load this week’s matchup, choose lineups (default 5/side), see per-round handicaps
+- Typeahead selectors for league, division, and my team
+- Team standings with clickable rows → player stats + roster panel
+- Search filters on Teams, Players, and Ratings
+- Schedule filtered by selected team
+- Handicap calculator based on your team and this week’s opponent
+- 5-player lineups (division format), drag-to-reorder, saved lineup presets
 
 ## Data source
 
@@ -26,9 +24,9 @@ Public endpoints on [FargoRate LMS](https://lms.fargorate.com/publicreport/alldi
 | Player standings | `GET /PublicReport/GeneratePlayerStandingsReport/{divisionId}` |
 | Players by team | `GET /PublicReport/GeneratePlayerStandingsByTeamReport/{divisionId}` |
 | Player list / ratings | `GET /PublicReport/GeneratePlayerListReport/{divisionId}` |
-| Schedule | `POST /PublicReport/GenerateDivisionScheduleReport` (`divisionId`) |
-
-This app proxies those endpoints through Next.js API routes and parses HTML reports into structured JSON for the UI.
+| Schedule | `POST /PublicReport/GenerateDivisionScheduleReport` |
+| Division format | `GET /api/divisions/{id}/format` |
+| Teams / rosters | `GET /api/matches/{id}`, `GET /api/teams/{id}/players` |
 
 ## Develop
 
@@ -37,18 +35,9 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
-
-## Build
-
-```bash
-npm run build
-npm start
-```
-
 ## Preferences
 
-Defaults are stored in `localStorage` under `tableside.preferences.v1`:
+Stored in `localStorage`:
 
-- Default league (pre-seeded to Palm Beach County BCA Pool League)
-- Default division (set by the user)
+- `tableside.preferences.v1` — league, division, my team
+- `tableside.lineups.v1` — saved handicap lineups
