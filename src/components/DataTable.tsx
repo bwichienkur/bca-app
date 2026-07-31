@@ -8,6 +8,8 @@ type DataTableProps = {
   headers: string[];
   rows: string[][];
   stickyFirst?: boolean;
+  /** Denser rows for team player grids */
+  compact?: boolean;
   onRowClick?: (row: string[], rowIndex: number) => void;
   /** Prefer content-based selection so sorting doesn't break highlights */
   isRowSelected?: (row: string[]) => boolean;
@@ -70,18 +72,25 @@ function columnKind(header: string): ColumnKind {
 }
 
 /** Fixed rem widths so short rank cols stay narrow and headers stay readable. */
-function columnWidth(header: string, kind: ColumnKind): string {
-  if (kind === "rank") return "3rem";
-  if (kind === "name") return "14rem";
+function columnWidth(
+  header: string,
+  kind: ColumnKind,
+  compact: boolean,
+): string {
+  if (kind === "rank") return compact ? "2.5rem" : "3rem";
+  if (kind === "name") return compact ? "9.5rem" : "14rem";
+  if (header.trim().toLowerCase() === "fargo") {
+    return compact ? "4rem" : "4.5rem";
+  }
 
   const label = header.trim();
   const len = label.length;
   // Room for label + sort chevron + cell padding
-  if (len <= 2) return "3.25rem";
-  if (len <= 3) return "3.75rem";
-  if (len <= 4) return "4.5rem";
-  if (len <= 5) return "5.25rem";
-  return `${Math.min(len * 0.85 + 1.5, 8)}rem`;
+  if (len <= 2) return compact ? "2.85rem" : "3.25rem";
+  if (len <= 3) return compact ? "3.35rem" : "3.75rem";
+  if (len <= 4) return compact ? "4rem" : "4.5rem";
+  if (len <= 5) return compact ? "4.6rem" : "5.25rem";
+  return `${Math.min(len * 0.85 + 1.5, compact ? 6.5 : 8)}rem`;
 }
 
 function stickyColumnIndex(headers: string[], stickyEnabled: boolean): number {
@@ -99,6 +108,7 @@ export function DataTable({
   headers,
   rows,
   stickyFirst = true,
+  compact = false,
   onRowClick,
   isRowSelected,
   selectedRowIndex = null,
@@ -111,9 +121,9 @@ export function DataTable({
     () =>
       headers.map((header) => {
         const kind = columnKind(header);
-        return { kind, width: columnWidth(header, kind) };
+        return { kind, width: columnWidth(header, kind, compact) };
       }),
-    [headers],
+    [headers, compact],
   );
 
   const stickyIndex = useMemo(
@@ -166,10 +176,20 @@ export function DataTable({
     setSortDirection("asc");
   };
 
+  const cellPad = compact
+    ? "px-2 py-2 md:px-2.5"
+    : "px-2.5 py-3 md:px-3.5";
+  const tableText = compact
+    ? "text-xs md:text-[13px]"
+    : "text-[13px] md:text-sm";
+
   return (
     <div className="overflow-x-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
       <table
-        className="w-full table-fixed border-separate border-spacing-0 text-left text-[13px] md:text-sm"
+        className={[
+          "w-full table-fixed border-separate border-spacing-0 text-left",
+          tableText,
+        ].join(" ")}
         style={{ minWidth: tableMinWidth }}
       >
         <colgroup>
@@ -195,9 +215,10 @@ export function DataTable({
                       : "none"
                   }
                   className={[
-                    "border-b border-[var(--felt-soft)] px-2.5 py-3 font-semibold tracking-wide text-white md:px-3.5",
+                    "border-b border-[var(--felt-soft)] font-semibold tracking-wide text-white",
+                    cellPad,
                     isSticky
-                      ? "sticky left-0 z-10 bg-[var(--felt-soft)]"
+                      ? "sticky left-0 z-10 bg-[var(--felt-soft)] shadow-[4px_0_10px_rgba(0,0,0,0.28)]"
                       : "bg-[var(--felt-soft)]",
                     isFirst ? "rounded-tl-[calc(var(--radius)-1px)]" : "",
                     isLast ? "rounded-tr-[calc(var(--radius)-1px)]" : "",
@@ -261,19 +282,24 @@ export function DataTable({
                   const isSticky = cellIndex === stickyIndex;
                   const isFirst = cellIndex === 0;
                   const isLastRow = displayIndex === sortedRows.length - 1;
+                  const value = row[cellIndex] ?? "";
                   return (
                     <td
                       key={cellIndex}
+                      title={kind === "name" ? value : undefined}
                       className={[
-                        "border-b border-[var(--line)] px-2.5 py-3 md:px-3.5",
+                        "border-b border-[var(--line)]",
+                        cellPad,
                         rowBg,
                         isSticky
-                          ? "sticky left-0 z-[1] font-semibold text-[var(--ink)]"
+                          ? "sticky left-0 z-[1] font-semibold text-[var(--ink)] shadow-[4px_0_10px_rgba(0,0,0,0.22)]"
                           : kind === "rank"
                             ? "tabular-nums font-medium text-[var(--muted)]"
                             : "tabular-nums font-semibold text-[var(--ink)]",
                         kind === "name"
-                          ? "whitespace-normal break-words font-semibold text-[var(--ink)]"
+                          ? compact
+                            ? "truncate whitespace-nowrap font-semibold text-[var(--ink)]"
+                            : "whitespace-normal break-words font-semibold text-[var(--ink)]"
                           : "whitespace-nowrap",
                         isLastRow && isFirst
                           ? "rounded-bl-[calc(var(--radius)-1px)]"
@@ -285,7 +311,7 @@ export function DataTable({
                         .filter(Boolean)
                         .join(" ")}
                     >
-                      {row[cellIndex] ?? ""}
+                      {value}
                     </td>
                   );
                 })}
