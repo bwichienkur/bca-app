@@ -7,7 +7,7 @@ type TeamDetailProps = {
   teamName: string;
   team: DivisionTeam | null;
   playersByTeam: PlayersByTeamReport | null;
-  onClose: () => void;
+  onClose?: () => void;
   onSetAsMyTeam?: () => void;
   isMyTeam?: boolean;
 };
@@ -34,7 +34,7 @@ export function TeamDetail({
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-              Team detail
+              {isMyTeam ? "Roster & stats" : "Team detail"}
             </p>
             <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
               {teamName}
@@ -51,13 +51,15 @@ export function TeamDetail({
               </p>
             ) : null}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]"
-          >
-            Close
-          </button>
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]"
+            >
+              Close
+            </button>
+          ) : null}
         </div>
         {onSetAsMyTeam ? (
           <button

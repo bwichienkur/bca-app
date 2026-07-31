@@ -47,31 +47,47 @@ type HandicapCalculatorProps = {
   onSelectTeam: (team: { teamId: string; teamName: string }) => void;
 };
 
+type LineupSlot = RosterPlayer | null;
+
 function playerLabel(player: RosterPlayer): string {
   return `${player.firstName} ${player.lastName}`.trim();
 }
 
-function defaultTopLineup(
-  team: DivisionTeam | null,
-  slots: number,
-): RosterPlayer[] {
-  if (!team) return [];
-  return [...team.players]
+function emptyLineup(slots: number): LineupSlot[] {
+  return Array.from({ length: slots }, () => null);
+}
+
+function filledCount(lineup: LineupSlot[]): number {
+  return lineup.filter(Boolean).length;
+}
+
+function isComplete(lineup: LineupSlot[], slots: number): boolean {
+  return lineup.length === slots && lineup.every(Boolean);
+}
+
+function defaultTopLineup(team: DivisionTeam | null, slots: number): LineupSlot[] {
+  if (!team) return emptyLineup(slots);
+  const top = [...team.players]
     .sort((a, b) => b.fargoRating - a.fargoRating)
     .slice(0, slots);
+  return Array.from({ length: slots }, (_, index) => top[index] ?? null);
 }
 
 function lineupFromIds(
   team: DivisionTeam | null,
   ids: string[],
   slots: number,
-): RosterPlayer[] {
-  if (!team) return [];
+): LineupSlot[] {
+  if (!team) return emptyLineup(slots);
   const map = new Map(team.players.map((player) => [player.id, player]));
-  return ids
-    .map((id) => map.get(id))
-    .filter((player): player is RosterPlayer => Boolean(player))
-    .slice(0, slots);
+  return Array.from(
+    { length: slots },
+    (_, index) => map.get(ids[index] ?? "") ?? null,
+  );
+}
+
+function compactPlayers(lineup: LineupSlot[]): RosterPlayer[] {
+  return lineup.filter((player): player is RosterPlayer => Boolean(player));
 }
 
 export function HandicapCalculator({
@@ -86,8 +102,8 @@ export function HandicapCalculator({
   const [myTeamId, setMyTeamId] = useState<string | null>(prefs.teamId);
   const [opponentTeamId, setOpponentTeamId] = useState<string | null>(null);
   const [iAmHome, setIAmHome] = useState(true);
-  const [myLineup, setMyLineup] = useState<RosterPlayer[]>([]);
-  const [oppLineup, setOppLineup] = useState<RosterPlayer[]>([]);
+  const [myLineup, setMyLineup] = useState<LineupSlot[]>([]);
+  const [oppLineup, setOppLineup] = useState<LineupSlot[]>([]);
   const [weekMatchup, setWeekMatchup] = useState<CalculatorMatchup | null>(null);
   const [presets, setPresets] = useState<LineupPreset[]>([]);
   const [presetName, setPresetName] = useState("Default lineup");
@@ -166,7 +182,9 @@ export function HandicapCalculator({
 
   const results: RoundHandicapResult[] | null = useMemo(() => {
     if (!data || !homeTeam || !awayTeam) return null;
-    if (homeLineup.length !== slots || awayLineup.length !== slots) return null;
+    if (!isComplete(homeLineup, slots) || !isComplete(awayLineup, slots)) {
+      return null;
+    }
 
     const format =
       data.parsedFormat.rounds.length > 0
@@ -175,8 +193,12 @@ export function HandicapCalculator({
 
     return calculateRoundBasedHandicaps({
       format,
-      teamOneRatings: homeLineup.map((player) => player.fargoRating),
-      teamTwoRatings: awayLineup.map((player) => player.fargoRating),
+      teamOneRatings: compactPlayers(homeLineup).map(
+        (player) => player.fargoRating,
+      ),
+      teamTwoRatings: compactPlayers(awayLineup).map(
+        (player) => player.fargoRating,
+      ),
       pointSystem: data.format.pointSystem || "10",
       handicapPercent: data.format.handicapPercent ?? 1,
       handicapCap: data.format.handicapCap ?? 50,
@@ -214,7 +236,7 @@ export function HandicapCalculator({
       setOppLineup(defaultTopLineup(opponent, slotCount));
     } else {
       setOpponentTeamId(null);
-      setOppLineup([]);
+      setOppLineup(emptyLineup(slotCount));
       setMyLineup(
         saved
           ? lineupFromIds(team, saved.playerIds, slotCount)
@@ -235,29 +257,46 @@ export function HandicapCalculator({
     setOppLineup(defaultTopLineup(team, slots));
   };
 
-  const togglePlayer = (
+  const setSlotPlayer = (
     side: "mine" | "opp",
-    player: RosterPlayer,
-  ) => {
-    const current = side === "mine" ? myLineup : oppLineup;
-    const setter = side === "mine" ? setMyLineup : setOppLineup;
-    const exists = current.some((item) => item.id === player.id);
-    if (exists) {
-      setter(current.filter((item) => item.id !== player.id));
-      return;
-    }
-    if (current.length >= slots) return;
-    setter([...current, player]);
-  };
-
-  const moveInLineup = (
-    side: "mine" | "opp",
-    from: number,
-    to: number,
+    slotIndex: number,
+    playerId: string,
   ) => {
     const current = side === "mine" ? [...myLineup] : [...oppLineup];
     const setter = side === "mine" ? setMyLineup : setOppLineup;
-    if (from < 0 || to < 0 || from >= current.length || to >= current.length) {
+    const roster =
+      side === "mine" ? (myTeam?.players ?? []) : (oppTeam?.players ?? []);
+
+    if (!playerId) {
+      current[slotIndex] = null;
+      setter(current);
+      return;
+    }
+
+    const player = roster.find((item) => item.id === playerId) ?? null;
+    if (!player) return;
+
+    // If this player is already in another slot, clear that slot
+    const existingIndex = current.findIndex(
+      (item) => item?.id === player.id,
+    );
+    if (existingIndex >= 0 && existingIndex !== slotIndex) {
+      current[existingIndex] = null;
+    }
+    current[slotIndex] = player;
+    setter(current);
+  };
+
+  const moveInLineup = (side: "mine" | "opp", from: number, to: number) => {
+    const current = side === "mine" ? [...myLineup] : [...oppLineup];
+    const setter = side === "mine" ? setMyLineup : setOppLineup;
+    if (
+      from < 0 ||
+      to < 0 ||
+      from >= current.length ||
+      to >= current.length ||
+      from === to
+    ) {
       return;
     }
     const [item] = current.splice(from, 1);
@@ -266,13 +305,13 @@ export function HandicapCalculator({
   };
 
   const savePreset = () => {
-    if (!myTeamId || myLineup.length !== slots) return;
+    if (!myTeamId || !isComplete(myLineup, slots)) return;
     const preset: LineupPreset = {
       id: `${myTeamId}-${Date.now()}`,
       name: presetName.trim() || "Lineup",
       divisionId,
       teamId: myTeamId,
-      playerIds: myLineup.map((player) => player.id),
+      playerIds: compactPlayers(myLineup).map((player) => player.id),
       updatedAt: new Date().toISOString(),
     };
     setPresets(upsertLineupPreset(preset));
@@ -334,7 +373,7 @@ export function HandicapCalculator({
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2">
+      <section className="relative z-30 grid gap-4 md:grid-cols-2">
         <Typeahead
           label="My team"
           placeholder="Select your team"
@@ -412,11 +451,13 @@ export function HandicapCalculator({
         <section className="grid gap-4 xl:grid-cols-[1.1fr_1.1fr_0.9fr]">
           <LineupPicker
             title={myTeam.name}
-            subtitle={`Pick ${slots} · order = H/A slots`}
+            subtitle={`Choose a player for each of ${slots} slots`}
             roster={myTeam.players}
-            lineup={myLineup}
+            lineup={myLineup.length === slots ? myLineup : emptyLineup(slots)}
             slots={slots}
-            onToggle={(player) => togglePlayer("mine", player)}
+            onSelectSlot={(slotIndex, playerId) =>
+              setSlotPlayer("mine", slotIndex, playerId)
+            }
             onMove={(from, to) => moveInLineup("mine", from, to)}
             dragIndex={dragIndex}
             setDragIndex={setDragIndex}
@@ -424,11 +465,15 @@ export function HandicapCalculator({
           {oppTeam ? (
             <LineupPicker
               title={oppTeam.name}
-              subtitle={`Pick ${slots} opponents`}
+              subtitle={`Choose ${slots} opponents by slot`}
               roster={oppTeam.players}
-              lineup={oppLineup}
+              lineup={
+                oppLineup.length === slots ? oppLineup : emptyLineup(slots)
+              }
               slots={slots}
-              onToggle={(player) => togglePlayer("opp", player)}
+              onSelectSlot={(slotIndex, playerId) =>
+                setSlotPlayer("opp", slotIndex, playerId)
+              }
               onMove={(from, to) => moveInLineup("opp", from, to)}
               dragIndex={dragIndex}
               setDragIndex={setDragIndex}
@@ -455,7 +500,7 @@ export function HandicapCalculator({
             />
             <button
               type="button"
-              disabled={myLineup.length !== slots}
+              disabled={!isComplete(myLineup, slots)}
               onClick={savePreset}
               className="w-full rounded-full bg-[var(--felt)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-40"
             >
@@ -505,7 +550,7 @@ export function HandicapCalculator({
         {!results ? (
           <EmptyState
             title="Finish both lineups"
-            body={`Select exactly ${slots} players for each team. Drag to reorder slots.`}
+            body={`Pick a player in each of the ${slots} slots for both teams. Drag filled slots to reorder.`}
           />
         ) : (
           <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
@@ -517,6 +562,8 @@ export function HandicapCalculator({
                   : result.teamTwo > 0
                     ? awayTeam?.name
                     : "Even";
+              const homePlayers = compactPlayers(homeLineup);
+              const awayPlayers = compactPlayers(awayLineup);
               return (
                 <article
                   key={result.round}
@@ -533,7 +580,8 @@ export function HandicapCalculator({
                           : `${gets} +${points}`}
                       </p>
                       <p className="mt-1 text-xs text-[var(--muted)]">
-                        Exp {result.teamOneExpected.toFixed(1)}–{result.teamTwoExpected.toFixed(1)}
+                        Exp {result.teamOneExpected.toFixed(1)}–
+                        {result.teamTwoExpected.toFixed(1)}
                       </p>
                     </div>
                     <div className="rounded-full bg-[var(--felt)] px-3 py-1 text-sm font-semibold text-white">
@@ -542,8 +590,8 @@ export function HandicapCalculator({
                   </div>
                   <ul className="mt-3 space-y-1 border-t border-[var(--line)] pt-3">
                     {result.matchups.map((matchup, index) => {
-                      const home = homeLineup[matchup.homeIndexes[0] - 1];
-                      const away = awayLineup[matchup.awayIndexes[0] - 1];
+                      const home = homePlayers[matchup.homeIndexes[0] - 1];
+                      const away = awayPlayers[matchup.awayIndexes[0] - 1];
                       return (
                         <li
                           key={`${result.round}-${index}`}
@@ -555,7 +603,8 @@ export function HandicapCalculator({
                             {away ? playerLabel(away) : `A${matchup.awayIndexes[0]}`}
                           </span>
                           <span className="tabular-nums text-xs text-[var(--muted)]">
-                            {Math.round(matchup.homeRating)}–{Math.round(matchup.awayRating)}
+                            {Math.round(matchup.homeRating)}–
+                            {Math.round(matchup.awayRating)}
                           </span>
                         </li>
                       );
@@ -577,7 +626,7 @@ function LineupPicker({
   roster,
   lineup,
   slots,
-  onToggle,
+  onSelectSlot,
   onMove,
   dragIndex,
   setDragIndex,
@@ -585,14 +634,18 @@ function LineupPicker({
   title: string;
   subtitle: string;
   roster: RosterPlayer[];
-  lineup: RosterPlayer[];
+  lineup: LineupSlot[];
   slots: number;
-  onToggle: (player: RosterPlayer) => void;
+  onSelectSlot: (slotIndex: number, playerId: string) => void;
   onMove: (from: number, to: number) => void;
   dragIndex: number | null;
   setDragIndex: (index: number | null) => void;
 }) {
-  const selectedIds = new Set(lineup.map((player) => player.id));
+  const filled = filledCount(lineup);
+  const sortedRoster = useMemo(
+    () => [...roster].sort((a, b) => b.fargoRating - a.fargoRating),
+    [roster],
+  );
 
   return (
     <div className="rounded-[1.3rem] border border-[var(--line)] bg-white/85 p-4 shadow-sm">
@@ -606,18 +659,29 @@ function LineupPicker({
         <span
           className={[
             "rounded-full px-2.5 py-1 text-xs font-semibold",
-            lineup.length === slots
+            filled === slots
               ? "bg-[var(--felt)] text-white"
               : "bg-[var(--paper-2)] text-[var(--muted)]",
           ].join(" ")}
         >
-          {lineup.length}/{slots}
+          {filled}/{slots}
         </span>
       </div>
 
-      <ol className="mb-3 space-y-1.5">
+      <ol className="space-y-2">
         {Array.from({ length: slots }).map((_, index) => {
           const player = lineup[index];
+          const takenElsewhere = new Set(
+            lineup
+              .map((item, slotIndex) =>
+                slotIndex !== index && item ? item.id : null,
+              )
+              .filter((id): id is string => Boolean(id)),
+          );
+          const options = sortedRoster.filter(
+            (item) => item.id === player?.id || !takenElsewhere.has(item.id),
+          );
+
           return (
             <li
               key={index}
@@ -628,63 +692,39 @@ function LineupPicker({
                 if (dragIndex !== null) onMove(dragIndex, index);
                 setDragIndex(null);
               }}
-              className="flex items-center gap-2 rounded-xl border border-dashed border-[var(--line)] bg-[var(--paper)]/70 px-3 py-2 text-sm"
+              className="rounded-xl border border-[var(--line)] bg-[var(--paper)]/70 px-3 py-2.5"
             >
-              <span className="w-8 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                #{index + 1}
-              </span>
-              <span className="flex-1 font-medium text-[var(--ink)]">
-                {player ? playerLabel(player) : "Open slot"}
-              </span>
-              {player ? (
-                <span className="tabular-nums text-[var(--felt)]">
-                  {player.fargoRating}
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                  Slot #{index + 1}
+                  {player ? (
+                    <span className="ml-2 normal-case tracking-normal text-[var(--felt)]">
+                      · drag to reorder
+                    </span>
+                  ) : null}
                 </span>
-              ) : null}
+                {player ? (
+                  <span className="tabular-nums text-xs font-semibold text-[var(--felt)]">
+                    {player.fargoRating}
+                  </span>
+                ) : null}
+              </div>
+              <select
+                value={player?.id ?? ""}
+                onChange={(event) => onSelectSlot(index, event.target.value)}
+                className="w-full rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm text-[var(--ink)] outline-none focus:ring-2 focus:ring-[var(--felt-soft)]"
+              >
+                <option value="">Open slot…</option>
+                {options.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {playerLabel(option)} · {option.fargoRating}
+                  </option>
+                ))}
+              </select>
             </li>
           );
         })}
       </ol>
-
-      <ul className="max-h-64 space-y-1 overflow-y-auto">
-        {roster.map((player) => {
-          const selected = selectedIds.has(player.id);
-          const full = !selected && lineup.length >= slots;
-          return (
-            <li key={player.id}>
-              <button
-                type="button"
-                disabled={full}
-                onClick={() => onToggle(player)}
-                className={[
-                  "flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition",
-                  selected
-                    ? "bg-[color-mix(in_srgb,var(--felt)_12%,white)] font-medium text-[var(--felt-deep)]"
-                    : "hover:bg-[var(--paper)]",
-                  full ? "opacity-40" : "",
-                ].join(" ")}
-              >
-                <span className="flex items-center gap-2">
-                  <span
-                    className={[
-                      "inline-flex h-4 w-4 items-center justify-center rounded border text-[10px]",
-                      selected
-                        ? "border-[var(--felt)] bg-[var(--felt)] text-white"
-                        : "border-[var(--line)]",
-                    ].join(" ")}
-                  >
-                    {selected ? "✓" : ""}
-                  </span>
-                  {playerLabel(player)}
-                </span>
-                <span className="tabular-nums text-[var(--muted)]">
-                  {player.fargoRating}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
     </div>
   );
 }
