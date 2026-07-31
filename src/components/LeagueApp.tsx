@@ -21,6 +21,7 @@ import { LoadingState } from "./LoadingState";
 import { ScheduleList } from "./ScheduleList";
 import { SearchField } from "./SearchField";
 import { TeamDetail } from "./TeamDetail";
+import { TeamStandingSummary } from "./TeamStandingSummary";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -675,21 +676,10 @@ export function LeagueApp() {
               prefs.teamName ? (
                 <section className="space-y-4">
                   {myStandingCells ? (
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-6">
-                      {myStandingCells.slice(0, 6).map((cell) => (
-                        <div
-                          key={cell.label}
-                          className="rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-3"
-                        >
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                            {cell.label}
-                          </p>
-                          <p className="mt-1 truncate text-base font-semibold tabular-nums text-[var(--ink)]">
-                            {cell.value}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
+                    <TeamStandingSummary
+                      cells={myStandingCells}
+                      teamName={prefs.teamName}
+                    />
                   ) : null}
                   <TeamDetail
                     teamName={prefs.teamName}

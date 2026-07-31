@@ -89,8 +89,7 @@ export function TeamDetail({
                 Player statistics
               </h4>
               <p className="mt-1 text-xs text-[var(--muted)]">
-                Compact sortable grid — see every name at a glance, then sort by
-                Win%, Fargo, and more.
+                Sortable grid with every LMS column — tap a header to reorder.
               </p>
             </div>
             <TeamPlayerStats
