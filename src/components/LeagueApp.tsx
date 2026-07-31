@@ -410,28 +410,6 @@ export function LeagueApp() {
     }));
   }, [teamReport, prefs?.teamName]);
 
-  const statsStrip = useMemo(() => {
-    if (!selectedDivision) return [];
-    return [
-      {
-        label: "Teams",
-        value: teamReport ? String(teamReport.rows.length) : "—",
-      },
-      {
-        label: "Players",
-        value: playerList ? String(playerList.rows.length) : "—",
-      },
-      {
-        label: "My team",
-        value: prefs?.teamName ?? "Not set",
-      },
-      {
-        label: "Division",
-        value: selectedDivision.year ?? "—",
-      },
-    ];
-  }, [teamReport, playerList, prefs?.teamName, selectedDivision]);
-
   if (!prefs || booting) {
     return (
       <main className="mx-auto flex min-h-dvh max-w-6xl items-center justify-center px-5">
@@ -441,39 +419,11 @@ export function LeagueApp() {
   }
 
   return (
-    <main className="relative mx-auto min-h-dvh w-full max-w-7xl px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-5 md:px-6 lg:px-8">
-      <header className="animate-rise mb-5 md:mb-7">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--amber)]">
-              Pool league companion
-            </p>
-            <h1 className="mt-1 font-[family-name:var(--font-display)] text-4xl leading-none tracking-tight text-[var(--felt-deep)] md:text-5xl">
-              Tableside
-            </h1>
-            <p className="mt-3 max-w-xl text-sm leading-relaxed text-[var(--muted)] md:text-base">
-              Standings, ratings, schedules, and handicaps — built for phone and
-              desktop.
-            </p>
-          </div>
-          {selectedDivision ? (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[420px]">
-              {statsStrip.map((stat) => (
-                <div
-                  key={stat.label}
-                  className="rounded-2xl border border-[var(--line)] bg-[var(--surface)]/80 px-3 py-2.5"
-                >
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                    {stat.label}
-                  </p>
-                  <p className="mt-1 truncate text-sm font-semibold text-[var(--ink)]">
-                    {stat.value}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
+    <main className="relative mx-auto min-h-dvh w-full max-w-7xl px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-4 md:px-6 lg:px-8">
+      <header className="animate-rise mb-3 md:mb-4">
+        <h1 className="font-[family-name:var(--font-display)] text-2xl leading-none tracking-tight text-[var(--felt-deep)] md:text-3xl">
+          Tableside
+        </h1>
       </header>
 
       {error ? (
