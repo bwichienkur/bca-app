@@ -57,7 +57,7 @@ export function LeagueApp() {
   );
   const [selectedDivision, setSelectedDivision] =
     useState<DivisionSummary | null>(null);
-  const [tab, setTab] = useState<ReportTab>("teams");
+  const [tab, setTab] = useState<ReportTab>("my-team");
   const [error, setError] = useState<string | null>(null);
   const [booting, setBooting] = useState(true);
   const [loadingLeagues, setLoadingLeagues] = useState(false);
@@ -203,7 +203,7 @@ export function LeagueApp() {
       setError(null);
       try {
         const id = selectedDivision!.id;
-        if (tab === "teams") {
+        if (tab === "standings" || tab === "my-team") {
           const data = await fetchJson<TableReport>(
             `/api/reports/teams?divisionId=${id}`,
           );
@@ -241,6 +241,7 @@ export function LeagueApp() {
 
   useEffect(() => {
     setFilterQuery("");
+    if (tab !== "standings") setSelectedTeamName(null);
   }, [tab, selectedDivision?.id]);
 
   const chooseLeague = async (league: LeagueSummary) => {
@@ -283,7 +284,8 @@ export function LeagueApp() {
 
   const chooseDivision = (division: DivisionSummary) => {
     setSelectedDivision(division);
-    setTab("teams");
+    setSelectedTeamName(null);
+    setTab(prefs?.teamName ? "my-team" : "standings");
     setTeamReport(null);
     setPlayerReport(null);
     setPlayerList(null);
@@ -393,10 +395,28 @@ export function LeagueApp() {
     return filterRows(playerList.rows, filterQuery);
   }, [playerList, filterQuery]);
 
+  const myStandingCells = useMemo(() => {
+    if (!teamReport || !prefs?.teamName) return null;
+    const nameIndex = teamNameIndex(teamReport.headers);
+    const row = teamReport.rows.find(
+      (item) =>
+        normalizeTeamName(item[nameIndex] ?? "") ===
+        normalizeTeamName(prefs.teamName ?? ""),
+    );
+    if (!row) return null;
+    return teamReport.headers.map((header, index) => ({
+      label: header,
+      value: row[index] ?? "—",
+    }));
+  }, [teamReport, prefs?.teamName]);
+
   const statsStrip = useMemo(() => {
-    if (!teamReport) return [];
+    if (!selectedDivision) return [];
     return [
-      { label: "Teams", value: String(teamReport.rows.length) },
+      {
+        label: "Teams",
+        value: teamReport ? String(teamReport.rows.length) : "—",
+      },
       {
         label: "Players",
         value: playerList ? String(playerList.rows.length) : "—",
@@ -407,10 +427,10 @@ export function LeagueApp() {
       },
       {
         label: "Division",
-        value: selectedDivision?.year ?? "—",
+        value: selectedDivision.year ?? "—",
       },
     ];
-  }, [teamReport, playerList, prefs?.teamName, selectedDivision?.year]);
+  }, [teamReport, playerList, prefs?.teamName, selectedDivision]);
 
   if (!prefs || booting) {
     return (
@@ -628,7 +648,10 @@ export function LeagueApp() {
                     type="button"
                     onClick={() => {
                       setTab(item.id);
-                      if (item.id === "schedule" && !prefs.teamName) {
+                      if (
+                        (item.id === "schedule" || item.id === "my-team") &&
+                        !prefs.teamName
+                      ) {
                         setContextOpen(true);
                       }
                     }}
@@ -639,26 +662,20 @@ export function LeagueApp() {
                         : "bg-[var(--surface)]/80 text-[var(--muted)] hover:bg-[var(--surface-2)]",
                     ].join(" ")}
                   >
-                    <span>{item.label}</span>
-                    <span
-                      className={[
-                        "ml-2 hidden text-[10px] uppercase tracking-[0.12em] sm:inline",
-                        active ? "text-white/70" : "text-[var(--muted)]",
-                      ].join(" ")}
-                    >
-                      {item.hint}
-                    </span>
+                    {item.label}
                   </button>
                 );
               })}
             </div>
 
-            {tab === "teams" || tab === "players" || tab === "player-list" ? (
+            {(tab === "standings" && !selectedTeamName) ||
+            tab === "players" ||
+            tab === "player-list" ? (
               <SearchField
                 value={filterQuery}
                 onChange={setFilterQuery}
                 placeholder={
-                  tab === "teams"
+                  tab === "standings"
                     ? "Filter teams…"
                     : tab === "players"
                       ? "Filter players…"
@@ -700,58 +717,56 @@ export function LeagueApp() {
               />
             ) : loadingReport ? (
               <LoadingState label="Pulling report from LMS…" />
-            ) : tab === "teams" && teamReport ? (
-              <>
-                <section className="space-y-3">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-                      My team
-                    </p>
-                    <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-                      {prefs.teamName ?? "Not set"}
-                    </h3>
-                    <p className="mt-1 text-sm text-[var(--muted)]">
-                      Your followed team for schedule and handicap — separate from
-                      the division standings below.
-                    </p>
-                  </div>
-                  {prefs.teamName ? (
-                    <TeamDetail
-                      teamName={prefs.teamName}
-                      team={
-                        divisionTeams.find(
-                          (team) =>
-                            normalizeTeamName(team.name) ===
-                            normalizeTeamName(prefs.teamName ?? ""),
-                        ) ?? null
-                      }
-                      playersByTeam={playersByTeam}
-                      isMyTeam
-                      onSetAsMyTeam={
-                        divisionTeams.find(
-                          (team) =>
-                            normalizeTeamName(team.name) ===
-                            normalizeTeamName(prefs.teamName ?? ""),
-                        )
-                          ? () => {
-                              const mine = divisionTeams.find(
-                                (team) =>
-                                  normalizeTeamName(team.name) ===
-                                  normalizeTeamName(prefs.teamName ?? ""),
-                              );
-                              if (mine) setMyTeam(mine);
-                            }
-                          : undefined
-                      }
-                    />
-                  ) : (
-                    <EmptyState
-                      title="Set your team"
-                      body="Use the “My team” typeahead above, or pick a row in standings and set it as your team."
-                    />
-                  )}
+            ) : tab === "my-team" ? (
+              prefs.teamName ? (
+                <section className="space-y-4">
+                  {myStandingCells ? (
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-6">
+                      {myStandingCells.slice(0, 6).map((cell) => (
+                        <div
+                          key={cell.label}
+                          className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5"
+                        >
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                            {cell.label}
+                          </p>
+                          <p className="mt-1 truncate text-sm font-semibold tabular-nums text-[var(--ink)]">
+                            {cell.value}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <TeamDetail
+                    teamName={prefs.teamName}
+                    team={myTeam}
+                    playersByTeam={playersByTeam}
+                    isMyTeam
+                  />
                 </section>
-
+              ) : (
+                <EmptyState
+                  title="Set your team"
+                  body="Open League · Division · My team above and pick your team to see roster and player stats here."
+                />
+              )
+            ) : tab === "standings" && teamReport ? (
+              selectedTeamName ? (
+                <TeamDetail
+                  teamName={selectedTeamName}
+                  team={detailTeam}
+                  playersByTeam={playersByTeam}
+                  isMyTeam={
+                    normalizeTeamName(prefs.teamName ?? "") ===
+                    normalizeTeamName(selectedTeamName)
+                  }
+                  backLabel="Back to standings"
+                  onClose={() => setSelectedTeamName(null)}
+                  onSetAsMyTeam={
+                    detailTeam ? () => setMyTeam(detailTeam) : undefined
+                  }
+                />
+              ) : (
                 <section className="space-y-3">
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
@@ -761,7 +776,8 @@ export function LeagueApp() {
                       Team standings
                     </h3>
                     <p className="mt-1 text-sm text-[var(--muted)]">
-                      Click a team row to open that team’s stats below.
+                      Tap a team to view player statistics. Use back to return
+                      to the standings grid.
                     </p>
                   </div>
                   <DataTable
@@ -769,10 +785,10 @@ export function LeagueApp() {
                     rows={filteredTeamRows}
                     isRowSelected={(row) =>
                       Boolean(
-                        selectedTeamName &&
+                        prefs.teamName &&
                           normalizeTeamName(
                             row[teamNameIndex(teamReport.headers)] ?? "",
-                          ) === normalizeTeamName(selectedTeamName),
+                          ) === normalizeTeamName(prefs.teamName),
                       )
                     }
                     onRowClick={(row) => {
@@ -788,34 +804,7 @@ export function LeagueApp() {
                     emptyText="No teams match your filter."
                   />
                 </section>
-
-                {selectedTeamName &&
-                normalizeTeamName(selectedTeamName) !==
-                  normalizeTeamName(prefs.teamName ?? "") ? (
-                  <section className="space-y-3">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-                        Selected team
-                      </p>
-                      <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-                        {selectedTeamName}
-                      </h3>
-                    </div>
-                    <TeamDetail
-                      teamName={selectedTeamName}
-                      team={detailTeam}
-                      playersByTeam={playersByTeam}
-                      isMyTeam={false}
-                      onClose={() => {
-                        setSelectedTeamName(null);
-                      }}
-                      onSetAsMyTeam={
-                        detailTeam ? () => setMyTeam(detailTeam) : undefined
-                      }
-                    />
-                  </section>
-                ) : null}
-              </>
+              )
             ) : tab === "players" && playerReport ? (
               <DataTable
                 headers={playerReport.headers}

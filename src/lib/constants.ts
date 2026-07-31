@@ -23,10 +23,11 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
 export const PREFERENCES_STORAGE_KEY = "tableside.preferences.v1";
 export const LINEUP_PRESETS_STORAGE_KEY = "tableside.lineups.v1";
 
-export const REPORT_TABS: { id: ReportTab; label: string; hint: string }[] = [
-  { id: "teams", label: "Teams", hint: "Standings" },
-  { id: "players", label: "Players", hint: "Division leaders" },
-  { id: "player-list", label: "Ratings", hint: "Fargo list" },
-  { id: "schedule", label: "Schedule", hint: "By team" },
-  { id: "handicap", label: "Handicap", hint: "This week" },
+export const REPORT_TABS: { id: ReportTab; label: string }[] = [
+  { id: "my-team", label: "My Team" },
+  { id: "standings", label: "Standings" },
+  { id: "players", label: "Players" },
+  { id: "player-list", label: "Ratings" },
+  { id: "schedule", label: "Schedule" },
+  { id: "handicap", label: "Handicap" },
 ];

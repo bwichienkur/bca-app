@@ -106,7 +106,8 @@ export type UserPreferences = {
 };
 
 export type ReportTab =
-  | "teams"
+  | "my-team"
+  | "standings"
   | "players"
   | "player-list"
   | "schedule"
