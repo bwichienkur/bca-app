@@ -313,6 +313,7 @@ export function LeagueApp() {
   const setMyTeam = (team: DivisionTeam) => {
     if (!prefs || !selectedDivision) return;
     setSelectedTeamName(team.name);
+    setTab("my-team");
     persist({
       ...prefs,
       divisionId: selectedDivision.id,
