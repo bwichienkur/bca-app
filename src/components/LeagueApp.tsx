@@ -639,7 +639,10 @@ export function LeagueApp() {
           </div>
 
           <div className="sticky top-0 z-20 -mx-1 flex flex-col gap-3 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 py-2 backdrop-blur md:flex-row md:items-center md:justify-between">
-            <div className="flex min-w-max gap-2 overflow-x-auto pb-1 md:pb-0">
+            <nav
+              aria-label="Reports"
+              className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:gap-2"
+            >
               {REPORT_TABS.map((item) => {
                 const active = tab === item.id;
                 return (
@@ -656,7 +659,7 @@ export function LeagueApp() {
                       }
                     }}
                     className={[
-                      "rounded-full px-3.5 py-2 text-sm font-medium transition",
+                      "rounded-xl px-2 py-2 text-center text-[12px] font-semibold leading-tight transition sm:rounded-full sm:px-3.5 sm:py-2 sm:text-sm sm:font-medium",
                       active
                         ? "bg-[var(--felt)] text-white shadow-sm"
                         : "bg-[var(--surface)]/80 text-[var(--muted)] hover:bg-[var(--surface-2)]",
@@ -666,7 +669,7 @@ export function LeagueApp() {
                   </button>
                 );
               })}
-            </div>
+            </nav>
 
             {(tab === "standings" && !selectedTeamName) ||
             tab === "players" ||
