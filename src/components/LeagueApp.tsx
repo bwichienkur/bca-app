@@ -679,12 +679,12 @@ export function LeagueApp() {
                       {myStandingCells.slice(0, 6).map((cell) => (
                         <div
                           key={cell.label}
-                          className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5"
+                          className="rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-3"
                         >
                           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
                             {cell.label}
                           </p>
-                          <p className="mt-1 truncate text-sm font-semibold tabular-nums text-[var(--ink)]">
+                          <p className="mt-1 truncate text-base font-semibold tabular-nums text-[var(--ink)]">
                             {cell.value}
                           </p>
                         </div>

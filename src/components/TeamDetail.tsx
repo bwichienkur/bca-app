@@ -1,7 +1,7 @@
 "use client";
 
-import { DataTable } from "./DataTable";
 import type { DivisionTeam, PlayersByTeamReport, RosterPlayer } from "@/lib/types";
+import { PlayerStatsCards } from "./PlayerStatsCards";
 
 type TeamDetailProps = {
   teamName: string;
@@ -84,13 +84,19 @@ export function TeamDetail({
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4 md:px-5">
         {statsTeam && playersByTeam ? (
           <section>
-            <h4 className="mb-2 text-sm font-semibold text-[var(--ink)]">
-              Player statistics
-            </h4>
-            <DataTable
+            <div className="mb-3">
+              <h4 className="text-sm font-semibold text-[var(--ink)]">
+                Player statistics
+              </h4>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                Key numbers first — swipe isn’t required to read Win%, games, and
+                points.
+              </p>
+            </div>
+            <PlayerStatsCards
               headers={playersByTeam.headers}
               rows={statsTeam.rows}
-              stickyFirst
+              roster={team?.players}
             />
           </section>
         ) : (
@@ -99,7 +105,7 @@ export function TeamDetail({
           </p>
         )}
 
-        {team ? (
+        {team && !statsTeam ? (
           <section>
             <h4 className="mb-2 text-sm font-semibold text-[var(--ink)]">
               Roster & ratings
