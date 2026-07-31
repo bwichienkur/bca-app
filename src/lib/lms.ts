@@ -479,39 +479,3 @@ export async function fetchDivisionCalculatorContext(divisionId: string): Promis
   calculatorCache.set(divisionId, { fetchedAt: Date.now(), data: payload });
   return payload;
 }
-
-export function findWeeklyMatchupForPlayer(
-  matchups: CalculatorMatchup[],
-  teamId: string,
-  today = new Date(),
-): CalculatorMatchup | null {
-  if (!matchups.length) return null;
-
-  const parsed = matchups
-    .map((matchup) => {
-      const date = new Date(matchup.date);
-      return {
-        matchup,
-        time: Number.isNaN(date.getTime()) ? null : date.getTime(),
-      };
-    })
-    .filter((item) => item.matchup.homeTeamId === teamId || item.matchup.awayTeamId === teamId);
-
-  if (!parsed.length) return null;
-
-  const todayStart = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  ).getTime();
-
-  const upcoming = parsed
-    .filter((item) => item.time !== null && item.time >= todayStart)
-    .sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
-  if (upcoming[0]) return upcoming[0].matchup;
-
-  const past = parsed
-    .filter((item) => item.time !== null && item.time < todayStart)
-    .sort((a, b) => (b.time ?? 0) - (a.time ?? 0));
-  return past[0]?.matchup ?? parsed[0]?.matchup ?? null;
-}
