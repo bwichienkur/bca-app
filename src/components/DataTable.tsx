@@ -169,7 +169,7 @@ export function DataTable({
   return (
     <div className="overflow-x-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
       <table
-        className="w-full table-fixed border-separate border-spacing-0 text-left text-sm"
+        className="w-full table-fixed border-separate border-spacing-0 text-left text-[13px] md:text-sm"
         style={{ minWidth: tableMinWidth }}
       >
         <colgroup>
@@ -195,7 +195,7 @@ export function DataTable({
                       : "none"
                   }
                   className={[
-                    "border-b border-[var(--felt-soft)] px-2 py-3 font-medium tracking-wide md:px-3",
+                    "border-b border-[var(--felt-soft)] px-2.5 py-3 font-semibold tracking-wide text-white md:px-3.5",
                     isSticky
                       ? "sticky left-0 z-10 bg-[var(--felt-soft)]"
                       : "bg-[var(--felt-soft)]",
@@ -265,15 +265,15 @@ export function DataTable({
                     <td
                       key={cellIndex}
                       className={[
-                        "border-b border-[var(--line)] px-2 py-2.5 md:px-3",
+                        "border-b border-[var(--line)] px-2.5 py-3 md:px-3.5",
                         rowBg,
                         isSticky
-                          ? "sticky left-0 z-[1] font-medium text-[var(--ink)]"
+                          ? "sticky left-0 z-[1] font-semibold text-[var(--ink)]"
                           : kind === "rank"
-                            ? "tabular-nums text-[var(--muted)]"
-                            : "tabular-nums text-[var(--muted)]",
+                            ? "tabular-nums font-medium text-[var(--muted)]"
+                            : "tabular-nums font-semibold text-[var(--ink)]",
                         kind === "name"
-                          ? "whitespace-normal break-words font-medium text-[var(--ink)]"
+                          ? "whitespace-normal break-words font-semibold text-[var(--ink)]"
                           : "whitespace-nowrap",
                         isLastRow && isFirst
                           ? "rounded-bl-[calc(var(--radius)-1px)]"
