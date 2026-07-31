@@ -64,7 +64,7 @@ export function Typeahead<T>({
   }, [query, open]);
 
   return (
-    <div ref={rootRef} className="relative w-full">
+    <div ref={rootRef} className="relative z-10 w-full">
       <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
         {label}
       </label>
@@ -122,7 +122,7 @@ export function Typeahead<T>({
         <ul
           id={listId}
           role="listbox"
-          className="absolute z-40 mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border border-[var(--line)] bg-white py-1 shadow-[var(--shadow)]"
+          className="absolute z-50 mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border border-[var(--line)] bg-white py-1 shadow-[var(--shadow)]"
         >
           {filtered.length === 0 ? (
             <li className="px-4 py-3 text-sm text-[var(--muted)]">{emptyText}</li>

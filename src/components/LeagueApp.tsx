@@ -450,7 +450,7 @@ export function LeagueApp() {
         </div>
       ) : null}
 
-      <section className="animate-rise animate-delay-1 mb-5 rounded-[1.5rem] border border-[var(--line)] bg-white/80 p-4 shadow-sm md:p-5">
+      <section className="animate-rise animate-delay-1 relative z-40 mb-5 rounded-[1.5rem] border border-[var(--line)] bg-white/80 p-4 shadow-sm md:p-5">
         <div className="grid gap-4 md:grid-cols-3">
           <Typeahead
             label="League"
@@ -536,7 +536,7 @@ export function LeagueApp() {
         />
       ) : (
         <section className="animate-rise animate-delay-2 space-y-4">
-          <div className="rounded-[1.4rem] border border-[var(--line)] bg-[linear-gradient(135deg,rgba(20,92,69,0.96),rgba(13,61,46,0.98))] px-4 py-4 text-white shadow-[var(--shadow)] md:px-6 md:py-5">
+          <div className="relative z-0 rounded-[1.4rem] border border-[var(--line)] bg-[linear-gradient(135deg,rgba(20,92,69,0.96),rgba(13,61,46,0.98))] px-4 py-4 text-white shadow-[var(--shadow)] md:px-6 md:py-5">
             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.16em] text-white/70">
@@ -631,37 +631,89 @@ export function LeagueApp() {
             ) : null}
           </div>
 
-          <div
-            className={
-              tab === "teams" && selectedTeamName
-                ? "grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.9fr)]"
-                : ""
-            }
-          >
-            <div className="animate-panel min-w-0">
-              {tab === "handicap" ? (
-                <HandicapCalculator
-                  divisionId={selectedDivision.id}
-                  divisionName={selectedDivision.name}
-                  prefs={prefs}
-                  onSelectTeam={({ teamId, teamName }) => {
-                    persist({
-                      ...prefs,
-                      teamId,
-                      teamName,
-                      divisionId: selectedDivision.id,
-                      divisionName: selectedDivision.name,
-                    });
-                    setSelectedTeamName(teamName);
-                  }}
-                />
-              ) : loadingReport ? (
-                <LoadingState label="Pulling report from LMS…" />
-              ) : tab === "teams" && teamReport ? (
-                <>
-                  <p className="mb-3 text-sm text-[var(--muted)]">
-                    Click a team row to open player stats and roster details.
-                  </p>
+          <div className="animate-panel min-w-0 space-y-6">
+            {tab === "handicap" ? (
+              <HandicapCalculator
+                divisionId={selectedDivision.id}
+                divisionName={selectedDivision.name}
+                prefs={prefs}
+                onSelectTeam={({ teamId, teamName }) => {
+                  persist({
+                    ...prefs,
+                    teamId,
+                    teamName,
+                    divisionId: selectedDivision.id,
+                    divisionName: selectedDivision.name,
+                  });
+                  setSelectedTeamName(teamName);
+                }}
+              />
+            ) : loadingReport ? (
+              <LoadingState label="Pulling report from LMS…" />
+            ) : tab === "teams" && teamReport ? (
+              <>
+                <section className="space-y-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
+                      My team
+                    </p>
+                    <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
+                      {prefs.teamName ?? "Not set"}
+                    </h3>
+                    <p className="mt-1 text-sm text-[var(--muted)]">
+                      Your followed team for schedule and handicap — separate from
+                      the division standings below.
+                    </p>
+                  </div>
+                  {prefs.teamName ? (
+                    <TeamDetail
+                      teamName={prefs.teamName}
+                      team={
+                        divisionTeams.find(
+                          (team) =>
+                            normalizeTeamName(team.name) ===
+                            normalizeTeamName(prefs.teamName ?? ""),
+                        ) ?? null
+                      }
+                      playersByTeam={playersByTeam}
+                      isMyTeam
+                      onSetAsMyTeam={
+                        divisionTeams.find(
+                          (team) =>
+                            normalizeTeamName(team.name) ===
+                            normalizeTeamName(prefs.teamName ?? ""),
+                        )
+                          ? () => {
+                              const mine = divisionTeams.find(
+                                (team) =>
+                                  normalizeTeamName(team.name) ===
+                                  normalizeTeamName(prefs.teamName ?? ""),
+                              );
+                              if (mine) setMyTeam(mine);
+                            }
+                          : undefined
+                      }
+                    />
+                  ) : (
+                    <EmptyState
+                      title="Set your team"
+                      body="Use the “My team” typeahead above, or pick a row in standings and set it as your team."
+                    />
+                  )}
+                </section>
+
+                <section className="space-y-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
+                      Division
+                    </p>
+                    <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
+                      Team standings
+                    </h3>
+                    <p className="mt-1 text-sm text-[var(--muted)]">
+                      Click a team row to open that team’s stats below.
+                    </p>
+                  </div>
                   <DataTable
                     headers={teamReport.headers}
                     rows={filteredTeamRows}
@@ -676,65 +728,71 @@ export function LeagueApp() {
                     onRowClick={(row) => {
                       const name =
                         row[teamNameIndex(teamReport.headers)]?.trim() ?? "";
-                      setSelectedTeamName(name);
                       const matched = divisionTeams.find(
                         (team) =>
                           normalizeTeamName(team.name) ===
                           normalizeTeamName(name),
                       );
-                      if (matched) setSelectedTeamName(matched.name);
+                      setSelectedTeamName(matched?.name ?? name);
                     }}
                     emptyText="No teams match your filter."
                   />
-                </>
-              ) : tab === "players" && playerReport ? (
-                <DataTable
-                  headers={playerReport.headers}
-                  rows={filteredPlayerRows}
-                  emptyText="No players match your filter."
-                />
-              ) : tab === "player-list" && playerList ? (
-                <DataTable
-                  headers={playerList.headers}
-                  rows={filteredRatingRows}
-                  emptyText="No ratings match your filter."
-                />
-              ) : tab === "schedule" && schedule ? (
-                prefs.teamName || selectedTeamName ? (
-                  <ScheduleList
-                    days={schedule}
-                    teamName={prefs.teamName ?? selectedTeamName}
-                  />
-                ) : (
-                  <EmptyState
-                    title="Select a team for schedule"
-                    body="Use “My team” or the schedule team typeahead to see only that team’s matches."
-                  />
-                )
-              ) : (
-                <EmptyState title="Nothing to show yet" />
-              )}
-            </div>
+                </section>
 
-            {tab === "teams" && selectedTeamName ? (
-              <TeamDetail
-                teamName={selectedTeamName}
-                team={detailTeam}
-                playersByTeam={playersByTeam}
-                isMyTeam={
-                  normalizeTeamName(prefs.teamName ?? "") ===
-                  normalizeTeamName(selectedTeamName)
-                }
-                onClose={() => {
-                  setSelectedTeamName(null);
-                }}
-                onSetAsMyTeam={
-                  detailTeam
-                    ? () => setMyTeam(detailTeam)
-                    : undefined
-                }
+                {selectedTeamName &&
+                normalizeTeamName(selectedTeamName) !==
+                  normalizeTeamName(prefs.teamName ?? "") ? (
+                  <section className="space-y-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
+                        Selected team
+                      </p>
+                      <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
+                        {selectedTeamName}
+                      </h3>
+                    </div>
+                    <TeamDetail
+                      teamName={selectedTeamName}
+                      team={detailTeam}
+                      playersByTeam={playersByTeam}
+                      isMyTeam={false}
+                      onClose={() => {
+                        setSelectedTeamName(null);
+                      }}
+                      onSetAsMyTeam={
+                        detailTeam ? () => setMyTeam(detailTeam) : undefined
+                      }
+                    />
+                  </section>
+                ) : null}
+              </>
+            ) : tab === "players" && playerReport ? (
+              <DataTable
+                headers={playerReport.headers}
+                rows={filteredPlayerRows}
+                emptyText="No players match your filter."
               />
-            ) : null}
+            ) : tab === "player-list" && playerList ? (
+              <DataTable
+                headers={playerList.headers}
+                rows={filteredRatingRows}
+                emptyText="No ratings match your filter."
+              />
+            ) : tab === "schedule" && schedule ? (
+              prefs.teamName || selectedTeamName ? (
+                <ScheduleList
+                  days={schedule}
+                  teamName={prefs.teamName ?? selectedTeamName}
+                />
+              ) : (
+                <EmptyState
+                  title="Select a team for schedule"
+                  body="Use “My team” or the schedule team typeahead to see only that team’s matches."
+                />
+              )
+            ) : (
+              <EmptyState title="Nothing to show yet" />
+            )}
           </div>
         </section>
       )}
