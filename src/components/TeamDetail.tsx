@@ -1,7 +1,7 @@
 "use client";
 
 import type { DivisionTeam, PlayersByTeamReport, RosterPlayer } from "@/lib/types";
-import { PlayerStatsCards } from "./PlayerStatsCards";
+import { TeamPlayerStats } from "./TeamPlayerStats";
 
 type TeamDetailProps = {
   teamName: string;
@@ -81,32 +81,32 @@ export function TeamDetail({
         ) : null}
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4 md:px-5">
+      <div className="flex-1 space-y-5 overflow-y-auto px-3 py-4 md:px-5">
         {statsTeam && playersByTeam ? (
           <section>
-            <div className="mb-4">
+            <div className="mb-3 px-1">
               <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
                 Player statistics
               </h4>
               <p className="mt-1 text-xs text-[var(--muted)]">
-                Win rate up front, with the rest of the card built for quick
-                scanning.
+                Compact sortable grid — see every name at a glance, then sort by
+                Win%, Fargo, and more.
               </p>
             </div>
-            <PlayerStatsCards
+            <TeamPlayerStats
               headers={playersByTeam.headers}
               rows={statsTeam.rows}
               roster={team?.players}
             />
           </section>
         ) : (
-          <p className="text-sm text-[var(--muted)]">
+          <p className="px-1 text-sm text-[var(--muted)]">
             Player standings for this team aren’t loaded yet.
           </p>
         )}
 
         {team && !statsTeam ? (
-          <section>
+          <section className="px-1">
             <h4 className="mb-2 text-sm font-semibold text-[var(--ink)]">
               Roster & ratings
             </h4>
