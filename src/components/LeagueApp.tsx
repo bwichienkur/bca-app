@@ -73,7 +73,6 @@ export function LeagueApp() {
   const [divisionTeams, setDivisionTeams] = useState<DivisionTeam[]>([]);
   const [filterQuery, setFilterQuery] = useState("");
   const [selectedTeamName, setSelectedTeamName] = useState<string | null>(null);
-  const [selectedTeamRow, setSelectedTeamRow] = useState<number | null>(null);
   const [, startTransition] = useTransition();
 
   const persist = (next: UserPreferences) => {
@@ -246,7 +245,6 @@ export function LeagueApp() {
     setSelectedLeague(league);
     setSelectedDivision(null);
     setSelectedTeamName(null);
-    setSelectedTeamRow(null);
     setLoadingDivisions(true);
     setError(null);
     try {
@@ -288,7 +286,6 @@ export function LeagueApp() {
     setPlayerReport(null);
     setPlayerList(null);
     setSchedule(null);
-    setSelectedTeamRow(null);
     startTransition(() => undefined);
     const base = prefs ?? {
       leagueId: division.leagueId,
@@ -571,9 +568,6 @@ export function LeagueApp() {
                     type="button"
                     onClick={() => {
                       setTab(item.id);
-                      if (item.id !== "teams") {
-                        setSelectedTeamRow(null);
-                      }
                     }}
                     className={[
                       "rounded-full px-3.5 py-2 text-sm font-medium transition",
@@ -671,21 +665,18 @@ export function LeagueApp() {
                   <DataTable
                     headers={teamReport.headers}
                     rows={filteredTeamRows}
-                    selectedRowIndex={
-                      selectedTeamName
-                        ? filteredTeamRows.findIndex(
-                            (row) =>
-                              normalizeTeamName(
-                                row[teamNameIndex(teamReport.headers)] ?? "",
-                              ) === normalizeTeamName(selectedTeamName),
-                          )
-                        : selectedTeamRow
+                    isRowSelected={(row) =>
+                      Boolean(
+                        selectedTeamName &&
+                          normalizeTeamName(
+                            row[teamNameIndex(teamReport.headers)] ?? "",
+                          ) === normalizeTeamName(selectedTeamName),
+                      )
                     }
-                    onRowClick={(row, rowIndex) => {
+                    onRowClick={(row) => {
                       const name =
                         row[teamNameIndex(teamReport.headers)]?.trim() ?? "";
                       setSelectedTeamName(name);
-                      setSelectedTeamRow(rowIndex);
                       const matched = divisionTeams.find(
                         (team) =>
                           normalizeTeamName(team.name) ===
@@ -736,7 +727,6 @@ export function LeagueApp() {
                 }
                 onClose={() => {
                   setSelectedTeamName(null);
-                  setSelectedTeamRow(null);
                 }}
                 onSetAsMyTeam={
                   detailTeam
