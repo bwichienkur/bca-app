@@ -52,11 +52,48 @@ export type ScheduleDay = {
   matches: ScheduleMatch[];
 };
 
+export type RosterPlayer = {
+  id: string;
+  readableId: number;
+  firstName: string;
+  lastName: string;
+  nickname: string | null;
+  fargoRating: number;
+  robustness: string | null;
+  provisionalRating: number | null;
+  handicap: number | null;
+  showOnRoster: boolean;
+  teamId: string;
+  teamName: string;
+};
+
+export type DivisionTeam = {
+  id: string;
+  name: string;
+  isBye: boolean;
+  locationId: string | null;
+  players: RosterPlayer[];
+};
+
+export type CalculatorMatchup = {
+  matchId: string;
+  date: string;
+  location: string;
+  homeTeamId: string;
+  homeTeamName: string;
+  awayTeamId: string;
+  awayTeamName: string;
+};
+
 export type UserPreferences = {
   leagueId: string;
   leagueName: string;
   divisionId: string | null;
   divisionName: string | null;
+  playerId: string | null;
+  playerName: string | null;
+  teamId: string | null;
+  teamName: string | null;
 };
 
 export type ReportTab =
@@ -64,4 +101,5 @@ export type ReportTab =
   | "players"
   | "players-by-team"
   | "player-list"
-  | "schedule";
+  | "schedule"
+  | "handicap";

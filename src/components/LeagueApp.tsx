@@ -14,6 +14,7 @@ import type {
 } from "@/lib/types";
 import { DataTable } from "./DataTable";
 import { EmptyState } from "./EmptyState";
+import { HandicapCalculator } from "./HandicapCalculator";
 import { LoadingState } from "./LoadingState";
 import { PlayersByTeam } from "./PlayersByTeam";
 import { ScheduleList } from "./ScheduleList";
@@ -147,6 +148,10 @@ export function LeagueApp() {
 
   useEffect(() => {
     if (!selectedDivision) return;
+    if (tab === "handicap") {
+      setLoadingReport(false);
+      return;
+    }
 
     let cancelled = false;
 
@@ -212,10 +217,20 @@ export function LeagueApp() {
       );
       setDivisions(data.divisions);
       persist({
+        ...(prefs ?? {
+          playerId: null,
+          playerName: null,
+          teamId: null,
+          teamName: null,
+        }),
         leagueId: league.id,
         leagueName: league.name,
         divisionId: null,
         divisionName: null,
+        playerId: null,
+        playerName: null,
+        teamId: null,
+        teamName: null,
       });
       startTransition(() => setScreen("division"));
     } catch (err) {
@@ -234,16 +249,28 @@ export function LeagueApp() {
     setPlayerList(null);
     setSchedule(null);
 
+    const base = prefs ?? {
+      leagueId: division.leagueId,
+      leagueName: division.leagueName,
+      divisionId: null,
+      divisionName: null,
+      playerId: null,
+      playerName: null,
+      teamId: null,
+      teamName: null,
+    };
+
     if (asDefault || prefs?.divisionId === division.id) {
       persist({
+        ...base,
         leagueId: division.leagueId,
         leagueName: division.leagueName,
         divisionId: division.id,
         divisionName: division.name,
       });
-    } else if (prefs) {
+    } else {
       persist({
-        ...prefs,
+        ...base,
         leagueId: division.leagueId,
         leagueName: division.leagueName,
       });
@@ -253,12 +280,30 @@ export function LeagueApp() {
   };
 
   const setDivisionDefault = () => {
-    if (!selectedDivision) return;
+    if (!selectedDivision || !prefs) return;
     persist({
+      ...prefs,
       leagueId: selectedDivision.leagueId,
       leagueName: selectedDivision.leagueName,
       divisionId: selectedDivision.id,
       divisionName: selectedDivision.name,
+    });
+  };
+
+  const savePlayerIdentity = (identity: {
+    playerId: string;
+    playerName: string;
+    teamId: string;
+    teamName: string;
+  }) => {
+    if (!prefs || !selectedDivision) return;
+    persist({
+      ...prefs,
+      leagueId: selectedDivision.leagueId,
+      leagueName: selectedDivision.leagueName,
+      divisionId: selectedDivision.id,
+      divisionName: selectedDivision.name,
+      ...identity,
     });
   };
 
@@ -506,7 +551,14 @@ export function LeagueApp() {
           </div>
 
           <div className="animate-panel">
-            {loadingReport ? (
+            {tab === "handicap" && prefs ? (
+              <HandicapCalculator
+                divisionId={selectedDivision.id}
+                divisionName={selectedDivision.name}
+                prefs={prefs}
+                onSaveIdentity={savePlayerIdentity}
+              />
+            ) : loadingReport ? (
               <LoadingState label="Pulling report from LMS…" />
             ) : tab === "teams" && teamReport ? (
               <DataTable

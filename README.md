@@ -13,6 +13,7 @@ Defaults to **Palm Beach County BCA Pool League**, with the ability to pick any 
 - Player standings by team
 - Player ratings list
 - Division schedule (match links open on FargoRate LMS)
+- **Handicap calculator** (FargoRate leaguecalc logic): pick who you are, auto-load this week’s matchup, choose lineups (default 5/side), see per-round handicaps
 
 ## Data source
 
