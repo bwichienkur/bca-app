@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { DEFAULT_PLAYERS_PER_TEAM } from "@/lib/constants";
 import {
   buildDefaultFivePlayerFormat,
@@ -48,6 +48,12 @@ type HandicapCalculatorProps = {
 };
 
 type LineupSlot = RosterPlayer | null;
+type LineupSide = "mine" | "opp";
+
+type DragState = {
+  side: LineupSide;
+  from: number;
+};
 
 function playerLabel(player: RosterPlayer): string {
   return `${player.firstName} ${player.lastName}`.trim();
@@ -90,6 +96,15 @@ function compactPlayers(lineup: LineupSlot[]): RosterPlayer[] {
   return lineup.filter((player): player is RosterPlayer => Boolean(player));
 }
 
+function presetId(teamId: string, name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `${teamId}:${slug || "lineup"}`;
+}
+
 export function HandicapCalculator({
   divisionId,
   divisionName,
@@ -107,7 +122,9 @@ export function HandicapCalculator({
   const [weekMatchup, setWeekMatchup] = useState<CalculatorMatchup | null>(null);
   const [presets, setPresets] = useState<LineupPreset[]>([]);
   const [presetName, setPresetName] = useState("Default lineup");
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [presetStatus, setPresetStatus] = useState<string | null>(null);
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const [dropTarget, setDropTarget] = useState<DragState | null>(null);
 
   useEffect(() => {
     setPresets(loadLineupPresets());
@@ -234,6 +251,7 @@ export function HandicapCalculator({
           : defaultTopLineup(team, slotCount),
       );
       setOppLineup(defaultTopLineup(opponent, slotCount));
+      if (saved) setPresetName(saved.name);
     } else {
       setOpponentTeamId(null);
       setOppLineup(emptyLineup(slotCount));
@@ -242,12 +260,14 @@ export function HandicapCalculator({
           ? lineupFromIds(team, saved.playerIds, slotCount)
           : defaultTopLineup(team, slotCount),
       );
+      if (saved) setPresetName(saved.name);
     }
   }
 
   const chooseMyTeam = (team: DivisionTeam) => {
     setMyTeamId(team.id);
     onSelectTeam({ teamId: team.id, teamName: team.name });
+    setPresetStatus(null);
     if (data) applyTeamMatchup(data, team.id);
   };
 
@@ -258,7 +278,7 @@ export function HandicapCalculator({
   };
 
   const setSlotPlayer = (
-    side: "mine" | "opp",
+    side: LineupSide,
     slotIndex: number,
     playerId: string,
   ) => {
@@ -276,10 +296,7 @@ export function HandicapCalculator({
     const player = roster.find((item) => item.id === playerId) ?? null;
     if (!player) return;
 
-    // If this player is already in another slot, clear that slot
-    const existingIndex = current.findIndex(
-      (item) => item?.id === player.id,
-    );
+    const existingIndex = current.findIndex((item) => item?.id === player.id);
     if (existingIndex >= 0 && existingIndex !== slotIndex) {
       current[existingIndex] = null;
     }
@@ -287,7 +304,7 @@ export function HandicapCalculator({
     setter(current);
   };
 
-  const moveInLineup = (side: "mine" | "opp", from: number, to: number) => {
+  const moveInLineup = (side: LineupSide, from: number, to: number) => {
     const current = side === "mine" ? [...myLineup] : [...oppLineup];
     const setter = side === "mine" ? setMyLineup : setOppLineup;
     if (
@@ -305,22 +322,49 @@ export function HandicapCalculator({
   };
 
   const savePreset = () => {
-    if (!myTeamId || !isComplete(myLineup, slots)) return;
+    if (!myTeamId) {
+      setPresetStatus("Select your team before saving a lineup.");
+      return;
+    }
+    if (!isComplete(myLineup, slots)) {
+      setPresetStatus(`Fill all ${slots} slots before saving.`);
+      return;
+    }
+
+    const name = presetName.trim() || "Default lineup";
     const preset: LineupPreset = {
-      id: `${myTeamId}-${Date.now()}`,
-      name: presetName.trim() || "Lineup",
+      id: presetId(myTeamId, name),
+      name,
       divisionId,
       teamId: myTeamId,
       playerIds: compactPlayers(myLineup).map((player) => player.id),
       updatedAt: new Date().toISOString(),
     };
-    setPresets(upsertLineupPreset(preset));
+
+    try {
+      const next = upsertLineupPreset(preset);
+      setPresets(next);
+      setPresetName(name);
+      setPresetStatus(`Saved “${name}”. Tap a preset anytime to load it.`);
+    } catch {
+      setPresetStatus("Couldn't save lineup — local storage may be blocked.");
+    }
   };
 
   const applyPreset = (preset: LineupPreset) => {
-    if (!myTeam) return;
+    if (!myTeam) {
+      setPresetStatus("Select your team first.");
+      return;
+    }
     setMyLineup(lineupFromIds(myTeam, preset.playerIds, slots));
     setPresetName(preset.name);
+    setPresetStatus(`Loaded “${preset.name}”.`);
+  };
+
+  const removePreset = (preset: LineupPreset) => {
+    const next = deleteLineupPreset(preset.id);
+    setPresets(next);
+    setPresetStatus(`Deleted “${preset.name}”.`);
   };
 
   const teamPresets = presets.filter(
@@ -343,7 +387,7 @@ export function HandicapCalculator({
 
   return (
     <div className="animate-panel space-y-5">
-      <section className="rounded-[1.4rem] border border-[var(--line)] bg-white/85 px-4 py-4 shadow-sm md:px-5">
+      <section className="rounded-[1.4rem] border border-[var(--line)] bg-[var(--surface)] px-4 py-4 shadow-sm md:px-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
@@ -358,7 +402,7 @@ export function HandicapCalculator({
             </p>
           </div>
           {weekMatchup ? (
-            <div className="rounded-2xl bg-[var(--felt)] px-4 py-3 text-white md:min-w-[280px]">
+            <div className="rounded-2xl bg-[var(--felt-soft)] px-4 py-3 text-white md:min-w-[280px]">
               <p className="text-[11px] uppercase tracking-[0.14em] text-white/70">
                 Auto-matched · {weekMatchup.date}
               </p>
@@ -422,7 +466,7 @@ export function HandicapCalculator({
               "rounded-full px-3 py-1.5 text-xs font-semibold",
               iAmHome
                 ? "bg-[var(--felt)] text-white"
-                : "border border-[var(--line)] bg-white text-[var(--muted)]",
+                : "border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]",
             ].join(" ")}
           >
             We’re home (Team One)
@@ -434,7 +478,7 @@ export function HandicapCalculator({
               "rounded-full px-3 py-1.5 text-xs font-semibold",
               !iAmHome
                 ? "bg-[var(--felt)] text-white"
-                : "border border-[var(--line)] bg-white text-[var(--muted)]",
+                : "border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]",
             ].join(" ")}
           >
             We’re away (Team Two)
@@ -450,6 +494,7 @@ export function HandicapCalculator({
       ) : (
         <section className="grid gap-4 xl:grid-cols-[1.1fr_1.1fr_0.9fr]">
           <LineupPicker
+            side="mine"
             title={myTeam.name}
             subtitle={`Choose a player for each of ${slots} slots`}
             roster={myTeam.players}
@@ -459,11 +504,14 @@ export function HandicapCalculator({
               setSlotPlayer("mine", slotIndex, playerId)
             }
             onMove={(from, to) => moveInLineup("mine", from, to)}
-            dragIndex={dragIndex}
-            setDragIndex={setDragIndex}
+            dragState={dragState}
+            dropTarget={dropTarget}
+            setDragState={setDragState}
+            setDropTarget={setDropTarget}
           />
           {oppTeam ? (
             <LineupPicker
+              side="opp"
               title={oppTeam.name}
               subtitle={`Choose ${slots} opponents by slot`}
               roster={oppTeam.players}
@@ -475,8 +523,10 @@ export function HandicapCalculator({
                 setSlotPlayer("opp", slotIndex, playerId)
               }
               onMove={(from, to) => moveInLineup("opp", from, to)}
-              dragIndex={dragIndex}
-              setDragIndex={setDragIndex}
+              dragState={dragState}
+              dropTarget={dropTarget}
+              setDragState={setDragState}
+              setDropTarget={setDropTarget}
             />
           ) : (
             <EmptyState
@@ -485,58 +535,92 @@ export function HandicapCalculator({
             />
           )}
 
-          <div className="space-y-3 rounded-[1.3rem] border border-[var(--line)] bg-white/85 p-4 shadow-sm">
+          <div className="space-y-3 rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
             <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
               Saved lineups
             </h4>
             <p className="text-sm text-[var(--muted)]">
-              Preset your {slots} for quick handicap checks before league night.
+              Store your {slots}-player order for this team, then load it before
+              league night.
             </p>
             <input
               value={presetName}
-              onChange={(event) => setPresetName(event.target.value)}
+              onChange={(event) => {
+                setPresetName(event.target.value);
+                setPresetStatus(null);
+              }}
               placeholder="Preset name"
-              className="w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--felt-soft)]"
+              className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]"
             />
             <button
               type="button"
               disabled={!isComplete(myLineup, slots)}
               onClick={savePreset}
-              className="w-full rounded-full bg-[var(--felt)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-40"
+              className="w-full rounded-full bg-[var(--felt)] px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--felt-soft)] disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Save current lineup
+              {teamPresets.some(
+                (preset) =>
+                  preset.name.trim().toLowerCase() ===
+                  presetName.trim().toLowerCase(),
+              )
+                ? "Update saved lineup"
+                : "Save current lineup"}
             </button>
+            {presetStatus ? (
+              <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
+                {presetStatus}
+              </p>
+            ) : null}
             <ul className="space-y-2">
               {teamPresets.length === 0 ? (
-                <li className="text-sm text-[var(--muted)]">No presets yet.</li>
+                <li className="rounded-xl border border-dashed border-[var(--line)] px-3 py-4 text-center text-sm text-[var(--muted)]">
+                  No presets yet — fill all slots, name it, then save.
+                </li>
               ) : (
-                teamPresets.map((preset) => (
-                  <li
-                    key={preset.id}
-                    className="rounded-xl border border-[var(--line)] px-3 py-2"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <button
-                        type="button"
-                        onClick={() => applyPreset(preset)}
-                        className="text-left text-sm font-medium text-[var(--ink)]"
-                      >
-                        {preset.name}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPresets(deleteLineupPreset(preset.id))}
-                        className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--chalk)]"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                    <p className="mt-1 text-[11px] text-[var(--muted)]">
-                      {preset.playerIds.length} players ·{" "}
-                      {new Date(preset.updatedAt).toLocaleDateString()}
-                    </p>
-                  </li>
-                ))
+                teamPresets.map((preset) => {
+                  const names = lineupFromIds(myTeam, preset.playerIds, slots)
+                    .map((player) => (player ? playerLabel(player) : "—"))
+                    .join(" · ");
+                  return (
+                    <li
+                      key={preset.id}
+                      className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2.5"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => applyPreset(preset)}
+                          className="text-left text-sm font-semibold text-[var(--ink)] hover:text-[var(--felt-deep)]"
+                        >
+                          {preset.name}
+                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => applyPreset(preset)}
+                            className="rounded-full bg-[var(--felt)]/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--felt-deep)]"
+                          >
+                            Load
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removePreset(preset)}
+                            className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--danger)]"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-[11px] text-[var(--muted)]">
+                        {names}
+                      </p>
+                      <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                        {preset.playerIds.length} players ·{" "}
+                        {new Date(preset.updatedAt).toLocaleString()}
+                      </p>
+                    </li>
+                  );
+                })
               )}
             </ul>
           </div>
@@ -567,7 +651,7 @@ export function HandicapCalculator({
               return (
                 <article
                   key={result.round}
-                  className="rounded-2xl border border-[var(--line)] bg-white/90 px-4 py-3 shadow-sm"
+                  className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3 shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -621,6 +705,7 @@ export function HandicapCalculator({
 }
 
 function LineupPicker({
+  side,
   title,
   subtitle,
   roster,
@@ -628,9 +713,12 @@ function LineupPicker({
   slots,
   onSelectSlot,
   onMove,
-  dragIndex,
-  setDragIndex,
+  dragState,
+  dropTarget,
+  setDragState,
+  setDropTarget,
 }: {
+  side: LineupSide;
   title: string;
   subtitle: string;
   roster: RosterPlayer[];
@@ -638,8 +726,10 @@ function LineupPicker({
   slots: number;
   onSelectSlot: (slotIndex: number, playerId: string) => void;
   onMove: (from: number, to: number) => void;
-  dragIndex: number | null;
-  setDragIndex: (index: number | null) => void;
+  dragState: DragState | null;
+  dropTarget: DragState | null;
+  setDragState: (state: DragState | null) => void;
+  setDropTarget: (state: DragState | null) => void;
 }) {
   const filled = filledCount(lineup);
   const sortedRoster = useMemo(
@@ -647,8 +737,13 @@ function LineupPicker({
     [roster],
   );
 
+  const clearDrag = () => {
+    setDragState(null);
+    setDropTarget(null);
+  };
+
   return (
-    <div className="rounded-[1.3rem] border border-[var(--line)] bg-white/85 p-4 shadow-sm">
+    <div className="rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
       <div className="mb-3 flex items-baseline justify-between gap-2">
         <div>
           <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
@@ -661,7 +756,7 @@ function LineupPicker({
             "rounded-full px-2.5 py-1 text-xs font-semibold",
             filled === slots
               ? "bg-[var(--felt)] text-white"
-              : "bg-[var(--paper-2)] text-[var(--muted)]",
+              : "bg-[var(--surface-2)] text-[var(--muted)]",
           ].join(" ")}
         >
           {filled}/{slots}
@@ -681,50 +776,199 @@ function LineupPicker({
           const options = sortedRoster.filter(
             (item) => item.id === player?.id || !takenElsewhere.has(item.id),
           );
+          const isDragging =
+            dragState?.side === side && dragState.from === index;
+          const isDropTarget =
+            dropTarget?.side === side &&
+            dropTarget.from === index &&
+            dragState?.side === side &&
+            dragState.from !== index;
 
           return (
-            <li
-              key={index}
-              draggable={Boolean(player)}
-              onDragStart={() => setDragIndex(index)}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={() => {
-                if (dragIndex !== null) onMove(dragIndex, index);
-                setDragIndex(null);
-              }}
-              className="rounded-xl border border-[var(--line)] bg-[var(--paper)]/70 px-3 py-2.5"
-            >
-              <div className="mb-1.5 flex items-center justify-between gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                  Slot #{index + 1}
+            <li key={index} className="relative">
+              {isDropTarget ? (
+                <div
+                  className="pointer-events-none absolute -top-1 left-2 right-2 z-10 h-1 rounded-full bg-[var(--felt)] shadow-[0_0_12px_rgba(61,155,117,0.7)]"
+                  aria-hidden
+                />
+              ) : null}
+              <div
+                draggable={Boolean(player)}
+                onDragStart={(event) => {
+                  if (!player) return;
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", String(index));
+                  setDragState({ side, from: index });
+                }}
+                onDragEnd={clearDrag}
+                onDragOver={(event) => {
+                  if (!dragState || dragState.side !== side) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  setDropTarget({ side, from: index });
+                }}
+                onDragLeave={() => {
+                  if (
+                    dropTarget?.side === side &&
+                    dropTarget.from === index
+                  ) {
+                    setDropTarget(null);
+                  }
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (dragState?.side === side) {
+                    onMove(dragState.from, index);
+                  }
+                  clearDrag();
+                }}
+                className={[
+                  "rounded-xl border px-3 py-2.5 transition",
+                  isDragging
+                    ? "scale-[0.98] border-[var(--amber)]/60 bg-[var(--surface-3)] opacity-55"
+                    : isDropTarget
+                      ? "animate-drop-target border-[var(--felt)] bg-[color-mix(in_srgb,var(--felt)_18%,var(--surface-2))]"
+                      : "border-[var(--line)] bg-[var(--surface-2)]",
+                  player ? "cursor-grab active:cursor-grabbing" : "",
+                ].join(" ")}
+              >
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                    <span
+                      className={[
+                        "inline-flex h-5 w-5 items-center justify-center rounded-md border text-[10px]",
+                        player
+                          ? "border-[var(--line-strong)] text-[var(--felt-deep)]"
+                          : "border-[var(--line)] text-[var(--muted)]",
+                      ].join(" ")}
+                      aria-hidden
+                    >
+                      ⠿
+                    </span>
+                    Slot #{index + 1}
+                  </span>
                   {player ? (
-                    <span className="ml-2 normal-case tracking-normal text-[var(--felt)]">
-                      · drag to reorder
+                    <span className="tabular-nums text-xs font-semibold text-[var(--felt)]">
+                      {player.fargoRating}
                     </span>
                   ) : null}
-                </span>
-                {player ? (
-                  <span className="tabular-nums text-xs font-semibold text-[var(--felt)]">
-                    {player.fargoRating}
-                  </span>
-                ) : null}
+                </div>
+                <PlayerSelect
+                  value={player?.id ?? ""}
+                  options={options}
+                  placeholder="Open slot…"
+                  onChange={(playerId) => onSelectSlot(index, playerId)}
+                />
               </div>
-              <select
-                value={player?.id ?? ""}
-                onChange={(event) => onSelectSlot(index, event.target.value)}
-                className="w-full rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm text-[var(--ink)] outline-none focus:ring-2 focus:ring-[var(--felt-soft)]"
-              >
-                <option value="">Open slot…</option>
-                {options.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {playerLabel(option)} · {option.fargoRating}
-                  </option>
-                ))}
-              </select>
             </li>
           );
         })}
       </ol>
+    </div>
+  );
+}
+
+function PlayerSelect({
+  value,
+  options,
+  placeholder,
+  onChange,
+}: {
+  value: string;
+  options: RosterPlayer[];
+  placeholder: string;
+  onChange: (playerId: string) => void;
+}) {
+  const listId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(0);
+
+  const selected = options.find((option) => option.id === value) ?? null;
+  const menuOptions = useMemo(
+    () => [{ id: "", label: placeholder, rating: null as number | null }, ...options.map((option) => ({
+      id: option.id,
+      label: playerLabel(option),
+      rating: option.fargoRating as number | null,
+    }))],
+    [options, placeholder],
+  );
+
+  useEffect(() => {
+    function onDoc(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const index = Math.max(
+      0,
+      menuOptions.findIndex((option) => option.id === value),
+    );
+    setHighlight(index);
+  }, [open, menuOptions, value]);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-center justify-between gap-2 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-left text-sm text-[var(--ink)] outline-none transition hover:border-[var(--line-strong)] focus:ring-2 focus:ring-[var(--felt-soft)]"
+      >
+        <span className={selected ? "font-medium" : "text-[var(--muted)]"}>
+          {selected
+            ? `${playerLabel(selected)} · ${selected.fargoRating}`
+            : placeholder}
+        </span>
+        <span className="text-[var(--muted)]">▾</span>
+      </button>
+
+      {open ? (
+        <ul
+          id={listId}
+          role="listbox"
+          className="absolute z-40 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-[var(--line-strong)] bg-[var(--surface)] py-1 shadow-[var(--shadow)]"
+        >
+          {menuOptions.map((option, index) => {
+            const active = index === highlight;
+            const isSelected = option.id === value;
+            return (
+              <li key={`${option.id || "empty"}-${index}`}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onMouseEnter={() => setHighlight(index)}
+                  onClick={() => {
+                    onChange(option.id);
+                    setOpen(false);
+                  }}
+                  className={[
+                    "flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm",
+                    active ? "bg-[var(--surface-3)]" : "bg-transparent",
+                    isSelected
+                      ? "font-semibold text-[var(--felt-deep)]"
+                      : "text-[var(--ink)]",
+                  ].join(" ")}
+                >
+                  <span>{option.label}</span>
+                  {option.rating != null ? (
+                    <span className="tabular-nums text-xs text-[var(--muted)]">
+                      {option.rating}
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
     </div>
   );
 }

@@ -111,7 +111,7 @@ export function Typeahead<T>({
               setOpen(false);
             }
           }}
-          className="w-full rounded-2xl border border-[var(--line)] bg-white/90 px-4 py-3 pr-10 outline-none ring-[var(--felt-soft)] transition focus:ring-2 disabled:opacity-50"
+          className="w-full rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 pr-10 text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2 disabled:opacity-50"
         />
         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">
           ▾
@@ -122,7 +122,7 @@ export function Typeahead<T>({
         <ul
           id={listId}
           role="listbox"
-          className="absolute z-50 mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border border-[var(--line)] bg-white py-1 shadow-[var(--shadow)]"
+          className="absolute z-50 mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border border-[var(--line-strong)] bg-[var(--surface)] py-1 shadow-[var(--shadow)]"
         >
           {filtered.length === 0 ? (
             <li className="px-4 py-3 text-sm text-[var(--muted)]">{emptyText}</li>
@@ -143,8 +143,12 @@ export function Typeahead<T>({
                     }}
                     className={[
                       "flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm",
-                      active ? "bg-[var(--paper-2)]" : "bg-white",
-                      selected ? "font-semibold text-[var(--felt-deep)]" : "text-[var(--ink)]",
+                      active
+                        ? "bg-[var(--surface-3)]"
+                        : "bg-transparent",
+                      selected
+                        ? "font-semibold text-[var(--felt-deep)]"
+                        : "text-[var(--ink)]",
                     ].join(" ")}
                   >
                     <span>

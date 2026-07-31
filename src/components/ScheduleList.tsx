@@ -49,7 +49,7 @@ export function ScheduleList({ days, teamName }: ScheduleListProps) {
         {filtered.map((day) => (
           <section
             key={day.date}
-            className="animate-rise rounded-[1.3rem] border border-[var(--line)] bg-white/80 p-4 shadow-sm"
+            className="animate-rise rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)]/90 p-4 shadow-sm"
           >
             <div className="mb-3 flex items-baseline justify-between gap-3">
               <h3 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
@@ -91,7 +91,7 @@ export function ScheduleList({ days, teamName }: ScheduleListProps) {
                         href={match.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="block rounded-2xl border border-[var(--line)] bg-[var(--paper)]/60 px-4 py-3 transition hover:border-[var(--felt-soft)] hover:bg-white"
+                        className="block rounded-2xl border border-[var(--line)] bg-[var(--paper)]/60 px-4 py-3 transition hover:border-[var(--felt-soft)] hover:bg-[var(--surface-2)]"
                       >
                         {content}
                       </a>

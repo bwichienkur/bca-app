@@ -29,7 +29,7 @@ export function TeamDetail({
   );
 
   return (
-    <aside className="animate-panel flex h-full flex-col rounded-[1.4rem] border border-[var(--line)] bg-white/90 shadow-[var(--shadow)]">
+    <aside className="animate-panel flex h-full flex-col rounded-[1.4rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
       <div className="border-b border-[var(--line)] px-4 py-4 md:px-5">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -95,7 +95,7 @@ export function TeamDetail({
             <h4 className="mb-2 text-sm font-semibold text-[var(--ink)]">
               Roster & ratings
             </h4>
-            <ul className="divide-y divide-[var(--line)] rounded-2xl border border-[var(--line)] bg-[var(--paper)]/50">
+            <ul className="divide-y divide-[var(--line)] rounded-2xl border border-[var(--line)] bg-[var(--surface-2)]">
               {team.players.map((player) => (
                 <li
                   key={player.id}

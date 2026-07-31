@@ -22,15 +22,16 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "Tableside",
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#145c45",
+  themeColor: "#0d1310",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  colorScheme: "dark",
 };
 
 export default function RootLayout({
@@ -39,7 +40,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body className={`${display.variable} ${body.variable} antialiased`}>
         {children}
       </body>

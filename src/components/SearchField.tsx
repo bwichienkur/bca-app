@@ -20,7 +20,7 @@ export function SearchField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-2xl border border-[var(--line)] bg-white/90 px-4 py-2.5 text-sm outline-none ring-[var(--felt-soft)] transition focus:ring-2"
+        className="w-full rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2"
       />
     </label>
   );

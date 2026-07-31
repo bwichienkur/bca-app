@@ -167,7 +167,7 @@ export function DataTable({
   };
 
   return (
-    <div className="overflow-x-auto rounded-[var(--radius)] border border-[var(--line)] bg-white/85 shadow-[var(--shadow)]">
+    <div className="overflow-x-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
       <table
         className="w-full table-fixed border-separate border-spacing-0 text-left text-sm"
         style={{ minWidth: tableMinWidth }}
@@ -177,7 +177,7 @@ export function DataTable({
             <col key={`col-${index}`} style={{ width: column.width }} />
           ))}
         </colgroup>
-        <thead className="bg-[var(--felt-deep)] text-white">
+        <thead className="bg-[var(--felt-soft)] text-white">
           <tr>
             {headers.map((header, index) => {
               const active = sortColumn === index;
@@ -195,10 +195,10 @@ export function DataTable({
                       : "none"
                   }
                   className={[
-                    "border-b border-[var(--felt-deep)] px-2 py-3 font-medium tracking-wide md:px-3",
+                    "border-b border-[var(--felt-soft)] px-2 py-3 font-medium tracking-wide md:px-3",
                     isSticky
-                      ? "sticky left-0 z-10 bg-[var(--felt-deep)]"
-                      : "bg-[var(--felt-deep)]",
+                      ? "sticky left-0 z-10 bg-[var(--felt-soft)]"
+                      : "bg-[var(--felt-soft)]",
                     isFirst ? "rounded-tl-[calc(var(--radius)-1px)]" : "",
                     isLast ? "rounded-tr-[calc(var(--radius)-1px)]" : "",
                   ]
@@ -240,10 +240,10 @@ export function DataTable({
               : selectedRowIndex === originalIndex;
             const clickable = Boolean(onRowClick);
             const rowBg = selected
-              ? "bg-[color-mix(in_srgb,var(--felt)_14%,white)]"
+              ? "bg-[color-mix(in_srgb,var(--felt)_22%,var(--surface))]"
               : displayIndex % 2 === 0
-                ? "bg-white"
-                : "bg-[var(--paper-2)]/55";
+                ? "bg-[var(--surface)]"
+                : "bg-[var(--surface-2)]";
             return (
               <tr
                 key={`${originalIndex}-${displayIndex}`}
@@ -252,7 +252,7 @@ export function DataTable({
                 }
                 className={[
                   clickable
-                    ? "cursor-pointer transition hover:bg-[color-mix(in_srgb,var(--amber)_12%,white)]"
+                    ? "cursor-pointer transition hover:bg-[color-mix(in_srgb,var(--amber)_16%,var(--surface))]"
                     : "",
                 ].join(" ")}
               >
