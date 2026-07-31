@@ -429,7 +429,7 @@ export function LeagueApp() {
               {statsStrip.map((stat) => (
                 <div
                   key={stat.label}
-                  className="rounded-2xl border border-[var(--line)] bg-white/75 px-3 py-2.5"
+                  className="rounded-2xl border border-[var(--line)] bg-[var(--surface)]/80 px-3 py-2.5"
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
                     {stat.label}
@@ -445,12 +445,12 @@ export function LeagueApp() {
       </header>
 
       {error ? (
-        <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <div className="mb-4 rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
           {error}
         </div>
       ) : null}
 
-      <section className="animate-rise animate-delay-1 relative z-40 mb-5 rounded-[1.5rem] border border-[var(--line)] bg-white/80 p-4 shadow-sm md:p-5">
+      <section className="animate-rise animate-delay-1 relative z-40 mb-5 rounded-[1.5rem] border border-[var(--line)] bg-[var(--surface)]/90 p-4 shadow-sm md:p-5">
         <div className="grid gap-4 md:grid-cols-3">
           <Typeahead
             label="League"
@@ -573,7 +573,7 @@ export function LeagueApp() {
                       "rounded-full px-3.5 py-2 text-sm font-medium transition",
                       active
                         ? "bg-[var(--felt)] text-white shadow-sm"
-                        : "bg-white/75 text-[var(--muted)] hover:bg-white",
+                        : "bg-[var(--surface)]/80 text-[var(--muted)] hover:bg-[var(--surface-2)]",
                     ].join(" ")}
                   >
                     <span>{item.label}</span>

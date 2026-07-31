@@ -55,8 +55,26 @@ export function saveLineupPresets(presets: LineupPreset[]): void {
 }
 
 export function upsertLineupPreset(preset: LineupPreset): LineupPreset[] {
-  const existing = loadLineupPresets().filter((item) => item.id !== preset.id);
-  const next = [preset, ...existing].slice(0, 40);
+  const existing = loadLineupPresets();
+  const nameKey = preset.name.trim().toLowerCase();
+  const matchIndex = existing.findIndex(
+    (item) =>
+      item.divisionId === preset.divisionId &&
+      item.teamId === preset.teamId &&
+      item.name.trim().toLowerCase() === nameKey,
+  );
+
+  const nextPreset: LineupPreset =
+    matchIndex >= 0
+      ? { ...preset, id: existing[matchIndex].id }
+      : preset;
+
+  const withoutMatch =
+    matchIndex >= 0
+      ? existing.filter((_, index) => index !== matchIndex)
+      : existing.filter((item) => item.id !== nextPreset.id);
+
+  const next = [nextPreset, ...withoutMatch].slice(0, 40);
   saveLineupPresets(next);
   return next;
 }

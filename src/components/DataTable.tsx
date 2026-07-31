@@ -15,6 +15,8 @@ type DataTableProps = {
   emptyText?: string;
 };
 
+type ColumnKind = "rank" | "name" | "stat";
+
 function compareValues(a: string, b: string): number {
   const aTrim = (a ?? "").trim();
   const bTrim = (b ?? "").trim();
@@ -51,10 +53,46 @@ function compareValues(a: string, b: string): number {
   });
 }
 
-function columnWidth(index: number, total: number): string {
-  if (total <= 1) return "100%";
-  if (index === 0) return "28%";
-  return `${Math.floor(72 / (total - 1))}%`;
+function columnKind(header: string): ColumnKind {
+  const h = header.trim().toLowerCase();
+  if (h === "#" || h === "rank" || h === "rk" || h === "pos") return "rank";
+  if (
+    h === "team" ||
+    h === "name" ||
+    h === "player" ||
+    h.includes("name") ||
+    h.includes("team") ||
+    h.includes("player")
+  ) {
+    return "name";
+  }
+  return "stat";
+}
+
+/** Fixed rem widths so short rank cols stay narrow and headers stay readable. */
+function columnWidth(header: string, kind: ColumnKind): string {
+  if (kind === "rank") return "3rem";
+  if (kind === "name") return "14rem";
+
+  const label = header.trim();
+  const len = label.length;
+  // Room for label + sort chevron + cell padding
+  if (len <= 2) return "3.25rem";
+  if (len <= 3) return "3.75rem";
+  if (len <= 4) return "4.5rem";
+  if (len <= 5) return "5.25rem";
+  return `${Math.min(len * 0.85 + 1.5, 8)}rem`;
+}
+
+function stickyColumnIndex(headers: string[], stickyEnabled: boolean): number {
+  if (!stickyEnabled || headers.length === 0) return -1;
+
+  const nameIndex = headers.findIndex((header) => columnKind(header) === "name");
+  if (nameIndex >= 0) return nameIndex;
+
+  // Prefer sticking the second column when the first is only a rank index
+  if (columnKind(headers[0] ?? "") === "rank" && headers.length > 1) return 1;
+  return 0;
 }
 
 export function DataTable({
@@ -68,6 +106,28 @@ export function DataTable({
 }: DataTableProps) {
   const [sortColumn, setSortColumn] = useState<number | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  const columnMeta = useMemo(
+    () =>
+      headers.map((header) => {
+        const kind = columnKind(header);
+        return { kind, width: columnWidth(header, kind) };
+      }),
+    [headers],
+  );
+
+  const stickyIndex = useMemo(
+    () => stickyColumnIndex(headers, stickyFirst),
+    [headers, stickyFirst],
+  );
+
+  const tableMinWidth = useMemo(() => {
+    const totalRem = columnMeta.reduce((sum, column) => {
+      const value = Number.parseFloat(column.width);
+      return sum + (Number.isFinite(value) ? value : 4);
+    }, 0);
+    return `${totalRem}rem`;
+  }, [columnMeta]);
 
   const sortedRows = useMemo(() => {
     if (sortColumn === null) {
@@ -107,20 +167,21 @@ export function DataTable({
   };
 
   return (
-    <div className="overflow-x-auto rounded-[var(--radius)] border border-[var(--line)] bg-white/85 shadow-[var(--shadow)]">
-      <table className="w-full min-w-[36rem] table-fixed border-separate border-spacing-0 text-left text-sm">
+    <div className="overflow-x-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <table
+        className="w-full table-fixed border-separate border-spacing-0 text-left text-sm"
+        style={{ minWidth: tableMinWidth }}
+      >
         <colgroup>
-          {headers.map((_, index) => (
-            <col
-              key={`col-${index}`}
-              style={{ width: columnWidth(index, headers.length) }}
-            />
+          {columnMeta.map((column, index) => (
+            <col key={`col-${index}`} style={{ width: column.width }} />
           ))}
         </colgroup>
-        <thead className="bg-[var(--felt-deep)] text-white">
+        <thead className="bg-[var(--felt-soft)] text-white">
           <tr>
             {headers.map((header, index) => {
               const active = sortColumn === index;
+              const isSticky = index === stickyIndex;
               const isFirst = index === 0;
               const isLast = index === headers.length - 1;
               return (
@@ -134,10 +195,10 @@ export function DataTable({
                       : "none"
                   }
                   className={[
-                    "border-b border-[var(--felt-deep)] px-3 py-3 font-medium tracking-wide md:px-4",
-                    isFirst && stickyFirst
-                      ? "sticky left-0 z-10 bg-[var(--felt-deep)]"
-                      : "bg-[var(--felt-deep)]",
+                    "border-b border-[var(--felt-soft)] px-2 py-3 font-medium tracking-wide md:px-3",
+                    isSticky
+                      ? "sticky left-0 z-10 bg-[var(--felt-soft)]"
+                      : "bg-[var(--felt-soft)]",
                     isFirst ? "rounded-tl-[calc(var(--radius)-1px)]" : "",
                     isLast ? "rounded-tr-[calc(var(--radius)-1px)]" : "",
                   ]
@@ -154,9 +215,9 @@ export function DataTable({
                           : "Sorted descending — click to clear sort"
                         : "Sort column"
                     }
-                    className="inline-flex max-w-full items-center gap-1.5 rounded-md px-0.5 py-0.5 transition hover:text-[var(--amber)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                    className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-0.5 py-0.5 transition hover:text-[var(--amber)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
                   >
-                    <span className="truncate">{header}</span>
+                    <span>{header}</span>
                     <span
                       className={[
                         "shrink-0 text-[10px] leading-none",
@@ -179,10 +240,10 @@ export function DataTable({
               : selectedRowIndex === originalIndex;
             const clickable = Boolean(onRowClick);
             const rowBg = selected
-              ? "bg-[color-mix(in_srgb,var(--felt)_14%,white)]"
+              ? "bg-[color-mix(in_srgb,var(--felt)_22%,var(--surface))]"
               : displayIndex % 2 === 0
-                ? "bg-white"
-                : "bg-[var(--paper-2)]/55";
+                ? "bg-[var(--surface)]"
+                : "bg-[var(--surface-2)]";
             return (
               <tr
                 key={`${originalIndex}-${displayIndex}`}
@@ -191,23 +252,29 @@ export function DataTable({
                 }
                 className={[
                   clickable
-                    ? "cursor-pointer transition hover:bg-[color-mix(in_srgb,var(--amber)_12%,white)]"
+                    ? "cursor-pointer transition hover:bg-[color-mix(in_srgb,var(--amber)_16%,var(--surface))]"
                     : "",
                 ].join(" ")}
               >
                 {headers.map((_, cellIndex) => {
+                  const kind = columnMeta[cellIndex]?.kind ?? "stat";
+                  const isSticky = cellIndex === stickyIndex;
                   const isFirst = cellIndex === 0;
                   const isLastRow = displayIndex === sortedRows.length - 1;
                   return (
                     <td
                       key={cellIndex}
                       className={[
-                        "border-b border-[var(--line)] px-3 py-2.5 md:px-4",
+                        "border-b border-[var(--line)] px-2 py-2.5 md:px-3",
                         rowBg,
-                        isFirst && stickyFirst
+                        isSticky
                           ? "sticky left-0 z-[1] font-medium text-[var(--ink)]"
-                          : "tabular-nums text-[var(--muted)]",
-                        isFirst ? "truncate" : "",
+                          : kind === "rank"
+                            ? "tabular-nums text-[var(--muted)]"
+                            : "tabular-nums text-[var(--muted)]",
+                        kind === "name"
+                          ? "whitespace-normal break-words font-medium text-[var(--ink)]"
+                          : "whitespace-nowrap",
                         isLastRow && isFirst
                           ? "rounded-bl-[calc(var(--radius)-1px)]"
                           : "",
