@@ -109,21 +109,22 @@ export function divisionsForLeague(
 
 function parseTable(html: string): TableReport {
   const $ = cheerio.load(html);
-  const headers = $("thead th")
-    .map((_, el) => $(el).text().replace(/\s+/g, " ").trim())
-    .get()
-    .filter(Boolean);
+  const headers: string[] = [];
+  $("thead th").each((_, el) => {
+    const text = $(el).text().replace(/\s+/g, " ").trim();
+    if (text) headers.push(text);
+  });
 
-  const rows = $("tbody tr")
-    .map((_, tr) => {
-      const cells = $(tr)
-        .find("td")
-        .map((__, td) => $(td).text().replace(/\s+/g, " ").trim())
-        .get();
-      return cells;
-    })
-    .get()
-    .filter((row) => row.length > 0);
+  const rows: string[][] = [];
+  $("tbody tr").each((_, tr) => {
+    const cells: string[] = [];
+    $(tr)
+      .find("td")
+      .each((__, td) => {
+        cells.push($(td).text().replace(/\s+/g, " ").trim());
+      });
+    if (cells.length > 0) rows.push(cells);
+  });
 
   return { headers, rows };
 }

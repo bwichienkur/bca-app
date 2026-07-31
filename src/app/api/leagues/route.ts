@@ -15,6 +15,9 @@ export async function GET(request: NextRequest) {
           league.name.toLowerCase().includes(q) ||
           league.state.toLowerCase().includes(q),
       );
+    } else {
+      // Avoid dumping every public league into the mobile UI.
+      leagues = leagues.slice(0, 40);
     }
 
     return NextResponse.json({ leagues, total: leagues.length });
