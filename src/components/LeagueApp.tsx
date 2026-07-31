@@ -432,7 +432,7 @@ export function LeagueApp() {
         </div>
       ) : null}
 
-      <section className="animate-rise animate-delay-1 relative z-40 mb-5 rounded-[1.5rem] border border-[var(--line)] bg-[var(--surface)]/90 shadow-sm">
+      <section className="animate-rise animate-delay-1 relative z-40 mb-5 overflow-visible rounded-[1.5rem] border border-[var(--line)] bg-[var(--surface)] shadow-sm [background-color:var(--surface)]">
         <button
           type="button"
           onClick={() => setContextOpen((open) => !open)}

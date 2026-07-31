@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { DEFAULT_PLAYERS_PER_TEAM } from "@/lib/constants";
 import {
   buildDefaultFivePlayerFormat,
@@ -487,7 +494,7 @@ export function HandicapCalculator({
           <LineupPicker
             side="mine"
             title={myTeam.name}
-            subtitle={`Choose a player for each of ${slots} slots`}
+            subtitle={`Pick players · hold ⠿ or use ▲▼ to reorder`}
             roster={myTeam.players}
             lineup={myLineup.length === slots ? myLineup : emptyLineup(slots)}
             slots={slots}
@@ -723,6 +730,7 @@ function LineupPicker({
   setDropTarget: (state: DragState | null) => void;
 }) {
   const filled = filledCount(lineup);
+  const listRef = useRef<HTMLOListElement>(null);
   const sortedRoster = useMemo(
     () => [...roster].sort((a, b) => b.fargoRating - a.fargoRating),
     [roster],
@@ -731,6 +739,61 @@ function LineupPicker({
   const clearDrag = () => {
     setDragState(null);
     setDropTarget(null);
+  };
+
+  const indexFromClientY = (clientY: number): number | null => {
+    const list = listRef.current;
+    if (!list) return null;
+    const items = Array.from(list.querySelectorAll<HTMLElement>("[data-slot]"));
+    if (!items.length) return null;
+
+    let closest = 0;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    items.forEach((item, index) => {
+      const rect = item.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      const distance = Math.abs(clientY - mid);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closest = index;
+      }
+    });
+    return closest;
+  };
+
+  const onGripPointerDown = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    index: number,
+  ) => {
+    if (!lineup[index]) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragState({ side, from: index });
+    setDropTarget({ side, from: index });
+  };
+
+  const onGripPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!dragState || dragState.side !== side) return;
+    const next = indexFromClientY(event.clientY);
+    if (next == null) return;
+    setDropTarget({ side, from: next });
+  };
+
+  const onGripPointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!dragState || dragState.side !== side) return;
+    const target =
+      dropTarget?.side === side
+        ? dropTarget.from
+        : (indexFromClientY(event.clientY) ?? dragState.from);
+    if (target !== dragState.from) {
+      onMove(dragState.from, target);
+    }
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // ignore if already released
+    }
+    clearDrag();
   };
 
   return (
@@ -754,7 +817,7 @@ function LineupPicker({
         </span>
       </div>
 
-      <ol className="space-y-2">
+      <ol ref={listRef} className="space-y-2">
         {Array.from({ length: slots }).map((_, index) => {
           const player = lineup[index];
           const takenElsewhere = new Set(
@@ -776,7 +839,7 @@ function LineupPicker({
             dragState.from !== index;
 
           return (
-            <li key={index} className="relative">
+            <li key={index} data-slot={index} className="relative">
               {isDropTarget ? (
                 <div
                   className="pointer-events-none absolute -top-1 left-2 right-2 z-10 h-1 rounded-full bg-[var(--felt)] shadow-[0_0_12px_rgba(61,155,117,0.7)]"
@@ -784,73 +847,70 @@ function LineupPicker({
                 />
               ) : null}
               <div
-                draggable={Boolean(player)}
-                onDragStart={(event) => {
-                  if (!player) return;
-                  event.dataTransfer.effectAllowed = "move";
-                  event.dataTransfer.setData("text/plain", String(index));
-
-                  // Hide the default sharp/white OS drag ghost; slot UI
-                  // already shows source fade + drop target highlight.
-                  const blank = document.createElement("canvas");
-                  blank.width = 1;
-                  blank.height = 1;
-                  event.dataTransfer.setDragImage(blank, 0, 0);
-
-                  setDragState({ side, from: index });
-                }}
-                onDragEnd={clearDrag}
-                onDragOver={(event) => {
-                  if (!dragState || dragState.side !== side) return;
-                  event.preventDefault();
-                  event.dataTransfer.dropEffect = "move";
-                  setDropTarget({ side, from: index });
-                }}
-                onDragLeave={() => {
-                  if (
-                    dropTarget?.side === side &&
-                    dropTarget.from === index
-                  ) {
-                    setDropTarget(null);
-                  }
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  if (dragState?.side === side) {
-                    onMove(dragState.from, index);
-                  }
-                  clearDrag();
-                }}
                 className={[
-                  "select-none overflow-hidden rounded-xl border px-3 py-2.5 transition [-webkit-user-drag:element]",
+                  "select-none overflow-hidden rounded-xl border px-3 py-2.5 transition",
                   isDragging
-                    ? "border-[var(--felt)]/50 bg-[var(--surface-3)] opacity-40"
+                    ? "border-[var(--felt)]/50 bg-[var(--surface-3)] opacity-45"
                     : isDropTarget
                       ? "animate-drop-target border-[var(--felt)] bg-[color-mix(in_srgb,var(--felt)_18%,var(--surface-2))]"
                       : "border-[var(--line)] bg-[var(--surface-2)]",
-                  player ? "cursor-grab active:cursor-grabbing" : "",
                 ].join(" ")}
               >
                 <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                    <span
-                      className={[
-                        "inline-flex h-5 w-5 items-center justify-center rounded-md border text-[10px]",
-                        player
-                          ? "border-[var(--line-strong)] text-[var(--felt-deep)]"
-                          : "border-[var(--line)] text-[var(--muted)]",
-                      ].join(" ")}
-                      aria-hidden
-                    >
-                      ⠿
+                  <div className="inline-flex items-center gap-2">
+                    {player ? (
+                      <button
+                        type="button"
+                        aria-label={`Drag to reorder slot ${index + 1}`}
+                        onPointerDown={(event) =>
+                          onGripPointerDown(event, index)
+                        }
+                        onPointerMove={onGripPointerMove}
+                        onPointerUp={onGripPointerUp}
+                        onPointerCancel={clearDrag}
+                        className="touch-none inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] text-[var(--felt-deep)] active:bg-[var(--surface-3)]"
+                      >
+                        ⠿
+                      </button>
+                    ) : (
+                      <span
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--line)] text-[var(--muted)]"
+                        aria-hidden
+                      >
+                        ⠿
+                      </span>
+                    )}
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                      Slot #{index + 1}
                     </span>
-                    Slot #{index + 1}
-                  </span>
-                  {player ? (
-                    <span className="tabular-nums text-xs font-semibold text-[var(--felt)]">
-                      {player.fargoRating}
-                    </span>
-                  ) : null}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {player ? (
+                      <>
+                        <button
+                          type="button"
+                          aria-label="Move up"
+                          disabled={index === 0}
+                          onClick={() => onMove(index, index - 1)}
+                          className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
+                        >
+                          ▲
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Move down"
+                          disabled={index >= slots - 1}
+                          onClick={() => onMove(index, index + 1)}
+                          className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
+                        >
+                          ▼
+                        </button>
+                        <span className="ml-1 tabular-nums text-xs font-semibold text-[var(--felt)]">
+                          {player.fargoRating}
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
                 </div>
                 <PlayerSelect
                   value={player?.id ?? ""}
@@ -863,6 +923,9 @@ function LineupPicker({
           );
         })}
       </ol>
+      <p className="mt-2 text-[11px] text-[var(--muted)]">
+        Hold ⠿ to drag, or use ▲ ▼ to reorder on mobile.
+      </p>
     </div>
   );
 }
@@ -885,20 +948,27 @@ function PlayerSelect({
 
   const selected = options.find((option) => option.id === value) ?? null;
   const menuOptions = useMemo(
-    () => [{ id: "", label: placeholder, rating: null as number | null }, ...options.map((option) => ({
-      id: option.id,
-      label: playerLabel(option),
-      rating: option.fargoRating as number | null,
-    }))],
+    () => [
+      { id: "", label: placeholder, rating: null as number | null },
+      ...options.map((option) => ({
+        id: option.id,
+        label: playerLabel(option),
+        rating: option.fargoRating as number | null,
+      })),
+    ],
     [options, placeholder],
   );
 
   useEffect(() => {
-    function onDoc(event: MouseEvent) {
+    function onDoc(event: MouseEvent | TouchEvent) {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     }
     document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    document.addEventListener("touchstart", onDoc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("touchstart", onDoc);
+    };
   }, []);
 
   useEffect(() => {
@@ -911,7 +981,10 @@ function PlayerSelect({
   }, [open, menuOptions, value]);
 
   return (
-    <div ref={rootRef} className="relative">
+    <div
+      ref={rootRef}
+      className={["relative", open ? "z-[70]" : "z-0"].join(" ")}
+    >
       <button
         type="button"
         aria-haspopup="listbox"
@@ -932,13 +1005,16 @@ function PlayerSelect({
         <ul
           id={listId}
           role="listbox"
-          className="absolute z-40 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-[var(--line-strong)] bg-[var(--surface)] py-1 shadow-[var(--shadow)]"
+          className="absolute z-[80] mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow)] [background-color:var(--surface-2)]"
         >
           {menuOptions.map((option, index) => {
             const active = index === highlight;
             const isSelected = option.id === value;
             return (
-              <li key={`${option.id || "empty"}-${index}`}>
+              <li
+                key={`${option.id || "empty"}-${index}`}
+                className="bg-[var(--surface-2)]"
+              >
                 <button
                   type="button"
                   role="option"
@@ -950,7 +1026,9 @@ function PlayerSelect({
                   }}
                   className={[
                     "flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm",
-                    active ? "bg-[var(--surface-3)]" : "bg-transparent",
+                    active
+                      ? "bg-[var(--surface-3)]"
+                      : "bg-[var(--surface-2)]",
                     isSelected
                       ? "font-semibold text-[var(--felt-deep)]"
                       : "text-[var(--ink)]",

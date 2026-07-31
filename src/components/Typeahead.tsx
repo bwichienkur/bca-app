@@ -41,11 +41,15 @@ export function Typeahead<T>({
   }, [value, open]);
 
   useEffect(() => {
-    function onDoc(event: MouseEvent) {
+    function onDoc(event: MouseEvent | TouchEvent) {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     }
     document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    document.addEventListener("touchstart", onDoc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("touchstart", onDoc);
+    };
   }, []);
 
   const filtered = useMemo(() => {
@@ -64,7 +68,10 @@ export function Typeahead<T>({
   }, [query, open]);
 
   return (
-    <div ref={rootRef} className="relative z-10 w-full">
+    <div
+      ref={rootRef}
+      className={["relative w-full", open ? "z-[80]" : "z-10"].join(" ")}
+    >
       <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
         {label}
       </label>
@@ -122,16 +129,18 @@ export function Typeahead<T>({
         <ul
           id={listId}
           role="listbox"
-          className="absolute z-50 mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border border-[var(--line-strong)] bg-[var(--surface)] py-1 shadow-[var(--shadow)]"
+          className="absolute z-[90] mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow)] [background-color:var(--surface-2)]"
         >
           {filtered.length === 0 ? (
-            <li className="px-4 py-3 text-sm text-[var(--muted)]">{emptyText}</li>
+            <li className="bg-[var(--surface-2)] px-4 py-3 text-sm text-[var(--muted)]">
+              {emptyText}
+            </li>
           ) : (
             filtered.map((option, index) => {
               const active = index === highlight;
               const selected = value?.id === option.id;
               return (
-                <li key={option.id}>
+                <li key={option.id} className="bg-[var(--surface-2)]">
                   <button
                     type="button"
                     role="option"
@@ -145,7 +154,7 @@ export function Typeahead<T>({
                       "flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm",
                       active
                         ? "bg-[var(--surface-3)]"
-                        : "bg-transparent",
+                        : "bg-[var(--surface-2)]",
                       selected
                         ? "font-semibold text-[var(--felt-deep)]"
                         : "text-[var(--ink)]",
