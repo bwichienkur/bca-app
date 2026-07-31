@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { REPORT_TABS } from "@/lib/constants";
 import { normalizeTeamName } from "@/lib/matchups";
 import { loadPreferences, savePreferences } from "@/lib/preferences";
@@ -73,6 +73,8 @@ export function LeagueApp() {
   const [divisionTeams, setDivisionTeams] = useState<DivisionTeam[]>([]);
   const [filterQuery, setFilterQuery] = useState("");
   const [selectedTeamName, setSelectedTeamName] = useState<string | null>(null);
+  const [contextOpen, setContextOpen] = useState(true);
+  const didAutoCollapseContext = useRef(false);
   const [, startTransition] = useTransition();
 
   const persist = (next: UserPreferences) => {
@@ -351,12 +353,14 @@ export function LeagueApp() {
     [divisionTeams],
   );
 
-  const activeTeam =
+  /** Followed team from the top League / Division / My team section */
+  const myTeam =
     divisionTeams.find(
       (team) =>
         team.id === prefs?.teamId ||
-        normalizeTeamName(team.name) ===
-          normalizeTeamName(selectedTeamName ?? ""),
+        (Boolean(prefs?.teamName) &&
+          normalizeTeamName(team.name) ===
+            normalizeTeamName(prefs?.teamName ?? "")),
     ) ?? null;
 
   const detailTeam =
@@ -365,6 +369,14 @@ export function LeagueApp() {
         normalizeTeamName(team.name) ===
         normalizeTeamName(selectedTeamName ?? ""),
     ) ?? null;
+
+  useEffect(() => {
+    if (didAutoCollapseContext.current) return;
+    if (selectedDivision && prefs?.teamName) {
+      setContextOpen(false);
+      didAutoCollapseContext.current = true;
+    }
+  }, [selectedDivision, prefs?.teamName]);
 
   const filteredTeamRows = useMemo(() => {
     if (!teamReport) return [];
@@ -450,83 +462,131 @@ export function LeagueApp() {
         </div>
       ) : null}
 
-      <section className="animate-rise animate-delay-1 relative z-40 mb-5 rounded-[1.5rem] border border-[var(--line)] bg-[var(--surface)]/90 p-4 shadow-sm md:p-5">
-        <div className="grid gap-4 md:grid-cols-3">
-          <Typeahead
-            label="League"
-            placeholder={loadingLeagues ? "Searching leagues…" : "Search leagues"}
-            value={
-              selectedLeague
-                ? {
-                    id: selectedLeague.id,
-                    label: selectedLeague.name,
-                    meta: `${selectedLeague.state} · ${selectedLeague.divisionCount} divisions`,
-                    value: selectedLeague,
+      <section className="animate-rise animate-delay-1 relative z-40 mb-5 rounded-[1.5rem] border border-[var(--line)] bg-[var(--surface)]/90 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setContextOpen((open) => !open)}
+          aria-expanded={contextOpen}
+          className="flex w-full items-start justify-between gap-3 px-4 py-3.5 text-left md:px-5 md:py-4"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
+              League · Division · My team
+            </p>
+            {contextOpen ? (
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                Set once — Schedule and Handicap follow My team.
+              </p>
+            ) : (
+              <div className="mt-1.5 space-y-0.5">
+                <p className="truncate text-sm font-semibold text-[var(--ink)]">
+                  {selectedLeague?.name ?? "Choose a league"}
+                </p>
+                <p className="truncate text-sm text-[var(--muted)]">
+                  {selectedDivision?.name ?? "Choose a division"}
+                  {prefs.teamName ? (
+                    <>
+                      {" "}
+                      ·{" "}
+                      <span className="font-medium text-[var(--felt-deep)]">
+                        {prefs.teamName}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-[var(--amber)]"> · Set my team</span>
+                  )}
+                </p>
+              </div>
+            )}
+          </div>
+          <span className="mt-0.5 shrink-0 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            {contextOpen ? "Collapse ▴" : "Change ▾"}
+          </span>
+        </button>
+
+        {contextOpen ? (
+          <div className="border-t border-[var(--line)] px-4 pb-4 pt-3 md:px-5 md:pb-5">
+            <div className="grid gap-4 md:grid-cols-3">
+              <Typeahead
+                label="League"
+                placeholder={
+                  loadingLeagues ? "Searching leagues…" : "Search leagues"
+                }
+                value={
+                  selectedLeague
+                    ? {
+                        id: selectedLeague.id,
+                        label: selectedLeague.name,
+                        meta: `${selectedLeague.state} · ${selectedLeague.divisionCount} divisions`,
+                        value: selectedLeague,
+                      }
+                    : null
+                }
+                options={leagueOptions}
+                onQueryChange={setLeagueQuery}
+                onChange={(option) => {
+                  if (option) void chooseLeague(option.value);
+                }}
+              />
+              <Typeahead
+                label="Division"
+                placeholder={
+                  !selectedLeague
+                    ? "Pick a league first"
+                    : loadingDivisions
+                      ? "Loading divisions…"
+                      : "Type to find your division"
+                }
+                value={
+                  selectedDivision
+                    ? {
+                        id: selectedDivision.id,
+                        label: selectedDivision.name,
+                        meta: `${selectedDivision.year}`,
+                        value: selectedDivision,
+                      }
+                    : null
+                }
+                options={divisionOptions}
+                disabled={!selectedLeague || loadingDivisions}
+                onChange={(option) => {
+                  if (option) chooseDivision(option.value);
+                }}
+                emptyText="No divisions match"
+              />
+              <Typeahead
+                label="My team"
+                placeholder={
+                  !selectedDivision
+                    ? "Pick a division first"
+                    : loadingContext
+                      ? "Loading teams…"
+                      : "Set your team for schedule & handicap"
+                }
+                value={
+                  myTeam
+                    ? {
+                        id: myTeam.id,
+                        label: myTeam.name,
+                        meta: `${myTeam.players.length} players`,
+                        value: myTeam,
+                      }
+                    : null
+                }
+                options={teamOptions}
+                disabled={!selectedDivision || loadingContext}
+                onChange={(option) => {
+                  if (option) {
+                    setMyTeam(option.value);
+                    setSelectedTeamName(option.value.name);
+                    setContextOpen(false);
                   }
-                : null
-            }
-            options={leagueOptions}
-            onQueryChange={setLeagueQuery}
-            onChange={(option) => {
-              if (option) void chooseLeague(option.value);
-            }}
-          />
-          <Typeahead
-            label="Division"
-            placeholder={
-              !selectedLeague
-                ? "Pick a league first"
-                : loadingDivisions
-                  ? "Loading divisions…"
-                  : "Type to find your division"
-            }
-            value={
-              selectedDivision
-                ? {
-                    id: selectedDivision.id,
-                    label: selectedDivision.name,
-                    meta: `${selectedDivision.year}`,
-                    value: selectedDivision,
-                  }
-                : null
-            }
-            options={divisionOptions}
-            disabled={!selectedLeague || loadingDivisions}
-            onChange={(option) => {
-              if (option) chooseDivision(option.value);
-            }}
-            emptyText="No divisions match"
-          />
-          <Typeahead
-            label="My team"
-            placeholder={
-              !selectedDivision
-                ? "Pick a division first"
-                : loadingContext
-                  ? "Loading teams…"
-                  : "Set your team for schedule & handicap"
-            }
-            value={
-              activeTeam
-                ? {
-                    id: activeTeam.id,
-                    label: activeTeam.name,
-                    meta: `${activeTeam.players.length} players`,
-                    value: activeTeam,
-                  }
-                : null
-            }
-            options={teamOptions}
-            disabled={!selectedDivision || loadingContext}
-            onChange={(option) => {
-              if (option) {
-                setMyTeam(option.value);
-                setSelectedTeamName(option.value.name);
-              }
-            }}
-            emptyText="No teams loaded yet"
-          />
-        </div>
+                }}
+                emptyText="No teams loaded yet"
+              />
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {!selectedDivision ? (
@@ -568,6 +628,9 @@ export function LeagueApp() {
                     type="button"
                     onClick={() => {
                       setTab(item.id);
+                      if (item.id === "schedule" && !prefs.teamName) {
+                        setContextOpen(true);
+                      }
                     }}
                     className={[
                       "rounded-full px-3.5 py-2 text-sm font-medium transition",
@@ -604,30 +667,17 @@ export function LeagueApp() {
               />
             ) : null}
 
-            {tab === "schedule" ? (
-              <div className="w-full max-w-md">
-                <Typeahead
-                  label="Schedule team"
-                  placeholder="Filter schedule by team"
-                  value={
-                    activeTeam
-                      ? {
-                          id: activeTeam.id,
-                          label: activeTeam.name,
-                          meta: "Selected",
-                          value: activeTeam,
-                        }
-                      : null
-                  }
-                  options={teamOptions}
-                  onChange={(option) => {
-                    if (option) {
-                      setMyTeam(option.value);
-                      setSelectedTeamName(option.value.name);
-                    }
-                  }}
-                />
-              </div>
+            {tab === "schedule" && prefs.teamName ? (
+              <p className="rounded-full border border-[var(--line)] bg-[var(--surface)]/80 px-3 py-2 text-xs text-[var(--muted)]">
+                Schedule for{" "}
+                <button
+                  type="button"
+                  onClick={() => setContextOpen(true)}
+                  className="font-semibold text-[var(--felt-deep)] underline-offset-2 hover:underline"
+                >
+                  {prefs.teamName}
+                </button>
+              </p>
             ) : null}
           </div>
 
@@ -779,15 +829,12 @@ export function LeagueApp() {
                 emptyText="No ratings match your filter."
               />
             ) : tab === "schedule" && schedule ? (
-              prefs.teamName || selectedTeamName ? (
-                <ScheduleList
-                  days={schedule}
-                  teamName={prefs.teamName ?? selectedTeamName}
-                />
+              prefs.teamName ? (
+                <ScheduleList days={schedule} teamName={prefs.teamName} />
               ) : (
                 <EmptyState
-                  title="Select a team for schedule"
-                  body="Use “My team” or the schedule team typeahead to see only that team’s matches."
+                  title="Set My team for schedule"
+                  body="Open League · Division · My team above and pick your team. Schedule always uses that selection."
                 />
               )
             ) : (
