@@ -8,6 +8,8 @@ type TeamDetailProps = {
   team: DivisionTeam | null;
   playersByTeam: PlayersByTeamReport | null;
   onClose?: () => void;
+  /** Label for the back/close control (e.g. “Back to standings”) */
+  backLabel?: string;
   onSetAsMyTeam?: () => void;
   isMyTeam?: boolean;
 };
@@ -21,6 +23,7 @@ export function TeamDetail({
   team,
   playersByTeam,
   onClose,
+  backLabel = "Back",
   onSetAsMyTeam,
   isMyTeam,
 }: TeamDetailProps) {
@@ -31,10 +34,20 @@ export function TeamDetail({
   return (
     <aside className="animate-panel flex h-full flex-col rounded-[1.4rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
       <div className="border-b border-[var(--line)] px-4 py-4 md:px-5">
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
+          >
+            <span aria-hidden>←</span>
+            {backLabel}
+          </button>
+        ) : null}
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-              {isMyTeam ? "Roster & stats" : "Team detail"}
+              {isMyTeam ? "My team" : "Team detail"}
             </p>
             <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
               {teamName}
@@ -51,24 +64,20 @@ export function TeamDetail({
               </p>
             ) : null}
           </div>
-          {onClose ? (
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]"
-            >
-              Close
-            </button>
-          ) : null}
         </div>
-        {onSetAsMyTeam ? (
+        {onSetAsMyTeam && !isMyTeam ? (
           <button
             type="button"
             onClick={onSetAsMyTeam}
             className="mt-3 rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white"
           >
-            {isMyTeam ? "My team ✓" : "Set as my team"}
+            Set as my team
           </button>
+        ) : null}
+        {isMyTeam ? (
+          <p className="mt-3 inline-flex rounded-full bg-[var(--felt)]/20 px-3 py-1.5 text-xs font-semibold text-[var(--felt-deep)]">
+            My team ✓
+          </p>
         ) : null}
       </div>
 
