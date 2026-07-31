@@ -3,11 +3,14 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import { DEFAULT_PLAYERS_PER_TEAM } from "@/lib/constants";
 import {
   buildDefaultFivePlayerFormat,
@@ -415,7 +418,7 @@ export function HandicapCalculator({
         </p>
       )}
 
-      <section className="relative z-30 grid gap-4 md:grid-cols-2">
+      <section className="relative z-40 grid gap-4 md:grid-cols-2">
         <Typeahead
           label="My team"
           placeholder="Select your team"
@@ -490,7 +493,7 @@ export function HandicapCalculator({
           body="Handicap starts from your team. We’ll auto-fill this week’s opponent from the schedule."
         />
       ) : (
-        <section className="grid gap-4 xl:grid-cols-[1.1fr_1.1fr_0.9fr]">
+        <section className="relative z-0 grid gap-4 xl:grid-cols-[1.1fr_1.1fr_0.9fr]">
           <LineupPicker
             side="mine"
             title={myTeam.name}
@@ -533,7 +536,7 @@ export function HandicapCalculator({
             />
           )}
 
-          <div className="space-y-3 rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
+          <div className="relative z-0 space-y-3 rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
             <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
               Saved lineups
             </h4>
@@ -848,12 +851,12 @@ function LineupPicker({
               ) : null}
               <div
                 className={[
-                  "select-none overflow-hidden rounded-xl border px-3 py-2.5 transition",
+                  "relative select-none rounded-xl border px-3 py-2.5 transition",
                   isDragging
-                    ? "border-[var(--felt)]/50 bg-[var(--surface-3)] opacity-45"
+                    ? "z-20 border-[var(--felt)]/50 bg-[var(--surface-3)] opacity-45"
                     : isDropTarget
-                      ? "animate-drop-target border-[var(--felt)] bg-[color-mix(in_srgb,var(--felt)_18%,var(--surface-2))]"
-                      : "border-[var(--line)] bg-[var(--surface-2)]",
+                      ? "z-10 animate-drop-target border-[var(--felt)] bg-[color-mix(in_srgb,var(--felt)_18%,var(--surface-2))]"
+                      : "z-0 border-[var(--line)] bg-[var(--surface-2)]",
                 ].join(" ")}
               >
                 <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -943,8 +946,12 @@ function PlayerSelect({
 }) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  const [mounted, setMounted] = useState(false);
 
   const selected = options.find((option) => option.id === value) ?? null;
   const menuOptions = useMemo(
@@ -960,8 +967,46 @@ function PlayerSelect({
   );
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open || !buttonRef.current) return;
+
+    const updatePosition = () => {
+      const rect = buttonRef.current!.getBoundingClientRect();
+      const menuHeight = Math.min(224, window.innerHeight * 0.45);
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUpward = spaceBelow < menuHeight + 12 && rect.top > spaceBelow;
+      setMenuStyle({
+        position: "fixed",
+        left: Math.max(8, rect.left),
+        width: Math.min(rect.width, window.innerWidth - 16),
+        top: openUpward ? undefined : rect.bottom + 6,
+        bottom: openUpward
+          ? Math.max(8, window.innerHeight - rect.top + 6)
+          : undefined,
+        maxHeight: menuHeight,
+        zIndex: 10000,
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open, menuOptions.length]);
+
+  useEffect(() => {
+    if (!open) return;
     function onDoc(event: MouseEvent | TouchEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setOpen(false);
     }
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("touchstart", onDoc);
@@ -969,7 +1014,7 @@ function PlayerSelect({
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("touchstart", onDoc);
     };
-  }, []);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -980,12 +1025,62 @@ function PlayerSelect({
     setHighlight(index);
   }, [open, menuOptions, value]);
 
+  const menu =
+    open && mounted
+      ? createPortal(
+          <ul
+            ref={menuRef}
+            id={listId}
+            role="listbox"
+            style={menuStyle}
+            className="overflow-y-auto rounded-xl border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow)] [background-color:var(--surface-2)]"
+          >
+            {menuOptions.map((option, index) => {
+              const active = index === highlight;
+              const isSelected = option.id === value;
+              return (
+                <li
+                  key={`${option.id || "empty"}-${index}`}
+                  className="bg-[var(--surface-2)]"
+                >
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    onMouseEnter={() => setHighlight(index)}
+                    onClick={() => {
+                      onChange(option.id);
+                      setOpen(false);
+                    }}
+                    className={[
+                      "flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm",
+                      active
+                        ? "bg-[var(--surface-3)]"
+                        : "bg-[var(--surface-2)]",
+                      isSelected
+                        ? "font-semibold text-[var(--felt-deep)]"
+                        : "text-[var(--ink)]",
+                    ].join(" ")}
+                  >
+                    <span>{option.label}</span>
+                    {option.rating != null ? (
+                      <span className="tabular-nums text-xs text-[var(--muted)]">
+                        {option.rating}
+                      </span>
+                    ) : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>,
+          document.body,
+        )
+      : null;
+
   return (
-    <div
-      ref={rootRef}
-      className={["relative", open ? "z-[70]" : "z-0"].join(" ")}
-    >
+    <div ref={rootRef} className="relative">
       <button
+        ref={buttonRef}
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -1000,52 +1095,7 @@ function PlayerSelect({
         </span>
         <span className="text-[var(--muted)]">▾</span>
       </button>
-
-      {open ? (
-        <ul
-          id={listId}
-          role="listbox"
-          className="absolute z-[80] mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow)] [background-color:var(--surface-2)]"
-        >
-          {menuOptions.map((option, index) => {
-            const active = index === highlight;
-            const isSelected = option.id === value;
-            return (
-              <li
-                key={`${option.id || "empty"}-${index}`}
-                className="bg-[var(--surface-2)]"
-              >
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={isSelected}
-                  onMouseEnter={() => setHighlight(index)}
-                  onClick={() => {
-                    onChange(option.id);
-                    setOpen(false);
-                  }}
-                  className={[
-                    "flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm",
-                    active
-                      ? "bg-[var(--surface-3)]"
-                      : "bg-[var(--surface-2)]",
-                    isSelected
-                      ? "font-semibold text-[var(--felt-deep)]"
-                      : "text-[var(--ink)]",
-                  ].join(" ")}
-                >
-                  <span>{option.label}</span>
-                  {option.rating != null ? (
-                    <span className="tabular-nums text-xs text-[var(--muted)]">
-                      {option.rating}
-                    </span>
-                  ) : null}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
+      {menu}
     </div>
   );
 }

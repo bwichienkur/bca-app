@@ -32,8 +32,8 @@ export function TeamDetail({
   );
 
   return (
-    <aside className="animate-panel flex h-full flex-col rounded-[1.4rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
-      <div className="border-b border-[var(--line)] px-4 py-4 md:px-5">
+    <aside className="animate-panel flex h-full flex-col overflow-hidden rounded-[1.45rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <div className="border-b border-[var(--line)] bg-[linear-gradient(135deg,rgba(61,155,117,0.18),transparent_55%)] px-4 py-4 md:px-5">
         {onClose ? (
           <button
             type="button"
@@ -49,7 +49,7 @@ export function TeamDetail({
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
               {isMyTeam ? "My team" : "Team detail"}
             </p>
-            <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
+            <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)] md:text-3xl">
               {teamName}
             </h3>
             {team ? (
@@ -84,13 +84,13 @@ export function TeamDetail({
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4 md:px-5">
         {statsTeam && playersByTeam ? (
           <section>
-            <div className="mb-3">
-              <h4 className="text-sm font-semibold text-[var(--ink)]">
+            <div className="mb-4">
+              <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
                 Player statistics
               </h4>
               <p className="mt-1 text-xs text-[var(--muted)]">
-                Key numbers first — swipe isn’t required to read Win%, games, and
-                points.
+                Win rate up front, with the rest of the card built for quick
+                scanning.
               </p>
             </div>
             <PlayerStatsCards
