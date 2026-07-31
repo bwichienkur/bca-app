@@ -109,6 +109,5 @@ export type ReportTab =
   | "my-team"
   | "standings"
   | "players"
-  | "player-list"
   | "schedule"
   | "handicap";

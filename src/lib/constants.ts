@@ -27,7 +27,6 @@ export const REPORT_TABS: { id: ReportTab; label: string }[] = [
   { id: "my-team", label: "My Team" },
   { id: "standings", label: "Standings" },
   { id: "players", label: "Players" },
-  { id: "player-list", label: "Ratings" },
   { id: "schedule", label: "Schedule" },
   { id: "handicap", label: "Handicap" },
 ];

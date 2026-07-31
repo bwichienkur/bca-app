@@ -88,9 +88,6 @@ export function TeamDetail({
               <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
                 Player statistics
               </h4>
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                Sortable grid with every LMS column — tap a header to reorder.
-              </p>
             </div>
             <TeamPlayerStats
               headers={playersByTeam.headers}

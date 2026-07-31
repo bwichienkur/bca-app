@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { REPORT_TABS } from "@/lib/constants";
 import { normalizeTeamName } from "@/lib/matchups";
+import { enrichPlayersWithRatings } from "@/lib/players";
 import { loadPreferences, savePreferences } from "@/lib/preferences";
 import type {
   DivisionSummary,
@@ -210,15 +211,16 @@ export function LeagueApp() {
           );
           if (!cancelled) setTeamReport(data);
         } else if (tab === "players") {
-          const data = await fetchJson<TableReport>(
-            `/api/reports/players?divisionId=${id}`,
-          );
-          if (!cancelled) setPlayerReport(data);
-        } else if (tab === "player-list") {
-          const data = await fetchJson<TableReport>(
-            `/api/reports/player-list?divisionId=${id}`,
-          );
-          if (!cancelled) setPlayerList(data);
+          const [players, ratings] = await Promise.all([
+            fetchJson<TableReport>(`/api/reports/players?divisionId=${id}`),
+            fetchJson<TableReport>(
+              `/api/reports/player-list?divisionId=${id}`,
+            ).catch(() => null),
+          ]);
+          if (!cancelled) {
+            setPlayerReport(players);
+            setPlayerList(ratings);
+          }
         } else if (tab === "schedule") {
           const data = await fetchJson<{ days: ScheduleDay[] }>(
             `/api/reports/schedule?divisionId=${id}`,
@@ -387,15 +389,15 @@ export function LeagueApp() {
     return filterRows(teamReport.rows, filterQuery);
   }, [teamReport, filterQuery]);
 
-  const filteredPlayerRows = useMemo(() => {
-    if (!playerReport) return [];
-    return filterRows(playerReport.rows, filterQuery);
-  }, [playerReport, filterQuery]);
+  const playersWithRatings = useMemo(() => {
+    if (!playerReport) return null;
+    return enrichPlayersWithRatings(playerReport, playerList);
+  }, [playerReport, playerList]);
 
-  const filteredRatingRows = useMemo(() => {
-    if (!playerList) return [];
-    return filterRows(playerList.rows, filterQuery);
-  }, [playerList, filterQuery]);
+  const filteredPlayerRows = useMemo(() => {
+    if (!playersWithRatings) return [];
+    return filterRows(playersWithRatings.rows, filterQuery);
+  }, [playersWithRatings, filterQuery]);
 
   const myStandingCells = useMemo(() => {
     if (!teamReport || !prefs?.teamName) return null;
@@ -623,33 +625,14 @@ export function LeagueApp() {
               })}
             </nav>
 
-            {(tab === "standings" && !selectedTeamName) ||
-            tab === "players" ||
-            tab === "player-list" ? (
+            {(tab === "standings" && !selectedTeamName) || tab === "players" ? (
               <SearchField
                 value={filterQuery}
                 onChange={setFilterQuery}
                 placeholder={
-                  tab === "standings"
-                    ? "Filter teams…"
-                    : tab === "players"
-                      ? "Filter players…"
-                      : "Filter ratings…"
+                  tab === "standings" ? "Filter teams…" : "Filter players…"
                 }
               />
-            ) : null}
-
-            {tab === "schedule" && prefs.teamName ? (
-              <p className="rounded-full border border-[var(--line)] bg-[var(--surface)]/80 px-3 py-2 text-xs text-[var(--muted)]">
-                Schedule for{" "}
-                <button
-                  type="button"
-                  onClick={() => setContextOpen(true)}
-                  className="font-semibold text-[var(--felt-deep)] underline-offset-2 hover:underline"
-                >
-                  {prefs.teamName}
-                </button>
-              </p>
             ) : null}
           </div>
 
@@ -749,17 +732,12 @@ export function LeagueApp() {
                   />
                 </section>
               )
-            ) : tab === "players" && playerReport ? (
+            ) : tab === "players" && playersWithRatings ? (
               <DataTable
-                headers={playerReport.headers}
+                headers={playersWithRatings.headers}
                 rows={filteredPlayerRows}
+                stickyFirst
                 emptyText="No players match your filter."
-              />
-            ) : tab === "player-list" && playerList ? (
-              <DataTable
-                headers={playerList.headers}
-                rows={filteredRatingRows}
-                emptyText="No ratings match your filter."
               />
             ) : tab === "schedule" && schedule ? (
               prefs.teamName ? (

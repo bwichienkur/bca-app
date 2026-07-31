@@ -98,17 +98,12 @@ export function TeamPlayerStats({
   }
 
   return (
-    <div className="space-y-3">
-      <p className="text-xs text-[var(--muted)]">
-        Tap a column header to sort. Names stay pinned while you scroll sideways.
-      </p>
-      <DataTable
-        headers={enriched.headers}
-        rows={enriched.rows}
-        stickyFirst
-        compact
-        emptyText="No player stats for this team."
-      />
-    </div>
+    <DataTable
+      headers={enriched.headers}
+      rows={enriched.rows}
+      stickyFirst
+      compact
+      emptyText="No player stats for this team."
+    />
   );
 }
