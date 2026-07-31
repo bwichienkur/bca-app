@@ -386,36 +386,27 @@ export function HandicapCalculator({
   }
 
   return (
-    <div className="animate-panel space-y-5">
-      <section className="rounded-[1.4rem] border border-[var(--line)] bg-[var(--surface)] px-4 py-4 shadow-sm md:px-5">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-              This week’s handicap
-            </p>
-            <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)] md:text-3xl">
-              {divisionName}
-            </h3>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              {data.format.pointSystem || "10"}-point · {slots} players/side ·{" "}
-              {data.format.fargoRateHandicapType || "RoundBased"}
-            </p>
-          </div>
-          {weekMatchup ? (
-            <div className="rounded-2xl bg-[var(--felt-soft)] px-4 py-3 text-white md:min-w-[280px]">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-white/70">
-                Auto-matched · {weekMatchup.date}
-              </p>
-              <p className="mt-1 font-semibold">
-                {weekMatchup.homeTeamName} vs {weekMatchup.awayTeamName}
-              </p>
-              {weekMatchup.location ? (
-                <p className="mt-1 text-xs text-white/75">{weekMatchup.location}</p>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      </section>
+    <div className="animate-panel space-y-4">
+      {weekMatchup ? (
+        <section className="rounded-2xl border border-[var(--line)] bg-[var(--felt-soft)] px-4 py-3 text-white shadow-sm">
+          <p className="text-[11px] uppercase tracking-[0.14em] text-white/70">
+            Auto-matched · {weekMatchup.date}
+          </p>
+          <p className="mt-1 font-semibold leading-snug">
+            {weekMatchup.homeTeamName} vs {weekMatchup.awayTeamName}
+          </p>
+          <p className="mt-1 text-xs text-white/75">
+            {data.format.pointSystem || "10"}-point · {slots}/side
+            {weekMatchup.location ? ` · ${weekMatchup.location}` : ""}
+          </p>
+        </section>
+      ) : (
+        <p className="text-xs text-[var(--muted)]">
+          {data.format.pointSystem || "10"}-point · {slots} players/side ·{" "}
+          {data.format.fargoRateHandicapType || "RoundBased"}
+          {divisionName ? ` · ${divisionName}` : ""}
+        </p>
+      )}
 
       <section className="relative z-30 grid gap-4 md:grid-cols-2">
         <Typeahead
@@ -798,6 +789,14 @@ function LineupPicker({
                   if (!player) return;
                   event.dataTransfer.effectAllowed = "move";
                   event.dataTransfer.setData("text/plain", String(index));
+
+                  // Hide the default sharp/white OS drag ghost; slot UI
+                  // already shows source fade + drop target highlight.
+                  const blank = document.createElement("canvas");
+                  blank.width = 1;
+                  blank.height = 1;
+                  event.dataTransfer.setDragImage(blank, 0, 0);
+
                   setDragState({ side, from: index });
                 }}
                 onDragEnd={clearDrag}
@@ -823,9 +822,9 @@ function LineupPicker({
                   clearDrag();
                 }}
                 className={[
-                  "rounded-xl border px-3 py-2.5 transition",
+                  "select-none overflow-hidden rounded-xl border px-3 py-2.5 transition [-webkit-user-drag:element]",
                   isDragging
-                    ? "scale-[0.98] border-[var(--amber)]/60 bg-[var(--surface-3)] opacity-55"
+                    ? "border-[var(--felt)]/50 bg-[var(--surface-3)] opacity-40"
                     : isDropTarget
                       ? "animate-drop-target border-[var(--felt)] bg-[color-mix(in_srgb,var(--felt)_18%,var(--surface-2))]"
                       : "border-[var(--line)] bg-[var(--surface-2)]",
