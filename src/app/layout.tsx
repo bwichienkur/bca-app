@@ -1,0 +1,48 @@
+import type { Metadata, Viewport } from "next";
+import { Figtree, Syne } from "next/font/google";
+import "./globals.css";
+
+const display = Syne({
+  variable: "--font-display",
+  subsets: ["latin"],
+  weight: ["600", "700", "800"],
+});
+
+const body = Figtree({
+  variable: "--font-body",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+export const metadata: Metadata = {
+  title: "Tableside | Palm Beach County BCA Pool League",
+  description:
+    "Mobile-friendly companion for FargoRate LMS league standings, players, and schedules. Defaults to Palm Beach County BCA Pool League.",
+  applicationName: "Tableside",
+  appleWebApp: {
+    capable: true,
+    title: "Tableside",
+    statusBarStyle: "default",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#145c45",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en">
+      <body className={`${display.variable} ${body.variable} antialiased`}>
+        {children}
+      </body>
+    </html>
+  );
+}
