@@ -306,10 +306,6 @@ export function HandicapCalculator({
     const player = roster.find((item) => item.id === playerId) ?? null;
     if (!player) return;
 
-    const existingIndex = current.findIndex((item) => item?.id === player.id);
-    if (existingIndex >= 0 && existingIndex !== slotIndex) {
-      current[existingIndex] = null;
-    }
     current[slotIndex] = player;
     setter(current);
   };
@@ -823,16 +819,6 @@ function LineupPicker({
       <ol ref={listRef} className="space-y-2">
         {Array.from({ length: slots }).map((_, index) => {
           const player = lineup[index];
-          const takenElsewhere = new Set(
-            lineup
-              .map((item, slotIndex) =>
-                slotIndex !== index && item ? item.id : null,
-              )
-              .filter((id): id is string => Boolean(id)),
-          );
-          const options = sortedRoster.filter(
-            (item) => item.id === player?.id || !takenElsewhere.has(item.id),
-          );
           const isDragging =
             dragState?.side === side && dragState.from === index;
           const isDropTarget =
@@ -917,7 +903,7 @@ function LineupPicker({
                 </div>
                 <PlayerSelect
                   value={player?.id ?? ""}
-                  options={options}
+                  options={sortedRoster}
                   placeholder="Open slot…"
                   onChange={(playerId) => onSelectSlot(index, playerId)}
                 />
