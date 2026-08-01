@@ -12,6 +12,7 @@ import type {
   PlayersByTeamReport,
   ReportTab,
   ScheduleDay,
+  ScheduleMatch,
   TableReport,
   UserPreferences,
 } from "@/lib/types";
@@ -21,6 +22,7 @@ import { HandicapCalculator } from "./HandicapCalculator";
 import { LoadingState } from "./LoadingState";
 import { PlayerSearch } from "./PlayerSearch";
 import { ScheduleList } from "./ScheduleList";
+import { ScheduleMatchDetail } from "./ScheduleMatchDetail";
 import { SearchField } from "./SearchField";
 import { TeamDetail } from "./TeamDetail";
 import { TeamStandingSummary } from "./TeamStandingSummary";
@@ -50,6 +52,24 @@ function teamNameIndex(headers: string[]): number {
   return index >= 0 ? index : 0;
 }
 
+function standingCellsForTeam(
+  teamReport: TableReport | null,
+  teamName: string | null | undefined,
+) {
+  if (!teamReport || !teamName) return null;
+  const nameIndex = teamNameIndex(teamReport.headers);
+  const row = teamReport.rows.find(
+    (item) =>
+      normalizeTeamName(item[nameIndex] ?? "") ===
+      normalizeTeamName(teamName),
+  );
+  if (!row) return null;
+  return teamReport.headers.map((header, index) => ({
+    label: header,
+    value: row[index] ?? "—",
+  }));
+}
+
 export function LeagueApp() {
   const [prefs, setPrefs] = useState<UserPreferences | null>(null);
   const [leagueQuery, setLeagueQuery] = useState("Palm Beach");
@@ -76,6 +96,10 @@ export function LeagueApp() {
   const [divisionTeams, setDivisionTeams] = useState<DivisionTeam[]>([]);
   const [filterQuery, setFilterQuery] = useState("");
   const [selectedTeamName, setSelectedTeamName] = useState<string | null>(null);
+  const [selectedScheduleMatch, setSelectedScheduleMatch] = useState<{
+    match: ScheduleMatch;
+    date: string;
+  } | null>(null);
   const [contextOpen, setContextOpen] = useState(true);
   const didAutoCollapseContext = useRef(false);
   const [, startTransition] = useTransition();
@@ -218,10 +242,18 @@ export function LeagueApp() {
             setPlayerList(ratings);
           }
         } else if (tab === "schedule") {
-          const data = await fetchJson<{ days: ScheduleDay[] }>(
-            `/api/reports/schedule?divisionId=${id}`,
-          );
-          if (!cancelled) setSchedule(data.days);
+          const [scheduleData, teams] = await Promise.all([
+            fetchJson<{ days: ScheduleDay[] }>(
+              `/api/reports/schedule?divisionId=${id}`,
+            ),
+            fetchJson<TableReport>(
+              `/api/reports/teams?divisionId=${id}`,
+            ).catch(() => null),
+          ]);
+          if (!cancelled) {
+            setSchedule(scheduleData.days);
+            if (teams) setTeamReport(teams);
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -240,9 +272,10 @@ export function LeagueApp() {
 
   useEffect(() => {
     setFilterQuery("");
-    // Standings drill-in is opt-in via row click only — never carry a team
-    // selection across tabs or division changes.
+    // Standings / schedule drill-ins are opt-in via click only — never carry
+    // a selection across tabs or division changes.
     setSelectedTeamName(null);
+    setSelectedScheduleMatch(null);
   }, [tab, selectedDivision?.id]);
 
   const chooseLeague = async (league: LeagueSummary) => {
@@ -449,20 +482,15 @@ export function LeagueApp() {
     return filterRows(playersWithRatings.rows, filterQuery);
   }, [playersWithRatings, filterQuery]);
 
-  const myStandingCells = useMemo(() => {
-    if (!teamReport || !prefs?.teamName) return null;
-    const nameIndex = teamNameIndex(teamReport.headers);
-    const row = teamReport.rows.find(
-      (item) =>
-        normalizeTeamName(item[nameIndex] ?? "") ===
-        normalizeTeamName(prefs.teamName ?? ""),
-    );
-    if (!row) return null;
-    return teamReport.headers.map((header, index) => ({
-      label: header,
-      value: row[index] ?? "—",
-    }));
-  }, [teamReport, prefs?.teamName]);
+  const myStandingCells = useMemo(
+    () => standingCellsForTeam(teamReport, prefs?.teamName),
+    [teamReport, prefs?.teamName],
+  );
+
+  const findDivisionTeam = (name: string) =>
+    divisionTeams.find(
+      (team) => normalizeTeamName(team.name) === normalizeTeamName(name),
+    ) ?? null;
 
   if (!prefs || booting) {
     return (
@@ -799,12 +827,36 @@ export function LeagueApp() {
               emptyText="No players match your filter."
             />
           ) : tab === "schedule" && schedule ? (
-            prefs.teamName ? (
-              <ScheduleList days={schedule} teamName={prefs.teamName} />
-            ) : (
+            !prefs.teamName ? (
               <EmptyState
                 title="Set My team for schedule"
                 body="Open League · Division · My team above and pick your team. Schedule always uses that selection."
+              />
+            ) : selectedScheduleMatch ? (
+              <ScheduleMatchDetail
+                date={selectedScheduleMatch.date}
+                match={selectedScheduleMatch.match}
+                homeTeam={findDivisionTeam(selectedScheduleMatch.match.home)}
+                awayTeam={findDivisionTeam(selectedScheduleMatch.match.away)}
+                playersByTeam={playersByTeam}
+                homeStandingCells={standingCellsForTeam(
+                  teamReport,
+                  selectedScheduleMatch.match.home,
+                )}
+                awayStandingCells={standingCellsForTeam(
+                  teamReport,
+                  selectedScheduleMatch.match.away,
+                )}
+                myTeamName={prefs.teamName}
+                onClose={() => setSelectedScheduleMatch(null)}
+              />
+            ) : (
+              <ScheduleList
+                days={schedule}
+                teamName={prefs.teamName}
+                onMatchClick={(match, day) =>
+                  setSelectedScheduleMatch({ match, date: day.date })
+                }
               />
             )
           ) : (

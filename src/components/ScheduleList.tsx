@@ -3,17 +3,22 @@
 import { useMemo, useState } from "react";
 import { normalizeTeamName } from "@/lib/matchups";
 import { isUpcomingScheduleDate } from "@/lib/schedule";
-import type { ScheduleDay } from "@/lib/types";
+import type { ScheduleDay, ScheduleMatch } from "@/lib/types";
 import { EmptyState } from "./EmptyState";
 
 type ScheduleListProps = {
   days: ScheduleDay[];
   teamName?: string | null;
+  onMatchClick?: (match: ScheduleMatch, day: ScheduleDay) => void;
 };
 
 type ScheduleView = "upcoming" | "past";
 
-export function ScheduleList({ days, teamName }: ScheduleListProps) {
+export function ScheduleList({
+  days,
+  teamName,
+  onMatchClick,
+}: ScheduleListProps) {
   const [view, setView] = useState<ScheduleView>("upcoming");
 
   const teamDays = useMemo(() => {
@@ -120,9 +125,15 @@ export function ScheduleList({ days, teamName }: ScheduleListProps) {
                 </span>
               </div>
               <ul className="space-y-2">
-                {day.matches.map((match, index) => {
-                  const content = (
-                    <>
+                {day.matches.map((match, index) => (
+                  <li
+                    key={`${day.date}-${index}-${match.matchId ?? match.home}`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onMatchClick?.(match, day)}
+                      className="block w-full rounded-2xl border border-[var(--line)] bg-[var(--paper)]/60 px-4 py-3 text-left transition hover:border-[var(--felt-soft)] hover:bg-[var(--surface-2)]"
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-medium text-[var(--ink)]">
@@ -132,41 +143,21 @@ export function ScheduleList({ days, teamName }: ScheduleListProps) {
                             vs {match.away}
                           </p>
                         </div>
-                        {match.url ? (
-                          <span className="mt-1 text-[var(--amber)]" aria-hidden>
-                            →
-                          </span>
-                        ) : null}
+                        <span
+                          className="mt-1 text-[var(--amber)]"
+                          aria-hidden
+                        >
+                          →
+                        </span>
                       </div>
                       {match.location ? (
                         <p className="mt-2 text-xs uppercase tracking-[0.12em] text-[var(--chalk)]">
                           {match.location}
                         </p>
                       ) : null}
-                    </>
-                  );
-
-                  return (
-                    <li
-                      key={`${day.date}-${index}-${match.matchId ?? match.home}`}
-                    >
-                      {match.url ? (
-                        <a
-                          href={match.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block rounded-2xl border border-[var(--line)] bg-[var(--paper)]/60 px-4 py-3 transition hover:border-[var(--felt-soft)] hover:bg-[var(--surface-2)]"
-                        >
-                          {content}
-                        </a>
-                      ) : (
-                        <div className="rounded-2xl border border-[var(--line)] bg-[var(--paper)]/60 px-4 py-3">
-                          {content}
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
+                    </button>
+                  </li>
+                ))}
               </ul>
             </section>
           ))}
