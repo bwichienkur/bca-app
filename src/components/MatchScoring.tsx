@@ -10,6 +10,7 @@ import {
   useTransition,
   type FormEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   applyQuickWin,
   applyRaceScore,
@@ -1586,6 +1587,15 @@ function ScoringLineupSide({
   );
 }
 
+function nextRaceScore(current: number, delta: number, options: number[]): number {
+  const sorted = [...options].sort((a, b) => a - b);
+  if (delta > 0) {
+    return sorted.find((value) => value > current) ?? sorted[sorted.length - 1] ?? current;
+  }
+  const lower = [...sorted].reverse().find((value) => value < current);
+  return lower ?? sorted[0] ?? current;
+}
+
 function ScorePad({
   open,
   match,
@@ -1604,10 +1614,16 @@ function ScorePad({
   onChange: (next: GameScoreState) => void;
 }) {
   const [local, setLocal] = useState<GameScoreState | null>(game ?? null);
-  const [padTop, setPadTop] = useState(104);
+  const [mounted, setMounted] = useState(false);
+  const [spacerPx, setSpacerPx] = useState(104);
+  const scoresRef = useRef<HTMLDivElement | null>(null);
   const [, startPadTransition] = useTransition();
   const maxWin = match.maxScore > 0 ? match.maxScore : 10;
   const maxLoss = match.maxLosingScore >= 0 ? match.maxLosingScore : 7;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Resync when opening/switching games — not on every parent score echo.
   useEffect(() => {
@@ -1624,39 +1640,30 @@ function ScorePad({
       const tabs = document.querySelector<HTMLElement>("[data-report-tabs]");
       const viewportHeight =
         window.visualViewport?.height ?? window.innerHeight;
-      // Keep most of the viewport for the scorer no matter where tabs sit.
-      const maxTop = Math.max(72, Math.floor(viewportHeight * 0.35));
-
-      let top = 104;
-      if (tabs) {
-        const rect = tabs.getBoundingClientRect();
-        const stuck = rect.top <= 1;
-        // Sticky tabs: sit flush under them.
-        // Mid-page tabs: use bar height only (not document Y), so the pad
-        // stays on-screen instead of starting hundreds of px down.
-        top = stuck
-          ? Math.ceil(rect.bottom)
-          : Math.ceil(tabs.offsetHeight);
-      }
-
-      setPadTop(Math.min(Math.max(top, 0), maxTop));
+      const maxSpacer = Math.max(72, Math.floor(viewportHeight * 0.32));
+      // Always use the tab bar's own height — never its document Y.
+      // (Fixed positioning inside transformed ancestors was the old bug;
+      // we portal to body, and spacer is just "room for sticky tabs".)
+      const height = tabs ? Math.ceil(tabs.offsetHeight) : 104;
+      setSpacerPx(Math.min(Math.max(height, 72), maxSpacer));
     };
 
     measure();
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
+    // Keep scores at the top of the sheet if anything tries to scroll them away.
+    scoresRef.current?.scrollIntoView({ block: "start" });
+
     window.addEventListener("resize", measure);
     window.visualViewport?.addEventListener("resize", measure);
-    window.visualViewport?.addEventListener("scroll", measure);
 
     return () => {
       document.body.style.overflow = prevOverflow;
       window.removeEventListener("resize", measure);
       window.visualViewport?.removeEventListener("resize", measure);
-      window.visualViewport?.removeEventListener("scroll", measure);
     };
-  }, [open]);
+  }, [open, roundNumber, gameIndex]);
 
   if (!open || !game || !local) {
     return (
@@ -1678,15 +1685,6 @@ function ScorePad({
     startPadTransition(() => onChange(next));
   };
 
-  const setScore = (side: 1 | 2, value: number) => {
-    commit(
-      applyRaceScore(local, side, value, {
-        maxScore: maxWin,
-        maxLosingScore: maxLoss,
-      }),
-    );
-  };
-
   const scoreOptionsFor = (side: 1 | 2) => {
     const other =
       side === 1 ? (local.teamTwoScore ?? 0) : (local.teamOneScore ?? 0);
@@ -1696,18 +1694,47 @@ function ScorePad({
     return [...RACE_SCORE_OPTIONS];
   };
 
-  return (
-    <>
-      <aside className="hidden rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)]/50 p-5 text-sm text-[var(--muted)] lg:block">
-        Score pad open — use the full-screen editor.
-      </aside>
-      <div
-        className="fixed inset-x-0 bottom-0 z-50 flex flex-col bg-[var(--paper-2)] shadow-[var(--shadow)]"
-        style={{ top: padTop, bottom: 0 }}
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Round ${roundNumber} game ${gameIndex} score pad`}
-      >
+  const setScore = (side: 1 | 2, value: number) => {
+    commit(
+      applyRaceScore(local, side, value, {
+        maxScore: maxWin,
+        maxLosingScore: maxLoss,
+      }),
+    );
+  };
+
+  const bump = (side: 1 | 2, delta: number) => {
+    const options = scoreOptionsFor(side);
+    const current =
+      side === 1 ? (local.teamOneScore ?? 0) : (local.teamTwoScore ?? 0);
+    setScore(side, nextRaceScore(current, delta, options));
+  };
+
+  const quickWin = (side: 1 | 2) => {
+    commit(
+      applyQuickWin(local, side, {
+        maxScore: maxWin,
+        maxLosingScore: maxLoss,
+        adornment: local.winAdornment,
+      }),
+    );
+  };
+
+  const sheet = (
+    <div
+      className="fixed inset-0 z-[100] flex flex-col"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Round ${roundNumber} game ${gameIndex} score pad`}
+    >
+      <button
+        type="button"
+        aria-label="Dismiss score pad"
+        className="shrink-0 bg-black/50"
+        style={{ height: spacerPx }}
+        onClick={onClose}
+      />
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-[1.25rem] border-t border-[var(--line)] bg-[var(--paper-2)] shadow-[var(--shadow)]">
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--line)] px-4 py-3">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
@@ -1738,8 +1765,8 @@ function ScorePad({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 pb-[calc(1rem+var(--safe-bottom))]">
-          <div className="grid grid-cols-2 gap-3">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain [overflow-anchor:none] px-4 py-4 pb-[calc(1rem+var(--safe-bottom))]">
+          <div ref={scoresRef} className="grid grid-cols-2 gap-3">
             {[1, 2].map((side) => {
               const score =
                 side === 1
@@ -1785,6 +1812,7 @@ function ScorePad({
                       Fargo {p2.fargoRating}
                     </p>
                   ) : null}
+
                   <label className="mt-3 block">
                     <span className="sr-only">Score for {name}</span>
                     <select
@@ -1806,13 +1834,36 @@ function ScorePad({
                       ))}
                     </select>
                   </label>
-                  {isWinner ? (
-                    <p className="mt-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--felt-deep)]">
-                      {local.winAdornment
-                        ? `Winner · ${local.winAdornment}`
-                        : "Winner"}
-                    </p>
-                  ) : null}
+
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => bump(side as 1 | 2, -1)}
+                      className="rounded-xl bg-[var(--surface)] py-2 text-lg font-semibold active:scale-[0.98]"
+                    >
+                      −
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => bump(side as 1 | 2, 1)}
+                      className="rounded-xl bg-[var(--surface)] py-2 text-lg font-semibold active:scale-[0.98]"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => quickWin(side as 1 | 2)}
+                    className={[
+                      "mt-2 w-full rounded-xl py-2.5 text-sm font-semibold text-white active:scale-[0.98]",
+                      isWinner
+                        ? "bg-[var(--felt-soft)]"
+                        : "bg-[var(--felt)]",
+                    ].join(" ")}
+                  >
+                    WIN
+                  </button>
                 </div>
               );
             })}
@@ -1897,6 +1948,15 @@ function ScorePad({
           </div>
         </div>
       </div>
+    </div>
+  );
+
+  return (
+    <>
+      <aside className="hidden rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)]/50 p-5 text-sm text-[var(--muted)] lg:block">
+        Score pad open — use the full-screen editor.
+      </aside>
+      {mounted ? createPortal(sheet, document.body) : null}
     </>
   );
 }
