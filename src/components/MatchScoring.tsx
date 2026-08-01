@@ -357,10 +357,6 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
     [roundPointTallies],
   );
 
-  const baseRoundsComplete =
-    roundPointTallies.length > 0 &&
-    roundPointTallies.every((round) => round.roundComplete);
-
   const rounds = match?.matchFormat?.rounds ?? [];
   const roundsAvailable =
     rounds.length + (includeMatchPointsRound ? 1 : 0);
@@ -647,15 +643,17 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                       (item) => item.roundNumber === round.roundNumber,
                     ) ?? null;
                   const done = tally?.gamesComplete ?? 0;
-                  const winnerLabel =
-                    tally?.roundComplete && tally.roundWinner
-                      ? tally.roundWinner === match.mySide
-                        ? "W"
-                        : match.mySide
-                          ? "L"
-                          : tally.roundWinner === 1
-                            ? "H"
-                            : "A"
+                  const decided = tally?.roundWinner != null;
+                  const winnerLabel = decided
+                    ? tally!.roundWinner === match.mySide
+                      ? "W"
+                      : match.mySide
+                        ? "L"
+                        : tally!.roundWinner === 1
+                          ? "H"
+                          : "A"
+                    : tally?.roundComplete
+                      ? "T"
                       : null;
                   return (
                     <button
@@ -671,13 +669,11 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                         "min-w-0 rounded-xl px-0.5 py-1.5 text-center transition",
                         active
                           ? "bg-[var(--felt)] text-white shadow-sm"
-                          : tally?.roundComplete &&
-                              tally.roundWinner === match.mySide
+                          : decided && tally!.roundWinner === match.mySide
                             ? "bg-[color-mix(in_srgb,var(--felt)_22%,var(--surface))] text-[var(--felt-deep)]"
-                            : tally?.roundComplete &&
+                            : decided &&
                                 match.mySide &&
-                                tally.roundWinner &&
-                                tally.roundWinner !== match.mySide
+                                tally!.roundWinner !== match.mySide
                               ? "bg-[color-mix(in_srgb,var(--danger)_16%,var(--surface))] text-[var(--danger)]"
                               : "bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface-2)]",
                       ].join(" ")}
@@ -686,9 +682,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                         R{round.roundNumber}
                       </span>
                       <span className="mt-0.5 block truncate text-[9px] font-semibold tabular-nums leading-none opacity-80">
-                        {tally?.roundComplete
-                          ? winnerLabel ?? "T"
-                          : `${done}/${round.games.length}`}
+                        {winnerLabel ?? `${done}/${round.games.length}`}
                       </span>
                     </button>
                   );
@@ -706,11 +700,9 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                       "min-w-0 rounded-xl px-0.5 py-1.5 text-center transition",
                       isMatchPointsRound
                         ? "bg-[var(--felt)] text-white shadow-sm"
-                        : matchPointsTally.roundComplete &&
-                            matchPointsTally.roundWinner === match.mySide
+                        : matchPointsTally.roundWinner === match.mySide
                           ? "bg-[color-mix(in_srgb,var(--felt)_22%,var(--surface))] text-[var(--felt-deep)]"
-                          : matchPointsTally.roundComplete &&
-                              match.mySide &&
+                          : match.mySide &&
                               matchPointsTally.roundWinner &&
                               matchPointsTally.roundWinner !== match.mySide
                             ? "bg-[color-mix(in_srgb,var(--danger)_16%,var(--surface))] text-[var(--danger)]"
@@ -721,24 +713,23 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                       R6
                     </span>
                     <span className="mt-0.5 block truncate text-[9px] font-semibold tabular-nums leading-none opacity-80">
-                      {matchPointsTally.roundComplete
-                        ? matchPointsTally.roundWinner
-                          ? matchPointsTally.roundWinner === match.mySide
-                            ? "W"
-                            : match.mySide
-                              ? "L"
-                              : matchPointsTally.roundWinner === 1
-                                ? "H"
-                                : "A"
-                          : "T"
-                        : "—"}
+                      {matchPointsTally.roundWinner
+                        ? matchPointsTally.roundWinner === match.mySide
+                          ? "W"
+                          : match.mySide
+                            ? "L"
+                            : matchPointsTally.roundWinner === 1
+                              ? "H"
+                              : "A"
+                        : matchPointsTally.roundComplete
+                          ? "T"
+                          : `${matchPointsTally.gamesComplete}/${matchPointsTally.gamesTotal}`}
                     </span>
                   </button>
                 ) : null}
               </div>
 
-              {activeRoundPoints &&
-              !(isMatchPointsRound && !baseRoundsComplete) ? (
+              {activeRoundPoints ? (
                 <RoundPointsBoard
                   tally={activeRoundPoints}
                   teamOneName={match.teamOneName}
@@ -751,9 +742,11 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
 
               {isMatchPointsRound ? (
                 <p className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--muted)]">
-                  {baseRoundsComplete
-                    ? "Round 6 is awarded from total points across all games (plus handicap)."
-                    : "Round 6 unlocks after rounds 1–5 are complete. Finish every game first."}
+                  Round 6 is total points across all games (plus handicap). It
+                  is only awarded when the other team can no longer catch up —
+                  win ≤{match.maxScore || 10} pts / loss ≤
+                  {match.maxLosingScore >= 0 ? match.maxLosingScore : 7} pts
+                  per game. Points ties break on game wins.
                 </p>
               ) : (
                 <div className="min-w-0 space-y-1.5">
@@ -1214,37 +1207,64 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
   isHandicapped: boolean;
   matchPointsRound?: boolean;
 }) {
+  const label = matchPointsRound ? "match points" : "the round";
+  const gamesLeft = tally.gamesRemaining;
   const resultLabel = (() => {
-    if (!tally.roundComplete) {
+    if (tally.roundWinner) {
+      const clinchSuffix =
+        tally.clinchedEarly && gamesLeft > 0
+          ? ` · clinched (${gamesLeft} game${gamesLeft === 1 ? "" : "s"} left)`
+          : "";
+      if (mySide && tally.roundWinner === mySide) {
+        return `We won ${label}${clinchSuffix}`;
+      }
+      if (mySide && tally.roundWinner !== mySide) {
+        return `Opponent won ${label}${clinchSuffix}`;
+      }
+      const name =
+        tally.roundWinner === 1
+          ? teamOneName.trim()
+          : teamTwoName.trim();
+      return `${name} won ${label}${clinchSuffix}`;
+    }
+    if (tally.roundComplete) {
       return matchPointsRound
-        ? `${tally.gamesComplete}/${tally.gamesTotal} games scored across rounds`
-        : `${tally.gamesComplete}/${tally.gamesTotal} games scored`;
+        ? "Match points tied on points and games"
+        : "Round tied on points and games";
     }
-    if (!tally.roundWinner) {
-      return matchPointsRound ? "Match points tied" : "Round tied";
-    }
-    if (mySide && tally.roundWinner === mySide) {
-      return matchPointsRound ? "We won match points" : "We won the round";
-    }
-    if (mySide && tally.roundWinner !== mySide) {
-      return matchPointsRound
-        ? "Opponent won match points"
-        : "Opponent won the round";
-    }
-    return tally.roundWinner === 1
-      ? `${teamOneName.trim()} won ${matchPointsRound ? "match points" : "the round"}`
-      : `${teamTwoName.trim()} won ${matchPointsRound ? "match points" : "the round"}`;
+    return matchPointsRound
+      ? `${tally.gamesComplete}/${tally.gamesTotal} games scored across rounds`
+      : `${tally.gamesComplete}/${tally.gamesTotal} games scored`;
   })();
 
-  const resultTone = !tally.roundComplete
-    ? "text-[var(--muted)]"
-    : !tally.roundWinner
+  const resultTone = tally.roundWinner
+    ? mySide && tally.roundWinner === mySide
+      ? "text-[var(--felt-deep)]"
+      : mySide
+        ? "text-[var(--danger)]"
+        : "text-[var(--felt-deep)]"
+    : tally.roundComplete
       ? "text-[var(--amber)]"
-      : mySide && tally.roundWinner === mySide
-        ? "text-[var(--felt-deep)]"
-        : mySide
-          ? "text-[var(--danger)]"
-          : "text-[var(--felt-deep)]";
+      : "text-[var(--muted)]";
+
+  const chaseLine = (() => {
+    if (tally.roundWinner || gamesLeft <= 0) return null;
+    const formatNeed = (side: 1 | 2, name: string) => {
+      const need =
+        side === 1 ? tally.pointsNeeded.teamOne : tally.pointsNeeded.teamTwo;
+      if (need == null) return null;
+      const maxAvail = gamesLeft * tally.maxWinPoints;
+      if (need > maxAvail) {
+        return `${name}: can’t catch up`;
+      }
+      return `${name}: need ${need} pt${need === 1 ? "" : "s"}`;
+    };
+    const one = formatNeed(1, mySide === 1 ? "You" : "Home");
+    const two = formatNeed(2, mySide === 2 ? "You" : "Away");
+    const parts = [one, two].filter(Boolean);
+    if (!parts.length) return null;
+    return `${parts.join(" · ")} from ${gamesLeft} game${gamesLeft === 1 ? "" : "s"} (win ≤${tally.maxWinPoints} / loss ≤${tally.maxLossPoints})`;
+  })();
 
   const sideCard = (
     side: 1 | 2,
@@ -1252,9 +1272,12 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
     gamePoints: number,
     handicap: number,
     total: number,
+    gameWins: number,
   ) => {
-    const won = tally.roundComplete && tally.roundWinner === side;
+    const won = tally.roundWinner === side;
     const isMine = mySide === side;
+    const need =
+      side === 1 ? tally.pointsNeeded.teamOne : tally.pointsNeeded.teamTwo;
     return (
       <div
         className={[
@@ -1282,7 +1305,22 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
               <span> +0 HC</span>
             )
           ) : null}
+          <span className="text-[var(--muted)]"> · {gameWins}g</span>
         </p>
+        {!tally.roundWinner && need != null && gamesLeft > 0 ? (
+          <p
+            className={[
+              "mt-1 text-[11px] font-semibold",
+              need > gamesLeft * tally.maxWinPoints
+                ? "text-[var(--danger)]"
+                : "text-[var(--amber)]",
+            ].join(" ")}
+          >
+            {need > gamesLeft * tally.maxWinPoints
+              ? "Can’t catch up"
+              : `Need ${need} pt${need === 1 ? "" : "s"}`}
+          </p>
+        ) : null}
       </div>
     );
   };
@@ -1291,7 +1329,7 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
     <div
       className={[
         "w-full min-w-0 overflow-hidden rounded-2xl border px-3 py-2.5 sm:px-4",
-        tally.roundComplete && tally.roundWinner
+        tally.roundWinner
           ? tally.roundWinner === mySide
             ? "border-[var(--felt)]/45 bg-[color-mix(in_srgb,var(--felt)_12%,var(--surface))]"
             : mySide
@@ -1316,6 +1354,12 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
         </div>
       </div>
 
+      {chaseLine ? (
+        <p className="mt-2 text-[11px] leading-snug text-[var(--muted)]">
+          {chaseLine}
+        </p>
+      ) : null}
+
       <div className="mt-2 grid grid-cols-2 gap-2">
         {sideCard(
           1,
@@ -1323,6 +1367,7 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
           tally.teamOneGamePoints,
           tally.teamOneHandicap,
           tally.teamOneTotal,
+          tally.teamOneGameWins,
         )}
         {sideCard(
           2,
@@ -1330,6 +1375,7 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
           tally.teamTwoGamePoints,
           tally.teamTwoHandicap,
           tally.teamTwoTotal,
+          tally.teamTwoGameWins,
         )}
       </div>
 
@@ -1339,6 +1385,15 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
           {tally.teamOneHandicap > 0
             ? `${teamOneName.trim()} handicap +${tally.teamOneHandicap} included in total`
             : `${teamTwoName.trim()} handicap +${tally.teamTwoHandicap} included in total`}
+        </p>
+      ) : null}
+
+      {tally.roundComplete &&
+      !tally.roundWinner &&
+      tally.teamOneTotal === tally.teamTwoTotal ? (
+        <p className="mt-1.5 text-[11px] text-[var(--muted)]">
+          Points tied {tally.teamOneTotal}–{tally.teamTwoTotal}; game wins also
+          tied {tally.teamOneGameWins}–{tally.teamTwoGameWins}.
         </p>
       ) : null}
     </div>
