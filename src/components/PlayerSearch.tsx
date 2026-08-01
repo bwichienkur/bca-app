@@ -148,13 +148,13 @@ export function PlayerSearch() {
       >
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-            FairMatch
+            Search
           </p>
           <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
             Player search
           </h3>
           <p className="mt-1 max-w-xl text-sm text-[var(--muted)]">
-            Lookup any FargoRate rating by name or membership ID.
+            Look up any FargoRate rating by name or membership ID.
           </p>
         </div>
 

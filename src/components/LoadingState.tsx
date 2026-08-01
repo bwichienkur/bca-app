@@ -1,7 +1,12 @@
 export function LoadingState({ label = "Loading…" }: { label?: string }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-      <div className="flex items-center gap-2">
+    <div
+      className="flex flex-col items-center justify-center gap-3 py-16 text-center"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div className="flex items-center gap-2" aria-hidden>
         <span className="loading-dot h-2.5 w-2.5 rounded-full bg-[var(--felt)]" />
         <span className="loading-dot h-2.5 w-2.5 rounded-full bg-[var(--chalk)]" />
         <span className="loading-dot h-2.5 w-2.5 rounded-full bg-[var(--amber)]" />

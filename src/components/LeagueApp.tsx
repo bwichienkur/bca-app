@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { DEFAULT_LEAGUE_ID, REPORT_TABS } from "@/lib/constants";
+import {
+  BROWSE_TABS,
+  DEFAULT_LEAGUE_ID,
+  PLAY_TAB,
+  TOOL_TABS,
+} from "@/lib/constants";
 import { normalizeTeamName } from "@/lib/matchups";
 import { enrichPlayersWithRatings } from "@/lib/players";
 import {
@@ -1141,29 +1146,69 @@ export function LeagueApp() {
         <div
           ref={filterAnchor.ref}
           data-report-tabs
-          className="sticky top-0 z-20 -mx-1 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 py-1 backdrop-blur"
+          className="sticky top-0 z-20 -mx-1 space-y-1.5 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 py-1 backdrop-blur"
         >
+          <nav aria-label="Browse reports" className="contents">
+            <div className="grid grid-cols-4 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
+              {BROWSE_TABS.map((item) => {
+                const active = tab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => {
+                      setTab(item.id);
+                      if (
+                        (item.id === "schedule" || item.id === "my-team") &&
+                        !prefs.teamName
+                      ) {
+                        setContextOpen(true);
+                      }
+                    }}
+                    className={[
+                      "rounded-xl px-2 py-2 text-center text-[12px] font-semibold leading-tight transition sm:rounded-full sm:px-3.5 sm:py-2 sm:text-sm sm:font-medium",
+                      active
+                        ? "bg-[var(--felt)] text-white shadow-sm"
+                        : "bg-[var(--surface)]/80 text-[var(--muted)] hover:bg-[var(--surface-2)]",
+                    ].join(" ")}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
           <nav
-            aria-label="Reports"
-            className="grid grid-cols-4 gap-1.5 sm:flex sm:flex-wrap sm:gap-2"
+            aria-label="Score and tools"
+            className="grid grid-cols-[minmax(0,1.35fr)_repeat(2,minmax(0,1fr))] gap-1.5 sm:flex sm:flex-wrap sm:gap-2"
           >
-            {REPORT_TABS.map((item) => {
+            <button
+              type="button"
+              aria-current={tab === PLAY_TAB.id ? "page" : undefined}
+              onClick={() => {
+                setTab(PLAY_TAB.id);
+                if (!prefs.teamName) setContextOpen(true);
+              }}
+              className={[
+                "rounded-xl px-3 py-2.5 text-center text-[13px] font-bold leading-tight transition sm:rounded-full sm:px-5 sm:py-2.5 sm:text-sm",
+                tab === PLAY_TAB.id
+                  ? "bg-[var(--felt)] text-white shadow-sm"
+                  : "bg-[color-mix(in_srgb,var(--felt)_88%,black)] text-white hover:bg-[var(--felt)]",
+              ].join(" ")}
+            >
+              {PLAY_TAB.label}
+            </button>
+            {TOOL_TABS.map((item) => {
               const active = tab === item.id;
               return (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => {
-                    setTab(item.id);
-                    if (
-                      (item.id === "schedule" || item.id === "my-team") &&
-                      !prefs.teamName
-                    ) {
-                      setContextOpen(true);
-                    }
-                  }}
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => setTab(item.id)}
                   className={[
-                    "rounded-xl px-2 py-2 text-center text-[12px] font-semibold leading-tight transition sm:rounded-full sm:px-3.5 sm:py-2 sm:text-sm sm:font-medium",
+                    "rounded-xl px-2 py-2.5 text-center text-[12px] font-semibold leading-tight transition sm:rounded-full sm:px-3.5 sm:py-2 sm:text-sm sm:font-medium",
                     active
                       ? "bg-[var(--felt)] text-white shadow-sm"
                       : "bg-[var(--surface)]/80 text-[var(--muted)] hover:bg-[var(--surface-2)]",
@@ -1205,11 +1250,21 @@ export function LeagueApp() {
               user={user}
               authLoading={authLoading}
               onRequestLogin={() => setScreen("login")}
+              onRequestContext={() => setContextOpen(true)}
             />
           ) : !selectedDivision ? (
             <EmptyState
               title="Choose a division to continue"
-              body="Tap Change on the context card above to pick your division. Search and Score sign-in work without a full division, but Score needs one to list matches."
+              body="Search works without a division. Score and reports need one from your context card."
+              action={
+                <button
+                  type="button"
+                  onClick={() => setContextOpen(true)}
+                  className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+                >
+                  Choose division
+                </button>
+              }
             />
           ) : tab === "handicap" ? (
             <HandicapCalculator
@@ -1217,15 +1272,7 @@ export function LeagueApp() {
               divisionName={selectedDivision.name}
               prefs={prefs}
               refreshToken={refreshToken}
-              onSelectTeam={({ teamId, teamName }) => {
-                persist({
-                  ...prefs,
-                  teamId,
-                  teamName,
-                  divisionId: selectedDivision.id,
-                  divisionName: selectedDivision.name,
-                });
-              }}
+              onRequestSetTeam={() => setContextOpen(true)}
             />
           ) : loadingReport ? (
             <LoadingState label="Pulling report from LMS…" />
@@ -1248,7 +1295,16 @@ export function LeagueApp() {
             ) : (
               <EmptyState
                 title="Set your team"
-                body="Tap Change on the context card above and pick your team to see roster and player stats here."
+                body="Pick My team on the context card to see roster and player stats here."
+                action={
+                  <button
+                    type="button"
+                    onClick={() => setContextOpen(true)}
+                    className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+                  >
+                    Set my team
+                  </button>
+                }
               />
             )
           ) : tab === "standings" && teamReport ? (
@@ -1337,7 +1393,16 @@ export function LeagueApp() {
             !prefs.teamName ? (
               <EmptyState
                 title="Set My team for schedule"
-                body="Tap Change on the context card above and pick your team. Schedule always uses that selection."
+                body="Schedule always uses your selected team from the context card."
+                action={
+                  <button
+                    type="button"
+                    onClick={() => setContextOpen(true)}
+                    className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+                  >
+                    Set my team
+                  </button>
+                }
               />
             ) : selectedScheduleMatch ? (
               <ScheduleMatchDetail

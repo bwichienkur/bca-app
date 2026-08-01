@@ -67,7 +67,10 @@ type MatchScoringProps = {
   user: AuthUser | null;
   authLoading?: boolean;
   onRequestLogin: () => void;
+  onRequestContext: () => void;
 };
+
+type SaveStatus = "idle" | "saving" | "saved" | "local";
 
 type View =
   | { mode: "list" }
@@ -127,6 +130,7 @@ export function MatchScoring({
   user,
   authLoading = false,
   onRequestLogin,
+  onRequestContext,
 }: MatchScoringProps) {
   const [matches, setMatches] = useState<ScoringMatchSummary[]>([]);
   const [loadingMatches, setLoadingMatches] = useState(false);
@@ -144,8 +148,10 @@ export function MatchScoring({
   const [sheetError, setSheetError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+  const [submitNeedsReview, setSubmitNeedsReview] = useState(false);
   const [draftMatchIds, setDraftMatchIds] = useState<Set<string>>(new Set());
   const [sharedDrafts, setSharedDrafts] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [syncNote, setSyncNote] = useState<string | null>(null);
   const [remoteSubmittedAt, setRemoteSubmittedAt] = useState<string | null>(
     null,
@@ -169,6 +175,7 @@ export function MatchScoring({
     if (sheetLockedRef.current) return;
     saveDraft(next);
     dirtyRef.current = true;
+    setSaveStatus("saving");
     const seq = ++pushSeqRef.current;
     void pushRemoteDraft(next, baseUpdatedAtRef.current)
       .then((remote) => {
@@ -181,6 +188,7 @@ export function MatchScoring({
           draftRef.current = merged;
           setDraft(merged);
           saveDraft(merged);
+          setSaveStatus("saved");
           setSyncNote("Another device had a newer score — loaded it.");
           return;
         }
@@ -190,11 +198,13 @@ export function MatchScoring({
           baseUpdatedAtRef.current = next.updatedAt;
         }
         dirtyRef.current = false;
+        setSaveStatus(remote.shared ? "saved" : "local");
         setSyncNote(null);
       })
       .catch(() => {
         // Keep local draft; shared store may be offline/unconfigured.
         dirtyRef.current = false;
+        setSaveStatus("local");
       });
   };
 
@@ -530,6 +540,7 @@ export function MatchScoring({
     setSubmitting(true);
     setSheetError(null);
     setSubmitMessage(null);
+    setSubmitNeedsReview(false);
     try {
       const payload = buildVerticalMatchPayload({
         match,
@@ -551,6 +562,7 @@ export function MatchScoring({
         sheetLockedRef.current = true;
         setRemoteSubmittedAt(new Date().toISOString());
         setSubmitMessage("Match submitted to LMS.");
+        setSubmitNeedsReview(false);
         setView({ mode: "list" });
         setMatch(null);
         setDraft(null);
@@ -567,11 +579,13 @@ export function MatchScoring({
           setMatches(data.matches);
         }
       } else {
+        setSubmitNeedsReview(true);
         setSubmitMessage(
-          "LMS accepted the request, but the match still shows as unscored. Double-check the scoresheet in LMS before leaving the table.",
+          "LMS accepted the request, but the match still shows as unscored. Keep this draft open and verify in LMS before leaving the table.",
         );
       }
     } catch (err) {
+      setSubmitNeedsReview(true);
       setSheetError(err instanceof Error ? err.message : "Submit failed.");
     } finally {
       setSubmitting(false);
@@ -604,7 +618,16 @@ export function MatchScoring({
     return (
       <EmptyState
         title="Choose a division to score"
-        body="Pick your division above (from the teams you belong to), then open Score."
+        body="Pick your division from the context card (from the teams you belong to), then open Score."
+        action={
+          <button
+            type="button"
+            onClick={onRequestContext}
+            className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+          >
+            Choose division
+          </button>
+        }
       />
     );
   }
@@ -613,7 +636,16 @@ export function MatchScoring({
     return (
       <EmptyState
         title="Set My team to score"
-        body="Score only lists matches for your selected team. Set My team in the League · Division · My team section or in Settings."
+        body="Score only lists matches for your selected team."
+        action={
+          <button
+            type="button"
+            onClick={onRequestContext}
+            className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+          >
+            Set my team
+          </button>
+        }
       />
     );
   }
@@ -667,15 +699,100 @@ export function MatchScoring({
           handicapTotals={handicapTotals}
         />
 
-        {sheetError ? (
-          <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
-            {sheetError}
+        {!sheetLocked ? (
+          <p
+            className={[
+              "text-xs font-semibold",
+              saveStatus === "saving"
+                ? "text-[var(--amber)]"
+                : saveStatus === "local"
+                  ? "text-[var(--muted)]"
+                  : "text-[var(--felt-deep)]",
+            ].join(" ")}
+            aria-live="polite"
+          >
+            {saveStatus === "saving"
+              ? "Saving…"
+              : saveStatus === "saved"
+                ? sharedDrafts
+                  ? "Saved · syncing across devices"
+                  : "Saved"
+                : saveStatus === "local"
+                  ? "Saved on this device only"
+                  : sharedDrafts
+                    ? "Draft sync ready"
+                    : "Edits save automatically"}
           </p>
         ) : null}
+
+        {sheetError ? (
+          <div className="space-y-2 rounded-xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
+            <p>{sheetError}</p>
+            {submitNeedsReview ? (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void submitMatch()}
+                  disabled={submitting}
+                  className="rounded-full bg-[var(--danger-strong)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  {submitting ? "Retrying…" : "Retry submit"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSheetError(null);
+                    setSubmitNeedsReview(false);
+                  }}
+                  className="rounded-full border border-[var(--danger)]/40 px-3 py-1.5 text-xs font-semibold"
+                >
+                  Keep draft
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {submitMessage ? (
-          <p className="rounded-xl border border-[var(--felt)]/35 bg-[color-mix(in_srgb,var(--felt)_18%,transparent)] px-3 py-2 text-sm text-[var(--felt-deep)]">
-            {submitMessage}
-          </p>
+          <div
+            className={[
+              "space-y-2 rounded-xl px-3 py-2 text-sm",
+              submitNeedsReview
+                ? "border border-[var(--amber)]/40 bg-[color-mix(in_srgb,var(--amber)_12%,transparent)] text-[var(--amber)]"
+                : "border border-[var(--felt)]/35 bg-[color-mix(in_srgb,var(--felt)_18%,transparent)] text-[var(--felt-deep)]",
+            ].join(" ")}
+          >
+            <p>{submitMessage}</p>
+            {submitNeedsReview ? (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void submitMatch()}
+                  disabled={submitting}
+                  className="rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  {submitting ? "Retrying…" : "Retry submit"}
+                </button>
+                <a
+                  href="https://lms.fargorate.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-[var(--amber)]/45 px-3 py-1.5 text-xs font-semibold text-[var(--amber)]"
+                >
+                  Open LMS
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSubmitMessage(null);
+                    setSubmitNeedsReview(false);
+                  }}
+                  className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]"
+                >
+                  Keep draft
+                </button>
+              </div>
+            ) : null}
+          </div>
         ) : null}
         {syncNote ? (
           <p className="rounded-xl border border-[var(--amber)]/35 bg-[color-mix(in_srgb,var(--amber)_12%,transparent)] px-3 py-2 text-sm text-[var(--amber)]">
@@ -1090,16 +1207,16 @@ export function MatchScoring({
             Score
           </p>
           <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-            Your matches
+            Scoresheets
           </h3>
           <p className="mt-1 text-sm text-[var(--muted)]">
             {teamName ? (
               <>
-                Scoring for{" "}
+                Open a match to score for{" "}
                 <span className="font-medium text-[var(--ink)]">{teamName}</span>
               </>
             ) : (
-              "Your matches"
+              "Open a match to score"
             )}
             {divisionName ? (
               <>
@@ -2241,14 +2358,22 @@ function ScorePad({
               Win adornment
             </p>
             <div className="grid grid-cols-4 gap-2">
-              {(["", "BR", "TR", "WZ"] as WinAdornment[]).map((adornment) => {
-                const label = adornment || "CLR";
-                const active = local.winAdornment === adornment;
+              {(
+                [
+                  { code: "" as WinAdornment, label: "CLR", hint: "Clear" },
+                  { code: "BR" as WinAdornment, label: "BR", hint: "Break & run" },
+                  { code: "TR" as WinAdornment, label: "TR", hint: "Table run" },
+                  { code: "WZ" as WinAdornment, label: "WZ", hint: "Win zip (10–0)" },
+                ] as const
+              ).map((item) => {
+                const active = local.winAdornment === item.code;
                 return (
                   <button
-                    key={label}
+                    key={item.label}
                     type="button"
-                    disabled={!winner && adornment !== ""}
+                    title={item.hint}
+                    aria-label={item.hint}
+                    disabled={!winner && item.code !== ""}
                     onClick={() => {
                       const currentWinner = gameWinner(local, {
                         maxScore: maxWin,
@@ -2266,7 +2391,7 @@ function ScorePad({
                         applyQuickWin(local, currentWinner, {
                           maxScore: maxWin,
                           maxLosingScore: maxLoss,
-                          adornment,
+                          adornment: item.code,
                         }),
                       );
                     }}
@@ -2277,11 +2402,14 @@ function ScorePad({
                         : "bg-[var(--surface-2)] text-[var(--ink)]",
                     ].join(" ")}
                   >
-                    {label}
+                    {item.label}
                   </button>
                 );
               })}
             </div>
+            <p className="mt-2 text-[11px] leading-snug text-[var(--muted)]">
+              CLR clear · BR break &amp; run · TR table run · WZ win zip (10–0)
+            </p>
           </div>
 
           <div className="flex gap-2">

@@ -59,7 +59,8 @@ type HandicapCalculatorProps = {
   prefs: UserPreferences;
   /** Bumps when LMS cache is manually refreshed. */
   refreshToken?: number;
-  onSelectTeam: (team: { teamId: string; teamName: string }) => void;
+  /** Opens the league context card so My team can be set once. */
+  onRequestSetTeam: () => void;
 };
 
 type LineupSlot = RosterPlayer | null;
@@ -206,7 +207,7 @@ export function HandicapCalculator({
   divisionName,
   prefs,
   refreshToken = 0,
-  onSelectTeam,
+  onRequestSetTeam,
 }: HandicapCalculatorProps) {
   const [data, setData] = useState<CalculatorPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -373,22 +374,6 @@ export function HandicapCalculator({
     }
   }
 
-  const chooseMyTeam = (team: DivisionTeam) => {
-    setMyTeamId(team.id);
-    onSelectTeam({ teamId: team.id, teamName: team.name });
-    setPresetStatus(null);
-    if (data) applyTeamMatchup(data, team.id);
-  };
-
-  const clearMyTeam = () => {
-    setMyTeamId(null);
-    setOpponentTeamId(null);
-    setMyLineup([]);
-    setOppLineup([]);
-    setWeekMatchup(null);
-    setPresetStatus(null);
-  };
-
   const chooseOpponent = (team: DivisionTeam) => {
     setOpponentTeamId(team.id);
     setOppLineup(defaultTopLineup(team, slots));
@@ -554,6 +539,27 @@ export function HandicapCalculator({
     );
   }
 
+  if (!prefs.teamId || !myTeam) {
+    return (
+      <section className="animate-rise space-y-4">
+        {sectionHeader}
+        <EmptyState
+          title="Set My team to calculate handicaps"
+          body="Handicap uses your team from the context card. Set My team once, then pick an opponent here."
+          action={
+            <button
+              type="button"
+              onClick={onRequestSetTeam}
+              className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+            >
+              Set my team
+            </button>
+          }
+        />
+      </section>
+    );
+  }
+
   return (
     <div className="animate-panel space-y-4">
       {sectionHeader}
@@ -579,26 +585,22 @@ export function HandicapCalculator({
         </p>
       )}
 
-      <section className="relative z-40 grid gap-4 md:grid-cols-2">
-        <Typeahead
-          label="My team"
-          placeholder="Select your team"
-          value={
-            myTeam
-              ? {
-                  id: myTeam.id,
-                  label: myTeam.name,
-                  meta: `${myTeam.players.length} players`,
-                  value: myTeam,
-                }
-              : null
-          }
-          options={teamOptions}
-          onChange={(option) => {
-            if (option) chooseMyTeam(option.value);
-            else clearMyTeam();
-          }}
-        />
+      <section className="relative z-40 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] md:items-end">
+        <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+            Your team
+          </p>
+          <p className="mt-1 font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
+            {myTeam.name}
+          </p>
+          <button
+            type="button"
+            onClick={onRequestSetTeam}
+            className="mt-2 text-xs font-semibold text-[var(--chalk)] underline-offset-2 hover:underline"
+          >
+            Change in context card
+          </button>
+        </div>
         <Typeahead
           label="Opponent"
           placeholder="Select opponent"
@@ -617,7 +619,6 @@ export function HandicapCalculator({
             if (option) chooseOpponent(option.value);
             else clearOpponent();
           }}
-          disabled={!myTeam}
         />
       </section>
 

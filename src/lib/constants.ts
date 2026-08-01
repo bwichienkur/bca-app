@@ -24,12 +24,29 @@ export const PREFERENCES_STORAGE_KEY = "tableside.preferences.v1";
 export const LINEUP_PRESETS_STORAGE_KEY = "tableside.lineups.v1";
 export const MEMBERSHIP_STORAGE_KEY = "tableside.membership.v1";
 
-export const REPORT_TABS: { id: ReportTab; label: string }[] = [
+/** Browse tabs — reports and roster context. */
+export const BROWSE_TABS: { id: ReportTab; label: string }[] = [
   { id: "my-team", label: "My Team" },
   { id: "standings", label: "Standings" },
   { id: "players", label: "Players" },
   { id: "schedule", label: "Schedule" },
+];
+
+/** Night-of primary action. */
+export const PLAY_TAB: { id: ReportTab; label: string } = {
+  id: "score",
+  label: "Score",
+};
+
+/** Secondary tools shown beside Score. */
+export const TOOL_TABS: { id: ReportTab; label: string }[] = [
   { id: "handicap", label: "Handicap" },
-  { id: "score", label: "Score" },
   { id: "search", label: "Search" },
+];
+
+/** @deprecated Prefer BROWSE_TABS / PLAY_TAB / TOOL_TABS */
+export const REPORT_TABS: { id: ReportTab; label: string }[] = [
+  ...BROWSE_TABS,
+  PLAY_TAB,
+  ...TOOL_TABS,
 ];

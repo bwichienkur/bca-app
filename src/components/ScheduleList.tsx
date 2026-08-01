@@ -103,18 +103,19 @@ export function ScheduleList({
             Schedule
           </p>
           <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-            Your matches
+            Your schedule
           </h3>
           <p className="mt-1 text-sm text-[var(--muted)]">
             {teamName ? (
               <>
-                Schedule for{" "}
+                Upcoming and past matchups for{" "}
                 <span className="font-medium text-[var(--ink)]">{teamName}</span>
               </>
             ) : (
               "Division schedule"
             )}
             {divisionName ? <> · {divisionName}</> : null}
+            . Use Score to open a scoresheet.
           </p>
         </div>
       </div>
