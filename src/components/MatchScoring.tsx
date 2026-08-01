@@ -424,8 +424,8 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
   if (view.mode !== "list" && match && draft) {
     const reviewMode = view.mode === "review";
     return (
-      <section className="animate-panel space-y-4">
-        <div className="sticky top-[3.25rem] z-30 -mx-1 space-y-3 bg-[color-mix(in_srgb,var(--paper)_92%,transparent)] px-1 py-2 backdrop-blur">
+      <section className="animate-panel min-w-0 space-y-4 overflow-x-hidden">
+        <div className="sticky top-[3.25rem] z-30 -mx-1 min-w-0 space-y-3 bg-[color-mix(in_srgb,var(--paper)_92%,transparent)] px-1 py-2 backdrop-blur">
           <div className="flex items-start justify-between gap-3">
             <button
               type="button"
@@ -454,16 +454,16 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
             <p className="text-[11px] uppercase tracking-[0.14em] text-white/65">
               {formatMatchDate(match.datePlayed)} · {match.location}
             </p>
-            <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-              <div className="min-w-0 text-right">
-                <p className="truncate font-[family-name:var(--font-display)] text-lg leading-tight md:text-xl">
+            <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-3">
+              <div className="min-w-0 overflow-hidden text-right">
+                <p className="truncate font-[family-name:var(--font-display)] text-base leading-tight sm:text-lg md:text-xl">
                   {match.teamOneName}
                 </p>
                 {match.mySide === 1 ? (
                   <p className="text-[11px] text-[var(--amber)]">Your team</p>
                 ) : null}
               </div>
-              <div className="rounded-2xl bg-black/25 px-3 py-2 text-center">
+              <div className="shrink-0 rounded-2xl bg-black/25 px-2.5 py-2 text-center sm:px-3">
                 <p className="font-[family-name:var(--font-display)] text-2xl tabular-nums leading-none">
                   {totals?.teamOneWins ?? 0}
                   <span className="mx-1 text-white/45">:</span>
@@ -479,8 +479,8 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                   </p>
                 ) : null}
               </div>
-              <div className="min-w-0">
-                <p className="truncate font-[family-name:var(--font-display)] text-lg leading-tight md:text-xl">
+              <div className="min-w-0 overflow-hidden">
+                <p className="truncate font-[family-name:var(--font-display)] text-base leading-tight sm:text-lg md:text-xl">
                   {match.teamTwoName}
                 </p>
                 {match.mySide === 2 ? (
@@ -518,8 +518,8 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
             onSubmit={() => void submitMatch()}
           />
         ) : (
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-            <div className="space-y-4">
+          <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+            <div className="min-w-0 space-y-4 overflow-x-hidden">
               <LineupEditor
                 match={match}
                 draft={draft}
@@ -603,17 +603,17 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
               {activeRoundHandicap &&
               (activeRoundHandicap.teamOne > 0 ||
                 activeRoundHandicap.teamTwo > 0) ? (
-                <div className="rounded-2xl border border-[var(--amber)]/30 bg-[color-mix(in_srgb,var(--amber)_12%,var(--surface))] px-4 py-3 text-sm">
+                <div className="min-w-0 overflow-hidden rounded-2xl border border-[var(--amber)]/30 bg-[color-mix(in_srgb,var(--amber)_12%,var(--surface))] px-3 py-3 text-sm sm:px-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
                     Round {activeRound} handicap
                   </p>
-                  <p className="mt-1 text-[var(--ink)]">
+                  <p className="mt-1 break-words text-[var(--ink)]">
                     {activeRoundHandicap.teamOne > 0
-                      ? `${match.teamOneName} gets +${activeRoundHandicap.teamOne}`
-                      : `${match.teamTwoName} gets +${activeRoundHandicap.teamTwo}`}
+                      ? `${match.teamOneName.trim()} gets +${activeRoundHandicap.teamOne}`
+                      : `${match.teamTwoName.trim()} gets +${activeRoundHandicap.teamTwo}`}
                     <span className="text-[var(--muted)]">
                       {" "}
-                      · based on Fargo lineups
+                      · based on Fargo
                     </span>
                   </p>
                 </div>
@@ -623,7 +623,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                 </div>
               ) : null}
 
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2">
                 {currentRound?.games.map((game) => {
                   const state =
                     draft.games[gameKey(currentRound.roundNumber, game.index)];
@@ -651,7 +651,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                         })
                       }
                       className={[
-                        "grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-2xl border px-3 py-3 text-left transition md:px-4",
+                        "w-full min-w-0 overflow-hidden rounded-2xl border px-3 py-3 text-left transition md:px-4",
                         selected
                           ? "border-[var(--felt)] bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))]"
                           : complete
@@ -659,57 +659,128 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                             : "border-[var(--line)] bg-[var(--surface)] hover:bg-[var(--surface-2)]",
                       ].join(" ")}
                     >
-                      <div className="min-w-0">
-                        <p
-                          className={[
-                            "truncate text-sm font-semibold",
-                            winner === 1
-                              ? "text-[var(--felt-deep)]"
-                              : "text-[var(--ink)]",
-                          ].join(" ")}
-                        >
-                          {p1 ? playerDisplayName(p1) : `H${game.playerOne.index}`}
-                        </p>
-                        <p className="text-[11px] text-[var(--muted)]">
-                          {ratingLabel(p1) ? (
-                            <span className="font-semibold text-[var(--felt)]">
-                              {ratingLabel(p1)}
-                            </span>
-                          ) : (
-                            "—"
-                          )}
-                          {state?.breakingTeam === 1 ? " · Breaks" : ""}
-                        </p>
+                      {/* Mobile: names on one row, score centered below */}
+                      <div className="flex flex-col gap-2.5 sm:hidden">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="min-w-0 overflow-hidden">
+                            <p
+                              className={[
+                                "truncate text-[13px] font-semibold leading-snug",
+                                winner === 1
+                                  ? "text-[var(--felt-deep)]"
+                                  : "text-[var(--ink)]",
+                              ].join(" ")}
+                            >
+                              {p1
+                                ? playerDisplayName(p1)
+                                : `H${game.playerOne.index}`}
+                            </p>
+                            <p className="mt-0.5 truncate text-[11px] text-[var(--muted)]">
+                              {ratingLabel(p1) ? (
+                                <span className="font-semibold text-[var(--felt)]">
+                                  {ratingLabel(p1)}
+                                </span>
+                              ) : (
+                                "—"
+                              )}
+                              {state?.breakingTeam === 1 ? " · Breaks" : ""}
+                            </p>
+                          </div>
+                          <div className="min-w-0 overflow-hidden text-right">
+                            <p
+                              className={[
+                                "truncate text-[13px] font-semibold leading-snug",
+                                winner === 2
+                                  ? "text-[var(--felt-deep)]"
+                                  : "text-[var(--ink)]",
+                              ].join(" ")}
+                            >
+                              {p2
+                                ? playerDisplayName(p2)
+                                : `A${game.playerTwo.index}`}
+                            </p>
+                            <p className="mt-0.5 truncate text-[11px] text-[var(--muted)]">
+                              {ratingLabel(p2) ? (
+                                <span className="font-semibold text-[var(--felt)]">
+                                  {ratingLabel(p2)}
+                                </span>
+                              ) : (
+                                "—"
+                              )}
+                              {state?.breakingTeam === 2 ? " · Breaks" : ""}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex justify-center">
+                          <div className="rounded-xl bg-[var(--surface-2)] px-4 py-1.5 text-center">
+                            <p className="text-sm font-semibold tabular-nums">
+                              {scoreLabel(state)}
+                            </p>
+                            <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                              {complete ? "Final" : `G${game.index}`}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      <div className="rounded-xl bg-[var(--surface-2)] px-2.5 py-1.5 text-center">
-                        <p className="text-sm font-semibold tabular-nums">
-                          {scoreLabel(state)}
-                        </p>
-                        <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                          {complete ? "Final" : `G${game.index}`}
-                        </p>
-                      </div>
-                      <div className="min-w-0 text-right">
-                        <p
-                          className={[
-                            "truncate text-sm font-semibold",
-                            winner === 2
-                              ? "text-[var(--felt-deep)]"
-                              : "text-[var(--ink)]",
-                          ].join(" ")}
-                        >
-                          {p2 ? playerDisplayName(p2) : `A${game.playerTwo.index}`}
-                        </p>
-                        <p className="text-[11px] text-[var(--muted)]">
-                          {ratingLabel(p2) ? (
-                            <span className="font-semibold text-[var(--felt)]">
-                              {ratingLabel(p2)}
-                            </span>
-                          ) : (
-                            "—"
-                          )}
-                          {state?.breakingTeam === 2 ? " · Breaks" : ""}
-                        </p>
+
+                      {/* Desktop / tablet: classic three-column row */}
+                      <div className="hidden grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 sm:grid">
+                        <div className="min-w-0 overflow-hidden">
+                          <p
+                            className={[
+                              "truncate text-sm font-semibold",
+                              winner === 1
+                                ? "text-[var(--felt-deep)]"
+                                : "text-[var(--ink)]",
+                            ].join(" ")}
+                          >
+                            {p1
+                              ? playerDisplayName(p1)
+                              : `H${game.playerOne.index}`}
+                          </p>
+                          <p className="truncate text-[11px] text-[var(--muted)]">
+                            {ratingLabel(p1) ? (
+                              <span className="font-semibold text-[var(--felt)]">
+                                {ratingLabel(p1)}
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                            {state?.breakingTeam === 1 ? " · Breaks" : ""}
+                          </p>
+                        </div>
+                        <div className="shrink-0 rounded-xl bg-[var(--surface-2)] px-2.5 py-1.5 text-center">
+                          <p className="text-sm font-semibold tabular-nums">
+                            {scoreLabel(state)}
+                          </p>
+                          <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                            {complete ? "Final" : `G${game.index}`}
+                          </p>
+                        </div>
+                        <div className="min-w-0 overflow-hidden text-right">
+                          <p
+                            className={[
+                              "truncate text-sm font-semibold",
+                              winner === 2
+                                ? "text-[var(--felt-deep)]"
+                                : "text-[var(--ink)]",
+                            ].join(" ")}
+                          >
+                            {p2
+                              ? playerDisplayName(p2)
+                              : `A${game.playerTwo.index}`}
+                          </p>
+                          <p className="truncate text-[11px] text-[var(--muted)]">
+                            {ratingLabel(p2) ? (
+                              <span className="font-semibold text-[var(--felt)]">
+                                {ratingLabel(p2)}
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                            {state?.breakingTeam === 2 ? " · Breaks" : ""}
+                          </p>
+                        </div>
                       </div>
                     </button>
                   );
@@ -878,29 +949,29 @@ function LineupEditor({
   const filledTwo = draft.teamTwoLineup.filter(Boolean).length;
 
   return (
-    <div className="space-y-3">
+    <div className="min-w-0 space-y-3">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center justify-between rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-left"
+        className="flex w-full min-w-0 items-start justify-between gap-3 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-3 text-left sm:px-4"
       >
-        <div>
+        <div className="min-w-0 flex-1 overflow-hidden">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
             Lineups
           </p>
-          <p className="mt-0.5 text-sm text-[var(--muted)]">
-            Pick players · ▲▼ to reorder · Fargo shown on each slot
+          <p className="mt-0.5 text-xs text-[var(--muted)] sm:text-sm">
+            Pick players · ▲▼ to reorder
           </p>
         </div>
-        <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)]">
+        <span className="shrink-0 rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)]">
           {filledOne + filledTwo}/{slots * 2} · {open ? "Hide ▴" : "Edit ▾"}
         </span>
       </button>
       {open ? (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid min-w-0 gap-4 md:grid-cols-2">
           <ScoringLineupSide
             title={match.teamOneName}
-            subtitle={`Home slots · H1–H${slots}`}
+            subtitle={`Home · H1–H${slots}`}
             prefix="H"
             players={match.teamOnePlayers}
             lineup={draft.teamOneLineup}
@@ -909,7 +980,7 @@ function LineupEditor({
           />
           <ScoringLineupSide
             title={match.teamTwoName}
-            subtitle={`Away slots · A1–A${slots}`}
+            subtitle={`Away · A1–A${slots}`}
             prefix="A"
             players={match.teamTwoPlayers}
             lineup={draft.teamTwoLineup}
@@ -959,17 +1030,17 @@ function ScoringLineupSide({
   );
 
   return (
-    <div className="rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
-      <div className="mb-3 flex items-baseline justify-between gap-2">
-        <div>
-          <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
+    <div className="min-w-0 overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm sm:p-4">
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <h4 className="truncate font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
             {title}
           </h4>
-          <p className="text-xs text-[var(--muted)]">{subtitle}</p>
+          <p className="truncate text-xs text-[var(--muted)]">{subtitle}</p>
         </div>
         <span
           className={[
-            "rounded-full px-2.5 py-1 text-xs font-semibold",
+            "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
             filled === slots
               ? "bg-[var(--felt)] text-white"
               : "bg-[var(--surface-2)] text-[var(--muted)]",
@@ -978,18 +1049,18 @@ function ScoringLineupSide({
           {filled}/{slots}
         </span>
       </div>
-      <ol className="space-y-2">
+      <ol className="min-w-0 space-y-2">
         {lineup.map((playerId, index) => {
           const player = findPlayer(players, playerId);
           return (
-            <li key={`${prefix}-${index}`}>
-              <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2.5">
+            <li key={`${prefix}-${index}`} className="min-w-0">
+              <div className="min-w-0 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-2.5 py-2.5 sm:px-3">
                 <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                    Slot #{index + 1} · {prefix}
+                  <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                    {prefix}
                     {index + 1}
                   </span>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex shrink-0 items-center gap-1">
                     {player ? (
                       <>
                         <button
@@ -1010,7 +1081,7 @@ function ScoringLineupSide({
                         >
                           ▼
                         </button>
-                        <span className="ml-1 tabular-nums text-xs font-semibold text-[var(--felt)]">
+                        <span className="ml-0.5 min-w-[2rem] text-right tabular-nums text-xs font-semibold text-[var(--felt)]">
                           {player.fargoRating ?? "—"}
                         </span>
                       </>
@@ -1029,7 +1100,7 @@ function ScoringLineupSide({
         })}
       </ol>
       <p className="mt-2 text-[11px] text-[var(--muted)]">
-        Use ▲ ▼ to reorder. Handicaps update from these Fargo ratings.
+        ▲ ▼ reorder · handicaps follow Fargo
       </p>
     </div>
   );
