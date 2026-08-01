@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, type Ref } from "react";
 
 type SearchFieldProps = {
   value: string;
@@ -9,6 +9,8 @@ type SearchFieldProps = {
   label?: string;
   /** Called immediately before the value changes (for scroll anchoring). */
   onBeforeChange?: () => void;
+  /** Element kept stable in the viewport when filter results shrink. */
+  anchorRef?: Ref<HTMLElement | null>;
 };
 
 export function SearchField({
@@ -17,6 +19,7 @@ export function SearchField({
   placeholder = "Filter…",
   label = "Search",
   onBeforeChange,
+  anchorRef,
 }: SearchFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const hasValue = value.trim().length > 0;
@@ -27,7 +30,10 @@ export function SearchField({
   };
 
   return (
-    <label className="relative block w-full max-w-md">
+    <label
+      ref={anchorRef as Ref<HTMLLabelElement>}
+      className="relative block w-full max-w-md"
+    >
       <span className="sr-only">{label}</span>
       <input
         ref={inputRef}

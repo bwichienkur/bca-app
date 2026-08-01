@@ -1139,7 +1139,6 @@ export function LeagueApp() {
 
       <section className="animate-rise animate-delay-2 space-y-1.5">
         <div
-          ref={filterAnchor.ref}
           data-report-tabs
           className="sticky top-0 z-20 -mx-1 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 py-1 backdrop-blur"
         >
@@ -1285,6 +1284,7 @@ export function LeagueApp() {
                 </div>
                 <SearchField
                   value={filterQuery}
+                  anchorRef={filterAnchor.ref}
                   onBeforeChange={filterAnchor.mark}
                   onChange={setFilterQuery}
                   placeholder="Filter teams…"
@@ -1335,6 +1335,7 @@ export function LeagueApp() {
               </div>
               <SearchField
                 value={filterQuery}
+                anchorRef={filterAnchor.ref}
                 onBeforeChange={filterAnchor.mark}
                 onChange={setFilterQuery}
                 placeholder="Filter players…"
