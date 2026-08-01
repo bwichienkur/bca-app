@@ -38,6 +38,8 @@ export type ScoringMatchSummary = {
   isHandicapped: boolean;
   handicapPercentage: number;
   maximumAllowedHandicap: number;
+  /** When true, overall points across all rounds count as an extra "round". */
+  matchWinCountsAsRound: boolean;
   mySide: 1 | 2 | null;
 };
 
@@ -321,6 +323,67 @@ export function tallyAllRoundPoints(
       handicaps: resolved,
     }),
   );
+}
+
+/** Synthetic round number for overall match-points (R6). */
+export const MATCH_POINTS_ROUND = 6;
+
+/**
+ * Overall points round: sum of every round's totals (game points + HC).
+ * Used when matchWinCountsAsRound is enabled.
+ */
+export function tallyMatchPointsRound(args: {
+  match: ScoringMatchDetail;
+  draft: ScoringDraft;
+  roundTallies?: RoundPointsTally[];
+}): RoundPointsTally {
+  const tallies =
+    args.roundTallies ?? tallyAllRoundPoints(args.match, args.draft);
+  const teamOneGamePoints = tallies.reduce(
+    (sum, round) => sum + round.teamOneGamePoints,
+    0,
+  );
+  const teamTwoGamePoints = tallies.reduce(
+    (sum, round) => sum + round.teamTwoGamePoints,
+    0,
+  );
+  const teamOneHandicap = tallies.reduce(
+    (sum, round) => sum + round.teamOneHandicap,
+    0,
+  );
+  const teamTwoHandicap = tallies.reduce(
+    (sum, round) => sum + round.teamTwoHandicap,
+    0,
+  );
+  const teamOneTotal = teamOneGamePoints + teamOneHandicap;
+  const teamTwoTotal = teamTwoGamePoints + teamTwoHandicap;
+  const gamesComplete = tallies.reduce(
+    (sum, round) => sum + round.gamesComplete,
+    0,
+  );
+  const gamesTotal = tallies.reduce((sum, round) => sum + round.gamesTotal, 0);
+  const roundComplete =
+    tallies.length > 0 && tallies.every((round) => round.roundComplete);
+
+  let roundWinner: 1 | 2 | null = null;
+  if (roundComplete) {
+    if (teamOneTotal > teamTwoTotal) roundWinner = 1;
+    else if (teamTwoTotal > teamOneTotal) roundWinner = 2;
+  }
+
+  return {
+    roundNumber: MATCH_POINTS_ROUND,
+    teamOneGamePoints,
+    teamTwoGamePoints,
+    teamOneHandicap,
+    teamTwoHandicap,
+    teamOneTotal,
+    teamTwoTotal,
+    gamesComplete,
+    gamesTotal,
+    roundComplete,
+    roundWinner,
+  };
 }
 
 export function parsedFormatFromMatch(

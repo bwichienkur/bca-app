@@ -645,7 +645,12 @@ export function LeagueApp() {
         ) : null}
       </section>
 
-      <section className="animate-rise animate-delay-2 space-y-4">
+      <section
+        className={[
+          "animate-rise animate-delay-2",
+          tab === "score" ? "space-y-2" : "space-y-4",
+        ].join(" ")}
+      >
         {selectedDivision ? (
           <div className="relative z-0 rounded-[1.4rem] border border-[var(--line)] bg-[linear-gradient(135deg,rgba(20,92,69,0.96),rgba(13,61,46,0.98))] px-4 py-4 text-white shadow-[var(--shadow)] md:px-6 md:py-5">
             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -670,7 +675,7 @@ export function LeagueApp() {
           </div>
         ) : null}
 
-        <div className="sticky top-0 z-20 -mx-1 flex flex-col gap-3 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 py-2 backdrop-blur md:flex-row md:items-center md:justify-between">
+        <div className="sticky top-0 z-20 -mx-1 flex flex-col gap-2 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 py-1.5 backdrop-blur md:flex-row md:items-center md:justify-between">
           <nav
             aria-label="Reports"
             className="grid grid-cols-4 gap-1.5 sm:flex sm:flex-wrap sm:gap-2"
@@ -715,7 +720,12 @@ export function LeagueApp() {
           ) : null}
         </div>
 
-        <div className="animate-panel min-w-0 space-y-6">
+        <div
+          className={[
+            "animate-panel min-w-0",
+            tab === "score" ? "space-y-2" : "space-y-6",
+          ].join(" ")}
+        >
           {tab === "search" ? (
             <PlayerSearch />
           ) : tab === "score" ? (

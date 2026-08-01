@@ -64,6 +64,7 @@ export async function GET(
       isHandicapped: Boolean(match.isHandicapped),
       handicapPercentage: Number(match.handicapPercentage ?? 1),
       maximumAllowedHandicap: Number(match.maximumAllowedHandicap ?? 50),
+      matchWinCountsAsRound: match.matchWinCountsAsRound !== false,
       mySide,
       matchFormat: (match.matchFormat as ScoringMatchDetail["matchFormat"]) ?? null,
       teamOnePlayers,

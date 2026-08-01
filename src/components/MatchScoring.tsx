@@ -18,12 +18,14 @@ import {
   gameKey,
   gameWinner,
   loadDraft,
+  MATCH_POINTS_ROUND,
   normalizeDraftScores,
   playerDisplayName,
   saveDraft,
   syncLineupToGames,
   tallyAllRoundPoints,
   tallyDraft,
+  tallyMatchPointsRound,
   type GameScoreState,
   type RoundPointsTally,
   type ScoringDraft,
@@ -294,12 +296,31 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
     [match, draft, roundHandicaps],
   );
 
-  const activeRoundPoints = useMemo(
-    () =>
+  const includeMatchPointsRound = match?.matchWinCountsAsRound !== false;
+
+  const matchPointsTally = useMemo(() => {
+    if (!match || !draft || !includeMatchPointsRound) return null;
+    return tallyMatchPointsRound({
+      match,
+      draft,
+      roundTallies: roundPointTallies,
+    });
+  }, [draft, includeMatchPointsRound, match, roundPointTallies]);
+
+  const isMatchPointsRound = activeRound === MATCH_POINTS_ROUND;
+
+  const activeRoundPoints = useMemo(() => {
+    if (isMatchPointsRound) return matchPointsTally;
+    return (
       roundPointTallies.find((item) => item.roundNumber === activeRound) ??
-      null,
-    [roundPointTallies, activeRound],
-  );
+      null
+    );
+  }, [
+    activeRound,
+    isMatchPointsRound,
+    matchPointsTally,
+    roundPointTallies,
+  ]);
 
   const handicapTotals = useMemo(() => {
     return roundHandicaps.reduce(
@@ -318,12 +339,16 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
       if (round.roundWinner === 1) teamOne += 1;
       if (round.roundWinner === 2) teamTwo += 1;
     }
+    if (matchPointsTally?.roundWinner === 1) teamOne += 1;
+    if (matchPointsTally?.roundWinner === 2) teamTwo += 1;
     return { teamOne, teamTwo };
-  }, [roundPointTallies]);
+  }, [matchPointsTally, roundPointTallies]);
 
   const rounds = match?.matchFormat?.rounds ?? [];
-  const currentRound =
-    rounds.find((round) => round.roundNumber === activeRound) ?? rounds[0];
+  const currentRound = isMatchPointsRound
+    ? null
+    : (rounds.find((round) => round.roundNumber === activeRound) ??
+      rounds[0]);
 
   const padGame =
     activeGame && draft
@@ -474,114 +499,116 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
 
   if (view.mode !== "list" && match && draft) {
     const reviewMode = view.mode === "review";
+    const actionBtnClass =
+      "rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]";
     return (
-      <section className="animate-panel w-full min-w-0 space-y-4 overflow-x-hidden">
-        <div className="sticky top-[3.25rem] z-30 w-full min-w-0 space-y-3 bg-[color-mix(in_srgb,var(--paper)_92%,transparent)] py-2 backdrop-blur">
-          <div className="flex items-start justify-between gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                if (reviewMode) {
-                  setView({ mode: "sheet", matchId: match.id });
-                } else {
-                  setView({ mode: "list" });
-                  setActiveGame(null);
-                }
-              }}
-              className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]"
-            >
-              {reviewMode ? "← Back to sheet" : "← Matches"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void onLogout()}
-              className="text-xs font-medium text-[var(--muted)] underline-offset-2 hover:underline"
-            >
-              Sign out
-            </button>
+      <section className="animate-panel w-full min-w-0 space-y-3 overflow-x-hidden">
+        <div className="sticky top-[3.1rem] z-30 -mx-1 flex items-center justify-between gap-3 bg-[color-mix(in_srgb,var(--paper)_92%,transparent)] px-1 py-1 backdrop-blur">
+          <button
+            type="button"
+            onClick={() => {
+              if (reviewMode) {
+                setView({ mode: "sheet", matchId: match.id });
+              } else {
+                setView({ mode: "list" });
+                setActiveGame(null);
+              }
+            }}
+            className={actionBtnClass}
+          >
+            {reviewMode ? "← Back to sheet" : "← Matches"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void onLogout()}
+            className={actionBtnClass}
+          >
+            Sign out
+          </button>
+        </div>
+
+        <div className="w-full overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[linear-gradient(135deg,rgba(20,92,69,0.96),rgba(13,61,46,0.98))] px-3 py-3 text-white shadow-[var(--shadow)] sm:px-4 md:px-5 md:py-3.5">
+          <p className="text-[11px] uppercase tracking-[0.14em] text-white/65">
+            {formatMatchDate(match.datePlayed)} · {match.location}
+          </p>
+
+          {/* Mobile: stacked full team names so nothing truncates */}
+          <div className="mt-2.5 space-y-2 sm:hidden">
+            <div className="text-center">
+              <p className="font-[family-name:var(--font-display)] text-lg leading-snug break-words">
+                {match.teamOneName.trim()}
+              </p>
+              {match.mySide === 1 ? (
+                <p className="mt-0.5 text-[11px] text-[var(--amber)]">
+                  Your team
+                </p>
+              ) : null}
+            </div>
+            <div className="mx-auto w-fit rounded-2xl bg-black/25 px-4 py-2 text-center">
+              <p className="font-[family-name:var(--font-display)] text-2xl tabular-nums leading-none">
+                {totals?.teamOneWins ?? 0}
+                <span className="mx-1 text-white/45">:</span>
+                {totals?.teamTwoWins ?? 0}
+              </p>
+              <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-white/55">
+                {totals?.scored ?? 0}/{totals?.total ?? 0} games
+              </p>
+              <p className="mt-1 text-[10px] tabular-nums text-white/70">
+                Rounds {roundWins.teamOne}–{roundWins.teamTwo}
+                {includeMatchPointsRound ? " (incl. match pts)" : ""}
+                {match.isHandicapped &&
+                (handicapTotals.teamOne > 0 || handicapTotals.teamTwo > 0)
+                  ? ` · HC ${handicapTotals.teamOne}–${handicapTotals.teamTwo}`
+                  : ""}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="font-[family-name:var(--font-display)] text-lg leading-snug break-words">
+                {match.teamTwoName.trim()}
+              </p>
+              {match.mySide === 2 ? (
+                <p className="mt-0.5 text-[11px] text-[var(--amber)]">
+                  Your team
+                </p>
+              ) : null}
+            </div>
           </div>
 
-          <div className="w-full overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[linear-gradient(135deg,rgba(20,92,69,0.96),rgba(13,61,46,0.98))] px-3 py-3.5 text-white shadow-[var(--shadow)] sm:px-4 md:px-5 md:py-4">
-            <p className="text-[11px] uppercase tracking-[0.14em] text-white/65">
-              {formatMatchDate(match.datePlayed)} · {match.location}
-            </p>
-
-            {/* Mobile: stacked full team names so nothing truncates */}
-            <div className="mt-3 space-y-3 sm:hidden">
-              <div className="text-center">
-                <p className="font-[family-name:var(--font-display)] text-lg leading-snug break-words">
-                  {match.teamOneName.trim()}
-                </p>
-                {match.mySide === 1 ? (
-                  <p className="mt-0.5 text-[11px] text-[var(--amber)]">
-                    Your team
-                  </p>
-                ) : null}
-              </div>
-              <div className="mx-auto w-fit rounded-2xl bg-black/25 px-4 py-2 text-center">
-                <p className="font-[family-name:var(--font-display)] text-2xl tabular-nums leading-none">
-                  {totals?.teamOneWins ?? 0}
-                  <span className="mx-1 text-white/45">:</span>
-                  {totals?.teamTwoWins ?? 0}
-                </p>
-                <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-white/55">
-                  {totals?.scored ?? 0}/{totals?.total ?? 0} games
-                </p>
-                <p className="mt-1 text-[10px] tabular-nums text-white/70">
-                  Rounds {roundWins.teamOne}–{roundWins.teamTwo}
-                  {match.isHandicapped &&
-                  (handicapTotals.teamOne > 0 || handicapTotals.teamTwo > 0)
-                    ? ` · HC ${handicapTotals.teamOne}–${handicapTotals.teamTwo}`
-                    : ""}
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="font-[family-name:var(--font-display)] text-lg leading-snug break-words">
-                  {match.teamTwoName.trim()}
-                </p>
-                {match.mySide === 2 ? (
-                  <p className="mt-0.5 text-[11px] text-[var(--amber)]">
-                    Your team
-                  </p>
-                ) : null}
-              </div>
+          {/* Tablet/desktop: side-by-side with wrapping names */}
+          <div className="mt-2.5 hidden grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 sm:grid">
+            <div className="min-w-0 text-right">
+              <p className="font-[family-name:var(--font-display)] text-lg leading-snug break-words md:text-xl">
+                {match.teamOneName.trim()}
+              </p>
+              {match.mySide === 1 ? (
+                <p className="text-[11px] text-[var(--amber)]">Your team</p>
+              ) : null}
             </div>
-
-            {/* Tablet/desktop: side-by-side with wrapping names */}
-            <div className="mt-3 hidden grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 sm:grid">
-              <div className="min-w-0 text-right">
-                <p className="font-[family-name:var(--font-display)] text-lg leading-snug break-words md:text-xl">
-                  {match.teamOneName.trim()}
-                </p>
-                {match.mySide === 1 ? (
-                  <p className="text-[11px] text-[var(--amber)]">Your team</p>
-                ) : null}
-              </div>
-              <div className="shrink-0 rounded-2xl bg-black/25 px-3 py-2 text-center">
-                <p className="font-[family-name:var(--font-display)] text-2xl tabular-nums leading-none">
-                  {totals?.teamOneWins ?? 0}
-                  <span className="mx-1 text-white/45">:</span>
-                  {totals?.teamTwoWins ?? 0}
-                </p>
-                <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-white/55">
-                  {totals?.scored ?? 0}/{totals?.total ?? 0} games
-                </p>
-                <p className="mt-1 text-[10px] tabular-nums text-white/70">
-                  Rounds {roundWins.teamOne}–{roundWins.teamTwo}
-                  {match.isHandicapped &&
-                  (handicapTotals.teamOne > 0 || handicapTotals.teamTwo > 0)
-                    ? ` · HC ${handicapTotals.teamOne}–${handicapTotals.teamTwo}`
-                    : ""}
-                </p>
-              </div>
-              <div className="min-w-0">
-                <p className="font-[family-name:var(--font-display)] text-lg leading-snug break-words md:text-xl">
-                  {match.teamTwoName.trim()}
-                </p>
-                {match.mySide === 2 ? (
-                  <p className="text-[11px] text-[var(--amber)]">Your team</p>
-                ) : null}
-              </div>
+            <div className="shrink-0 rounded-2xl bg-black/25 px-3 py-2 text-center">
+              <p className="font-[family-name:var(--font-display)] text-2xl tabular-nums leading-none">
+                {totals?.teamOneWins ?? 0}
+                <span className="mx-1 text-white/45">:</span>
+                {totals?.teamTwoWins ?? 0}
+              </p>
+              <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-white/55">
+                {totals?.scored ?? 0}/{totals?.total ?? 0} games
+              </p>
+              <p className="mt-1 text-[10px] tabular-nums text-white/70">
+                Rounds {roundWins.teamOne}–{roundWins.teamTwo}
+                {includeMatchPointsRound ? " (incl. match pts)" : ""}
+                {match.isHandicapped &&
+                (handicapTotals.teamOne > 0 || handicapTotals.teamTwo > 0)
+                  ? ` · HC ${handicapTotals.teamOne}–${handicapTotals.teamTwo}`
+                  : ""}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="font-[family-name:var(--font-display)] text-lg leading-snug break-words md:text-xl">
+                {match.teamTwoName.trim()}
+              </p>
+              {match.mySide === 2 ? (
+                <p className="text-[11px] text-[var(--amber)]">Your team</p>
+              ) : null}
             </div>
           </div>
         </div>
@@ -711,6 +738,52 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                     </button>
                   );
                 })}
+                {includeMatchPointsRound && matchPointsTally ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      startTransition(() => {
+                        setActiveRound(MATCH_POINTS_ROUND);
+                        setActiveGame(null);
+                      });
+                    }}
+                    className={[
+                      "shrink-0 rounded-full px-3.5 py-2 text-sm font-semibold transition",
+                      isMatchPointsRound
+                        ? "bg-[var(--felt)] text-white shadow-sm"
+                        : matchPointsTally.roundComplete &&
+                            matchPointsTally.roundWinner === match.mySide
+                          ? "bg-[color-mix(in_srgb,var(--felt)_22%,var(--surface))] text-[var(--felt-deep)]"
+                          : matchPointsTally.roundComplete &&
+                              match.mySide &&
+                              matchPointsTally.roundWinner &&
+                              matchPointsTally.roundWinner !== match.mySide
+                            ? "bg-[color-mix(in_srgb,var(--danger)_16%,var(--surface))] text-[var(--danger)]"
+                            : "bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface-2)]",
+                    ].join(" ")}
+                  >
+                    R6
+                    {matchPointsTally.roundComplete ? (
+                      <span className="ml-1.5 text-[11px] tabular-nums opacity-80">
+                        {matchPointsTally.teamOneTotal}–
+                        {matchPointsTally.teamTwoTotal}
+                        {matchPointsTally.roundWinner
+                          ? matchPointsTally.roundWinner === match.mySide
+                            ? " W"
+                            : match.mySide
+                              ? " L"
+                              : matchPointsTally.roundWinner === 1
+                                ? " H"
+                                : " A"
+                          : ""}
+                      </span>
+                    ) : (
+                      <span className="ml-1.5 text-[11px] opacity-70">
+                        pts
+                      </span>
+                    )}
+                  </button>
+                ) : null}
               </div>
 
               {activeRoundPoints ? (
@@ -720,52 +793,60 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                   teamTwoName={match.teamTwoName}
                   mySide={match.mySide}
                   isHandicapped={match.isHandicapped}
+                  matchPointsRound={isMatchPointsRound}
                 />
               ) : null}
 
-              <div className="min-w-0 space-y-2">
-                {currentRound?.games.map((game) => {
-                  const state =
-                    draft.games[gameKey(currentRound.roundNumber, game.index)];
-                  const p1 = findPlayer(
-                    match.teamOnePlayers,
-                    state?.teamOnePlayerId ?? null,
-                  );
-                  const p2 = findPlayer(
-                    match.teamTwoPlayers,
-                    state?.teamTwoPlayerId ?? null,
-                  );
-                  const selected =
-                    activeGame?.roundNumber === currentRound.roundNumber &&
-                    activeGame?.gameIndex === game.index;
-                  const winner = gameWinner(state);
-                  const complete = winner != null;
-                  return (
-                    <button
-                      key={game.index}
-                      type="button"
-                      onClick={() =>
-                        setActiveGame({
-                          roundNumber: currentRound.roundNumber,
-                          gameIndex: game.index,
-                        })
-                      }
-                      className={[
-                        "w-full min-w-0 overflow-hidden rounded-2xl border px-3 py-3 text-left transition md:px-4",
-                        selected
-                          ? "border-[var(--felt)] bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))]"
-                          : complete
-                            ? "border-[var(--felt)]/35 bg-[var(--surface)]"
-                            : "border-[var(--line)] bg-[var(--surface)] hover:bg-[var(--surface-2)]",
-                      ].join(" ")}
-                    >
-                      {/* Mobile: names on one row, score centered below */}
-                      <div className="flex flex-col gap-2.5 sm:hidden">
-                        <div className="grid grid-cols-2 gap-3">
+              {isMatchPointsRound ? (
+                <p className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--muted)]">
+                  Round 6 is awarded from total points across all games (plus
+                  handicap). Score rounds 1–5 — this chip updates as games
+                  finish.
+                </p>
+              ) : (
+                <div className="min-w-0 space-y-1.5">
+                  {currentRound?.games.map((game) => {
+                    const state =
+                      draft.games[
+                        gameKey(currentRound.roundNumber, game.index)
+                      ];
+                    const p1 = findPlayer(
+                      match.teamOnePlayers,
+                      state?.teamOnePlayerId ?? null,
+                    );
+                    const p2 = findPlayer(
+                      match.teamTwoPlayers,
+                      state?.teamTwoPlayerId ?? null,
+                    );
+                    const selected =
+                      activeGame?.roundNumber === currentRound.roundNumber &&
+                      activeGame?.gameIndex === game.index;
+                    const winner = gameWinner(state);
+                    const complete = winner != null;
+                    return (
+                      <button
+                        key={game.index}
+                        type="button"
+                        onClick={() =>
+                          setActiveGame({
+                            roundNumber: currentRound.roundNumber,
+                            gameIndex: game.index,
+                          })
+                        }
+                        className={[
+                          "w-full min-w-0 overflow-hidden rounded-xl border px-2.5 py-2 text-left transition sm:px-3",
+                          selected
+                            ? "border-[var(--felt)] bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))]"
+                            : complete
+                              ? "border-[var(--felt)]/35 bg-[var(--surface)]"
+                              : "border-[var(--line)] bg-[var(--surface)] hover:bg-[var(--surface-2)]",
+                        ].join(" ")}
+                      >
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
                           <div className="min-w-0 overflow-hidden">
                             <p
                               className={[
-                                "truncate text-[13px] font-semibold leading-snug",
+                                "truncate text-[13px] font-semibold leading-snug sm:text-sm",
                                 winner === 1
                                   ? "text-[var(--felt-deep)]"
                                   : "text-[var(--ink)]",
@@ -775,7 +856,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                                 ? playerDisplayName(p1)
                                 : `H${game.playerOne.index}`}
                             </p>
-                            <p className="mt-0.5 truncate text-[11px] text-[var(--muted)]">
+                            <p className="truncate text-[10px] leading-tight text-[var(--muted)] sm:text-[11px]">
                               {ratingLabel(p1) ? (
                                 <span className="font-semibold text-[var(--felt)]">
                                   {ratingLabel(p1)}
@@ -786,10 +867,18 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                               {state?.breakingTeam === 1 ? " · Breaks" : ""}
                             </p>
                           </div>
+                          <div className="shrink-0 rounded-lg bg-[var(--surface-2)] px-2.5 py-1 text-center">
+                            <p className="text-sm font-semibold tabular-nums leading-none">
+                              {scoreLabel(state)}
+                            </p>
+                            <p className="mt-0.5 text-[9px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                              {complete ? "Final" : `G${game.index}`}
+                            </p>
+                          </div>
                           <div className="min-w-0 overflow-hidden text-right">
                             <p
                               className={[
-                                "truncate text-[13px] font-semibold leading-snug",
+                                "truncate text-[13px] font-semibold leading-snug sm:text-sm",
                                 winner === 2
                                   ? "text-[var(--felt-deep)]"
                                   : "text-[var(--ink)]",
@@ -799,7 +888,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                                 ? playerDisplayName(p2)
                                 : `A${game.playerTwo.index}`}
                             </p>
-                            <p className="mt-0.5 truncate text-[11px] text-[var(--muted)]">
+                            <p className="truncate text-[10px] leading-tight text-[var(--muted)] sm:text-[11px]">
                               {ratingLabel(p2) ? (
                                 <span className="font-semibold text-[var(--felt)]">
                                   {ratingLabel(p2)}
@@ -811,81 +900,11 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                             </p>
                           </div>
                         </div>
-                        <div className="flex justify-center">
-                          <div className="rounded-xl bg-[var(--surface-2)] px-4 py-1.5 text-center">
-                            <p className="text-sm font-semibold tabular-nums">
-                              {scoreLabel(state)}
-                            </p>
-                            <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                              {complete ? "Final" : `G${game.index}`}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Desktop / tablet: classic three-column row */}
-                      <div className="hidden grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 sm:grid">
-                        <div className="min-w-0 overflow-hidden">
-                          <p
-                            className={[
-                              "truncate text-sm font-semibold",
-                              winner === 1
-                                ? "text-[var(--felt-deep)]"
-                                : "text-[var(--ink)]",
-                            ].join(" ")}
-                          >
-                            {p1
-                              ? playerDisplayName(p1)
-                              : `H${game.playerOne.index}`}
-                          </p>
-                          <p className="truncate text-[11px] text-[var(--muted)]">
-                            {ratingLabel(p1) ? (
-                              <span className="font-semibold text-[var(--felt)]">
-                                {ratingLabel(p1)}
-                              </span>
-                            ) : (
-                              "—"
-                            )}
-                            {state?.breakingTeam === 1 ? " · Breaks" : ""}
-                          </p>
-                        </div>
-                        <div className="shrink-0 rounded-xl bg-[var(--surface-2)] px-2.5 py-1.5 text-center">
-                          <p className="text-sm font-semibold tabular-nums">
-                            {scoreLabel(state)}
-                          </p>
-                          <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                            {complete ? "Final" : `G${game.index}`}
-                          </p>
-                        </div>
-                        <div className="min-w-0 overflow-hidden text-right">
-                          <p
-                            className={[
-                              "truncate text-sm font-semibold",
-                              winner === 2
-                                ? "text-[var(--felt-deep)]"
-                                : "text-[var(--ink)]",
-                            ].join(" ")}
-                          >
-                            {p2
-                              ? playerDisplayName(p2)
-                              : `A${game.playerTwo.index}`}
-                          </p>
-                          <p className="truncate text-[11px] text-[var(--muted)]">
-                            {ratingLabel(p2) ? (
-                              <span className="font-semibold text-[var(--felt)]">
-                                {ratingLabel(p2)}
-                              </span>
-                            ) : (
-                              "—"
-                            )}
-                            {state?.breakingTeam === 2 ? " · Breaks" : ""}
-                          </p>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
               <div className="flex flex-wrap gap-2 pt-1">
                 <button
@@ -1030,23 +1049,35 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
   teamTwoName,
   mySide,
   isHandicapped,
+  matchPointsRound = false,
 }: {
   tally: RoundPointsTally;
   teamOneName: string;
   teamTwoName: string;
   mySide: 1 | 2 | null;
   isHandicapped: boolean;
+  matchPointsRound?: boolean;
 }) {
   const resultLabel = (() => {
     if (!tally.roundComplete) {
-      return `${tally.gamesComplete}/${tally.gamesTotal} games scored`;
+      return matchPointsRound
+        ? `${tally.gamesComplete}/${tally.gamesTotal} games scored across rounds`
+        : `${tally.gamesComplete}/${tally.gamesTotal} games scored`;
     }
-    if (!tally.roundWinner) return "Round tied";
-    if (mySide && tally.roundWinner === mySide) return "We won the round";
-    if (mySide && tally.roundWinner !== mySide) return "Opponent won the round";
+    if (!tally.roundWinner) {
+      return matchPointsRound ? "Match points tied" : "Round tied";
+    }
+    if (mySide && tally.roundWinner === mySide) {
+      return matchPointsRound ? "We won match points" : "We won the round";
+    }
+    if (mySide && tally.roundWinner !== mySide) {
+      return matchPointsRound
+        ? "Opponent won match points"
+        : "Opponent won the round";
+    }
     return tally.roundWinner === 1
-      ? `${teamOneName.trim()} won the round`
-      : `${teamTwoName.trim()} won the round`;
+      ? `${teamOneName.trim()} won ${matchPointsRound ? "match points" : "the round"}`
+      : `${teamTwoName.trim()} won ${matchPointsRound ? "match points" : "the round"}`;
   })();
 
   const resultTone = !tally.roundComplete
@@ -1071,22 +1102,22 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
     return (
       <div
         className={[
-          "min-w-0 overflow-hidden rounded-xl px-3 py-2.5",
+          "min-w-0 overflow-hidden rounded-xl px-2.5 py-2",
           won
             ? "bg-[color-mix(in_srgb,var(--felt)_22%,var(--surface-2))]"
             : "bg-[var(--surface-2)]",
         ].join(" ")}
       >
-        <p className="truncate text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+        <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
           {isMine ? "Your team" : side === 1 ? "Home" : "Away"}
         </p>
-        <p className="mt-0.5 truncate text-sm font-semibold text-[var(--ink)]">
+        <p className="mt-0.5 truncate text-xs font-semibold text-[var(--ink)] sm:text-sm">
           {name.trim()}
         </p>
-        <p className="mt-2 font-[family-name:var(--font-display)] text-3xl tabular-nums leading-none text-[var(--felt-deep)]">
+        <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl tabular-nums leading-none text-[var(--felt-deep)]">
           {total}
         </p>
-        <p className="mt-1 text-[11px] tabular-nums text-[var(--muted)]">
+        <p className="mt-0.5 text-[11px] tabular-nums text-[var(--muted)]">
           {gamePoints} pts
           {isHandicapped ? (
             handicap > 0 ? (
@@ -1103,7 +1134,7 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
   return (
     <div
       className={[
-        "w-full min-w-0 overflow-hidden rounded-2xl border px-3 py-3 sm:px-4",
+        "w-full min-w-0 overflow-hidden rounded-2xl border px-3 py-2.5 sm:px-4",
         tally.roundComplete && tally.roundWinner
           ? tally.roundWinner === mySide
             ? "border-[var(--felt)]/45 bg-[color-mix(in_srgb,var(--felt)_12%,var(--surface))]"
@@ -1113,12 +1144,14 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
           : "border-[var(--line)] bg-[var(--surface)]",
       ].join(" ")}
     >
-      <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
-            Round {tally.roundNumber} points
+            {matchPointsRound
+              ? "Match points (R6)"
+              : `Round ${tally.roundNumber} points`}
           </p>
-          <p className={["mt-1 text-sm font-semibold", resultTone].join(" ")}>
+          <p className={["mt-0.5 text-sm font-semibold", resultTone].join(" ")}>
             {resultLabel}
           </p>
         </div>
@@ -1127,7 +1160,7 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
         </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="mt-2 grid grid-cols-2 gap-2">
         {sideCard(
           1,
           teamOneName,
@@ -1146,7 +1179,7 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
 
       {isHandicapped &&
       (tally.teamOneHandicap > 0 || tally.teamTwoHandicap > 0) ? (
-        <p className="mt-2 text-[11px] text-[var(--muted)]">
+        <p className="mt-1.5 text-[11px] text-[var(--muted)]">
           {tally.teamOneHandicap > 0
             ? `${teamOneName.trim()} handicap +${tally.teamOneHandicap} included in total`
             : `${teamTwoName.trim()} handicap +${tally.teamTwoHandicap} included in total`}

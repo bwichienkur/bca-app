@@ -26,6 +26,7 @@ type RawMatch = {
   isHandicapped: boolean;
   handicapPercentage?: number;
   maximumAllowedHandicap?: number;
+  matchWinCountsAsRound?: boolean;
 };
 
 async function teamIncludesPlayer(
@@ -116,6 +117,7 @@ export async function GET(request: NextRequest) {
         isHandicapped: match.isHandicapped,
         handicapPercentage: match.handicapPercentage ?? 1,
         maximumAllowedHandicap: match.maximumAllowedHandicap ?? 50,
+        matchWinCountsAsRound: match.matchWinCountsAsRound !== false,
         mySide,
       });
     }
