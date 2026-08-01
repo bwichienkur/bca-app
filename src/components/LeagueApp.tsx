@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { REPORT_TABS } from "@/lib/constants";
+import { DEFAULT_LEAGUE_ID, REPORT_TABS } from "@/lib/constants";
 import { normalizeTeamName } from "@/lib/matchups";
 import { enrichPlayersWithRatings } from "@/lib/players";
 import { loadPreferences, savePreferences } from "@/lib/preferences";
@@ -125,12 +125,20 @@ export function LeagueApp() {
     savePreferences(next);
   };
 
-  const loadMembership = async (fresh = false) => {
+  const loadMembership = async (
+    fresh = false,
+    leagueId?: string | null,
+  ) => {
+    const scopedLeagueId =
+      (leagueId || prefs?.leagueId || DEFAULT_LEAGUE_ID).trim() ||
+      DEFAULT_LEAGUE_ID;
     setLoadingMembership(true);
     setMembershipError(null);
     try {
+      const params = new URLSearchParams({ leagueId: scopedLeagueId });
+      if (fresh) params.set("fresh", "1");
       const data = await fetchJson<{ membership: MembershipSnapshot }>(
-        `/api/scoring/membership${fresh ? "?fresh=1" : ""}`,
+        `/api/scoring/membership?${params.toString()}`,
       );
       setMembership(data.membership);
       return data.membership;
@@ -274,19 +282,6 @@ export function LeagueApp() {
         setUser(sessionData.user);
         setAuthLoading(false);
 
-        if (sessionData.user) {
-          const nextMembership = await loadMembership(false);
-          if (cancelled) return;
-          if (nextMembership?.teams.length) {
-            applyMembershipDefaults(
-              nextMembership,
-              saved,
-              sessionData.user.name,
-            );
-            return;
-          }
-        }
-
         const data = await fetchJson<{ leagues: LeagueSummary[] }>(
           `/api/leagues?q=${encodeURIComponent(saved.leagueName)}`,
         );
@@ -297,18 +292,31 @@ export function LeagueApp() {
           data.leagues[0] ??
           null;
         setSelectedLeague(league);
-        if (!league) return;
+        if (league) {
+          const divisionData = await fetchJson<{
+            divisions: DivisionSummary[];
+          }>(`/api/leagues/${league.id}/divisions`);
+          if (cancelled) return;
+          setDivisions(divisionData.divisions);
+          const division =
+            divisionData.divisions.find(
+              (item) => item.id === saved.divisionId,
+            ) ?? null;
+          if (division) {
+            setSelectedDivision(division);
+          }
+        }
 
-        const divisionData = await fetchJson<{ divisions: DivisionSummary[] }>(
-          `/api/leagues/${league.id}/divisions`,
-        );
-        if (cancelled) return;
-        setDivisions(divisionData.divisions);
-        const division =
-          divisionData.divisions.find((item) => item.id === saved.divisionId) ??
-          null;
-        if (division) {
-          setSelectedDivision(division);
+        // Membership is league-scoped and can take a few seconds — never block boot.
+        if (sessionData.user) {
+          void loadMembership(false, saved.leagueId).then((nextMembership) => {
+            if (cancelled || !nextMembership?.teams.length) return;
+            applyMembershipDefaults(
+              nextMembership,
+              loadPreferences(),
+              sessionData.user!.name,
+            );
+          });
         }
       } catch (err) {
         if (!cancelled) {
@@ -449,6 +457,10 @@ export function LeagueApp() {
     setSelectedScheduleMatch(null);
   }, [tab, selectedDivision?.id]);
 
+  const membershipReady = Boolean(
+    user && membership && membership.teams.length,
+  );
+
   const chooseLeague = async (league: LeagueSummary) => {
     setSelectedLeague(league);
     setSelectedDivision(null);
@@ -456,9 +468,9 @@ export function LeagueApp() {
     setLoadingDivisions(true);
     setError(null);
     try {
-      if (user && membership) {
+      if (membershipReady) {
         setDivisions(
-          membership.divisions.filter(
+          membership!.divisions.filter(
             (division) => division.leagueId === league.id,
           ),
         );
@@ -600,35 +612,33 @@ export function LeagueApp() {
   };
 
   const leagueOptions: TypeaheadOption<LeagueSummary>[] = useMemo(() => {
-    const source =
-      user && membership?.leagues.length ? membership.leagues : leagues;
+    const source = membershipReady ? membership!.leagues : leagues;
     return source.map((league) => ({
       id: league.id,
       label: league.name,
       meta: `${league.state} · ${league.divisionCount} divisions`,
       value: league,
     }));
-  }, [user, membership, leagues]);
+  }, [membershipReady, membership, leagues]);
 
   const divisionOptions: TypeaheadOption<DivisionSummary>[] = useMemo(() => {
-    const source =
-      user && membership
-        ? membership.divisions.filter(
-            (division) =>
-              !selectedLeague || division.leagueId === selectedLeague.id,
-          )
-        : divisions;
+    const source = membershipReady
+      ? membership!.divisions.filter(
+          (division) =>
+            !selectedLeague || division.leagueId === selectedLeague.id,
+        )
+      : divisions;
     return source.map((division) => ({
       id: division.id,
       label: division.name,
       meta: `${division.year} · ${division.leagueName}`,
       value: division,
     }));
-  }, [user, membership, divisions, selectedLeague]);
+  }, [membershipReady, membership, divisions, selectedLeague]);
 
   const teamOptions: TypeaheadOption<DivisionTeam>[] = useMemo(() => {
-    if (user && membership && selectedDivision) {
-      const mine = membership.teams.filter(
+    if (membershipReady && selectedDivision) {
+      const mine = membership!.teams.filter(
         (team) => team.divisionId === selectedDivision.id,
       );
       return mine.map((team) => {
@@ -657,7 +667,7 @@ export function LeagueApp() {
       meta: `${team.players.length} players`,
       value: team,
     }));
-  }, [user, membership, selectedDivision, divisionTeams]);
+  }, [membershipReady, membership, selectedDivision, divisionTeams]);
 
   /** Followed team from the top League / Division / My team section */
   const myTeam =
@@ -730,18 +740,16 @@ export function LeagueApp() {
           onSuccess={(nextUser) => {
             setUser(nextUser);
             setScreen("main");
+            const basePrefs = prefs ?? loadPreferences();
             void (async () => {
-              const nextMembership = await loadMembership(true);
-              if (nextMembership && prefs) {
+              const nextMembership = await loadMembership(
+                true,
+                basePrefs.leagueId,
+              );
+              if (nextMembership?.teams.length) {
                 applyMembershipDefaults(
                   nextMembership,
-                  prefs,
-                  nextUser.name,
-                );
-              } else if (nextMembership) {
-                applyMembershipDefaults(
-                  nextMembership,
-                  loadPreferences(),
+                  basePrefs,
                   nextUser.name,
                 );
               } else {
@@ -769,12 +777,14 @@ export function LeagueApp() {
           loadingMembership={loadingMembership}
           membershipError={membershipError}
           onClose={() => setScreen("main")}
-          onRefreshMembership={() => {
-            void loadMembership(true).then((next) => {
-              if (next && prefs) {
-                applyMembershipDefaults(next, prefs, user.name);
-              }
-            });
+          onRefreshMembership={(leagueId) => {
+            void loadMembership(true, leagueId ?? prefs.leagueId).then(
+              (next) => {
+                if (next && prefs) {
+                  applyMembershipDefaults(next, prefs, user.name);
+                }
+              },
+            );
           }}
           onSave={(next) => {
             persist(next);
