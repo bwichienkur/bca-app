@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   DivisionSummary,
   LeagueSummary,
@@ -19,7 +19,7 @@ type SettingsScreenProps = {
   loadingMembership: boolean;
   membershipError: string | null;
   onSave: (next: UserPreferences) => void;
-  onRefreshMembership: () => void;
+  onRefreshMembership: (leagueId?: string) => void;
   onSignOut: () => void;
   onClose: () => void;
 };
@@ -39,8 +39,42 @@ export function SettingsScreen({
   const [divisionId, setDivisionId] = useState(prefs.divisionId);
   const [teamId, setTeamId] = useState(prefs.teamId);
   const [status, setStatus] = useState<string | null>(null);
+  const [leagueQuery, setLeagueQuery] = useState(
+    prefs.leagueName.split(" ").slice(0, 2).join(" ") || "Palm Beach",
+  );
+  const [publicLeagues, setPublicLeagues] = useState<LeagueSummary[]>([]);
+  const [loadingLeagues, setLoadingLeagues] = useState(false);
 
-  const leagues = membership?.leagues ?? [];
+  useEffect(() => {
+    const controller = new AbortController();
+    const handle = window.setTimeout(async () => {
+      setLoadingLeagues(true);
+      try {
+        const response = await fetch(
+          `/api/leagues?q=${encodeURIComponent(leagueQuery)}`,
+          { signal: controller.signal },
+        );
+        if (!response.ok) return;
+        const data = (await response.json()) as { leagues: LeagueSummary[] };
+        if (!controller.signal.aborted) setPublicLeagues(data.leagues);
+      } catch {
+        // Ignore aborted / network errors while typing.
+      } finally {
+        if (!controller.signal.aborted) setLoadingLeagues(false);
+      }
+    }, 220);
+    return () => {
+      controller.abort();
+      window.clearTimeout(handle);
+    };
+  }, [leagueQuery]);
+
+  const leagues = useMemo(() => {
+    const byId = new Map<string, LeagueSummary>();
+    for (const league of publicLeagues) byId.set(league.id, league);
+    for (const league of membership?.leagues ?? []) byId.set(league.id, league);
+    return Array.from(byId.values());
+  }, [membership?.leagues, publicLeagues]);
   const divisions = useMemo(
     () =>
       (membership?.divisions ?? []).filter(
@@ -59,7 +93,9 @@ export function SettingsScreen({
   );
 
   const selectedLeague =
-    leagues.find((league) => league.id === leagueId) ?? null;
+    leagues.find((league) => league.id === leagueId) ??
+    publicLeagues.find((league) => league.id === leagueId) ??
+    null;
   const selectedDivision =
     divisions.find((division) => division.id === divisionId) ?? null;
   const selectedTeam =
@@ -139,35 +175,25 @@ export function SettingsScreen({
       </div>
 
       {loadingMembership ? (
-        <LoadingState label="Finding your leagues and teams…" />
+        <LoadingState label="Finding your teams in this league…" />
       ) : membershipError ? (
         <div className="space-y-3 rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
           <p>{membershipError}</p>
           <button
             type="button"
-            onClick={onRefreshMembership}
+            onClick={() => onRefreshMembership(leagueId || prefs.leagueId)}
             className="rounded-full bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)]"
           >
             Try again
           </button>
         </div>
-      ) : !membership?.teams.length ? (
-        <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-5 text-sm text-[var(--muted)]">
-          No recent-season team memberships were found for your LMS player id.
-          You can still browse public reports without Score filters.
-          <button
-            type="button"
-            onClick={onRefreshMembership}
-            className="mt-3 block rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)]"
-          >
-            Rescan memberships
-          </button>
-        </div>
       ) : (
         <div className="space-y-4 rounded-[1.4rem] border border-[var(--line)] bg-[var(--surface)] p-4 md:p-5">
           <Typeahead
-            label="Default league"
-            placeholder="Your leagues"
+            label="League to scan"
+            placeholder={
+              loadingLeagues ? "Searching leagues…" : "Search leagues"
+            }
             value={
               selectedLeague
                 ? {
@@ -179,58 +205,71 @@ export function SettingsScreen({
                 : null
             }
             options={leagueOptions}
+            onQueryChange={setLeagueQuery}
             onChange={(option) => {
               setLeagueId(option?.value.id ?? "");
               setDivisionId(null);
               setTeamId(null);
               setStatus(null);
+              if (option) onRefreshMembership(option.value.id);
             }}
           />
-          <Typeahead
-            label="Default division"
-            placeholder={
-              selectedLeague ? "Your divisions" : "Pick a league first"
-            }
-            disabled={!selectedLeague}
-            value={
-              selectedDivision
-                ? {
-                    id: selectedDivision.id,
-                    label: selectedDivision.name,
-                    meta: selectedDivision.year,
-                    value: selectedDivision,
-                  }
-                : null
-            }
-            options={divisionOptions}
-            onChange={(option) => {
-              setDivisionId(option?.value.id ?? null);
-              setTeamId(null);
-              setStatus(null);
-            }}
-          />
-          <Typeahead
-            label="Default team"
-            placeholder={
-              selectedDivision ? "Your teams" : "Pick a division first"
-            }
-            disabled={!selectedDivision}
-            value={
-              selectedTeam
-                ? {
-                    id: selectedTeam.teamId,
-                    label: selectedTeam.teamName,
-                    meta: selectedTeam.divisionName,
-                    value: selectedTeam,
-                  }
-                : null
-            }
-            options={teamOptions}
-            onChange={(option) => {
-              setTeamId(option?.value.teamId ?? null);
-              setStatus(null);
-            }}
-          />
+
+          {!membership?.teams.length ? (
+            <p className="text-sm text-[var(--muted)]">
+              No recent-season teams found for your LMS player id in this
+              league. Pick another league above, or browse public reports
+              without Score filters.
+            </p>
+          ) : (
+            <>
+              <Typeahead
+                label="Default division"
+                placeholder={
+                  selectedLeague ? "Your divisions" : "Pick a league first"
+                }
+                disabled={!selectedLeague}
+                value={
+                  selectedDivision
+                    ? {
+                        id: selectedDivision.id,
+                        label: selectedDivision.name,
+                        meta: selectedDivision.year,
+                        value: selectedDivision,
+                      }
+                    : null
+                }
+                options={divisionOptions}
+                onChange={(option) => {
+                  setDivisionId(option?.value.id ?? null);
+                  setTeamId(null);
+                  setStatus(null);
+                }}
+              />
+              <Typeahead
+                label="Default team"
+                placeholder={
+                  selectedDivision ? "Your teams" : "Pick a division first"
+                }
+                disabled={!selectedDivision}
+                value={
+                  selectedTeam
+                    ? {
+                        id: selectedTeam.teamId,
+                        label: selectedTeam.teamName,
+                        meta: selectedTeam.divisionName,
+                        value: selectedTeam,
+                      }
+                    : null
+                }
+                options={teamOptions}
+                onChange={(option) => {
+                  setTeamId(option?.value.teamId ?? null);
+                  setStatus(null);
+                }}
+              />
+            </>
+          )}
 
           {status ? (
             <p className="text-sm text-[var(--felt-deep)]">{status}</p>
@@ -240,16 +279,17 @@ export function SettingsScreen({
             <button
               type="button"
               onClick={save}
-              className="rounded-xl bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white"
+              disabled={!membership?.teams.length}
+              className="rounded-xl bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
             >
               Save defaults
             </button>
             <button
               type="button"
-              onClick={onRefreshMembership}
+              onClick={() => onRefreshMembership(leagueId || prefs.leagueId)}
               className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 text-sm font-semibold text-[var(--muted)]"
             >
-              Rescan memberships
+              Rescan this league
             </button>
           </div>
         </div>
