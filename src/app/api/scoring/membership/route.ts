@@ -25,10 +25,9 @@ export async function GET(request: NextRequest) {
     const deep = request.nextUrl.searchParams.get("deep") === "1";
     const fresh = request.nextUrl.searchParams.get("fresh") === "1";
 
-    // v4: preferred-league auth probe (+ optional deep state). Hints are not
-    // part of the cache key; a hit is still valid for the player/league scope.
+    // v5: one BCAPL player-schedule call (active sessions only).
     const cacheKey = lmsCacheKey(
-      "membership-v4",
+      "membership-v5",
       `${session.lmsId}:${deep ? "deep" : "league"}:${leagueId}`,
     );
 

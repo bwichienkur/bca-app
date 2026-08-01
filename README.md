@@ -49,14 +49,17 @@ Stored in `localStorage`:
 
 ### Membership discovery (after login)
 
-Sign-in does **not** scan every LMS league. It:
+Uses the same LMS player-schedule endpoint as the official BCAPL scoring app:
+
+`GET /api/divisions/{anyId}/ScheduledMatchesForPlayerBCAPL?playerId=…`
+
+LMS ignores the division id and returns scheduled matches for **all active sessions** that player is on (typically one fast call). Tableside then roster-checks only the candidate teams from those matches to resolve league / division / team filters.
+
+Also:
 
 1. Reuses the last membership snapshot from `localStorage` / Redis when present
-2. Verifies your saved team with one roster call (when prefs include team + division)
-3. Auth-probes only divisions in your preferred league (~12 for Palm Beach)
-4. Falls back to a public schedule/roster scan of that league only if auth finds nothing
-
-Settings → **Find all my teams** optionally probes other leagues in the same state.
+2. Verifies your saved team with one roster call when prefs already include team + division
+3. Falls back to a preferred-league public roster scan only if the player-schedule call returns nothing
 
 ## Upstash Redis (Vercel)
 

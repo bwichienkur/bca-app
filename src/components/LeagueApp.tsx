@@ -906,7 +906,7 @@ export function LeagueApp() {
 
       {user && loadingMembership ? (
         <p className="mb-3 text-xs text-[var(--muted)]">
-          Checking your teams in {selectedLeague?.name ?? "your league"}…
+          Loading your active BCAPL sessions…
         </p>
       ) : user && membership && !membership.teams.length ? (
         <p className="mb-3 text-xs text-[var(--muted)]">
