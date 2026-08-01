@@ -234,6 +234,94 @@ export function tallyDraft(draft: ScoringDraft): {
   return { teamOneWins, teamTwoWins, scored, total: games.length };
 }
 
+export type RoundPointsTally = {
+  roundNumber: number;
+  teamOneGamePoints: number;
+  teamTwoGamePoints: number;
+  teamOneHandicap: number;
+  teamTwoHandicap: number;
+  teamOneTotal: number;
+  teamTwoTotal: number;
+  gamesComplete: number;
+  gamesTotal: number;
+  roundComplete: boolean;
+  /** Set only when every game in the round has a winner. */
+  roundWinner: 1 | 2 | null;
+};
+
+/**
+ * Sum race/game points for a round, then add that round's handicap
+ * to the underdog team's total.
+ */
+export function tallyRoundPoints(args: {
+  match: ScoringMatchDetail;
+  draft: ScoringDraft;
+  roundNumber: number;
+  handicaps?: RoundHandicapResult[];
+}): RoundPointsTally {
+  const { match, draft, roundNumber } = args;
+  const round = match.matchFormat?.rounds.find(
+    (item) => item.roundNumber === roundNumber,
+  );
+  const games = round?.games ?? [];
+  let teamOneGamePoints = 0;
+  let teamTwoGamePoints = 0;
+  let gamesComplete = 0;
+
+  for (const game of games) {
+    const state = draft.games[gameKey(roundNumber, game.index)];
+    teamOneGamePoints += state?.teamOneScore ?? 0;
+    teamTwoGamePoints += state?.teamTwoScore ?? 0;
+    if (gameWinner(state)) gamesComplete += 1;
+  }
+
+  const handicap =
+    (args.handicaps ?? computeMatchHandicaps(match, draft)).find(
+      (item) => item.round === roundNumber,
+    ) ?? null;
+  const teamOneHandicap = handicap?.teamOne ?? 0;
+  const teamTwoHandicap = handicap?.teamTwo ?? 0;
+  const teamOneTotal = teamOneGamePoints + teamOneHandicap;
+  const teamTwoTotal = teamTwoGamePoints + teamTwoHandicap;
+  const roundComplete =
+    games.length > 0 && gamesComplete === games.length;
+
+  let roundWinner: 1 | 2 | null = null;
+  if (roundComplete) {
+    if (teamOneTotal > teamTwoTotal) roundWinner = 1;
+    else if (teamTwoTotal > teamOneTotal) roundWinner = 2;
+  }
+
+  return {
+    roundNumber,
+    teamOneGamePoints,
+    teamTwoGamePoints,
+    teamOneHandicap,
+    teamTwoHandicap,
+    teamOneTotal,
+    teamTwoTotal,
+    gamesComplete,
+    gamesTotal: games.length,
+    roundComplete,
+    roundWinner,
+  };
+}
+
+export function tallyAllRoundPoints(
+  match: ScoringMatchDetail,
+  draft: ScoringDraft,
+): RoundPointsTally[] {
+  const handicaps = computeMatchHandicaps(match, draft);
+  return (match.matchFormat?.rounds ?? []).map((round) =>
+    tallyRoundPoints({
+      match,
+      draft,
+      roundNumber: round.roundNumber,
+      handicaps,
+    }),
+  );
+}
+
 export function parsedFormatFromMatch(
   match: ScoringMatchDetail,
 ): ParsedMatchFormat {
