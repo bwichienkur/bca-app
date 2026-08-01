@@ -244,16 +244,139 @@ export type RoundPointsTally = {
   teamTwoHandicap: number;
   teamOneTotal: number;
   teamTwoTotal: number;
+  teamOneGameWins: number;
+  teamTwoGameWins: number;
   gamesComplete: number;
   gamesTotal: number;
+  gamesRemaining: number;
   roundComplete: boolean;
-  /** Set only when every game in the round has a winner. */
+  /** Winner when clinched early or after all games (points, then game wins). */
   roundWinner: 1 | 2 | null;
+  /** True when the winner was decided before every game was scored. */
+  clinchedEarly: boolean;
+  /** Points still needed from remaining games to win; null if decided/N/A. */
+  pointsNeeded: { teamOne: number | null; teamTwo: number | null };
+  maxWinPoints: number;
+  maxLossPoints: number;
+};
+
+export function scoreLimits(
+  match: Pick<ScoringMatchSummary, "maxScore" | "maxLosingScore">,
+): { maxWin: number; maxLoss: number } {
+  return {
+    maxWin: match.maxScore > 0 ? match.maxScore : 10,
+    maxLoss: match.maxLosingScore >= 0 ? match.maxLosingScore : 7,
+  };
+}
+
+/** Points first; if tied, majority of game wins; else true tie. */
+export function decideByPointsThenGames(
+  teamOnePoints: number,
+  teamTwoPoints: number,
+  teamOneGameWins: number,
+  teamTwoGameWins: number,
+): 1 | 2 | null {
+  if (teamOnePoints > teamTwoPoints) return 1;
+  if (teamTwoPoints > teamOnePoints) return 2;
+  if (teamOneGameWins > teamTwoGameWins) return 1;
+  if (teamTwoGameWins > teamOneGameWins) return 2;
+  return null;
+}
+
+type ClinchArgs = {
+  teamOnePoints: number;
+  teamTwoPoints: number;
+  teamOneGameWins: number;
+  teamTwoGameWins: number;
+  gamesRemaining: number;
+  maxWin: number;
 };
 
 /**
+ * Side has clinched when even their worst remaining case (lose all at 0 pts)
+ * still beats the opponent's best case (win all at maxWin), using the
+ * points-then-game-wins tiebreak.
+ */
+export function hasClinchedRound(args: ClinchArgs & { side: 1 | 2 }): boolean {
+  const rem = Math.max(0, args.gamesRemaining);
+  let onePts = args.teamOnePoints;
+  let twoPts = args.teamTwoPoints;
+  let oneWins = args.teamOneGameWins;
+  let twoWins = args.teamTwoGameWins;
+
+  if (rem > 0) {
+    if (args.side === 1) {
+      twoPts += args.maxWin * rem;
+      twoWins += rem;
+    } else {
+      onePts += args.maxWin * rem;
+      oneWins += rem;
+    }
+  }
+
+  return (
+    decideByPointsThenGames(onePts, twoPts, oneWins, twoWins) === args.side
+  );
+}
+
+export function clinchRoundWinner(args: ClinchArgs): 1 | 2 | null {
+  if (hasClinchedRound({ ...args, side: 1 })) return 1;
+  if (hasClinchedRound({ ...args, side: 2 })) return 2;
+  return null;
+}
+
+/**
+ * Chase number: points `side` still needs from remaining games to beat the
+ * opponent's ceiling (opp current + rem×maxWin), with game-win tiebreak
+ * available if they can still win enough remaining games.
+ */
+export function pointsNeededFromRemaining(
+  args: ClinchArgs & { side: 1 | 2 },
+): number | null {
+  const rem = args.gamesRemaining;
+  if (rem <= 0) return null;
+  if (clinchRoundWinner(args) != null) return null;
+
+  const ourPts =
+    args.side === 1 ? args.teamOnePoints : args.teamTwoPoints;
+  const oppPts =
+    args.side === 1 ? args.teamTwoPoints : args.teamOnePoints;
+  const ourWins =
+    args.side === 1 ? args.teamOneGameWins : args.teamTwoGameWins;
+  const oppWins =
+    args.side === 1 ? args.teamTwoGameWins : args.teamOneGameWins;
+
+  const oppCeiling = oppPts + args.maxWin * rem;
+  // Best case for tiebreak: we take every remaining game win.
+  const canWinOnPointsTie = ourWins + rem > oppWins;
+  const needed = canWinOnPointsTie
+    ? oppCeiling - ourPts
+    : oppCeiling - ourPts + 1;
+
+  return Math.max(0, needed);
+}
+
+function buildRoundDecision(args: ClinchArgs): {
+  roundWinner: 1 | 2 | null;
+  clinchedEarly: boolean;
+  pointsNeeded: { teamOne: number | null; teamTwo: number | null };
+} {
+  const roundComplete = args.gamesRemaining <= 0;
+  const roundWinner = clinchRoundWinner(args);
+  return {
+    roundWinner,
+    clinchedEarly: roundWinner != null && !roundComplete,
+    pointsNeeded: {
+      teamOne: pointsNeededFromRemaining({ ...args, side: 1 }),
+      teamTwo: pointsNeededFromRemaining({ ...args, side: 2 }),
+    },
+  };
+}
+
+/**
  * Sum race/game points for a round, then add that round's handicap
- * to the underdog team's total.
+ * to the underdog team's total. Declares a winner when clinched early
+ * or when all games are done (points, then game-win tiebreak).
  */
 export function tallyRoundPoints(args: {
   match: ScoringMatchDetail;
@@ -266,15 +389,23 @@ export function tallyRoundPoints(args: {
     (item) => item.roundNumber === roundNumber,
   );
   const games = round?.games ?? [];
+  const { maxWin, maxLoss } = scoreLimits(match);
   let teamOneGamePoints = 0;
   let teamTwoGamePoints = 0;
+  let teamOneGameWins = 0;
+  let teamTwoGameWins = 0;
   let gamesComplete = 0;
 
   for (const game of games) {
     const state = draft.games[gameKey(roundNumber, game.index)];
     teamOneGamePoints += state?.teamOneScore ?? 0;
     teamTwoGamePoints += state?.teamTwoScore ?? 0;
-    if (gameWinner(state)) gamesComplete += 1;
+    const winner = gameWinner(state);
+    if (winner) {
+      gamesComplete += 1;
+      if (winner === 1) teamOneGameWins += 1;
+      if (winner === 2) teamTwoGameWins += 1;
+    }
   }
 
   const handicap =
@@ -285,14 +416,16 @@ export function tallyRoundPoints(args: {
   const teamTwoHandicap = handicap?.teamTwo ?? 0;
   const teamOneTotal = teamOneGamePoints + teamOneHandicap;
   const teamTwoTotal = teamTwoGamePoints + teamTwoHandicap;
-  const roundComplete =
-    games.length > 0 && gamesComplete === games.length;
-
-  let roundWinner: 1 | 2 | null = null;
-  if (roundComplete) {
-    if (teamOneTotal > teamTwoTotal) roundWinner = 1;
-    else if (teamTwoTotal > teamOneTotal) roundWinner = 2;
-  }
+  const gamesRemaining = Math.max(0, games.length - gamesComplete);
+  const roundComplete = games.length > 0 && gamesRemaining === 0;
+  const decision = buildRoundDecision({
+    teamOnePoints: teamOneTotal,
+    teamTwoPoints: teamTwoTotal,
+    teamOneGameWins,
+    teamTwoGameWins,
+    gamesRemaining,
+    maxWin,
+  });
 
   return {
     roundNumber,
@@ -302,10 +435,17 @@ export function tallyRoundPoints(args: {
     teamTwoHandicap,
     teamOneTotal,
     teamTwoTotal,
+    teamOneGameWins,
+    teamTwoGameWins,
     gamesComplete,
     gamesTotal: games.length,
+    gamesRemaining,
     roundComplete,
-    roundWinner,
+    roundWinner: decision.roundWinner,
+    clinchedEarly: decision.clinchedEarly,
+    pointsNeeded: decision.pointsNeeded,
+    maxWinPoints: maxWin,
+    maxLossPoints: maxLoss,
   };
 }
 
@@ -329,8 +469,9 @@ export function tallyAllRoundPoints(
 export const MATCH_POINTS_ROUND = 6;
 
 /**
- * Overall points round: sum of every round's totals (game points + HC).
- * Used when matchWinCountsAsRound is enabled.
+ * Overall points round: live sum of every round's totals (game points + HC).
+ * Awarded only when the opponent can no longer catch up on remaining points
+ * (same clinch + game-win tiebreak rules as base rounds).
  */
 export function tallyMatchPointsRound(args: {
   match: ScoringMatchDetail;
@@ -339,6 +480,7 @@ export function tallyMatchPointsRound(args: {
 }): RoundPointsTally {
   const tallies =
     args.roundTallies ?? tallyAllRoundPoints(args.match, args.draft);
+  const { maxWin, maxLoss } = scoreLimits(args.match);
   const teamOneGamePoints = tallies.reduce(
     (sum, round) => sum + round.teamOneGamePoints,
     0,
@@ -355,36 +497,31 @@ export function tallyMatchPointsRound(args: {
     (sum, round) => sum + round.teamTwoHandicap,
     0,
   );
+  const teamOneGameWins = tallies.reduce(
+    (sum, round) => sum + round.teamOneGameWins,
+    0,
+  );
+  const teamTwoGameWins = tallies.reduce(
+    (sum, round) => sum + round.teamTwoGameWins,
+    0,
+  );
   const gamesComplete = tallies.reduce(
     (sum, round) => sum + round.gamesComplete,
     0,
   );
   const gamesTotal = tallies.reduce((sum, round) => sum + round.gamesTotal, 0);
-  const roundComplete =
-    tallies.length > 0 && tallies.every((round) => round.roundComplete);
-
-  // R6 is only awarded once every base round is finished — no partial result.
-  if (!roundComplete) {
-    return {
-      roundNumber: MATCH_POINTS_ROUND,
-      teamOneGamePoints: 0,
-      teamTwoGamePoints: 0,
-      teamOneHandicap: 0,
-      teamTwoHandicap: 0,
-      teamOneTotal: 0,
-      teamTwoTotal: 0,
-      gamesComplete,
-      gamesTotal,
-      roundComplete: false,
-      roundWinner: null,
-    };
-  }
-
+  const gamesRemaining = Math.max(0, gamesTotal - gamesComplete);
+  const roundComplete = gamesTotal > 0 && gamesRemaining === 0;
   const teamOneTotal = teamOneGamePoints + teamOneHandicap;
   const teamTwoTotal = teamTwoGamePoints + teamTwoHandicap;
-  let roundWinner: 1 | 2 | null = null;
-  if (teamOneTotal > teamTwoTotal) roundWinner = 1;
-  else if (teamTwoTotal > teamOneTotal) roundWinner = 2;
+  const decision = buildRoundDecision({
+    teamOnePoints: teamOneTotal,
+    teamTwoPoints: teamTwoTotal,
+    teamOneGameWins,
+    teamTwoGameWins,
+    gamesRemaining,
+    maxWin,
+  });
 
   return {
     roundNumber: MATCH_POINTS_ROUND,
@@ -394,10 +531,17 @@ export function tallyMatchPointsRound(args: {
     teamTwoHandicap,
     teamOneTotal,
     teamTwoTotal,
+    teamOneGameWins,
+    teamTwoGameWins,
     gamesComplete,
     gamesTotal,
-    roundComplete: true,
-    roundWinner,
+    gamesRemaining,
+    roundComplete,
+    roundWinner: decision.roundWinner,
+    clinchedEarly: decision.clinchedEarly,
+    pointsNeeded: decision.pointsNeeded,
+    maxWinPoints: maxWin,
+    maxLossPoints: maxLoss,
   };
 }
 
