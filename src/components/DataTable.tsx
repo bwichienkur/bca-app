@@ -71,14 +71,18 @@ function columnKind(header: string): ColumnKind {
   return "stat";
 }
 
-/** Size the name column from the longest label in the data so full names show. */
-function nameColumnWidth(maxChars: number, compact: boolean): string {
-  const min = compact ? 6.5 : 8;
-  // Cap only extreme outliers; the table scrolls horizontally for stats.
-  const max = compact ? 18 : 22;
-  const perChar = compact ? 0.54 : 0.58;
-  const pad = compact ? 1.15 : 1.4;
-  const width = Math.min(Math.max(maxChars * perChar + pad, min), max);
+/**
+ * Size name columns from a high percentile of label lengths so one long
+ * outlier doesn’t inflate the whole grid. Longer names still truncate with
+ * a title tooltip.
+ */
+function nameColumnWidth(targetChars: number, compact: boolean): string {
+  const min = compact ? 5.75 : 7;
+  const max = compact ? 11.5 : 13.5;
+  // Proportional UI fonts run closer to ~0.45rem/char at table sizes.
+  const perChar = compact ? 0.44 : 0.47;
+  const pad = compact ? 0.85 : 1.05;
+  const width = Math.min(Math.max(targetChars * perChar + pad, min), max);
   return `${width.toFixed(2)}rem`;
 }
 
@@ -106,13 +110,24 @@ function columnWidth(
   return `${Math.min(len * 0.85 + 1.5, compact ? 6.5 : 8)}rem`;
 }
 
-function longestCellLength(rows: string[][], columnIndex: number): number {
-  let maxLen = 0;
-  for (const row of rows) {
-    const len = (row[columnIndex] ?? "").trim().length;
-    if (len > maxLen) maxLen = len;
-  }
-  return maxLen;
+/** Prefer ~85th percentile length so typical names fit without outlier stretch. */
+function targetNameLength(
+  rows: string[][],
+  columnIndex: number,
+  headerLength: number,
+): number {
+  const lengths = rows
+    .map((row) => (row[columnIndex] ?? "").trim().length)
+    .filter((len) => len > 0)
+    .sort((a, b) => a - b);
+
+  if (!lengths.length) return Math.max(headerLength, 8);
+
+  const percentileIndex = Math.min(
+    lengths.length - 1,
+    Math.max(0, Math.ceil(lengths.length * 0.85) - 1),
+  );
+  return Math.max(lengths[percentileIndex] ?? 8, headerLength, 8);
 }
 
 function stickyColumnIndex(headers: string[], stickyEnabled: boolean): number {
@@ -144,11 +159,12 @@ export function DataTable({
       headers.map((header, index) => {
         const kind = columnKind(header);
         if (kind === "name") {
-          const maxChars = Math.max(
+          const targetChars = targetNameLength(
+            rows,
+            index,
             header.trim().length,
-            longestCellLength(rows, index),
           );
-          return { kind, width: nameColumnWidth(maxChars, compact) };
+          return { kind, width: nameColumnWidth(targetChars, compact) };
         }
         return { kind, width: columnWidth(header, kind, compact) };
       }),
