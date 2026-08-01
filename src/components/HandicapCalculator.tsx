@@ -21,10 +21,11 @@ import {
   findWeeklyMatchupForTeam,
 } from "@/lib/matchups";
 import {
-  deleteLineupPreset,
-  loadLineupPresets,
-  upsertLineupPreset,
-} from "@/lib/preferences";
+  loadTeamLineupPresets,
+  removeTeamLineupPreset,
+  saveTeamLineupPreset,
+} from "@/lib/lineup-sync";
+import { loadLineupPresets } from "@/lib/preferences";
 import type {
   CalculatorMatchup,
   DivisionTeam,
@@ -223,8 +224,20 @@ export function HandicapCalculator({
   const [dropTarget, setDropTarget] = useState<DragState | null>(null);
 
   useEffect(() => {
-    setPresets(loadLineupPresets());
-  }, []);
+    if (!myTeamId) {
+      setPresets(loadLineupPresets());
+      return;
+    }
+    let cancelled = false;
+    void loadTeamLineupPresets({ teamId: myTeamId, divisionId }).then(
+      (result) => {
+        if (!cancelled) setPresets(result.presets);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [myTeamId, divisionId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -456,14 +469,19 @@ export function HandicapCalculator({
       updatedAt: new Date().toISOString(),
     };
 
-    try {
-      const next = upsertLineupPreset(preset);
-      setPresets(next);
-      setPresetName(name);
-      setPresetStatus(`Saved “${name}”. Tap a preset anytime to load it.`);
-    } catch {
-      setPresetStatus("Couldn't save lineup — local storage may be blocked.");
-    }
+    void saveTeamLineupPreset(preset)
+      .then((result) => {
+        setPresets(result.presets);
+        setPresetName(name);
+        setPresetStatus(
+          result.shared
+            ? `Saved “${name}” for the team. Tap a preset anytime to load it.`
+            : `Saved “${name}” on this device. Tap a preset anytime to load it.`,
+        );
+      })
+      .catch(() => {
+        setPresetStatus("Couldn't save lineup.");
+      });
   };
 
   const applyPreset = (preset: LineupPreset) => {
@@ -477,9 +495,15 @@ export function HandicapCalculator({
   };
 
   const removePreset = (preset: LineupPreset) => {
-    const next = deleteLineupPreset(preset.id);
-    setPresets(next);
-    setPresetStatus(`Deleted “${preset.name}”.`);
+    if (!myTeamId) return;
+    void removeTeamLineupPreset({
+      teamId: myTeamId,
+      divisionId,
+      presetId: preset.id,
+    }).then((result) => {
+      setPresets(result.presets);
+      setPresetStatus(`Deleted “${preset.name}”.`);
+    });
   };
 
   const teamPresets = presets.filter(

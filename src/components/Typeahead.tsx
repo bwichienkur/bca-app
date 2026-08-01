@@ -20,7 +20,7 @@ type TypeaheadProps<T> = {
   emptyText?: string;
   /** Show a clear control when a value is selected. Defaults to true. */
   clearable?: boolean;
-  /** Visual tone for embedding on felt/green surfaces. */
+  /** Visual tone for embedding on felt/theme surfaces. */
   tone?: "default" | "felt";
 };
 
@@ -213,10 +213,22 @@ export function Typeahead<T>({
         <ul
           id={listId}
           role="listbox"
-          className="absolute z-[90] mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow)] [background-color:var(--surface-2)]"
+          className={[
+            "absolute z-[90] mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border py-1 shadow-[var(--shadow)]",
+            felt
+              ? "border-white/20 bg-[var(--felt)] [background-color:var(--felt)]"
+              : "border-[var(--line-strong)] bg-[var(--surface-2)] [background-color:var(--surface-2)]",
+          ].join(" ")}
         >
           {filtered.length === 0 ? (
-            <li className="bg-[var(--surface-2)] px-4 py-3 text-sm text-[var(--muted)]">
+            <li
+              className={[
+                "px-4 py-3 text-sm",
+                felt
+                  ? "bg-[var(--felt)] text-white/70"
+                  : "bg-[var(--surface-2)] text-[var(--muted)]",
+              ].join(" ")}
+            >
               {emptyText}
             </li>
           ) : (
@@ -224,7 +236,10 @@ export function Typeahead<T>({
               const active = index === highlight;
               const selected = value?.id === option.id;
               return (
-                <li key={option.id} className="bg-[var(--surface-2)]">
+                <li
+                  key={option.id}
+                  className={felt ? "bg-[var(--felt)]" : "bg-[var(--surface-2)]"}
+                >
                   <button
                     type="button"
                     role="option"
@@ -234,24 +249,39 @@ export function Typeahead<T>({
                     onClick={() => choose(option)}
                     className={[
                       "flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm",
-                      active
-                        ? "bg-[var(--surface-3)]"
-                        : "bg-[var(--surface-2)]",
+                      felt
+                        ? active
+                          ? "bg-black/25"
+                          : "bg-[var(--felt)]"
+                        : active
+                          ? "bg-[var(--surface-3)]"
+                          : "bg-[var(--surface-2)]",
                       selected
-                        ? "font-semibold text-[var(--felt-deep)]"
-                        : "text-[var(--ink)]",
+                        ? felt
+                          ? "font-semibold text-white"
+                          : "font-semibold text-[var(--felt-deep)]"
+                        : felt
+                          ? "text-white/95"
+                          : "text-[var(--ink)]",
                     ].join(" ")}
                   >
                     <span>
                       <span className="block">{option.label}</span>
                       {option.meta ? (
-                        <span className="mt-0.5 block text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                        <span
+                          className={[
+                            "mt-0.5 block text-[11px] uppercase tracking-[0.12em]",
+                            felt ? "text-white/60" : "text-[var(--muted)]",
+                          ].join(" ")}
+                        >
                           {option.meta}
                         </span>
                       ) : null}
                     </span>
                     {selected ? (
-                      <span className="text-[var(--felt)]">✓</span>
+                      <span className={felt ? "text-white" : "text-[var(--felt)]"}>
+                        ✓
+                      </span>
                     ) : null}
                   </button>
                 </li>

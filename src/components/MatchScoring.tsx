@@ -50,10 +50,10 @@ import { LoadingState } from "./LoadingState";
 import type { AuthUser } from "./LoginScreen";
 import { DraggableLineupList } from "./DraggableLineupList";
 import {
-  deleteLineupPreset,
-  loadLineupPresets,
-  upsertLineupPreset,
-} from "@/lib/preferences";
+  loadTeamLineupPresets,
+  removeTeamLineupPreset,
+  saveTeamLineupPreset,
+} from "@/lib/lineup-sync";
 import type { LineupPreset } from "@/lib/types";
 
 type MatchScoringProps = {
@@ -1305,7 +1305,7 @@ const MatchScoreboard = memo(function MatchScoreboard({
   };
 
   return (
-    <div className="w-full overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[linear-gradient(145deg,rgba(24,102,74,0.98),rgba(11,52,38,0.99))] px-3 py-3 text-white shadow-[var(--shadow)] sm:px-4 md:px-5 md:py-3.5">
+    <div className="w-full overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.99))] px-3 py-3 text-white shadow-[var(--shadow)] sm:px-4 md:px-5 md:py-3.5">
       <div className="flex items-start justify-between gap-3">
         <p className="min-w-0 text-[11px] uppercase tracking-[0.14em] text-white/60">
           {dateLabel}
@@ -1676,8 +1676,20 @@ function LineupEditor({
         : [];
 
   useEffect(() => {
-    setPresets(loadLineupPresets());
-  }, []);
+    if (!myTeamId) {
+      setPresets([]);
+      return;
+    }
+    let cancelled = false;
+    void loadTeamLineupPresets({ teamId: myTeamId, divisionId }).then(
+      (result) => {
+        if (!cancelled) setPresets(result.presets);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [myTeamId, divisionId]);
 
   const teamPresets = presets.filter(
     (preset) =>
@@ -1714,14 +1726,19 @@ function LineupEditor({
       playerIds: myLineup.filter((id): id is string => Boolean(id)),
       updatedAt: new Date().toISOString(),
     };
-    try {
-      const next = upsertLineupPreset(preset);
-      setPresets(next);
-      setPresetName(name);
-      setPresetStatus(`Saved “${name}”.`);
-    } catch {
-      setPresetStatus("Couldn't save lineup — local storage may be blocked.");
-    }
+    void saveTeamLineupPreset(preset)
+      .then((result) => {
+        setPresets(result.presets);
+        setPresetName(name);
+        setPresetStatus(
+          result.shared
+            ? `Saved “${name}” for the team.`
+            : `Saved “${name}” on this device.`,
+        );
+      })
+      .catch(() => {
+        setPresetStatus("Couldn't save lineup.");
+      });
   };
 
   const applyPreset = (preset: LineupPreset) => {
@@ -1736,8 +1753,15 @@ function LineupEditor({
   };
 
   const removePreset = (preset: LineupPreset) => {
-    setPresets(deleteLineupPreset(preset.id));
-    setPresetStatus(`Deleted “${preset.name}”.`);
+    if (!myTeamId) return;
+    void removeTeamLineupPreset({
+      teamId: myTeamId,
+      divisionId,
+      presetId: preset.id,
+    }).then((result) => {
+      setPresets(result.presets);
+      setPresetStatus(`Deleted “${preset.name}”.`);
+    });
   };
 
   return (
@@ -1772,7 +1796,8 @@ function LineupEditor({
                 Your lineup presets
               </p>
               <p className="mt-1 text-xs text-[var(--muted)]">
-                Same saved lineups as Handicap — load or save for{" "}
+                Team presets sync via Redis when configured — shared with
+                Handicap for{" "}
                 {mySide === 1 ? match.teamOneName : match.teamTwoName}.
               </p>
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">

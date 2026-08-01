@@ -58,7 +58,7 @@ export function TeamStandingSummary({
   );
 
   return (
-    <section className="overflow-hidden rounded-[1.4rem] border border-[var(--line)] bg-[linear-gradient(145deg,rgba(61,155,117,0.18),var(--surface)_40%,var(--surface-2))] shadow-[var(--shadow)]">
+    <section className="overflow-hidden rounded-[1.4rem] border border-[var(--line)] bg-[linear-gradient(145deg,rgba(29,110,158,0.2),var(--surface)_40%,var(--surface-2))] shadow-[var(--shadow)]">
       <div className="flex items-stretch">
         <div className="w-1.5 shrink-0 bg-[linear-gradient(180deg,var(--felt),var(--amber))]" />
         <div

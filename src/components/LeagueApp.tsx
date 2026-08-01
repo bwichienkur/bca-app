@@ -11,6 +11,10 @@ import {
   savePreferences,
   saveStoredMembership,
 } from "@/lib/preferences";
+import {
+  fetchSharedPreferences,
+  pushSharedPreferences,
+} from "@/lib/prefs-sync";
 import { useViewportAnchor } from "@/lib/use-viewport-anchor";
 import type {
   DivisionSummary,
@@ -167,6 +171,7 @@ export function LeagueApp() {
   const persist = (next: UserPreferences) => {
     setPrefs(next);
     savePreferences(next);
+    if (user) void pushSharedPreferences(next);
   };
 
   const loadMembership = async (options?: {
@@ -332,6 +337,31 @@ export function LeagueApp() {
         setUser(sessionData.user);
         setAuthLoading(false);
 
+        let effectivePrefs = saved;
+        if (sessionData.user) {
+          const shared = await fetchSharedPreferences();
+          if (cancelled) return;
+          if (shared) {
+            effectivePrefs = {
+              ...saved,
+              ...shared,
+              playerId: sessionData.user.lmsId,
+              playerName: sessionData.user.name ?? shared.playerName,
+            };
+            setPrefs(effectivePrefs);
+            savePreferences(effectivePrefs);
+            setLeagueQuery(
+              effectivePrefs.leagueName.split(" ").slice(0, 2).join(" "),
+            );
+          } else {
+            void pushSharedPreferences({
+              ...saved,
+              playerId: sessionData.user.lmsId,
+              playerName: sessionData.user.name ?? saved.playerName,
+            });
+          }
+        }
+
         // Instant filter from last successful membership scan.
         const cachedMembership = sessionData.user
           ? loadStoredMembership(sessionData.user.lmsId)
@@ -340,17 +370,17 @@ export function LeagueApp() {
           setMembership(cachedMembership);
           applyMembershipDefaults(
             cachedMembership,
-            saved,
+            effectivePrefs,
             sessionData.user.name,
           );
         } else {
           const data = await fetchJson<{ leagues: LeagueSummary[] }>(
-            `/api/leagues?q=${encodeURIComponent(saved.leagueName)}`,
+            `/api/leagues?q=${encodeURIComponent(effectivePrefs.leagueName)}`,
           );
           if (cancelled) return;
           setLeagues(data.leagues);
           const league =
-            data.leagues.find((item) => item.id === saved.leagueId) ??
+            data.leagues.find((item) => item.id === effectivePrefs.leagueId) ??
             data.leagues[0] ??
             null;
           setSelectedLeague(league);
@@ -362,7 +392,7 @@ export function LeagueApp() {
             setDivisions(divisionData.divisions);
             const division =
               divisionData.divisions.find(
-                (item) => item.id === saved.divisionId,
+                (item) => item.id === effectivePrefs.divisionId,
               ) ?? null;
             if (division) {
               setSelectedDivision(division);
@@ -370,11 +400,11 @@ export function LeagueApp() {
           }
         }
 
-        // Refresh membership in the background (preferred league only).
+        // Refresh membership in the background.
         if (sessionData.user) {
           void loadMembership({
             fresh: false,
-            prefsOverride: saved,
+            prefsOverride: effectivePrefs,
           }).then((nextMembership) => {
             if (cancelled || !nextMembership?.teams.length) return;
             applyMembershipDefaults(
@@ -969,7 +999,7 @@ export function LeagueApp() {
         </p>
       ) : null}
 
-      <section className="animate-rise animate-delay-1 relative z-40 mb-5 overflow-visible rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(20,92,69,0.96),rgba(13,61,46,0.98))] text-white shadow-[var(--shadow)]">
+      <section className="animate-rise animate-delay-1 relative z-40 mb-5 overflow-visible rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] text-white shadow-[var(--shadow)]">
         <button
           type="button"
           onClick={() => setContextOpen((open) => !open)}
@@ -1187,7 +1217,7 @@ export function LeagueApp() {
           ) : !selectedDivision ? (
             <EmptyState
               title="Choose a division to continue"
-              body="Tap Change on the green card above to pick your division. Search and Score sign-in work without a full division, but Score needs one to list matches."
+              body="Tap Change on the context card above to pick your division. Search and Score sign-in work without a full division, but Score needs one to list matches."
             />
           ) : tab === "handicap" ? (
             <HandicapCalculator
@@ -1226,7 +1256,7 @@ export function LeagueApp() {
             ) : (
               <EmptyState
                 title="Set your team"
-                body="Tap Change on the green card above and pick your team to see roster and player stats here."
+                body="Tap Change on the context card above and pick your team to see roster and player stats here."
               />
             )
           ) : tab === "standings" && teamReport ? (
@@ -1328,7 +1358,7 @@ export function LeagueApp() {
             !prefs.teamName ? (
               <EmptyState
                 title="Set My team for schedule"
-                body="Tap Change on the green card above and pick your team. Schedule always uses that selection."
+                body="Tap Change on the context card above and pick your team. Schedule always uses that selection."
               />
             ) : selectedScheduleMatch ? (
               <ScheduleMatchDetail

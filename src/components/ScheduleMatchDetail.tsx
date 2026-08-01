@@ -69,7 +69,7 @@ function MatchTeamPanel({
 
   return (
     <article className="min-w-0 overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] shadow-sm">
-      <div className="border-b border-[var(--line)] bg-[linear-gradient(135deg,rgba(61,155,117,0.14),transparent_55%)] px-3 py-3">
+      <div className="border-b border-[var(--line)] bg-[linear-gradient(135deg,rgba(29,110,158,0.16),transparent_55%)] px-3 py-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">

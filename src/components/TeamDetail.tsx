@@ -35,7 +35,7 @@ export function TeamDetail({
 
   return (
     <aside className="animate-panel flex h-full flex-col overflow-hidden rounded-[1.45rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
-      <div className="border-b border-[var(--line)] bg-[linear-gradient(135deg,rgba(61,155,117,0.18),transparent_55%)] px-4 py-4 md:px-5">
+      <div className="border-b border-[var(--line)] bg-[linear-gradient(135deg,rgba(29,110,158,0.18),transparent_55%)] px-4 py-4 md:px-5">
         {onClose ? (
           <button
             type="button"

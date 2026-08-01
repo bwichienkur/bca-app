@@ -40,12 +40,14 @@ npm run dev
 
 ## Preferences
 
-Stored in `localStorage`:
+Local cache in `localStorage` (always):
 
 - `tableside.preferences.v1` — league, division, my team
 - `tableside.membership.v1` — last discovered roster memberships (instant filter on return visits)
-- `tableside.lineups.v1` — saved handicap lineups
+- `tableside.lineups.v1` — local fallback for saved scoring/handicap lineups
 - `tableside.scoring.draft.v1.*` — local scoresheet drafts (also synced when Redis is configured)
+
+When signed in and Upstash Redis is configured, preferences and team lineups also sync server-side (see below).
 
 ### Membership discovery (after login)
 
@@ -78,6 +80,15 @@ Vercel KV REST names are also accepted (`KV_REST_API_URL` / `KV_REST_API_TOKEN`)
 
 ### Score drafts
 Keyed by match id, TTL 60 days, last-write-wins with ~3s polling while a scoresheet is open.
+
+### Login / settings preferences
+Keyed by LMS player id (`tableside:prefs:v1:{lmsId}`), TTL 180 days. On sign-in the app loads shared prefs from Redis (league / division / team defaults) and merges them over localStorage; changes in Settings or the context selectors push back up.
+
+### Team lineup templates
+Saved scoring / handicap lineup presets are stored per team (`tableside:scoring:lineups:v1:{teamId}`), TTL 1 year, so captains and teammates share the same presets. localStorage remains a fallback when Redis is unavailable.
+
+### Membership cache
+Discovered roster memberships are cached in Redis (`membership-v6:{lmsId}`) to speed up post-login filter setup.
 
 ### LMS public data cache
 Parsed league/division/team/player/schedule responses are cached in Redis so Vercel serverless instances skip slow LMS round-trips. Approximate TTLs:
