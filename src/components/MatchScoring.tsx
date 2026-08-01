@@ -344,21 +344,22 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
     return { teamOne, teamTwo };
   }, [matchPointsTally, roundPointTallies]);
 
-  const matchPointTotals = useMemo(() => {
-    if (matchPointsTally) {
-      return {
-        teamOne: matchPointsTally.teamOneTotal,
-        teamTwo: matchPointsTally.teamTwoTotal,
-      };
-    }
-    return roundPointTallies.reduce(
-      (acc, round) => ({
-        teamOne: acc.teamOne + round.teamOneTotal,
-        teamTwo: acc.teamTwo + round.teamTwoTotal,
-      }),
-      { teamOne: 0, teamTwo: 0 },
-    );
-  }, [matchPointsTally, roundPointTallies]);
+  // Live point totals from R1–R5 only (R6 is awarded later, not a separate sum).
+  const matchPointTotals = useMemo(
+    () =>
+      roundPointTallies.reduce(
+        (acc, round) => ({
+          teamOne: acc.teamOne + round.teamOneTotal,
+          teamTwo: acc.teamTwo + round.teamTwoTotal,
+        }),
+        { teamOne: 0, teamTwo: 0 },
+      ),
+    [roundPointTallies],
+  );
+
+  const baseRoundsComplete =
+    roundPointTallies.length > 0 &&
+    roundPointTallies.every((round) => round.roundComplete);
 
   const rounds = match?.matchFormat?.rounds ?? [];
   const roundsAvailable =
@@ -520,8 +521,8 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
     const actionBtnClass =
       "rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]";
     return (
-      <section className="animate-panel w-full min-w-0 space-y-3 overflow-x-hidden">
-        <div className="sticky top-[3.1rem] z-30 -mx-1 flex items-center justify-between gap-3 bg-[color-mix(in_srgb,var(--paper)_92%,transparent)] px-1 py-1 backdrop-blur">
+      <section className="animate-panel w-full min-w-0 space-y-2.5 overflow-x-hidden">
+        <div className="flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => {
@@ -633,7 +634,12 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                 }}
               />
 
-              <div className="flex gap-2 overflow-x-auto pb-1">
+              <div
+                className={[
+                  "grid gap-1",
+                  includeMatchPointsRound ? "grid-cols-6" : "grid-cols-5",
+                ].join(" ")}
+              >
                 {rounds.map((round) => {
                   const active = round.roundNumber === activeRound;
                   const tally =
@@ -662,7 +668,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                         });
                       }}
                       className={[
-                        "shrink-0 rounded-full px-3.5 py-2 text-sm font-semibold transition",
+                        "min-w-0 rounded-xl px-0.5 py-1.5 text-center transition",
                         active
                           ? "bg-[var(--felt)] text-white shadow-sm"
                           : tally?.roundComplete &&
@@ -676,17 +682,14 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                               : "bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface-2)]",
                       ].join(" ")}
                     >
-                      R{round.roundNumber}
-                      {tally?.roundComplete ? (
-                        <span className="ml-1.5 text-[11px] tabular-nums opacity-80">
-                          {tally.teamOneTotal}–{tally.teamTwoTotal}
-                          {winnerLabel ? ` ${winnerLabel}` : ""}
-                        </span>
-                      ) : (
-                        <span className="ml-1.5 text-[11px] opacity-70">
-                          {done}/{round.games.length}
-                        </span>
-                      )}
+                      <span className="block text-[11px] font-semibold leading-none">
+                        R{round.roundNumber}
+                      </span>
+                      <span className="mt-0.5 block truncate text-[9px] font-semibold tabular-nums leading-none opacity-80">
+                        {tally?.roundComplete
+                          ? winnerLabel ?? "T"
+                          : `${done}/${round.games.length}`}
+                      </span>
                     </button>
                   );
                 })}
@@ -700,7 +703,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                       });
                     }}
                     className={[
-                      "shrink-0 rounded-full px-3.5 py-2 text-sm font-semibold transition",
+                      "min-w-0 rounded-xl px-0.5 py-1.5 text-center transition",
                       isMatchPointsRound
                         ? "bg-[var(--felt)] text-white shadow-sm"
                         : matchPointsTally.roundComplete &&
@@ -714,31 +717,28 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                             : "bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface-2)]",
                     ].join(" ")}
                   >
-                    R6
-                    {matchPointsTally.roundComplete ? (
-                      <span className="ml-1.5 text-[11px] tabular-nums opacity-80">
-                        {matchPointsTally.teamOneTotal}–
-                        {matchPointsTally.teamTwoTotal}
-                        {matchPointsTally.roundWinner
+                    <span className="block text-[11px] font-semibold leading-none">
+                      R6
+                    </span>
+                    <span className="mt-0.5 block truncate text-[9px] font-semibold tabular-nums leading-none opacity-80">
+                      {matchPointsTally.roundComplete
+                        ? matchPointsTally.roundWinner
                           ? matchPointsTally.roundWinner === match.mySide
-                            ? " W"
+                            ? "W"
                             : match.mySide
-                              ? " L"
+                              ? "L"
                               : matchPointsTally.roundWinner === 1
-                                ? " H"
-                                : " A"
-                          : ""}
-                      </span>
-                    ) : (
-                      <span className="ml-1.5 text-[11px] opacity-70">
-                        pts
-                      </span>
-                    )}
+                                ? "H"
+                                : "A"
+                          : "T"
+                        : "—"}
+                    </span>
                   </button>
                 ) : null}
               </div>
 
-              {activeRoundPoints ? (
+              {activeRoundPoints &&
+              !(isMatchPointsRound && !baseRoundsComplete) ? (
                 <RoundPointsBoard
                   tally={activeRoundPoints}
                   teamOneName={match.teamOneName}
@@ -751,9 +751,9 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
 
               {isMatchPointsRound ? (
                 <p className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--muted)]">
-                  Round 6 is awarded from total points across all games (plus
-                  handicap). Score rounds 1–5 — this chip updates as games
-                  finish.
+                  {baseRoundsComplete
+                    ? "Round 6 is awarded from total points across all games (plus handicap)."
+                    : "Round 6 unlocks after rounds 1–5 are complete. Finish every game first."}
                 </p>
               ) : (
                 <div className="min-w-0 space-y-1.5">
@@ -1374,18 +1374,19 @@ function LineupEditor({
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full min-w-0 items-start justify-between gap-3 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-3 text-left sm:px-4"
+        aria-expanded={open}
+        className="flex w-full min-w-0 items-center justify-between gap-3 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-3 text-left sm:px-4"
       >
         <div className="min-w-0 flex-1 overflow-hidden">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
             Lineups
           </p>
           <p className="mt-0.5 text-xs text-[var(--muted)] sm:text-sm">
-            Pick players · ▲▼ to reorder
+            {filledOne + filledTwo}/{slots * 2} filled · ▲▼ to reorder
           </p>
         </div>
-        <span className="shrink-0 rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)]">
-          {filledOne + filledTwo}/{slots * 2} · {open ? "Hide ▴" : "Edit ▾"}
+        <span className="shrink-0 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+          {open ? "Collapse ▴" : "Change ▾"}
         </span>
       </button>
       {open ? (
