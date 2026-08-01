@@ -103,7 +103,30 @@ export function LeagueApp() {
   } | null>(null);
   const [contextOpen, setContextOpen] = useState(true);
   const didAutoCollapseContext = useRef(false);
+  const tabsRef = useRef<HTMLDivElement | null>(null);
   const [, startTransition] = useTransition();
+
+  useEffect(() => {
+    const el = tabsRef.current;
+    if (!el) return;
+    const syncPadTop = () => {
+      const bottom = Math.ceil(el.getBoundingClientRect().bottom);
+      document.documentElement.style.setProperty(
+        "--score-pad-top",
+        `${Math.max(bottom, 0)}px`,
+      );
+    };
+    syncPadTop();
+    const observer = new ResizeObserver(syncPadTop);
+    observer.observe(el);
+    window.addEventListener("scroll", syncPadTop, { passive: true });
+    window.addEventListener("resize", syncPadTop);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", syncPadTop);
+      window.removeEventListener("resize", syncPadTop);
+    };
+  }, [tab, contextOpen]);
 
   const persist = (next: UserPreferences) => {
     setPrefs(next);
@@ -676,6 +699,7 @@ export function LeagueApp() {
         ) : null}
 
         <div
+          ref={tabsRef}
           className={[
             "sticky top-0 z-20 -mx-1 flex flex-col gap-2 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 backdrop-blur md:flex-row md:items-center md:justify-between",
             tab === "score" ? "py-1" : "py-1.5",
