@@ -582,7 +582,7 @@ export function HandicapCalculator({
           <LineupPicker
             side="mine"
             title={myTeam.name}
-            subtitle={`Pick players · press & hold a card to drag · ⠿ / ▲▼ also work`}
+            subtitle={`Pick players · drag ⠿ to reorder · ▲▼ also work`}
             roster={myTeam.players}
             lineup={myLineup.length === slots ? myLineup : emptyLineup(slots)}
             slots={slots}
@@ -817,32 +817,14 @@ function LineupPicker({
   setDragState: (state: DragState | null) => void;
   setDropTarget: (state: DragState | null) => void;
 }) {
-  // Hold still briefly to drag from the card; ⠿ starts drag immediately.
-  const HOLD_MS = 220;
-  const MOVE_CANCEL_PX = 14;
-
+  // Only the top-left ⠿ grip starts a drag — the rest of the card stays interactive.
   const filled = filledCount(lineup);
   const listRef = useRef<HTMLOListElement>(null);
   const dropTargetRef = useRef(dropTarget);
   const onMoveRef = useRef(onMove);
   const setDragStateRef = useRef(setDragState);
   const setDropTargetRef = useRef(setDropTarget);
-  const holdTimerRef = useRef<number | null>(null);
-  const blockSelectOpenRef = useRef(false);
-  const pendingHoldRef = useRef<{
-    index: number;
-    startX: number;
-    startY: number;
-    lastX: number;
-    lastY: number;
-    width: number;
-    height: number;
-    offsetX: number;
-    offsetY: number;
-  } | null>(null);
   const [mounted, setMounted] = useState(false);
-  const [holdingIndex, setHoldingIndex] = useState<number | null>(null);
-  const [blockSelectOpen, setBlockSelectOpen] = useState(false);
   const [ghost, setGhost] = useState<{
     x: number;
     y: number;
@@ -882,19 +864,6 @@ function LineupPicker({
     setDropTargetRef.current = setDropTarget;
   }, [onMove, setDragState, setDropTarget]);
 
-  const clearHoldTimer = () => {
-    if (holdTimerRef.current != null) {
-      window.clearTimeout(holdTimerRef.current);
-      holdTimerRef.current = null;
-    }
-  };
-
-  const cancelHold = () => {
-    clearHoldTimer();
-    pendingHoldRef.current = null;
-    setHoldingIndex(null);
-  };
-
   const unlockBodyScroll = () => {
     document.body.style.touchAction = "";
     document.body.style.userSelect = "";
@@ -902,17 +871,10 @@ function LineupPicker({
   };
 
   const clearDrag = () => {
-    cancelHold();
     unlockBodyScroll();
     setDragStateRef.current(null);
     setDropTargetRef.current(null);
     setGhost(null);
-    // Avoid the trailing click after a drag opening the player menu.
-    // Keep a sync ref so the click handler sees the block before React re-renders.
-    window.setTimeout(() => {
-      blockSelectOpenRef.current = false;
-      setBlockSelectOpen(false);
-    }, 320);
   };
 
   const indexFromClientY = (clientY: number): number | null => {
@@ -935,13 +897,6 @@ function LineupPicker({
     return closest;
   };
 
-  // Only ▲▼ controls opt out of whole-card hold. The player dropdown is part of
-  // the card surface so press-and-hold works there too.
-  const shouldIgnoreDrag = (target: EventTarget | null) => {
-    if (!(target instanceof Element)) return false;
-    return Boolean(target.closest("[data-no-drag]"));
-  };
-
   const beginDrag = (args: {
     index: number;
     x: number;
@@ -951,9 +906,6 @@ function LineupPicker({
     offsetX: number;
     offsetY: number;
   }) => {
-    cancelHold();
-    blockSelectOpenRef.current = true;
-    setBlockSelectOpen(true);
     setGhost({
       x: args.x,
       y: args.y,
@@ -1010,7 +962,6 @@ function LineupPicker({
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("pointercancel", onPointerUp);
     return () => {
-      // Always clear — do not restore a prior "none" left by the hold timer.
       unlockBodyScroll();
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
@@ -1019,43 +970,8 @@ function LineupPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draggingHere, dragFrom, side]);
 
-  // Arm press-and-hold on the card body (not the grip).
-  useEffect(() => {
-    if (holdingIndex == null) return;
-
-    const onPointerMove = (event: PointerEvent) => {
-      const pending = pendingHoldRef.current;
-      if (!pending) return;
-      pending.lastX = event.clientX;
-      pending.lastY = event.clientY;
-      const distance = Math.hypot(
-        event.clientX - pending.startX,
-        event.clientY - pending.startY,
-      );
-      // Finger moved before hold completed — treat as scroll, cancel hold.
-      if (distance > MOVE_CANCEL_PX) {
-        cancelHold();
-      }
-    };
-
-    const onPointerUp = () => {
-      cancelHold();
-    };
-
-    window.addEventListener("pointermove", onPointerMove, { passive: true });
-    window.addEventListener("pointerup", onPointerUp);
-    window.addEventListener("pointercancel", onPointerUp);
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-      window.removeEventListener("pointercancel", onPointerUp);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [holdingIndex]);
-
   useEffect(() => {
     return () => {
-      clearHoldTimer();
       unlockBodyScroll();
     };
   }, []);
@@ -1078,42 +994,6 @@ function LineupPicker({
       offsetX: event.clientX - rect.left,
       offsetY: event.clientY - rect.top,
     });
-  };
-
-  const onCardPointerDown = (
-    event: ReactPointerEvent<HTMLDivElement>,
-    index: number,
-  ) => {
-    if (!lineup[index] || shouldIgnoreDrag(event.target) || draggingHere) {
-      return;
-    }
-    const rect = event.currentTarget.getBoundingClientRect();
-    cancelHold();
-    pendingHoldRef.current = {
-      index,
-      startX: event.clientX,
-      startY: event.clientY,
-      lastX: event.clientX,
-      lastY: event.clientY,
-      width: rect.width,
-      height: rect.height,
-      offsetX: event.clientX - rect.left,
-      offsetY: event.clientY - rect.top,
-    };
-    setHoldingIndex(index);
-    holdTimerRef.current = window.setTimeout(() => {
-      const pending = pendingHoldRef.current;
-      if (!pending) return;
-      beginDrag({
-        index: pending.index,
-        x: pending.lastX,
-        y: pending.lastY,
-        width: pending.width,
-        height: pending.height,
-        offsetX: pending.offsetX,
-        offsetY: pending.offsetY,
-      });
-    }, HOLD_MS);
   };
 
   return (
@@ -1148,7 +1028,6 @@ function LineupPicker({
             Boolean(draggedPlayer);
           const isLiftedSource =
             draggingHere && dragFrom === dragTo && index === dragFrom;
-          const isHolding = holdingIndex === index;
 
           return (
             <li key={`slot-${index}`} data-slot={index} className="relative">
@@ -1160,22 +1039,11 @@ function LineupPicker({
               ) : (
                 <div
                   data-lineup-card
-                  onContextMenu={(event) => {
-                    if (player) event.preventDefault();
-                  }}
-                  onPointerDown={(event) => {
-                    if (draggingHere) return;
-                    onCardPointerDown(event, index);
-                  }}
                   className={[
-                    "relative select-none rounded-xl border px-3 py-2.5 transition duration-150 [-webkit-touch-callout:none]",
-                    draggingHere ? "cursor-grabbing" : player ? "cursor-grab" : "",
+                    "relative rounded-xl border px-3 py-2.5 transition duration-150",
                     isLiftedSource
                       ? "z-20 border-[var(--felt)]/40 bg-[var(--surface-3)] opacity-30"
-                      : isHolding
-                        ? "z-10 border-[var(--felt)]/60 bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface-2))] shadow-[inset_0_0_0_1px_rgba(61,155,117,0.35)]"
-                        : "z-0 border-[var(--line)] bg-[var(--surface-2)]",
-                    draggingHere ? "touch-none" : "",
+                      : "z-0 border-[var(--line)] bg-[var(--surface-2)]",
                   ].join(" ")}
                 >
                   <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -1190,7 +1058,7 @@ function LineupPicker({
                             ) as HTMLElement | null;
                             onGripPointerDown(event, index, card);
                           }}
-                          className="touch-none inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] text-sm text-[var(--felt-deep)] active:bg-[var(--surface-3)]"
+                          className="touch-none inline-flex h-8 w-8 cursor-grab items-center justify-center rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] text-sm text-[var(--felt-deep)] active:cursor-grabbing active:bg-[var(--surface-3)]"
                         >
                           ⠿
                         </button>
@@ -1209,26 +1077,24 @@ function LineupPicker({
                     <div className="flex items-center gap-1.5">
                       {player ? (
                         <>
-                          <div className="flex items-center gap-1.5" data-no-drag>
-                            <button
-                              type="button"
-                              aria-label="Move up"
-                              disabled={index === 0 || draggingHere}
-                              onClick={() => onMove(index, index - 1)}
-                              className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
-                            >
-                              ▲
-                            </button>
-                            <button
-                              type="button"
-                              aria-label="Move down"
-                              disabled={index >= slots - 1 || draggingHere}
-                              onClick={() => onMove(index, index + 1)}
-                              className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
-                            >
-                              ▼
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            aria-label="Move up"
+                            disabled={index === 0 || draggingHere}
+                            onClick={() => onMove(index, index - 1)}
+                            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
+                          >
+                            ▲
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Move down"
+                            disabled={index >= slots - 1 || draggingHere}
+                            onClick={() => onMove(index, index + 1)}
+                            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
+                          >
+                            ▼
+                          </button>
                           <span className="ml-1 tabular-nums text-xs font-semibold text-[var(--felt)]">
                             {player.fargoRating}
                           </span>
@@ -1240,8 +1106,6 @@ function LineupPicker({
                     value={player?.id ?? ""}
                     options={sortedRoster}
                     placeholder="Open slot…"
-                    suppressOpen={blockSelectOpen || draggingHere}
-                    suppressOpenRef={blockSelectOpenRef}
                     onChange={(playerId) => onSelectSlot(index, playerId)}
                   />
                 </div>
@@ -1251,7 +1115,7 @@ function LineupPicker({
         })}
       </ol>
       <p className="mt-2 text-[11px] text-[var(--muted)]">
-        Press & hold anywhere on a card to drag, or use ⠿ / ▲ ▼.
+        Drag ⠿ to reorder, or use ▲ ▼.
       </p>
 
       {mounted &&
@@ -1286,17 +1150,11 @@ function PlayerSelect({
   options,
   placeholder,
   onChange,
-  suppressOpen = false,
-  suppressOpenRef,
 }: {
   value: string;
   options: RosterPlayer[];
   placeholder: string;
   onChange: (playerId: string) => void;
-  /** When true, keep the menu closed (hold/drag in progress). */
-  suppressOpen?: boolean;
-  /** Sync block for the trailing click after a drag (checked before React re-renders). */
-  suppressOpenRef?: { current: boolean };
 }) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -1306,13 +1164,6 @@ function PlayerSelect({
   const [highlight, setHighlight] = useState(0);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   const [mounted, setMounted] = useState(false);
-
-  const isSelectBlocked = () =>
-    Boolean(suppressOpen || suppressOpenRef?.current);
-
-  useEffect(() => {
-    if (suppressOpen) setOpen(false);
-  }, [suppressOpen]);
 
   const selected = options.find((option) => option.id === value) ?? null;
   const menuOptions = useMemo(
@@ -1446,12 +1297,7 @@ function PlayerSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listId}
-        onClick={() => {
-          // Do not key off holdingIndex — a quick tap's click can fire before
-          // React clears the press state, which would block the menu forever.
-          if (isSelectBlocked()) return;
-          setOpen((current) => !current);
-        }}
+        onClick={() => setOpen((current) => !current)}
         className="flex w-full items-center justify-between gap-2 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-left text-sm text-[var(--ink)] outline-none transition hover:border-[var(--line-strong)] focus:ring-2 focus:ring-[var(--felt-soft)]"
       >
         <span className={selected ? "font-medium" : "text-[var(--muted)]"}>
