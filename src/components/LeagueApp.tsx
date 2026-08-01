@@ -133,20 +133,16 @@ export function LeagueApp() {
 
   const loadMembership = async (options?: {
     fresh?: boolean;
-    leagueId?: string | null;
-    deep?: boolean;
     prefsOverride?: UserPreferences | null;
   }) => {
     const base = options?.prefsOverride ?? prefs;
     const scopedLeagueId =
-      (options?.leagueId || base?.leagueId || DEFAULT_LEAGUE_ID).trim() ||
-      DEFAULT_LEAGUE_ID;
+      (base?.leagueId || DEFAULT_LEAGUE_ID).trim() || DEFAULT_LEAGUE_ID;
     setLoadingMembership(true);
     setMembershipError(null);
     try {
       const params = new URLSearchParams({ leagueId: scopedLeagueId });
       if (options?.fresh) params.set("fresh", "1");
-      if (options?.deep) params.set("deep", "1");
       if (base?.divisionId) params.set("divisionId", base.divisionId);
       if (base?.teamId) params.set("teamId", base.teamId);
       if (base?.teamName) params.set("teamName", base.teamName);
@@ -340,8 +336,6 @@ export function LeagueApp() {
         if (sessionData.user) {
           void loadMembership({
             fresh: false,
-            leagueId: saved.leagueId,
-            deep: false,
             prefsOverride: saved,
           }).then((nextMembership) => {
             if (cancelled || !nextMembership?.teams.length) return;
@@ -779,8 +773,6 @@ export function LeagueApp() {
               // Prefer Redis/local cache; only scan the preferred league.
               const nextMembership = await loadMembership({
                 fresh: false,
-                leagueId: basePrefs.leagueId,
-                deep: false,
                 prefsOverride: basePrefs,
               });
               if (nextMembership?.teams.length) {
@@ -814,12 +806,9 @@ export function LeagueApp() {
           loadingMembership={loadingMembership}
           membershipError={membershipError}
           onClose={() => setScreen("main")}
-          onRefreshMembership={(leagueId, deep) => {
-            const scoped = leagueId ?? prefs.leagueId;
+          onRefreshMembership={() => {
             void loadMembership({
               fresh: true,
-              leagueId: scoped,
-              deep: Boolean(deep),
               prefsOverride: prefs,
             }).then((next) => {
               if (next?.teams.length) {

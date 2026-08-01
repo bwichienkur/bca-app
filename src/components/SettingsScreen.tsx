@@ -19,7 +19,7 @@ type SettingsScreenProps = {
   loadingMembership: boolean;
   membershipError: string | null;
   onSave: (next: UserPreferences) => void;
-  onRefreshMembership: (leagueId?: string, deep?: boolean) => void;
+  onRefreshMembership: () => void;
   onSignOut: () => void;
   onClose: () => void;
 };
@@ -181,7 +181,7 @@ export function SettingsScreen({
           <p>{membershipError}</p>
           <button
             type="button"
-            onClick={() => onRefreshMembership(leagueId || prefs.leagueId)}
+            onClick={onRefreshMembership}
             className="rounded-full bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)]"
           >
             Try again
@@ -190,9 +190,9 @@ export function SettingsScreen({
       ) : (
         <div className="space-y-4 rounded-[1.4rem] border border-[var(--line)] bg-[var(--surface)] p-4 md:p-5">
           <Typeahead
-            label="League to scan"
+            label="Default league"
             placeholder={
-              loadingLeagues ? "Searching leagues…" : "Search leagues"
+              loadingLeagues ? "Searching leagues…" : "Your leagues"
             }
             value={
               selectedLeague
@@ -205,21 +205,22 @@ export function SettingsScreen({
                 : null
             }
             options={leagueOptions}
-            onQueryChange={setLeagueQuery}
+            onQueryChange={
+              membership?.leagues.length ? undefined : setLeagueQuery
+            }
             onChange={(option) => {
               setLeagueId(option?.value.id ?? "");
               setDivisionId(null);
               setTeamId(null);
               setStatus(null);
-              if (option) onRefreshMembership(option.value.id);
             }}
           />
 
           {!membership?.teams.length ? (
             <p className="text-sm text-[var(--muted)]">
-              No recent-season teams found for your LMS player id in this
-              league. Pick another league above, or browse public reports
-              without Score filters.
+              No active-session teams were found for your LMS player id. Tap
+              Refresh my teams, or browse public reports without Score
+              filters.
             </p>
           ) : (
             <>
@@ -286,17 +287,10 @@ export function SettingsScreen({
             </button>
             <button
               type="button"
-              onClick={() => onRefreshMembership(leagueId || prefs.leagueId)}
+              onClick={onRefreshMembership}
               className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 text-sm font-semibold text-[var(--muted)]"
             >
-              Rescan this league
-            </button>
-            <button
-              type="button"
-              onClick={() => onRefreshMembership(undefined, true)}
-              className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 text-sm font-semibold text-[var(--muted)]"
-            >
-              Find all my teams
+              Refresh my teams
             </button>
           </div>
         </div>

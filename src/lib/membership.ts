@@ -15,12 +15,11 @@ export type MembershipAuthFetch = (
 ) => Promise<Response>;
 
 export type DiscoverMembershipOptions = {
+  /** Used only for the rare public fallback when the player-schedule call is empty. */
   leagueId?: string | null;
   divisionId?: string | null;
   teamId?: string | null;
   teamName?: string | null;
-  /** Kept for Settings compatibility; player-schedule discovery is already global. */
-  deep?: boolean;
   authFetch?: MembershipAuthFetch;
 };
 
