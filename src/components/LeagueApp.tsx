@@ -772,6 +772,8 @@ export function LeagueApp() {
                 <DataTable
                   headers={teamReport.headers}
                   rows={filteredTeamRows}
+                  stickyFirst
+                  compact
                   isRowSelected={(row) =>
                     Boolean(
                       prefs.teamName &&
@@ -799,6 +801,7 @@ export function LeagueApp() {
               headers={playersWithRatings.headers}
               rows={filteredPlayerRows}
               stickyFirst
+              compact
               emptyText="No players match your filter."
             />
           ) : tab === "schedule" && schedule ? (
