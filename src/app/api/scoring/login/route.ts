@@ -36,7 +36,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Login failed.";
-    const status = message.includes("AUTH0_CLIENT_SECRET") ? 503 : 401;
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ error: message }, { status: 401 });
   }
 }
