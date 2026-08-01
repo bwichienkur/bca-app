@@ -1179,18 +1179,6 @@ export function LeagueApp() {
           </nav>
         </div>
 
-        {selectedDivision &&
-        ((tab === "standings" && !selectedTeamName) || tab === "players") ? (
-          <SearchField
-            value={filterQuery}
-            onBeforeChange={filterAnchor.mark}
-            onChange={setFilterQuery}
-            placeholder={
-              tab === "standings" ? "Filter teams…" : "Filter players…"
-            }
-          />
-        ) : null}
-
         <div
           className={[
             "animate-panel min-w-0 [overflow-anchor:none]",
@@ -1295,6 +1283,12 @@ export function LeagueApp() {
                     the standings grid.
                   </p>
                 </div>
+                <SearchField
+                  value={filterQuery}
+                  onBeforeChange={filterAnchor.mark}
+                  onChange={setFilterQuery}
+                  placeholder="Filter teams…"
+                />
                 <DataTable
                   headers={teamReport.headers}
                   rows={filteredTeamRows}
@@ -1336,9 +1330,15 @@ export function LeagueApp() {
                   <span className="font-medium text-[var(--ink)]">
                     {selectedDivision.name}
                   </span>
-                  . Use the filter above to find someone quickly.
+                  . Filter below to find someone quickly.
                 </p>
               </div>
+              <SearchField
+                value={filterQuery}
+                onBeforeChange={filterAnchor.mark}
+                onChange={setFilterQuery}
+                placeholder="Filter players…"
+              />
               <DataTable
                 headers={playersWithRatings.headers}
                 rows={filteredPlayerRows}
