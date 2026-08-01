@@ -999,7 +999,7 @@ export function LeagueApp() {
         </p>
       ) : null}
 
-      <section className="animate-rise animate-delay-1 relative z-40 mb-5 overflow-visible rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] text-white shadow-[var(--shadow)]">
+      <section className="animate-rise animate-delay-1 relative z-40 mb-2 overflow-visible rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] text-white shadow-[var(--shadow)]">
         <button
           type="button"
           onClick={() => setContextOpen((open) => !open)}
@@ -1137,19 +1137,11 @@ export function LeagueApp() {
         ) : null}
       </section>
 
-      <section
-        className={[
-          "animate-rise animate-delay-2",
-          tab === "score" ? "space-y-1.5" : "space-y-4",
-        ].join(" ")}
-      >
+      <section className="animate-rise animate-delay-2 space-y-1.5">
         <div
           ref={filterAnchor.ref}
           data-report-tabs
-          className={[
-            "sticky top-0 z-20 -mx-1 flex flex-col gap-2 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 backdrop-blur md:flex-row md:items-center md:justify-between",
-            tab === "score" ? "py-1" : "py-1.5",
-          ].join(" ")}
+          className="sticky top-0 z-20 -mx-1 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 py-1 backdrop-blur"
         >
           <nav
             aria-label="Reports"
@@ -1182,24 +1174,24 @@ export function LeagueApp() {
               );
             })}
           </nav>
-
-          {selectedDivision &&
-          ((tab === "standings" && !selectedTeamName) || tab === "players") ? (
-            <SearchField
-              value={filterQuery}
-              onBeforeChange={filterAnchor.mark}
-              onChange={setFilterQuery}
-              placeholder={
-                tab === "standings" ? "Filter teams…" : "Filter players…"
-              }
-            />
-          ) : null}
         </div>
+
+        {selectedDivision &&
+        ((tab === "standings" && !selectedTeamName) || tab === "players") ? (
+          <SearchField
+            value={filterQuery}
+            onBeforeChange={filterAnchor.mark}
+            onChange={setFilterQuery}
+            placeholder={
+              tab === "standings" ? "Filter teams…" : "Filter players…"
+            }
+          />
+        ) : null}
 
         <div
           className={[
             "animate-panel min-w-0 [overflow-anchor:none]",
-            tab === "score" ? "mt-0 space-y-0" : "space-y-6",
+            tab === "score" || tab === "players" ? "mt-0 space-y-0" : "space-y-6",
           ].join(" ")}
         >
           {tab === "search" ? (
