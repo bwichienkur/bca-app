@@ -160,7 +160,7 @@ export function Typeahead<T>({
           className={[
             "w-full rounded-2xl border px-4 py-3 outline-none transition focus:ring-2 disabled:opacity-50",
             felt
-              ? "border-white/20 bg-white/10 text-white ring-white/35 placeholder:text-white/45"
+              ? "border-white/20 bg-[var(--felt)] text-white ring-white/35 placeholder:text-white/45 [background-color:var(--felt)]"
               : "border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)] ring-[var(--felt-soft)] placeholder:text-[var(--muted)]",
             showClear ? "pr-16" : "pr-10",
           ].join(" ")}
@@ -175,7 +175,7 @@ export function Typeahead<T>({
               className={[
                 "flex h-8 w-8 items-center justify-center rounded-full text-lg leading-none transition",
                 felt
-                  ? "text-white/70 hover:bg-white/10 hover:text-white"
+                  ? "text-white/70 hover:bg-black/20 hover:text-white"
                   : "text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--ink)]",
               ].join(" ")}
             >
@@ -200,7 +200,7 @@ export function Typeahead<T>({
             className={[
               "flex h-8 w-8 items-center justify-center rounded-full text-sm transition disabled:opacity-50",
               felt
-                ? "text-white/70 hover:bg-white/10 hover:text-white"
+                ? "text-white/70 hover:bg-black/20 hover:text-white"
                 : "text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--ink)]",
             ].join(" ")}
           >
