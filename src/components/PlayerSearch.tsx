@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PlayerSearchResult } from "@/lib/types";
 import { EmptyState } from "./EmptyState";
 
@@ -40,6 +40,11 @@ function pageNumbers(current: number, total: number): (number | "…")[] {
   return out;
 }
 
+function stickyTabsOffset(): number {
+  if (typeof window === "undefined") return 92;
+  return window.matchMedia("(min-width: 640px)").matches ? 68 : 100;
+}
+
 export function PlayerSearch() {
   const [query, setQuery] = useState("");
   const [players, setPlayers] = useState<PlayerSearchResult[]>([]);
@@ -47,8 +52,25 @@ export function PlayerSearch() {
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const [page, setPage] = useState(1);
+  const [resultsEpoch, setResultsEpoch] = useState(0);
   const requestId = useRef(0);
   const searchChromeRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const pinSearchChrome = () => {
+    const chrome = searchChromeRef.current;
+    if (!chrome) return;
+    const offset = stickyTabsOffset();
+    const top = chrome.getBoundingClientRect().top;
+    // When the list collapses, the browser clamps scrollY and the search box
+    // drifts. Snap it back under the sticky tab bar.
+    if (Math.abs(top - offset) > 8) {
+      window.scrollTo({
+        top: Math.max(0, window.scrollY + top - offset),
+        behavior: "auto",
+      });
+    }
+  };
 
   useEffect(() => {
     const q = query.trim();
@@ -80,6 +102,7 @@ export function PlayerSearch() {
           setPlayers(payload.players ?? []);
           setPage(1);
           setSearched(true);
+          setResultsEpoch((value) => value + 1);
         })
         .catch((err: unknown) => {
           if (id !== requestId.current) return;
@@ -87,6 +110,7 @@ export function PlayerSearch() {
           setPage(1);
           setSearched(true);
           setError(err instanceof Error ? err.message : "Search failed");
+          setResultsEpoch((value) => value + 1);
         })
         .finally(() => {
           if (id === requestId.current) setLoading(false);
@@ -95,6 +119,28 @@ export function PlayerSearch() {
 
     return () => window.clearTimeout(timer);
   }, [query]);
+
+  // Pin after layout commits — including the shrink from many results → 1–2.
+  useLayoutEffect(() => {
+    if (resultsEpoch === 0) return;
+    pinSearchChrome();
+    const outer = window.requestAnimationFrame(() => {
+      pinSearchChrome();
+      // Second frame catches late layout (pagination bar unmounting, etc.).
+      window.requestAnimationFrame(() => {
+        pinSearchChrome();
+        // Keep focus on the input without scrolling again via focus().
+        if (
+          inputRef.current &&
+          document.activeElement !== inputRef.current &&
+          query.trim().length >= MIN_QUERY
+        ) {
+          inputRef.current.focus({ preventScroll: true });
+        }
+      });
+    });
+    return () => window.cancelAnimationFrame(outer);
+  }, [resultsEpoch, query]);
 
   const totalPages = Math.max(1, Math.ceil(players.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -106,9 +152,9 @@ export function PlayerSearch() {
   const goToPage = (next: number) => {
     const clamped = Math.min(Math.max(1, next), totalPages);
     setPage(clamped);
-    searchChromeRef.current?.scrollIntoView({
-      block: "nearest",
-      behavior: "smooth",
+    window.requestAnimationFrame(() => {
+      pinSearchChrome();
+      window.requestAnimationFrame(pinSearchChrome);
     });
   };
 
@@ -139,6 +185,7 @@ export function PlayerSearch() {
         <label className="relative block max-w-xl">
           <span className="sr-only">Search players</span>
           <input
+            ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Name or ID…"
@@ -156,148 +203,157 @@ export function PlayerSearch() {
         </label>
       </div>
 
-      {error ? (
-        <div className="rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
-          {error}
-        </div>
-      ) : null}
-
-      {showHint ? (
-        <p className="text-sm text-[var(--muted)]">
-          Type at least {MIN_QUERY} characters to search.
-        </p>
-      ) : null}
-
-      {showEmpty ? (
-        <EmptyState
-          title="No players found"
-          body="Try a fuller name, last name first, or a membership ID."
-        />
-      ) : null}
-
-      {loading && !showResults && !showEmpty && !error && !showHint ? (
-        <p className="py-6 text-center text-sm text-[var(--muted)]">
-          Searching FairMatch…
-        </p>
-      ) : null}
-
-      {showResults ? (
-        <div className="space-y-3 [overflow-anchor:none]">
-          <div className="flex items-baseline justify-between gap-3 px-0.5">
-            <p className="text-sm text-[var(--muted)]">
-              <span className="tabular-nums font-semibold text-[var(--ink)]">
-                {players.length}
-              </span>{" "}
-              result{players.length === 1 ? "" : "s"}
-              {loading ? (
-                <span className="ml-2 text-[var(--amber)]">Updating…</span>
-              ) : null}
-            </p>
-            <p className="text-xs tabular-nums text-[var(--muted)]">
-              Page {safePage} of {totalPages}
-            </p>
+      <div className="[overflow-anchor:none]">
+        {error ? (
+          <div className="rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
+            {error}
           </div>
+        ) : null}
 
-          <ul
-            className={[
-              "divide-y divide-[var(--line)] overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)]/90 transition-opacity",
-              loading ? "opacity-60" : "opacity-100",
-            ].join(" ")}
-          >
-            {pagePlayers.map((player) => (
-              <li
-                key={player.id}
-                className="flex items-start justify-between gap-4 px-4 py-3.5 md:px-5"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium text-[var(--ink)]">{player.name}</p>
-                  <p className="mt-0.5 text-sm text-[var(--muted)]">
-                    {[
-                      player.readableId ? `#${player.readableId}` : null,
-                      player.membershipId,
-                      player.location,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                  <span
-                    className={[
-                      "mt-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]",
-                      statusClass(player.robustnessStatus),
-                    ].join(" ")}
-                  >
-                    {statusLabel(player.robustnessStatus)}
-                    {player.robustness != null ? ` · ${player.robustness}` : ""}
-                  </span>
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className="font-[family-name:var(--font-display)] text-2xl tabular-nums leading-none text-[var(--felt-deep)]">
-                    {player.effectiveRating ?? "—"}
-                  </p>
-                  <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                    Rating
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
+        {showHint ? (
+          <p className="text-sm text-[var(--muted)]">
+            Type at least {MIN_QUERY} characters to search.
+          </p>
+        ) : null}
 
-          {totalPages > 1 ? (
-            <nav
-              aria-label="Search results pages"
-              className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface)]/80 px-2.5 py-2 sm:px-3"
+        {showEmpty ? (
+          <EmptyState
+            title="No players found"
+            body="Try a fuller name, last name first, or a membership ID."
+          />
+        ) : null}
+
+        {loading && !showResults && !showEmpty && !error && !showHint ? (
+          <p className="py-6 text-center text-sm text-[var(--muted)]">
+            Searching FairMatch…
+          </p>
+        ) : null}
+
+        {showResults ? (
+          <div className="space-y-3">
+            <div className="flex items-baseline justify-between gap-3 px-0.5">
+              <p className="text-sm text-[var(--muted)]">
+                <span className="tabular-nums font-semibold text-[var(--ink)]">
+                  {players.length}
+                </span>{" "}
+                result{players.length === 1 ? "" : "s"}
+                {loading ? (
+                  <span className="ml-2 text-[var(--amber)]">Updating…</span>
+                ) : null}
+              </p>
+              <p className="text-xs tabular-nums text-[var(--muted)]">
+                Page {safePage} of {totalPages}
+              </p>
+            </div>
+
+            <ul
+              className={[
+                "divide-y divide-[var(--line)] overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)]/90 transition-opacity",
+                loading ? "opacity-60" : "opacity-100",
+              ].join(" ")}
             >
-              <button
-                type="button"
-                onClick={() => goToPage(safePage - 1)}
-                disabled={safePage <= 1}
-                className="rounded-full bg-[var(--surface-2)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                Previous
-              </button>
-
-              <div className="flex flex-wrap items-center justify-center gap-1">
-                {pageNumbers(safePage, totalPages).map((item, index) =>
-                  item === "…" ? (
+              {pagePlayers.map((player) => (
+                <li
+                  key={player.id}
+                  className="flex items-start justify-between gap-4 px-4 py-3.5 md:px-5"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-[var(--ink)]">{player.name}</p>
+                    <p className="mt-0.5 text-sm text-[var(--muted)]">
+                      {[
+                        player.readableId ? `#${player.readableId}` : null,
+                        player.membershipId,
+                        player.location,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
                     <span
-                      key={`ellipsis-${index}`}
-                      className="px-1 text-sm text-[var(--muted)]"
-                      aria-hidden
-                    >
-                      …
-                    </span>
-                  ) : (
-                    <button
-                      key={item}
-                      type="button"
-                      aria-label={`Page ${item}`}
-                      aria-current={item === safePage ? "page" : undefined}
-                      onClick={() => goToPage(item)}
                       className={[
-                        "min-w-9 rounded-full px-2.5 py-1.5 text-sm font-semibold tabular-nums transition",
-                        item === safePage
-                          ? "bg-[var(--felt)] text-white shadow-sm"
-                          : "bg-[var(--surface-2)] text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--ink)]",
+                        "mt-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]",
+                        statusClass(player.robustnessStatus),
                       ].join(" ")}
                     >
-                      {item}
-                    </button>
-                  ),
-                )}
-              </div>
+                      {statusLabel(player.robustnessStatus)}
+                      {player.robustness != null
+                        ? ` · ${player.robustness}`
+                        : ""}
+                    </span>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="font-[family-name:var(--font-display)] text-2xl tabular-nums leading-none text-[var(--felt-deep)]">
+                      {player.effectiveRating ?? "—"}
+                    </p>
+                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                      Rating
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
 
-              <button
-                type="button"
-                onClick={() => goToPage(safePage + 1)}
-                disabled={safePage >= totalPages}
-                className="rounded-full bg-[var(--surface-2)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
+            {totalPages > 1 ? (
+              <nav
+                aria-label="Search results pages"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface)]/80 px-2.5 py-2 sm:px-3"
               >
-                Next
-              </button>
-            </nav>
-          ) : null}
-        </div>
-      ) : null}
+                <button
+                  type="button"
+                  onClick={() => goToPage(safePage - 1)}
+                  disabled={safePage <= 1}
+                  className="rounded-full bg-[var(--surface-2)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  Previous
+                </button>
+
+                <div className="flex flex-wrap items-center justify-center gap-1">
+                  {pageNumbers(safePage, totalPages).map((item, index) =>
+                    item === "…" ? (
+                      <span
+                        key={`ellipsis-${index}`}
+                        className="px-1 text-sm text-[var(--muted)]"
+                        aria-hidden
+                      >
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={item}
+                        type="button"
+                        aria-label={`Page ${item}`}
+                        aria-current={item === safePage ? "page" : undefined}
+                        onClick={() => goToPage(item)}
+                        className={[
+                          "min-w-9 rounded-full px-2.5 py-1.5 text-sm font-semibold tabular-nums transition",
+                          item === safePage
+                            ? "bg-[var(--felt)] text-white shadow-sm"
+                            : "bg-[var(--surface-2)] text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--ink)]",
+                        ].join(" ")}
+                      >
+                        {item}
+                      </button>
+                    ),
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => goToPage(safePage + 1)}
+                  disabled={safePage >= totalPages}
+                  className="rounded-full bg-[var(--surface-2)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  Next
+                </button>
+              </nav>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* Absorbs height loss when results shrink so scrollY is not clamped. */}
+        {query.trim().length >= MIN_QUERY ? (
+          <div className="pointer-events-none h-[45vh]" aria-hidden />
+        ) : null}
+      </div>
     </section>
   );
 }
