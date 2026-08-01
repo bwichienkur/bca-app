@@ -72,6 +72,26 @@ function playerLabel(player: RosterPlayer): string {
   return `${player.firstName} ${player.lastName}`.trim();
 }
 
+/** Centered 2×3 grip — unicode ⠿ sits optically off-center in most fonts. */
+function GripIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 12 16"
+      width="12"
+      height="16"
+      aria-hidden
+      className={className}
+    >
+      <circle cx="3.5" cy="3" r="1.4" fill="currentColor" />
+      <circle cx="8.5" cy="3" r="1.4" fill="currentColor" />
+      <circle cx="3.5" cy="8" r="1.4" fill="currentColor" />
+      <circle cx="8.5" cy="8" r="1.4" fill="currentColor" />
+      <circle cx="3.5" cy="13" r="1.4" fill="currentColor" />
+      <circle cx="8.5" cy="13" r="1.4" fill="currentColor" />
+    </svg>
+  );
+}
+
 function moveSlotPreview(
   lineup: LineupSlot[],
   from: number,
@@ -115,8 +135,8 @@ function DragGhostCard({
     >
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <div className="inline-flex items-center gap-2">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--felt)]/40 bg-[var(--surface)]/80 text-sm text-[var(--felt-deep)]">
-            ⠿
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--felt)]/40 bg-[var(--surface)]/80 text-[var(--felt-deep)]">
+            <GripIcon />
           </span>
           <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
             Slot #{slotNumber}
@@ -1058,16 +1078,16 @@ function LineupPicker({
                             ) as HTMLElement | null;
                             onGripPointerDown(event, index, card);
                           }}
-                          className="touch-none inline-flex h-8 w-8 cursor-grab items-center justify-center rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] text-sm text-[var(--felt-deep)] active:cursor-grabbing active:bg-[var(--surface-3)]"
+                          className="touch-none inline-flex h-8 w-8 cursor-grab items-center justify-center rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--felt-deep)] active:cursor-grabbing active:bg-[var(--surface-3)]"
                         >
-                          ⠿
+                          <GripIcon />
                         </button>
                       ) : (
                         <span
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--line)] text-sm text-[var(--muted)]"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--line)] text-[var(--muted)]"
                           aria-hidden
                         >
-                          ⠿
+                          <GripIcon />
                         </span>
                       )}
                       <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
