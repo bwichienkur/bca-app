@@ -355,8 +355,6 @@ export function tallyMatchPointsRound(args: {
     (sum, round) => sum + round.teamTwoHandicap,
     0,
   );
-  const teamOneTotal = teamOneGamePoints + teamOneHandicap;
-  const teamTwoTotal = teamTwoGamePoints + teamTwoHandicap;
   const gamesComplete = tallies.reduce(
     (sum, round) => sum + round.gamesComplete,
     0,
@@ -365,11 +363,28 @@ export function tallyMatchPointsRound(args: {
   const roundComplete =
     tallies.length > 0 && tallies.every((round) => round.roundComplete);
 
-  let roundWinner: 1 | 2 | null = null;
-  if (roundComplete) {
-    if (teamOneTotal > teamTwoTotal) roundWinner = 1;
-    else if (teamTwoTotal > teamOneTotal) roundWinner = 2;
+  // R6 is only awarded once every base round is finished — no partial result.
+  if (!roundComplete) {
+    return {
+      roundNumber: MATCH_POINTS_ROUND,
+      teamOneGamePoints: 0,
+      teamTwoGamePoints: 0,
+      teamOneHandicap: 0,
+      teamTwoHandicap: 0,
+      teamOneTotal: 0,
+      teamTwoTotal: 0,
+      gamesComplete,
+      gamesTotal,
+      roundComplete: false,
+      roundWinner: null,
+    };
   }
+
+  const teamOneTotal = teamOneGamePoints + teamOneHandicap;
+  const teamTwoTotal = teamTwoGamePoints + teamTwoHandicap;
+  let roundWinner: 1 | 2 | null = null;
+  if (teamOneTotal > teamTwoTotal) roundWinner = 1;
+  else if (teamTwoTotal > teamOneTotal) roundWinner = 2;
 
   return {
     roundNumber: MATCH_POINTS_ROUND,
@@ -381,7 +396,7 @@ export function tallyMatchPointsRound(args: {
     teamTwoTotal,
     gamesComplete,
     gamesTotal,
-    roundComplete,
+    roundComplete: true,
     roundWinner,
   };
 }

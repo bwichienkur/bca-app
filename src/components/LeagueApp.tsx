@@ -648,7 +648,7 @@ export function LeagueApp() {
       <section
         className={[
           "animate-rise animate-delay-2",
-          tab === "score" ? "space-y-2" : "space-y-4",
+          tab === "score" ? "space-y-1.5" : "space-y-4",
         ].join(" ")}
       >
         {selectedDivision ? (
@@ -675,7 +675,12 @@ export function LeagueApp() {
           </div>
         ) : null}
 
-        <div className="sticky top-0 z-20 -mx-1 flex flex-col gap-2 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 py-1.5 backdrop-blur md:flex-row md:items-center md:justify-between">
+        <div
+          className={[
+            "sticky top-0 z-20 -mx-1 flex flex-col gap-2 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 backdrop-blur md:flex-row md:items-center md:justify-between",
+            tab === "score" ? "py-1" : "py-1.5",
+          ].join(" ")}
+        >
           <nav
             aria-label="Reports"
             className="grid grid-cols-4 gap-1.5 sm:flex sm:flex-wrap sm:gap-2"
@@ -723,7 +728,7 @@ export function LeagueApp() {
         <div
           className={[
             "animate-panel min-w-0",
-            tab === "score" ? "space-y-2" : "space-y-6",
+            tab === "score" ? "mt-0 space-y-0" : "space-y-6",
           ].join(" ")}
         >
           {tab === "search" ? (
