@@ -1,3 +1,9 @@
+import {
+  buildDefaultFivePlayerFormat,
+  calculateRoundBasedHandicaps,
+  type ParsedMatchFormat,
+  type RoundHandicapResult,
+} from "./handicap";
 import type { RosterPlayer } from "./types";
 
 export type WinAdornment = "" | "BR" | "TR" | "WZ";
@@ -30,6 +36,8 @@ export type ScoringMatchSummary = {
   maxLosingScore: number;
   pointsForWin: number;
   isHandicapped: boolean;
+  handicapPercentage: number;
+  maximumAllowedHandicap: number;
   mySide: 1 | 2 | null;
 };
 
@@ -129,8 +137,8 @@ export function emptyDraft(
           draft.teamOneLineup[(game.playerOne.index || 1) - 1] ?? null,
         teamTwoPlayerId:
           draft.teamTwoLineup[(game.playerTwo.index || 1) - 1] ?? null,
-        teamOneScore: null,
-        teamTwoScore: null,
+        teamOneScore: 0,
+        teamTwoScore: 0,
         winAdornment: "",
         isWinZip: false,
         breakingTeam: (game.breakingTeam === 2 ? 2 : 1) as 1 | 2,
@@ -141,7 +149,7 @@ export function emptyDraft(
   }
 
   void preferMyTeamFirst;
-  return draft;
+  return applyHandicapsToDraft(match, draft);
 }
 
 export function syncLineupToGames(
@@ -160,8 +168,8 @@ export function syncLineupToGames(
       const existing = next.games[key] ?? {
         teamOnePlayerId: null,
         teamTwoPlayerId: null,
-        teamOneScore: null,
-        teamTwoScore: null,
+        teamOneScore: 0,
+        teamTwoScore: 0,
         winAdornment: "" as WinAdornment,
         isWinZip: false,
         breakingTeam: (game.breakingTeam === 2 ? 2 : 1) as 1 | 2,
@@ -170,6 +178,8 @@ export function syncLineupToGames(
       };
       next.games[key] = {
         ...existing,
+        teamOneScore: existing.teamOneScore ?? 0,
+        teamTwoScore: existing.teamTwoScore ?? 0,
         teamOnePlayerId:
           next.teamOneLineup[(game.playerOne.index || 1) - 1] ?? null,
         teamTwoPlayerId:
@@ -177,18 +187,31 @@ export function syncLineupToGames(
       };
     }
   }
-  return next;
+  return applyHandicapsToDraft(match, next);
+}
+
+/** A game is complete only when one side has a higher score (a winner). */
+export function gameWinner(game: GameScoreState | undefined): 1 | 2 | null {
+  if (!game) return null;
+  if (game.teamOneScore == null || game.teamTwoScore == null) return null;
+  if (game.teamOneScore === game.teamTwoScore) return null;
+  return game.teamOneScore > game.teamTwoScore ? 1 : 2;
 }
 
 export function isGameScored(game: GameScoreState | undefined): boolean {
-  if (!game) return false;
-  return game.teamOneScore != null && game.teamTwoScore != null;
+  return gameWinner(game) != null;
 }
 
-export function gameWinner(game: GameScoreState): 1 | 2 | null {
-  if (!isGameScored(game)) return null;
-  if ((game.teamOneScore ?? 0) === (game.teamTwoScore ?? 0)) return null;
-  return (game.teamOneScore ?? 0) > (game.teamTwoScore ?? 0) ? 1 : 2;
+export function normalizeDraftScores(draft: ScoringDraft): ScoringDraft {
+  const games: ScoringDraft["games"] = {};
+  for (const [key, game] of Object.entries(draft.games)) {
+    games[key] = {
+      ...game,
+      teamOneScore: game.teamOneScore ?? 0,
+      teamTwoScore: game.teamTwoScore ?? 0,
+    };
+  }
+  return { ...draft, games };
 }
 
 export function tallyDraft(draft: ScoringDraft): {
@@ -202,13 +225,89 @@ export function tallyDraft(draft: ScoringDraft): {
   let scored = 0;
   const games = Object.values(draft.games);
   for (const game of games) {
-    if (!isGameScored(game)) continue;
-    scored += 1;
     const winner = gameWinner(game);
+    if (!winner) continue;
+    scored += 1;
     if (winner === 1) teamOneWins += 1;
     if (winner === 2) teamTwoWins += 1;
   }
   return { teamOneWins, teamTwoWins, scored, total: games.length };
+}
+
+export function parsedFormatFromMatch(
+  match: ScoringMatchDetail,
+): ParsedMatchFormat {
+  const rounds = match.matchFormat?.rounds;
+  if (!rounds?.length) {
+    return buildDefaultFivePlayerFormat(
+      match.numberOfSets || 5,
+      match.numberOfSets || 5,
+    );
+  }
+  return {
+    numOfPlayers: match.matchFormat?.teamOnePlayers.length || 5,
+    rounds: rounds.map((round) => ({
+      roundNumber: round.roundNumber,
+      games: round.games.map((game) => ({
+        homePlayers: [game.playerOne.index],
+        awayPlayers: [game.playerTwo.index],
+        gameType: game.gameType === "SINGLES" ? "S" : game.gameType,
+      })),
+    })),
+  };
+}
+
+function lineupRatings(
+  lineup: (string | null)[],
+  players: ScoringPlayer[],
+): number[] {
+  return lineup.map((id) => {
+    if (!id) return 0;
+    return players.find((player) => player.id === id)?.fargoRating ?? 0;
+  });
+}
+
+export function computeMatchHandicaps(
+  match: ScoringMatchDetail,
+  draft: ScoringDraft,
+): RoundHandicapResult[] {
+  if (!match.isHandicapped) return [];
+  return calculateRoundBasedHandicaps({
+    format: parsedFormatFromMatch(match),
+    teamOneRatings: lineupRatings(draft.teamOneLineup, match.teamOnePlayers),
+    teamTwoRatings: lineupRatings(draft.teamTwoLineup, match.teamTwoPlayers),
+    pointSystem: String(match.pointsForWin || 10),
+    handicapPercent: match.handicapPercentage ?? 1,
+    handicapCap: match.maximumAllowedHandicap ?? 50,
+  });
+}
+
+export function applyHandicapsToDraft(
+  match: ScoringMatchDetail,
+  draft: ScoringDraft,
+): ScoringDraft {
+  const results = computeMatchHandicaps(match, draft);
+  if (!results.length) return draft;
+
+  const byRound = new Map(results.map((result) => [result.round, result]));
+  const games: ScoringDraft["games"] = { ...draft.games };
+
+  for (const round of match.matchFormat?.rounds ?? []) {
+    const result = byRound.get(round.roundNumber);
+    if (!result) continue;
+    for (const game of round.games) {
+      const key = gameKey(round.roundNumber, game.index);
+      const existing = games[key];
+      if (!existing) continue;
+      games[key] = {
+        ...existing,
+        teamOneHandicap: result.teamOne,
+        teamTwoHandicap: result.teamTwo,
+      };
+    }
+  }
+
+  return { ...draft, games };
 }
 
 export function loadDraft(matchId: string): ScoringDraft | null {
@@ -294,6 +393,7 @@ export function buildVerticalMatchPayload(args: {
     };
   });
 
+  const roundHandicaps = computeMatchHandicaps(match, draft);
   return {
     matchId: match.id,
     MatchId: match.id,
@@ -303,8 +403,14 @@ export function buildVerticalMatchPayload(args: {
     ScoreKeeper: scoreKeeper,
     rounds,
     Rounds: rounds,
-    teamOneRoundsBonus: 0,
-    teamTwoRoundsBonus: 0,
+    teamOneRoundsBonus: roundHandicaps.reduce(
+      (sum, round) => sum + round.teamOne,
+      0,
+    ),
+    teamTwoRoundsBonus: roundHandicaps.reduce(
+      (sum, round) => sum + round.teamTwo,
+      0,
+    ),
     teamOneGamesBonus: 0,
     teamTwoGamesBonus: 0,
     createHandoff: false,

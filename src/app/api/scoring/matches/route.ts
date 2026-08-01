@@ -24,6 +24,8 @@ type RawMatch = {
   maxLosingScore: number;
   pointsForWin: number;
   isHandicapped: boolean;
+  handicapPercentage?: number;
+  maximumAllowedHandicap?: number;
 };
 
 async function teamIncludesPlayer(
@@ -112,6 +114,8 @@ export async function GET(request: NextRequest) {
         maxLosingScore: match.maxLosingScore,
         pointsForWin: match.pointsForWin,
         isHandicapped: match.isHandicapped,
+        handicapPercentage: match.handicapPercentage ?? 1,
+        maximumAllowedHandicap: match.maximumAllowedHandicap ?? 50,
         mySide,
       });
     }

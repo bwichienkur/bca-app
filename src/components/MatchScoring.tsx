@@ -11,11 +11,13 @@ import {
   applyQuickWin,
   buildVerticalMatchPayload,
   clearDraft,
+  computeMatchHandicaps,
   emptyDraft,
   gameKey,
   gameWinner,
   isGameScored,
   loadDraft,
+  normalizeDraftScores,
   playerDisplayName,
   saveDraft,
   syncLineupToGames,
@@ -29,6 +31,7 @@ import {
 } from "@/lib/scoring";
 import { EmptyState } from "./EmptyState";
 import { LoadingState } from "./LoadingState";
+import { PlayerSelect } from "./PlayerSelect";
 
 type ScoringUser = {
   lmsId: string;
@@ -69,15 +72,19 @@ function formatMatchDate(value: string): string {
 }
 
 function scoreLabel(game: GameScoreState | undefined): string {
-  if (!game || !isGameScored(game)) return "—";
-  const adorn = game.winAdornment;
+  const s1 = game?.teamOneScore ?? 0;
+  const s2 = game?.teamTwoScore ?? 0;
+  const adorn = game?.winAdornment ?? "";
   const winner = gameWinner(game);
   if (adorn && winner) {
-    return winner === 1
-      ? `${adorn} – ${game.teamTwoScore}`
-      : `${game.teamOneScore} – ${adorn}`;
+    return winner === 1 ? `${adorn} – ${s2}` : `${s1} – ${adorn}`;
   }
-  return `${game.teamOneScore} – ${game.teamTwoScore}`;
+  return `${s1} – ${s2}`;
+}
+
+function ratingLabel(player: ScoringPlayer | null): string {
+  if (!player || player.fargoRating == null) return "";
+  return String(player.fargoRating);
 }
 
 function findPlayer(
@@ -183,7 +190,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
       const saved = loadDraft(matchId);
       const nextDraft =
         saved && saved.matchId === matchId
-          ? syncLineupToGames(saved, data.match)
+          ? syncLineupToGames(normalizeDraftScores(saved), data.match)
           : emptyDraft(data.match);
       setMatch(data.match);
       setDraft(nextDraft);
@@ -245,6 +252,26 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
     () => (draft ? tallyDraft(draft) : null),
     [draft],
   );
+
+  const roundHandicaps = useMemo(
+    () => (match && draft ? computeMatchHandicaps(match, draft) : []),
+    [match, draft],
+  );
+
+  const activeRoundHandicap = useMemo(
+    () => roundHandicaps.find((item) => item.round === activeRound) ?? null,
+    [roundHandicaps, activeRound],
+  );
+
+  const handicapTotals = useMemo(() => {
+    return roundHandicaps.reduce(
+      (acc, round) => ({
+        teamOne: acc.teamOne + round.teamOne,
+        teamTwo: acc.teamTwo + round.teamTwo,
+      }),
+      { teamOne: 0, teamTwo: 0 },
+    );
+  }, [roundHandicaps]);
 
   const rounds = match?.matchFormat?.rounds ?? [];
   const currentRound =
@@ -443,8 +470,14 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                   {totals?.teamTwoWins ?? 0}
                 </p>
                 <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-white/55">
-                  {totals?.scored ?? 0}/{totals?.total ?? 0} games
+                  {totals?.scored ?? 0}/{totals?.total ?? 0} won
                 </p>
+                {match.isHandicapped &&
+                (handicapTotals.teamOne > 0 || handicapTotals.teamTwo > 0) ? (
+                  <p className="mt-1 text-[10px] tabular-nums text-[var(--amber)]">
+                    HC {handicapTotals.teamOne}–{handicapTotals.teamTwo}
+                  </p>
+                ) : null}
               </div>
               <div className="min-w-0">
                 <p className="truncate font-[family-name:var(--font-display)] text-lg leading-tight md:text-xl">
@@ -496,11 +529,32 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                       side === 1 ? "teamOneLineup" : "teamTwoLineup";
                     const nextLineup = [...prev[lineupKey]];
                     nextLineup[index] = playerId;
-                    const synced = syncLineupToGames(
+                    return syncLineupToGames(
                       { ...prev, [lineupKey]: nextLineup },
                       match,
                     );
-                    return synced;
+                  });
+                }}
+                onMoveLineup={(side, from, to) => {
+                  updateDraft((prev) => {
+                    const lineupKey =
+                      side === 1 ? "teamOneLineup" : "teamTwoLineup";
+                    const nextLineup = [...prev[lineupKey]];
+                    if (
+                      from < 0 ||
+                      to < 0 ||
+                      from >= nextLineup.length ||
+                      to >= nextLineup.length ||
+                      from === to
+                    ) {
+                      return prev;
+                    }
+                    const [item] = nextLineup.splice(from, 1);
+                    nextLineup.splice(to, 0, item);
+                    return syncLineupToGames(
+                      { ...prev, [lineupKey]: nextLineup },
+                      match,
+                    );
                   });
                 }}
               />
@@ -512,6 +566,9 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                     (game) => draft.games[gameKey(round.roundNumber, game.index)],
                   );
                   const done = roundGames.filter(isGameScored).length;
+                  const hc = roundHandicaps.find(
+                    (item) => item.round === round.roundNumber,
+                  );
                   return (
                     <button
                       key={round.roundNumber}
@@ -533,10 +590,38 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                       <span className="ml-1.5 text-[11px] opacity-70">
                         {done}/{round.games.length}
                       </span>
+                      {hc && (hc.teamOne > 0 || hc.teamTwo > 0) ? (
+                        <span className="ml-1.5 text-[10px] opacity-80">
+                          HC
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}
               </div>
+
+              {activeRoundHandicap &&
+              (activeRoundHandicap.teamOne > 0 ||
+                activeRoundHandicap.teamTwo > 0) ? (
+                <div className="rounded-2xl border border-[var(--amber)]/30 bg-[color-mix(in_srgb,var(--amber)_12%,var(--surface))] px-4 py-3 text-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
+                    Round {activeRound} handicap
+                  </p>
+                  <p className="mt-1 text-[var(--ink)]">
+                    {activeRoundHandicap.teamOne > 0
+                      ? `${match.teamOneName} gets +${activeRoundHandicap.teamOne}`
+                      : `${match.teamTwoName} gets +${activeRoundHandicap.teamTwo}`}
+                    <span className="text-[var(--muted)]">
+                      {" "}
+                      · based on Fargo lineups
+                    </span>
+                  </p>
+                </div>
+              ) : match.isHandicapped ? (
+                <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--muted)]">
+                  Round {activeRound}: no handicap — lineups are even.
+                </div>
+              ) : null}
 
               <div className="space-y-2">
                 {currentRound?.games.map((game) => {
@@ -553,7 +638,8 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                   const selected =
                     activeGame?.roundNumber === currentRound.roundNumber &&
                     activeGame?.gameIndex === game.index;
-                  const winner = state ? gameWinner(state) : null;
+                  const winner = gameWinner(state);
+                  const complete = winner != null;
                   return (
                     <button
                       key={game.index}
@@ -568,7 +654,9 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                         "grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-2xl border px-3 py-3 text-left transition md:px-4",
                         selected
                           ? "border-[var(--felt)] bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))]"
-                          : "border-[var(--line)] bg-[var(--surface)] hover:bg-[var(--surface-2)]",
+                          : complete
+                            ? "border-[var(--felt)]/35 bg-[var(--surface)]"
+                            : "border-[var(--line)] bg-[var(--surface)] hover:bg-[var(--surface-2)]",
                       ].join(" ")}
                     >
                       <div className="min-w-0">
@@ -583,7 +671,14 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                           {p1 ? playerDisplayName(p1) : `H${game.playerOne.index}`}
                         </p>
                         <p className="text-[11px] text-[var(--muted)]">
-                          {state?.breakingTeam === 1 ? "Breaks" : "·"}
+                          {ratingLabel(p1) ? (
+                            <span className="font-semibold text-[var(--felt)]">
+                              {ratingLabel(p1)}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                          {state?.breakingTeam === 1 ? " · Breaks" : ""}
                         </p>
                       </div>
                       <div className="rounded-xl bg-[var(--surface-2)] px-2.5 py-1.5 text-center">
@@ -591,7 +686,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                           {scoreLabel(state)}
                         </p>
                         <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                          G{game.index}
+                          {complete ? "Final" : `G${game.index}`}
                         </p>
                       </div>
                       <div className="min-w-0 text-right">
@@ -606,7 +701,14 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                           {p2 ? playerDisplayName(p2) : `A${game.playerTwo.index}`}
                         </p>
                         <p className="text-[11px] text-[var(--muted)]">
-                          {state?.breakingTeam === 2 ? "Breaks" : "·"}
+                          {ratingLabel(p2) ? (
+                            <span className="font-semibold text-[var(--felt)]">
+                              {ratingLabel(p2)}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                          {state?.breakingTeam === 2 ? " · Breaks" : ""}
                         </p>
                       </div>
                     </button>
@@ -755,6 +857,7 @@ function LineupEditor({
   match,
   draft,
   onChangeLineup,
+  onMoveLineup,
 }: {
   match: ScoringMatchDetail;
   draft: ScoringDraft;
@@ -763,48 +866,55 @@ function LineupEditor({
     index: number,
     playerId: string | null,
   ) => void;
+  onMoveLineup: (side: 1 | 2, from: number, to: number) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const slots = Math.max(
     draft.teamOneLineup.length,
     draft.teamTwoLineup.length,
     5,
   );
+  const filledOne = draft.teamOneLineup.filter(Boolean).length;
+  const filledTwo = draft.teamTwoLineup.filter(Boolean).length;
 
   return (
-    <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
+    <div className="space-y-3">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center justify-between px-4 py-3 text-left"
+        className="flex w-full items-center justify-between rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-left"
       >
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
             Lineups
           </p>
           <p className="mt-0.5 text-sm text-[var(--muted)]">
-            Set H1–H{slots} / A1–A{slots}. Pairings follow the match format.
+            Pick players · ▲▼ to reorder · Fargo shown on each slot
           </p>
         </div>
-        <span className="text-xs font-semibold text-[var(--muted)]">
-          {open ? "Hide ▴" : "Edit ▾"}
+        <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)]">
+          {filledOne + filledTwo}/{slots * 2} · {open ? "Hide ▴" : "Edit ▾"}
         </span>
       </button>
       {open ? (
-        <div className="grid gap-3 border-t border-[var(--line)] px-4 py-4 md:grid-cols-2">
-          <LineupSide
-            label={match.teamOneName}
+        <div className="grid gap-4 md:grid-cols-2">
+          <ScoringLineupSide
+            title={match.teamOneName}
+            subtitle={`Home slots · H1–H${slots}`}
             prefix="H"
             players={match.teamOnePlayers}
             lineup={draft.teamOneLineup}
             onChange={(index, id) => onChangeLineup(1, index, id)}
+            onMove={(from, to) => onMoveLineup(1, from, to)}
           />
-          <LineupSide
-            label={match.teamTwoName}
+          <ScoringLineupSide
+            title={match.teamTwoName}
+            subtitle={`Away slots · A1–A${slots}`}
             prefix="A"
             players={match.teamTwoPlayers}
             lineup={draft.teamTwoLineup}
             onChange={(index, id) => onChangeLineup(2, index, id)}
+            onMove={(from, to) => onMoveLineup(2, from, to)}
           />
         </div>
       ) : null}
@@ -812,45 +922,115 @@ function LineupEditor({
   );
 }
 
-function LineupSide({
-  label,
+function ScoringLineupSide({
+  title,
+  subtitle,
   prefix,
   players,
   lineup,
   onChange,
+  onMove,
 }: {
-  label: string;
+  title: string;
+  subtitle: string;
   prefix: string;
   players: ScoringPlayer[];
   lineup: (string | null)[];
   onChange: (index: number, playerId: string | null) => void;
+  onMove: (from: number, to: number) => void;
 }) {
+  const slots = lineup.length;
+  const filled = lineup.filter(Boolean).length;
+  const sortedRoster = useMemo(
+    () =>
+      [...players]
+        .filter((player) => player.showOnRoster !== false)
+        .sort((a, b) => (b.fargoRating ?? 0) - (a.fargoRating ?? 0)),
+    [players],
+  );
+  const options = useMemo(
+    () =>
+      sortedRoster.map((player) => ({
+        id: player.id,
+        label: playerDisplayName(player),
+        rating: player.fargoRating,
+      })),
+    [sortedRoster],
+  );
+
   return (
-    <div className="space-y-2">
-      <p className="text-sm font-semibold text-[var(--ink)]">{label}</p>
-      {lineup.map((playerId, index) => (
-        <label key={`${prefix}-${index}`} className="flex items-center gap-2">
-          <span className="w-7 shrink-0 text-xs font-semibold text-[var(--muted)]">
-            {prefix}
-            {index + 1}
-          </span>
-          <select
-            value={playerId ?? ""}
-            onChange={(event) =>
-              onChange(index, event.target.value || null)
-            }
-            className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-2.5 py-2 text-sm outline-none ring-[var(--felt)] focus:ring-2"
-          >
-            <option value="">Unassigned</option>
-            {players.map((player) => (
-              <option key={player.id} value={player.id}>
-                {playerDisplayName(player)}
-                {player.fargoRating != null ? ` (${player.fargoRating})` : ""}
-              </option>
-            ))}
-          </select>
-        </label>
-      ))}
+    <div className="rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <div>
+          <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
+            {title}
+          </h4>
+          <p className="text-xs text-[var(--muted)]">{subtitle}</p>
+        </div>
+        <span
+          className={[
+            "rounded-full px-2.5 py-1 text-xs font-semibold",
+            filled === slots
+              ? "bg-[var(--felt)] text-white"
+              : "bg-[var(--surface-2)] text-[var(--muted)]",
+          ].join(" ")}
+        >
+          {filled}/{slots}
+        </span>
+      </div>
+      <ol className="space-y-2">
+        {lineup.map((playerId, index) => {
+          const player = findPlayer(players, playerId);
+          return (
+            <li key={`${prefix}-${index}`}>
+              <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2.5">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                    Slot #{index + 1} · {prefix}
+                    {index + 1}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {player ? (
+                      <>
+                        <button
+                          type="button"
+                          aria-label="Move up"
+                          disabled={index === 0}
+                          onClick={() => onMove(index, index - 1)}
+                          className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
+                        >
+                          ▲
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Move down"
+                          disabled={index >= slots - 1}
+                          onClick={() => onMove(index, index + 1)}
+                          className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
+                        >
+                          ▼
+                        </button>
+                        <span className="ml-1 tabular-nums text-xs font-semibold text-[var(--felt)]">
+                          {player.fargoRating ?? "—"}
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+                <PlayerSelect
+                  value={playerId ?? ""}
+                  options={options}
+                  placeholder="Open slot…"
+                  onChange={(id) => onChange(index, id || null)}
+                />
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="mt-2 text-[11px] text-[var(--muted)]">
+        Use ▲ ▼ to reorder. Handicaps update from these Fargo ratings.
+      </p>
     </div>
   );
 }
@@ -882,6 +1062,7 @@ function ScorePad({
 
   const p1 = findPlayer(match.teamOnePlayers, game.teamOnePlayerId);
   const p2 = findPlayer(match.teamTwoPlayers, game.teamTwoPlayerId);
+  const winner = gameWinner(game);
 
   const bump = (side: 1 | 2, delta: number) => {
     const key = side === 1 ? "teamOneScore" : "teamTwoScore";
@@ -916,9 +1097,18 @@ function ScorePad({
             Round {roundNumber} · Game {gameIndex}
           </p>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            {p1 ? playerDisplayName(p1) : "Home"} vs{" "}
+            {p1 ? playerDisplayName(p1) : "Home"}
+            {p1?.fargoRating != null ? ` (${p1.fargoRating})` : ""} vs{" "}
             {p2 ? playerDisplayName(p2) : "Away"}
+            {p2?.fargoRating != null ? ` (${p2.fargoRating})` : ""}
           </p>
+          {!winner ? (
+            <p className="mt-1 text-xs text-[var(--amber)]">
+              In progress — counts when someone wins
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-[var(--felt-deep)]">Game complete</p>
+          )}
         </div>
         <button
           type="button"
@@ -951,10 +1141,20 @@ function ScorePad({
                 {breaking ? " · break" : ""}
               </p>
               <p className="mt-2 font-[family-name:var(--font-display)] text-4xl tabular-nums text-[var(--felt-deep)]">
-                {game.winAdornment && gameWinner(game) === side
+                {game.winAdornment && winner === side
                   ? game.winAdornment
-                  : (score ?? "–")}
+                  : (score ?? 0)}
               </p>
+              {side === 1 && p1?.fargoRating != null ? (
+                <p className="mt-1 text-[11px] font-semibold text-[var(--felt)]">
+                  Fargo {p1.fargoRating}
+                </p>
+              ) : null}
+              {side === 2 && p2?.fargoRating != null ? (
+                <p className="mt-1 text-[11px] font-semibold text-[var(--felt)]">
+                  Fargo {p2.fargoRating}
+                </p>
+              ) : null}
               <div className="mt-3 flex gap-2">
                 <button
                   type="button"
@@ -1039,15 +1239,15 @@ function ScorePad({
           onClick={() =>
             onChange({
               ...game,
-              teamOneScore: null,
-              teamTwoScore: null,
+              teamOneScore: 0,
+              teamTwoScore: 0,
               winAdornment: "",
               isWinZip: false,
             })
           }
           className="flex-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] py-2.5 text-sm font-semibold text-[var(--muted)]"
         >
-          Clear
+          Reset 0–0
         </button>
       </div>
     </div>
@@ -1088,6 +1288,9 @@ function ReviewPanel({
 }) {
   const totals = tallyDraft(draft);
   const incomplete = totals.scored < totals.total;
+  const handicaps = computeMatchHandicaps(match, draft);
+  const hcOne = handicaps.reduce((sum, round) => sum + round.teamOne, 0);
+  const hcTwo = handicaps.reduce((sum, round) => sum + round.teamTwo, 0);
 
   return (
     <div className="space-y-4 rounded-[1.4rem] border border-[var(--line)] bg-[var(--surface)] p-4 md:p-5">
@@ -1099,9 +1302,10 @@ function ReviewPanel({
           Ready to send to LMS?
         </h4>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          {totals.teamOneWins}–{totals.teamTwoWins} · {totals.scored} of{" "}
-          {totals.total} games scored
-          {incomplete ? " · some games still open" : ""}
+          {totals.teamOneWins}–{totals.teamTwoWins} games won · {totals.scored} of{" "}
+          {totals.total} complete
+          {incomplete ? " · finish every game first" : ""}
+          {match.isHandicapped ? ` · HC ${hcOne}–${hcTwo}` : ""}
         </p>
       </div>
 
@@ -1123,18 +1327,26 @@ function ReviewPanel({
                   match.teamTwoPlayers,
                   state?.teamTwoPlayerId ?? null,
                 );
+                const complete = gameWinner(state) != null;
                 return (
                   <div
                     key={game.index}
                     className="flex items-center justify-between gap-3 rounded-xl bg-[var(--surface-2)] px-3 py-2 text-sm"
                   >
                     <span className="min-w-0 truncate">
-                      {p1 ? playerDisplayName(p1) : `H${game.playerOne.index}`}{" "}
+                      {p1 ? playerDisplayName(p1) : `H${game.playerOne.index}`}
+                      {p1?.fargoRating != null ? ` (${p1.fargoRating})` : ""}{" "}
                       vs{" "}
                       {p2 ? playerDisplayName(p2) : `A${game.playerTwo.index}`}
+                      {p2?.fargoRating != null ? ` (${p2.fargoRating})` : ""}
                     </span>
-                    <span className="shrink-0 font-semibold tabular-nums">
-                      {scoreLabel(state)}
+                    <span className="shrink-0 text-right">
+                      <span className="font-semibold tabular-nums">
+                        {scoreLabel(state)}
+                      </span>
+                      <span className="mt-0.5 block text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                        {complete ? "Won" : "Open"}
+                      </span>
                     </span>
                   </div>
                 );
