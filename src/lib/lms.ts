@@ -1,6 +1,11 @@
 import * as cheerio from "cheerio";
 import { LMS_BASE } from "./constants";
 import type { DivisionFormat } from "./handicap";
+import {
+  LMS_CACHE_TTL,
+  lmsCacheKey,
+  withLmsCache,
+} from "./lms-cache";
 import { resolveHomeAwayFromSchedule } from "./matchups";
 import type {
   CalculatorMatchup,
@@ -15,12 +20,13 @@ import type {
   TableReport,
 } from "./types";
 
+/** Process-local L1 cache (per serverless instance). Redis is L2. */
 const divisionsCache: {
   fetchedAt: number;
   data: DivisionEntry[] | null;
 } = { fetchedAt: 0, data: null };
 
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const MEMORY_TTL_MS = 5 * 60 * 1000;
 
 async function lmsFetch(
   path: string,
@@ -51,16 +57,27 @@ export async function fetchAllDivisions(
   if (
     !force &&
     divisionsCache.data &&
-    now - divisionsCache.fetchedAt < CACHE_TTL_MS
+    now - divisionsCache.fetchedAt < MEMORY_TTL_MS
   ) {
     return divisionsCache.data;
   }
 
-  const response = await lmsFetch("/PublicReport/GetDivisions");
-  const data = (await response.json()) as DivisionEntry[];
+  const data = force
+    ? await loadAllDivisionsFromLms()
+    : await withLmsCache(
+        lmsCacheKey("divisions"),
+        LMS_CACHE_TTL.divisions,
+        loadAllDivisionsFromLms,
+      );
+
   divisionsCache.data = data;
   divisionsCache.fetchedAt = now;
   return data;
+}
+
+async function loadAllDivisionsFromLms(): Promise<DivisionEntry[]> {
+  const response = await lmsFetch("/PublicReport/GetDivisions");
+  return (await response.json()) as DivisionEntry[];
 }
 
 export function groupLeagues(entries: DivisionEntry[]): LeagueSummary[] {
@@ -137,70 +154,94 @@ function parseTable(html: string): TableReport {
 export async function fetchTeamStandings(
   divisionId: string,
 ): Promise<TableReport> {
-  const response = await lmsFetch(
-    `/PublicReport/GenerateTeamStandingsReport/${divisionId}`,
+  return withLmsCache(
+    lmsCacheKey("team-standings", divisionId),
+    LMS_CACHE_TTL.teamStandings,
+    async () => {
+      const response = await lmsFetch(
+        `/PublicReport/GenerateTeamStandingsReport/${divisionId}`,
+      );
+      return parseTable(await response.text());
+    },
   );
-  return parseTable(await response.text());
 }
 
 export async function fetchPlayerStandings(
   divisionId: string,
 ): Promise<TableReport> {
-  const response = await lmsFetch(
-    `/PublicReport/GeneratePlayerStandingsReport/${divisionId}`,
+  return withLmsCache(
+    lmsCacheKey("player-standings", divisionId),
+    LMS_CACHE_TTL.playerStandings,
+    async () => {
+      const response = await lmsFetch(
+        `/PublicReport/GeneratePlayerStandingsReport/${divisionId}`,
+      );
+      return parseTable(await response.text());
+    },
   );
-  return parseTable(await response.text());
 }
 
 export async function fetchPlayerList(
   divisionId: string,
 ): Promise<TableReport> {
-  const response = await lmsFetch(
-    `/PublicReport/GeneratePlayerListReport/${divisionId}`,
+  return withLmsCache(
+    lmsCacheKey("player-list", divisionId),
+    LMS_CACHE_TTL.playerList,
+    async () => {
+      const response = await lmsFetch(
+        `/PublicReport/GeneratePlayerListReport/${divisionId}`,
+      );
+      return parseTable(await response.text());
+    },
   );
-  return parseTable(await response.text());
 }
 
 export async function fetchPlayersByTeam(
   divisionId: string,
 ): Promise<PlayersByTeamReport> {
-  const response = await lmsFetch(
-    `/PublicReport/GeneratePlayerStandingsByTeamReport/${divisionId}`,
+  return withLmsCache(
+    lmsCacheKey("players-by-team", divisionId),
+    LMS_CACHE_TTL.playersByTeam,
+    async () => {
+      const response = await lmsFetch(
+        `/PublicReport/GeneratePlayerStandingsByTeamReport/${divisionId}`,
+      );
+      const html = await response.text();
+      const $ = cheerio.load(html);
+
+      const headers = $("thead th")
+        .map((_, el) => $(el).text().replace(/\s+/g, " ").trim())
+        .get()
+        .filter(Boolean);
+
+      const teams: PlayersByTeamReport["teams"] = [];
+      let current: PlayersByTeamReport["teams"][number] | null = null;
+
+      $("tbody tr").each((_, tr) => {
+        const $tr = $(tr);
+        if ($tr.hasClass("subtitle-row") || $tr.find("td.subtitle").length) {
+          const team = $tr.text().replace(/\s+/g, " ").trim();
+          current = { team, rows: [] };
+          teams.push(current);
+          return;
+        }
+
+        const cells = $tr
+          .find("td")
+          .map((__, td) => $(td).text().replace(/\s+/g, " ").trim())
+          .get();
+
+        if (!cells.length) return;
+        if (!current) {
+          current = { team: "Division", rows: [] };
+          teams.push(current);
+        }
+        current.rows.push(cells);
+      });
+
+      return { headers, teams };
+    },
   );
-  const html = await response.text();
-  const $ = cheerio.load(html);
-
-  const headers = $("thead th")
-    .map((_, el) => $(el).text().replace(/\s+/g, " ").trim())
-    .get()
-    .filter(Boolean);
-
-  const teams: PlayersByTeamReport["teams"] = [];
-  let current: PlayersByTeamReport["teams"][number] | null = null;
-
-  $("tbody tr").each((_, tr) => {
-    const $tr = $(tr);
-    if ($tr.hasClass("subtitle-row") || $tr.find("td.subtitle").length) {
-      const team = $tr.text().replace(/\s+/g, " ").trim();
-      current = { team, rows: [] };
-      teams.push(current);
-      return;
-    }
-
-    const cells = $tr
-      .find("td")
-      .map((__, td) => $(td).text().replace(/\s+/g, " ").trim())
-      .get();
-
-    if (!cells.length) return;
-    if (!current) {
-      current = { team: "Division", rows: [] };
-      teams.push(current);
-    }
-    current.rows.push(cells);
-  });
-
-  return { headers, teams };
 }
 
 function extractMatchId(url: string | undefined): string | null {
@@ -212,65 +253,71 @@ function extractMatchId(url: string | undefined): string | null {
 export async function fetchSchedule(
   divisionId: string,
 ): Promise<ScheduleDay[]> {
-  const body = new URLSearchParams({ divisionId });
-  const response = await lmsFetch(
-    "/PublicReport/GenerateDivisionScheduleReport",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body,
+  return withLmsCache(
+    lmsCacheKey("schedule", divisionId),
+    LMS_CACHE_TTL.schedule,
+    async () => {
+      const body = new URLSearchParams({ divisionId });
+      const response = await lmsFetch(
+        "/PublicReport/GenerateDivisionScheduleReport",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body,
+        },
+      );
+
+      const html = await response.text();
+      const $ = cheerio.load(html);
+      const days: ScheduleDay[] = [];
+      let current: ScheduleDay | null = null;
+
+      $("#schedule-list")
+        .children()
+        .each((_, el) => {
+          const $el = $(el);
+          if ($el.hasClass("schedule-date")) {
+            current = {
+              date: $el.text().replace(/\s+/g, " ").trim(),
+              matches: [],
+            };
+            days.push(current);
+            return;
+          }
+
+          if (!$el.hasClass("schedule-team-block")) return;
+          if (!current) {
+            current = { date: "TBD", matches: [] };
+            days.push(current);
+          }
+
+          const teams = $el
+            .find(".schedule-team")
+            .map((__, team) => $(team).text().replace(/\s+/g, " ").trim())
+            .get();
+          const location = $el
+            .find(".schedule-location")
+            .first()
+            .text()
+            .replace(/\s+/g, " ")
+            .trim();
+          const url = $el.attr("data-url") ?? null;
+
+          const match: ScheduleMatch = {
+            matchId: extractMatchId(url ?? undefined),
+            home: teams[0] ?? "TBD",
+            away: teams[1] ?? "TBD",
+            location,
+            url: url ? `${LMS_BASE}${url}` : null,
+          };
+          current.matches.push(match);
+        });
+
+      return days;
     },
   );
-
-  const html = await response.text();
-  const $ = cheerio.load(html);
-  const days: ScheduleDay[] = [];
-  let current: ScheduleDay | null = null;
-
-  $("#schedule-list")
-    .children()
-    .each((_, el) => {
-      const $el = $(el);
-      if ($el.hasClass("schedule-date")) {
-        current = {
-          date: $el.text().replace(/\s+/g, " ").trim(),
-          matches: [],
-        };
-        days.push(current);
-        return;
-      }
-
-      if (!$el.hasClass("schedule-team-block")) return;
-      if (!current) {
-        current = { date: "TBD", matches: [] };
-        days.push(current);
-      }
-
-      const teams = $el
-        .find(".schedule-team")
-        .map((__, team) => $(team).text().replace(/\s+/g, " ").trim())
-        .get();
-      const location = $el
-        .find(".schedule-location")
-        .first()
-        .text()
-        .replace(/\s+/g, " ")
-        .trim();
-      const url = $el.attr("data-url") ?? null;
-
-      const match: ScheduleMatch = {
-        matchId: extractMatchId(url ?? undefined),
-        home: teams[0] ?? "TBD",
-        away: teams[1] ?? "TBD",
-        location,
-        url: url ? `${LMS_BASE}${url}` : null,
-      };
-      current.matches.push(match);
-    });
-
-  return days;
 }
 
 type LmsMatchPayload = {
@@ -314,40 +361,66 @@ function toRating(value: string | number | null | undefined): number {
 export async function fetchDivisionFormat(
   divisionId: string,
 ): Promise<DivisionFormat> {
-  const response = await lmsFetch(`/api/divisions/${divisionId}/format`);
-  return (await response.json()) as DivisionFormat;
+  return withLmsCache(
+    lmsCacheKey("format", divisionId),
+    LMS_CACHE_TTL.format,
+    async () => {
+      const response = await lmsFetch(`/api/divisions/${divisionId}/format`);
+      return (await response.json()) as DivisionFormat;
+    },
+  );
 }
 
 export async function fetchMatch(matchId: string): Promise<LmsMatchPayload> {
-  const response = await lmsFetch(`/api/matches/${matchId}`);
-  return (await response.json()) as LmsMatchPayload;
+  return withLmsCache(
+    lmsCacheKey("match", matchId),
+    LMS_CACHE_TTL.match,
+    async () => {
+      const response = await lmsFetch(`/api/matches/${matchId}`);
+      return (await response.json()) as LmsMatchPayload;
+    },
+  );
 }
 
 export async function fetchTeam(teamId: string): Promise<LmsTeamPayload> {
-  const response = await lmsFetch(`/api/teams/${teamId}`);
-  return (await response.json()) as LmsTeamPayload;
+  return withLmsCache(
+    lmsCacheKey("team", teamId),
+    LMS_CACHE_TTL.team,
+    async () => {
+      const response = await lmsFetch(`/api/teams/${teamId}`);
+      return (await response.json()) as LmsTeamPayload;
+    },
+  );
 }
 
 export async function fetchTeamPlayers(
   teamId: string,
   teamName: string,
 ): Promise<RosterPlayer[]> {
-  const response = await lmsFetch(`/api/teams/${teamId}/players`);
-  const players = (await response.json()) as LmsPlayerPayload[];
-  return players.map((player) => ({
-    id: player.id,
-    readableId: player.readableId,
-    firstName: player.firstName,
-    lastName: player.lastName,
-    nickname: player.nickname,
-    fargoRating: toRating(player.fargoRating),
-    robustness: player.robustness,
-    provisionalRating: player.provisionalRating,
-    handicap: player.handicap,
-    showOnRoster: player.showOnRoster !== false,
-    teamId,
-    teamName,
-  }));
+  const players = await withLmsCache(
+    lmsCacheKey("team-players", teamId),
+    LMS_CACHE_TTL.teamPlayers,
+    async () => {
+      const response = await lmsFetch(`/api/teams/${teamId}/players`);
+      const payload = (await response.json()) as LmsPlayerPayload[];
+      return payload.map((player) => ({
+        id: player.id,
+        readableId: player.readableId,
+        firstName: player.firstName,
+        lastName: player.lastName,
+        nickname: player.nickname,
+        fargoRating: toRating(player.fargoRating),
+        robustness: player.robustness,
+        provisionalRating: player.provisionalRating,
+        handicap: player.handicap,
+        showOnRoster: player.showOnRoster !== false,
+        teamId,
+        teamName,
+      }));
+    },
+  );
+  // Keep the caller's team name if roster was cached under another label.
+  return players.map((player) => ({ ...player, teamName }));
 }
 
 async function mapPool<T, R>(
@@ -374,16 +447,18 @@ async function mapPool<T, R>(
   return results;
 }
 
+type CalculatorContext = {
+  format: DivisionFormat;
+  teams: DivisionTeam[];
+  schedule: ScheduleDay[];
+  matchups: CalculatorMatchup[];
+};
+
 const calculatorCache = new Map<
   string,
   {
     fetchedAt: number;
-    data: {
-      format: DivisionFormat;
-      teams: DivisionTeam[];
-      schedule: ScheduleDay[];
-      matchups: CalculatorMatchup[];
-    };
+    data: CalculatorContext;
   }
 >();
 
@@ -397,11 +472,24 @@ export async function fetchDivisionCalculatorContext(divisionId: string): Promis
   schedule: ScheduleDay[];
   matchups: CalculatorMatchup[];
 }> {
-  const cached = calculatorCache.get(divisionId);
-  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
-    return cached.data;
+  const memory = calculatorCache.get(divisionId);
+  if (memory && Date.now() - memory.fetchedAt < MEMORY_TTL_MS) {
+    return memory.data;
   }
 
+  const payload = await withLmsCache(
+    lmsCacheKey("calculator", divisionId),
+    LMS_CACHE_TTL.calculator,
+    () => loadDivisionCalculatorContext(divisionId),
+  );
+
+  calculatorCache.set(divisionId, { fetchedAt: Date.now(), data: payload });
+  return payload;
+}
+
+async function loadDivisionCalculatorContext(
+  divisionId: string,
+): Promise<CalculatorContext> {
   const [format, schedule] = await Promise.all([
     fetchDivisionFormat(divisionId),
     fetchSchedule(divisionId),
@@ -482,7 +570,5 @@ export async function fetchDivisionCalculatorContext(divisionId: string): Promis
     }
   }
 
-  const payload = { format, teams, schedule, matchups };
-  calculatorCache.set(divisionId, { fetchedAt: Date.now(), data: payload });
-  return payload;
+  return { format, teams, schedule, matchups };
 }

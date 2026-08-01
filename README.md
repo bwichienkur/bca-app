@@ -43,9 +43,9 @@ Stored in `localStorage`:
 - `tableside.lineups.v1` — saved handicap lineups
 - `tableside.scoring.draft.v1.*` — local scoresheet drafts (also synced when Redis is configured)
 
-## Multi-device Score drafts (Upstash Redis)
+## Upstash Redis (Vercel)
 
-Score drafts can sync across phones/tablets via a free [Upstash Redis](https://upstash.com/) database (also works with Vercel KV REST credentials). Without these env vars, Score still works with browser `localStorage` only.
+One free [Upstash Redis](https://upstash.com/) database powers both Score draft sync and LMS response caching. Without these env vars, the app still works (local drafts + direct LMS fetches).
 
 In the [Upstash console](https://console.upstash.com/), create a Redis database (free tier), then copy the REST URL and token into Vercel project env (or `.env.local`):
 
@@ -54,11 +54,20 @@ UPSTASH_REDIS_REST_URL=https://xxxx.upstash.io
 UPSTASH_REDIS_REST_TOKEN=xxxxxxxx
 ```
 
-Vercel KV REST names are also accepted:
+Vercel KV REST names are also accepted (`KV_REST_API_URL` / `KV_REST_API_TOKEN`).
 
-```bash
-KV_REST_API_URL=...
-KV_REST_API_TOKEN=...
-```
+### Score drafts
+Keyed by match id, TTL 60 days, last-write-wins with ~3s polling while a scoresheet is open.
 
-Drafts are keyed by match id, TTL 60 days, last-write-wins with ~3s polling while a scoresheet is open. LMS submit still happens once from any device.
+### LMS public data cache
+Parsed league/division/team/player/schedule responses are cached in Redis so Vercel serverless instances skip slow LMS round-trips. Approximate TTLs:
+
+| Data | TTL |
+| --- | --- |
+| League/division directory | 1 hour |
+| Division format | 1 hour |
+| Schedule, player ratings list | 30 min |
+| Match / team / roster | 15–30 min |
+| Standings, players-by-team, handicap calculator context | 10 min |
+
+Cache keys use prefix `tableside:lms:v1:`. Failures are not cached.
