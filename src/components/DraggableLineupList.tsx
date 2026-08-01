@@ -109,6 +109,7 @@ export function DraggableLineupList({
   onChange,
   onMove,
   footer,
+  disabled = false,
 }: {
   title: string;
   subtitle: string;
@@ -118,6 +119,7 @@ export function DraggableLineupList({
   onChange: (index: number, playerId: string | null) => void;
   onMove: (from: number, to: number) => void;
   footer?: ReactNode;
+  disabled?: boolean;
 }) {
   const slots = lineupIds.length;
   const filled = lineupIds.filter(Boolean).length;
@@ -257,7 +259,7 @@ export function DraggableLineupList({
     index: number,
     cardEl: HTMLElement | null,
   ) => {
-    if (!lineupPlayers[index] || drag) return;
+    if (disabled || !lineupPlayers[index] || drag) return;
     event.preventDefault();
     event.stopPropagation();
     const rect = (cardEl ?? event.currentTarget).getBoundingClientRect();
@@ -331,7 +333,7 @@ export function DraggableLineupList({
                 >
                   <div className="mb-1.5 flex items-center justify-between gap-2">
                     <div className="inline-flex items-center gap-2">
-                      {player ? (
+                      {player && !disabled ? (
                         <button
                           type="button"
                           aria-label={`Drag ${slotPrefix}${index + 1}`}
@@ -361,24 +363,28 @@ export function DraggableLineupList({
                     <div className="flex shrink-0 items-center gap-1">
                       {player ? (
                         <>
-                          <button
-                            type="button"
-                            aria-label="Move up"
-                            disabled={index === 0 || Boolean(drag)}
-                            onClick={() => onMove(index, index - 1)}
-                            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
-                          >
-                            ▲
-                          </button>
-                          <button
-                            type="button"
-                            aria-label="Move down"
-                            disabled={index >= slots - 1 || Boolean(drag)}
-                            onClick={() => onMove(index, index + 1)}
-                            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
-                          >
-                            ▼
-                          </button>
+                          {!disabled ? (
+                            <>
+                              <button
+                                type="button"
+                                aria-label="Move up"
+                                disabled={index === 0 || Boolean(drag)}
+                                onClick={() => onMove(index, index - 1)}
+                                className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
+                              >
+                                ▲
+                              </button>
+                              <button
+                                type="button"
+                                aria-label="Move down"
+                                disabled={index >= slots - 1 || Boolean(drag)}
+                                onClick={() => onMove(index, index + 1)}
+                                className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
+                              >
+                                ▼
+                              </button>
+                            </>
+                          ) : null}
                           <span className="ml-0.5 min-w-[2rem] text-right tabular-nums text-xs font-semibold text-[var(--felt)]">
                             {player.rating ?? "—"}
                           </span>
@@ -390,6 +396,7 @@ export function DraggableLineupList({
                     value={previewIds[index] ?? ""}
                     options={roster}
                     placeholder="Open slot…"
+                    disabled={disabled}
                     onChange={(id) => onChange(index, id || null)}
                   />
                 </div>
@@ -400,7 +407,9 @@ export function DraggableLineupList({
       </ol>
 
       <p className="mt-2 text-[11px] text-[var(--muted)]">
-        Drag ⠿ to reorder, or use ▲ ▼ · handicaps follow Fargo
+        {disabled
+          ? "Lineup is locked for this scoresheet."
+          : "Drag ⠿ to reorder, or use ▲ ▼ · handicaps follow Fargo"}
       </p>
       {footer}
 
