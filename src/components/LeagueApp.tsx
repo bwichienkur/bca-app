@@ -969,54 +969,48 @@ export function LeagueApp() {
         </p>
       ) : null}
 
-      <section className="animate-rise animate-delay-1 relative z-40 mb-5 overflow-visible rounded-[1.5rem] border border-[var(--line)] bg-[var(--surface)] shadow-sm [background-color:var(--surface)]">
+      <section className="animate-rise animate-delay-1 relative z-40 mb-5 overflow-visible rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(20,92,69,0.96),rgba(13,61,46,0.98))] text-white shadow-[var(--shadow)]">
         <button
           type="button"
           onClick={() => setContextOpen((open) => !open)}
           aria-expanded={contextOpen}
-          className="flex w-full items-start justify-between gap-3 px-4 py-3.5 text-left md:px-5 md:py-4"
+          className="flex w-full items-start justify-between gap-3 px-4 py-4 text-left md:px-6 md:py-5"
         >
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-              League · Division · My team
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/65">
+              {selectedLeague?.name ??
+                selectedDivision?.leagueName ??
+                "League · Division · My team"}
             </p>
+            <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl leading-tight md:text-3xl">
+              {selectedDivision?.name ?? "Choose your division"}
+            </h2>
             {contextOpen ? (
-              <p className="mt-1 text-sm text-[var(--muted)]">
+              <p className="mt-2 text-sm text-white/70">
                 {user
-                  ? "Signed in — selectors show only leagues, divisions, and teams you belong to. Standings and players still include the whole division."
-                  : "Set once — Schedule and Handicap follow My team. Login to limit this to your teams."}
+                  ? "Pick from your active sessions. Standings and players still include the whole division."
+                  : "Set league, division, and my team for schedule & handicap."}
+              </p>
+            ) : prefs.teamName ? (
+              <p className="mt-2 text-sm text-white/80">
+                Following <span className="font-semibold">{prefs.teamName}</span>
               </p>
             ) : (
-              <div className="mt-1.5 space-y-0.5">
-                <p className="truncate text-sm font-semibold text-[var(--ink)]">
-                  {selectedLeague?.name ?? "Choose a league"}
-                </p>
-                <p className="truncate text-sm text-[var(--muted)]">
-                  {selectedDivision?.name ?? "Choose a division"}
-                  {prefs.teamName ? (
-                    <>
-                      {" "}
-                      ·{" "}
-                      <span className="font-medium text-[var(--felt-deep)]">
-                        {prefs.teamName}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-[var(--amber)]"> · Set my team</span>
-                  )}
-                </p>
-              </div>
+              <p className="mt-2 text-sm text-white/70">
+                Set my team to personalize schedule & handicap.
+              </p>
             )}
           </div>
-          <span className="mt-0.5 shrink-0 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+          <span className="mt-0.5 shrink-0 rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/85">
             {contextOpen ? "Collapse ▴" : "Change ▾"}
           </span>
         </button>
 
         {contextOpen ? (
-          <div className="border-t border-[var(--line)] px-4 pb-4 pt-3 md:px-5 md:pb-5">
+          <div className="border-t border-white/15 px-4 pb-4 pt-3 md:px-6 md:pb-5">
             <div className="grid gap-4 md:grid-cols-3">
               <Typeahead
+                tone="felt"
                 label="League"
                 placeholder={
                   user
@@ -1045,6 +1039,7 @@ export function LeagueApp() {
                 }}
               />
               <Typeahead
+                tone="felt"
                 label="Division"
                 placeholder={
                   !selectedLeague
@@ -1074,6 +1069,7 @@ export function LeagueApp() {
                 emptyText="No divisions match"
               />
               <Typeahead
+                tone="felt"
                 label="My team"
                 placeholder={
                   !selectedDivision
@@ -1117,30 +1113,6 @@ export function LeagueApp() {
           tab === "score" ? "space-y-1.5" : "space-y-4",
         ].join(" ")}
       >
-        {selectedDivision ? (
-          <div className="relative z-0 rounded-[1.4rem] border border-[var(--line)] bg-[linear-gradient(135deg,rgba(20,92,69,0.96),rgba(13,61,46,0.98))] px-4 py-4 text-white shadow-[var(--shadow)] md:px-6 md:py-5">
-            <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-white/70">
-                  {selectedDivision.leagueName}
-                </p>
-                <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl leading-tight md:text-3xl">
-                  {selectedDivision.name}
-                </h2>
-                {prefs.teamName ? (
-                  <p className="mt-2 text-sm text-white/80">
-                    Following <span className="font-semibold">{prefs.teamName}</span>
-                  </p>
-                ) : (
-                  <p className="mt-2 text-sm text-white/70">
-                    Set “My team” above to personalize schedule & handicap.
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : null}
-
         <div
           ref={filterAnchor.ref}
           data-report-tabs
@@ -1215,7 +1187,7 @@ export function LeagueApp() {
           ) : !selectedDivision ? (
             <EmptyState
               title="Choose a division to continue"
-              body="Use the typeaheads above — start typing your division name for a fast jump. Search and Score sign-in work without a full division, but Score needs one to list matches."
+              body="Tap Change on the green card above to pick your division. Search and Score sign-in work without a full division, but Score needs one to list matches."
             />
           ) : tab === "handicap" ? (
             <HandicapCalculator
@@ -1254,7 +1226,7 @@ export function LeagueApp() {
             ) : (
               <EmptyState
                 title="Set your team"
-                body="Open League · Division · My team above and pick your team to see roster and player stats here."
+                body="Tap Change on the green card above and pick your team to see roster and player stats here."
               />
             )
           ) : tab === "standings" && teamReport ? (
@@ -1356,7 +1328,7 @@ export function LeagueApp() {
             !prefs.teamName ? (
               <EmptyState
                 title="Set My team for schedule"
-                body="Open League · Division · My team above and pick your team. Schedule always uses that selection."
+                body="Tap Change on the green card above and pick your team. Schedule always uses that selection."
               />
             ) : selectedScheduleMatch ? (
               <ScheduleMatchDetail
