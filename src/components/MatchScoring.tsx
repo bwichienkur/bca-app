@@ -12,6 +12,13 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
+  deleteRemoteDraft,
+  fetchRemoteDraft,
+  fetchRemoteDraftMatchIds,
+  newerDraft,
+  pushRemoteDraft,
+} from "@/lib/draft-sync";
+import {
   applyQuickWin,
   applyRaceScore,
   buildVerticalMatchPayload,
@@ -135,13 +142,55 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
   const [submitting, setSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [draftMatchIds, setDraftMatchIds] = useState<Set<string>>(new Set());
+  const [sharedDrafts, setSharedDrafts] = useState(false);
+  const [syncNote, setSyncNote] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const saveTimerRef = useRef<number | null>(null);
+  const dirtyRef = useRef(false);
+  const baseUpdatedAtRef = useRef<string | null>(null);
+  const draftRef = useRef<ScoringDraft | null>(null);
+  const pushSeqRef = useRef(0);
+
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  const persistDraft = (next: ScoringDraft) => {
+    saveDraft(next);
+    dirtyRef.current = true;
+    const seq = ++pushSeqRef.current;
+    void pushRemoteDraft(next, baseUpdatedAtRef.current)
+      .then((remote) => {
+        if (seq !== pushSeqRef.current) return;
+        if (remote.shared) setSharedDrafts(true);
+        if (remote.conflict && remote.draft) {
+          const merged = normalizeDraftScores(remote.draft);
+          baseUpdatedAtRef.current = merged.updatedAt;
+          dirtyRef.current = false;
+          draftRef.current = merged;
+          setDraft(merged);
+          saveDraft(merged);
+          setSyncNote("Another device had a newer score — loaded it.");
+          return;
+        }
+        if (remote.draft) {
+          baseUpdatedAtRef.current = remote.draft.updatedAt;
+        } else {
+          baseUpdatedAtRef.current = next.updatedAt;
+        }
+        dirtyRef.current = false;
+        setSyncNote(null);
+      })
+      .catch(() => {
+        // Keep local draft; shared store may be offline/unconfigured.
+        dirtyRef.current = false;
+      });
+  };
 
   const scheduleSaveDraft = (next: ScoringDraft) => {
     if (saveTimerRef.current != null) window.clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(() => {
-      saveDraft(next);
+      persistDraft(next);
       saveTimerRef.current = null;
     }, 280);
   };
@@ -191,7 +240,18 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
           for (const item of data.matches) {
             if (loadDraft(item.id)) ids.add(item.id);
           }
-          setDraftMatchIds(ids);
+          try {
+            const remote = await fetchRemoteDraftMatchIds(
+              data.matches.map((item) => item.id),
+            );
+            if (!cancelled) {
+              setSharedDrafts(remote.shared);
+              for (const id of remote.matchIds) ids.add(id);
+            }
+          } catch {
+            // local markers still apply
+          }
+          if (!cancelled) setDraftMatchIds(ids);
         }
       } catch (err) {
         if (!cancelled) {
@@ -213,21 +273,45 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
     setLoadingMatch(true);
     setSheetError(null);
     setSubmitMessage(null);
+    setSyncNote(null);
     try {
       const data = await fetchJson<{ match: ScoringMatchDetail }>(
         `/api/scoring/matches/${matchId}`,
       );
-      const saved = loadDraft(matchId);
-      const nextDraft =
-        saved && saved.matchId === matchId
-          ? syncLineupToGames(normalizeDraftScores(saved), data.match)
-          : emptyDraft(data.match);
+      const local = loadDraft(matchId);
+      let remoteDraft: ScoringDraft | null = null;
+      try {
+        const remote = await fetchRemoteDraft(matchId);
+        if (remote.shared) setSharedDrafts(true);
+        remoteDraft = remote.draft;
+        if (remote.submittedAt) {
+          setSyncNote("This match may already have been submitted.");
+        }
+      } catch {
+        // Fall back to localStorage-only.
+      }
+
+      const chosen = newerDraft(remoteDraft, local, "a");
+      const nextDraft = chosen
+        ? syncLineupToGames(normalizeDraftScores(chosen), data.match)
+        : emptyDraft(data.match);
+
+      baseUpdatedAtRef.current = remoteDraft?.updatedAt ?? null;
+      dirtyRef.current = false;
       setMatch(data.match);
       setDraft(nextDraft);
+      draftRef.current = nextDraft;
       setActiveRound(data.match.matchFormat?.rounds[0]?.roundNumber ?? 1);
       setActiveGame(null);
       setView({ mode: "sheet", matchId });
       saveDraft(nextDraft);
+      // Seed shared store when we opened from local-only or empty.
+      void pushRemoteDraft(nextDraft, baseUpdatedAtRef.current)
+        .then((remote) => {
+          if (remote.shared) setSharedDrafts(true);
+          if (remote.draft) baseUpdatedAtRef.current = remote.draft.updatedAt;
+        })
+        .catch(() => undefined);
       setDraftMatchIds((prev) => new Set(prev).add(matchId));
     } catch (err) {
       setListError(
@@ -244,16 +328,57 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
   ) => {
     setDraft((prev) => {
       if (!prev || !match) return prev;
-      const next = updater(prev);
+      const next: ScoringDraft = {
+        ...updater(prev),
+        updatedAt: new Date().toISOString(),
+      };
+      dirtyRef.current = true;
+      draftRef.current = next;
       if (options?.immediate) {
         if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-        saveDraft(next);
+        persistDraft(next);
       } else {
         scheduleSaveDraft(next);
       }
       return next;
     });
   };
+
+  // Poll shared draft so a second phone/tablet stays in sync.
+  useEffect(() => {
+    if (view.mode === "list" || !view.matchId || !match) return;
+    const matchId = view.matchId;
+    const activeMatch = match;
+    const timer = window.setInterval(() => {
+      if (dirtyRef.current || saveTimerRef.current != null) return;
+      void fetchRemoteDraft(matchId)
+        .then((remote) => {
+          if (!remote.shared) return;
+          setSharedDrafts(true);
+          if (!remote.draft) return;
+          const local = draftRef.current;
+          if (!local) return;
+          if (remote.draft.updatedAt === local.updatedAt) {
+            baseUpdatedAtRef.current = remote.draft.updatedAt;
+            return;
+          }
+          if (Date.parse(remote.draft.updatedAt) <= Date.parse(local.updatedAt)) {
+            return;
+          }
+          if (dirtyRef.current) return;
+          const merged = syncLineupToGames(
+            normalizeDraftScores(remote.draft),
+            activeMatch,
+          );
+          baseUpdatedAtRef.current = merged.updatedAt;
+          draftRef.current = merged;
+          setDraft(merged);
+          saveDraft(merged);
+        })
+        .catch(() => undefined);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [view, match]);
 
   const onLogin = async (event: FormEvent) => {
     event.preventDefault();
@@ -419,10 +544,16 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
 
       if (result.verifiedPlayed) {
         clearDraft(match.id);
+        void deleteRemoteDraft(match.id);
         setSubmitMessage("Match submitted to LMS.");
         setView({ mode: "list" });
         setMatch(null);
         setDraft(null);
+        setDraftMatchIds((prev) => {
+          const next = new Set(prev);
+          next.delete(match.id);
+          return next;
+        });
         // refresh list
         if (divisionId) {
           const data = await fetchJson<{ matches: ScoringMatchSummary[] }>(
@@ -580,6 +711,11 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
         {submitMessage ? (
           <p className="rounded-xl border border-[var(--felt)]/35 bg-[color-mix(in_srgb,var(--felt)_18%,transparent)] px-3 py-2 text-sm text-[var(--felt-deep)]">
             {submitMessage}
+          </p>
+        ) : null}
+        {syncNote ? (
+          <p className="rounded-xl border border-[var(--amber)]/35 bg-[color-mix(in_srgb,var(--amber)_12%,transparent)] px-3 py-2 text-sm text-[var(--amber)]">
+            {syncNote}
           </p>
         ) : null}
 
@@ -884,9 +1020,14 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                   type="button"
                   onClick={() => {
                     if (!match) return;
-                    const fresh = emptyDraft(match);
+                    const fresh: ScoringDraft = {
+                      ...emptyDraft(match),
+                      updatedAt: new Date().toISOString(),
+                    };
+                    dirtyRef.current = true;
+                    draftRef.current = fresh;
                     setDraft(fresh);
-                    saveDraft(fresh);
+                    persistDraft(fresh);
                   }}
                   className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-[var(--muted)]"
                 >
@@ -938,6 +1079,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                 · {divisionName}
               </>
             ) : null}
+            {sharedDrafts ? " · multi-device draft sync on" : null}
           </p>
         </div>
         <button

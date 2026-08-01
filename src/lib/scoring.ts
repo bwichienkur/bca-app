@@ -697,7 +697,10 @@ export function saveDraft(draft: ScoringDraft): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(
     SCORING_DRAFT_PREFIX + draft.matchId,
-    JSON.stringify({ ...draft, updatedAt: new Date().toISOString() }),
+    JSON.stringify({
+      ...draft,
+      updatedAt: draft.updatedAt || new Date().toISOString(),
+    }),
   );
 }
 
