@@ -18,6 +18,8 @@ type TypeaheadProps<T> = {
   onQueryChange?: (query: string) => void;
   disabled?: boolean;
   emptyText?: string;
+  /** Show a clear control when a value is selected. Defaults to true. */
+  clearable?: boolean;
 };
 
 export function Typeahead<T>({
@@ -29,9 +31,11 @@ export function Typeahead<T>({
   onQueryChange,
   disabled,
   emptyText = "No matches",
+  clearable = true,
 }: TypeaheadProps<T>) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState(0);
@@ -67,6 +71,32 @@ export function Typeahead<T>({
     setHighlight(0);
   }, [query, open]);
 
+  const openList = () => {
+    if (disabled) return;
+    setOpen(true);
+    // Start with an empty query so the full list is visible and typing
+    // replaces the previous selection without backspacing.
+    setQuery("");
+    onQueryChange?.("");
+  };
+
+  const clear = () => {
+    if (disabled) return;
+    setQuery("");
+    onChange(null);
+    onQueryChange?.("");
+    setOpen(true);
+    inputRef.current?.focus();
+  };
+
+  const choose = (option: TypeaheadOption<T>) => {
+    onChange(option);
+    setQuery(option.label);
+    setOpen(false);
+  };
+
+  const showClear = clearable && Boolean(value) && !disabled;
+
   return (
     <div
       ref={rootRef}
@@ -77,26 +107,28 @@ export function Typeahead<T>({
       </label>
       <div className="relative">
         <input
+          ref={inputRef}
           disabled={disabled}
-          value={open ? query : (value?.label ?? query)}
-          placeholder={placeholder}
+          value={open ? query : (value?.label ?? "")}
+          placeholder={
+            open && value ? value.label : placeholder
+          }
           role="combobox"
           aria-expanded={open}
           aria-controls={listId}
           aria-autocomplete="list"
-          onFocus={() => {
-            setOpen(true);
-            setQuery(value?.label ?? "");
-          }}
+          onFocus={openList}
           onChange={(event) => {
-            setQuery(event.target.value);
+            const next = event.target.value;
+            setQuery(next);
             setOpen(true);
-            onQueryChange?.(event.target.value);
-            if (!event.target.value) onChange(null);
+            onQueryChange?.(next);
+            if (!next && value) onChange(null);
           }}
           onKeyDown={(event) => {
             if (!open && (event.key === "ArrowDown" || event.key === "Enter")) {
-              setOpen(true);
+              event.preventDefault();
+              openList();
               return;
             }
             if (event.key === "ArrowDown") {
@@ -110,19 +142,49 @@ export function Typeahead<T>({
             } else if (event.key === "Enter") {
               event.preventDefault();
               const option = filtered[highlight];
-              if (option) {
-                onChange(option);
-                setOpen(false);
-              }
+              if (option) choose(option);
             } else if (event.key === "Escape") {
               setOpen(false);
+              setQuery(value?.label ?? "");
             }
           }}
-          className="w-full rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 pr-10 text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2 disabled:opacity-50"
+          className={[
+            "w-full rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2 disabled:opacity-50",
+            showClear ? "pr-16" : "pr-10",
+          ].join(" ")}
         />
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">
-          ▾
-        </span>
+        <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
+          {showClear ? (
+            <button
+              type="button"
+              aria-label={`Clear ${label}`}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={clear}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-lg leading-none text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)]"
+            >
+              ×
+            </button>
+          ) : null}
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label={open ? `Close ${label} options` : `Open ${label} options`}
+            disabled={disabled}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              if (open) {
+                setOpen(false);
+                setQuery(value?.label ?? "");
+              } else {
+                openList();
+                inputRef.current?.focus();
+              }
+            }}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-sm text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)] disabled:opacity-50"
+          >
+            {open ? "▴" : "▾"}
+          </button>
+        </div>
       </div>
 
       {open ? (
@@ -146,10 +208,8 @@ export function Typeahead<T>({
                     role="option"
                     aria-selected={selected}
                     onMouseEnter={() => setHighlight(index)}
-                    onClick={() => {
-                      onChange(option);
-                      setOpen(false);
-                    }}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => choose(option)}
                     className={[
                       "flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm",
                       active

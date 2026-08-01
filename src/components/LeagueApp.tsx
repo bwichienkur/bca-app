@@ -326,6 +326,59 @@ export function LeagueApp() {
     });
   };
 
+  const clearLeague = () => {
+    setSelectedLeague(null);
+    setSelectedDivision(null);
+    setSelectedTeamName(null);
+    setDivisions([]);
+    setDivisionTeams([]);
+    setTeamReport(null);
+    setPlayerReport(null);
+    setPlayerList(null);
+    setSchedule(null);
+    setPlayersByTeam(null);
+    if (prefs) {
+      persist({
+        ...prefs,
+        divisionId: null,
+        divisionName: null,
+        teamId: null,
+        teamName: null,
+      });
+    }
+  };
+
+  const clearDivision = () => {
+    setSelectedDivision(null);
+    setSelectedTeamName(null);
+    setDivisionTeams([]);
+    setTeamReport(null);
+    setPlayerReport(null);
+    setPlayerList(null);
+    setSchedule(null);
+    setPlayersByTeam(null);
+    if (prefs) {
+      persist({
+        ...prefs,
+        divisionId: null,
+        divisionName: null,
+        teamId: null,
+        teamName: null,
+      });
+    }
+  };
+
+  const clearMyTeam = () => {
+    setSelectedTeamName(null);
+    if (prefs) {
+      persist({
+        ...prefs,
+        teamId: null,
+        teamName: null,
+      });
+    }
+  };
+
   const leagueOptions: TypeaheadOption<LeagueSummary>[] = useMemo(
     () =>
       leagues.map((league) => ({
@@ -500,6 +553,7 @@ export function LeagueApp() {
                 onQueryChange={setLeagueQuery}
                 onChange={(option) => {
                   if (option) void chooseLeague(option.value);
+                  else clearLeague();
                 }}
               />
               <Typeahead
@@ -525,6 +579,7 @@ export function LeagueApp() {
                 disabled={!selectedLeague || loadingDivisions}
                 onChange={(option) => {
                   if (option) chooseDivision(option.value);
+                  else clearDivision();
                 }}
                 emptyText="No divisions match"
               />
@@ -554,6 +609,8 @@ export function LeagueApp() {
                     setMyTeam(option.value);
                     setSelectedTeamName(option.value.name);
                     setContextOpen(false);
+                  } else {
+                    clearMyTeam();
                   }
                 }}
                 emptyText="No teams loaded yet"
