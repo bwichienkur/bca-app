@@ -582,7 +582,7 @@ export function HandicapCalculator({
           <LineupPicker
             side="mine"
             title={myTeam.name}
-            subtitle={`Pick players · drag ⠿ or press & hold a card · ▲▼ also work`}
+            subtitle={`Pick players · press & hold a card to drag · ⠿ / ▲▼ also work`}
             roster={myTeam.players}
             lineup={myLineup.length === slots ? myLineup : emptyLineup(slots)}
             slots={slots}
@@ -828,6 +828,7 @@ function LineupPicker({
   const setDragStateRef = useRef(setDragState);
   const setDropTargetRef = useRef(setDropTarget);
   const holdTimerRef = useRef<number | null>(null);
+  const blockSelectOpenRef = useRef(false);
   const pendingHoldRef = useRef<{
     index: number;
     startX: number;
@@ -841,6 +842,7 @@ function LineupPicker({
   } | null>(null);
   const [mounted, setMounted] = useState(false);
   const [holdingIndex, setHoldingIndex] = useState<number | null>(null);
+  const [blockSelectOpen, setBlockSelectOpen] = useState(false);
   const [ghost, setGhost] = useState<{
     x: number;
     y: number;
@@ -898,6 +900,12 @@ function LineupPicker({
     setDragStateRef.current(null);
     setDropTargetRef.current(null);
     setGhost(null);
+    // Avoid the trailing click after a drag opening the player menu.
+    // Keep a sync ref so the click handler sees the block before React re-renders.
+    window.setTimeout(() => {
+      blockSelectOpenRef.current = false;
+      setBlockSelectOpen(false);
+    }, 320);
   };
 
   const indexFromClientY = (clientY: number): number | null => {
@@ -920,6 +928,8 @@ function LineupPicker({
     return closest;
   };
 
+  // Only ▲▼ controls opt out of whole-card hold. The player dropdown is part of
+  // the card surface so press-and-hold works there too.
   const shouldIgnoreDrag = (target: EventTarget | null) => {
     if (!(target instanceof Element)) return false;
     return Boolean(target.closest("[data-no-drag]"));
@@ -935,6 +945,8 @@ function LineupPicker({
     offsetY: number;
   }) => {
     cancelHold();
+    blockSelectOpenRef.current = true;
+    setBlockSelectOpen(true);
     setGhost({
       x: args.x,
       y: args.y,
@@ -1088,6 +1100,10 @@ function LineupPicker({
     holdTimerRef.current = window.setTimeout(() => {
       const pending = pendingHoldRef.current;
       if (!pending) return;
+      // Lock touch scrolling as soon as the hold completes so the first
+      // vertical move becomes a drag instead of a page scroll.
+      document.body.style.touchAction = "none";
+      document.body.style.userSelect = "none";
       beginDrag({
         index: pending.index,
         x: pending.lastX,
@@ -1144,12 +1160,15 @@ function LineupPicker({
               ) : (
                 <div
                   data-lineup-card
+                  onContextMenu={(event) => {
+                    if (player) event.preventDefault();
+                  }}
                   onPointerDown={(event) => {
                     if (draggingHere) return;
                     onCardPointerDown(event, index);
                   }}
                   className={[
-                    "relative select-none rounded-xl border px-3 py-2.5 transition duration-150",
+                    "relative select-none rounded-xl border px-3 py-2.5 transition duration-150 [-webkit-touch-callout:none]",
                     draggingHere ? "cursor-grabbing" : player ? "cursor-grab" : "",
                     isLiftedSource
                       ? "z-20 border-[var(--felt)]/40 bg-[var(--surface-3)] opacity-30"
@@ -1187,27 +1206,29 @@ function LineupPicker({
                         Slot #{index + 1}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5" data-no-drag>
+                    <div className="flex items-center gap-1.5">
                       {player ? (
                         <>
-                          <button
-                            type="button"
-                            aria-label="Move up"
-                            disabled={index === 0 || draggingHere}
-                            onClick={() => onMove(index, index - 1)}
-                            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
-                          >
-                            ▲
-                          </button>
-                          <button
-                            type="button"
-                            aria-label="Move down"
-                            disabled={index >= slots - 1 || draggingHere}
-                            onClick={() => onMove(index, index + 1)}
-                            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
-                          >
-                            ▼
-                          </button>
+                          <div className="flex items-center gap-1.5" data-no-drag>
+                            <button
+                              type="button"
+                              aria-label="Move up"
+                              disabled={index === 0 || draggingHere}
+                              onClick={() => onMove(index, index - 1)}
+                              className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
+                            >
+                              ▲
+                            </button>
+                            <button
+                              type="button"
+                              aria-label="Move down"
+                              disabled={index >= slots - 1 || draggingHere}
+                              onClick={() => onMove(index, index + 1)}
+                              className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
+                            >
+                              ▼
+                            </button>
+                          </div>
                           <span className="ml-1 tabular-nums text-xs font-semibold text-[var(--felt)]">
                             {player.fargoRating}
                           </span>
@@ -1215,14 +1236,14 @@ function LineupPicker({
                       ) : null}
                     </div>
                   </div>
-                  <div data-no-drag>
-                    <PlayerSelect
-                      value={player?.id ?? ""}
-                      options={sortedRoster}
-                      placeholder="Open slot…"
-                      onChange={(playerId) => onSelectSlot(index, playerId)}
-                    />
-                  </div>
+                  <PlayerSelect
+                    value={player?.id ?? ""}
+                    options={sortedRoster}
+                    placeholder="Open slot…"
+                    suppressOpen={blockSelectOpen || draggingHere}
+                    suppressOpenRef={blockSelectOpenRef}
+                    onChange={(playerId) => onSelectSlot(index, playerId)}
+                  />
                 </div>
               )}
             </li>
@@ -1230,7 +1251,7 @@ function LineupPicker({
         })}
       </ol>
       <p className="mt-2 text-[11px] text-[var(--muted)]">
-        Drag ⠿ to reorder immediately, or press & hold the card. ▲ ▼ also work.
+        Press & hold anywhere on a card to drag, or use ⠿ / ▲ ▼.
       </p>
 
       {mounted &&
@@ -1265,11 +1286,17 @@ function PlayerSelect({
   options,
   placeholder,
   onChange,
+  suppressOpen = false,
+  suppressOpenRef,
 }: {
   value: string;
   options: RosterPlayer[];
   placeholder: string;
   onChange: (playerId: string) => void;
+  /** When true, keep the menu closed (hold/drag in progress). */
+  suppressOpen?: boolean;
+  /** Sync block for the trailing click after a drag (checked before React re-renders). */
+  suppressOpenRef?: { current: boolean };
 }) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -1279,6 +1306,13 @@ function PlayerSelect({
   const [highlight, setHighlight] = useState(0);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   const [mounted, setMounted] = useState(false);
+
+  const isSelectBlocked = () =>
+    Boolean(suppressOpen || suppressOpenRef?.current);
+
+  useEffect(() => {
+    if (suppressOpen) setOpen(false);
+  }, [suppressOpen]);
 
   const selected = options.find((option) => option.id === value) ?? null;
   const menuOptions = useMemo(
@@ -1412,7 +1446,12 @@ function PlayerSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listId}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          // Do not key off holdingIndex — a quick tap's click can fire before
+          // React clears the press state, which would block the menu forever.
+          if (isSelectBlocked()) return;
+          setOpen((current) => !current);
+        }}
         className="flex w-full items-center justify-between gap-2 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-left text-sm text-[var(--ink)] outline-none transition hover:border-[var(--line-strong)] focus:ring-2 focus:ring-[var(--felt-soft)]"
       >
         <span className={selected ? "font-medium" : "text-[var(--muted)]"}>
