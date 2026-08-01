@@ -64,10 +64,9 @@ Parsed league/division/team/player/schedule responses are cached in Redis so Ver
 
 | Data | TTL |
 | --- | --- |
-| League/division directory | 1 hour |
-| Division format | 1 hour |
-| Schedule, player ratings list | 30 min |
-| Match / team / roster | 15–30 min |
-| Standings, players-by-team, handicap calculator context | 10 min |
+| League/division directory, format | 24 hours |
+| Schedule, ratings list, matches | 24 hours |
+| Standings, players-by-team, calculator context | 24 hours |
+| Team / roster | 8 hours |
 
 Cache keys use prefix `tableside:lms:v1:`. Failures are not cached.

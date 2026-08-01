@@ -4,17 +4,17 @@ const KEY_PREFIX = "tableside:lms:v1:";
 
 /** TTLs tuned for data that changes slowly outside match nights. */
 export const LMS_CACHE_TTL = {
-  divisions: 60 * 60, // 1 hour
-  format: 60 * 60,
-  schedule: 30 * 60,
-  playerList: 30 * 60,
-  teamStandings: 10 * 60,
-  playerStandings: 10 * 60,
-  playersByTeam: 10 * 60,
-  calculator: 10 * 60,
-  match: 30 * 60,
-  team: 15 * 60,
-  teamPlayers: 15 * 60,
+  divisions: 24 * 60 * 60,
+  format: 24 * 60 * 60,
+  schedule: 24 * 60 * 60,
+  playerList: 24 * 60 * 60,
+  teamStandings: 24 * 60 * 60,
+  playerStandings: 24 * 60 * 60,
+  playersByTeam: 24 * 60 * 60,
+  calculator: 24 * 60 * 60,
+  match: 24 * 60 * 60,
+  team: 8 * 60 * 60,
+  teamPlayers: 8 * 60 * 60,
 } as const;
 
 export function lmsCacheKey(
