@@ -242,8 +242,13 @@ export function SettingsScreen({
                 }
                 options={divisionOptions}
                 onChange={(option) => {
-                  setDivisionId(option?.value.id ?? null);
-                  setTeamId(null);
+                  const nextDivisionId = option?.value.id ?? null;
+                  setDivisionId(nextDivisionId);
+                  const soleTeam =
+                    (membership?.teams ?? []).find(
+                      (team) => team.divisionId === nextDivisionId,
+                    ) ?? null;
+                  setTeamId(soleTeam?.teamId ?? null);
                   setStatus(null);
                 }}
               />

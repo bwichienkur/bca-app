@@ -41,6 +41,44 @@ import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
 type AppScreen = "main" | "login" | "settings";
 
+function ResyncIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 12a9 9 0 0 0-15.5-6.36" />
+      <path d="M3 4v5h5" />
+      <path d="M3 12a9 9 0 0 0 15.5 6.36" />
+      <path d="M21 20v-5h-5" />
+    </svg>
+  );
+}
+
+function GearIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+    </svg>
+  );
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
   if (!response.ok) {
@@ -554,14 +592,19 @@ export function LeagueApp() {
       teamId: null,
       teamName: null,
     };
+    const membershipTeams =
+      membership?.teams.filter((team) => team.divisionId === division.id) ??
+      [];
     const keepTeam =
       prefs?.teamId &&
-      membership?.teams.some(
-        (team) =>
-          team.teamId === prefs.teamId && team.divisionId === division.id,
-      )
+      membershipTeams.some((team) => team.teamId === prefs.teamId)
         ? { teamId: prefs.teamId, teamName: prefs.teamName }
-        : { teamId: null, teamName: null };
+        : membershipTeams[0]
+          ? {
+              teamId: membershipTeams[0].teamId,
+              teamName: membershipTeams[0].teamName,
+            }
+          : { teamId: null, teamName: null };
     persist({
       ...base,
       leagueId: division.leagueId,
@@ -852,29 +895,44 @@ export function LeagueApp() {
         <h1 className="font-[family-name:var(--font-display)] text-2xl leading-none tracking-tight text-[var(--felt-deep)] md:text-3xl">
           Tableside
         </h1>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+        <div className="flex min-w-0 shrink-0 items-center justify-end gap-1.5 sm:gap-2">
+          {user ? (
+            <div
+              title={`Signed in as ${user.name ?? user.email ?? "player"}`}
+              className="flex min-w-0 max-w-[11rem] items-center gap-2 rounded-full border border-[var(--felt)]/25 bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))] px-2.5 py-1.5 sm:max-w-[14rem]"
+            >
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--felt)] text-[10px] font-bold uppercase text-white">
+                {(user.name ?? user.email ?? "?").trim().charAt(0) || "?"}
+              </span>
+              <span className="min-w-0 truncate text-xs font-semibold text-[var(--felt-deep)]">
+                {user.name ?? user.email ?? "Signed in"}
+              </span>
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={() => void refreshCachedData()}
             disabled={refreshing}
-            title="Clear cached league data and reload from FargoRate"
-            className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)] disabled:opacity-60"
+            title="Resync league data from FargoRate"
+            aria-label={refreshing ? "Resyncing league data" : "Resync league data"}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)] disabled:opacity-60"
           >
-            {refreshing ? "Refreshing…" : "Refresh data"}
+            <ResyncIcon
+              className={["h-4 w-4", refreshing ? "animate-spin" : ""].join(
+                " ",
+              )}
+            />
           </button>
           {user ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setScreen("settings")}
-                className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
-              >
-                Settings
-              </button>
-              <span className="hidden max-w-[10rem] truncate text-xs font-medium text-[var(--felt-deep)] sm:inline">
-                {user.name ?? user.email ?? "Signed in"}
-              </span>
-            </>
+            <button
+              type="button"
+              onClick={() => setScreen("settings")}
+              title="Settings"
+              aria-label="Settings"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
+            >
+              <GearIcon className="h-4 w-4" />
+            </button>
           ) : (
             <button
               type="button"
