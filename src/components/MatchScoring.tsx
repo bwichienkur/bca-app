@@ -11,6 +11,7 @@ import {
 } from "react";
 import {
   applyQuickWin,
+  applyRaceScore,
   buildVerticalMatchPayload,
   clearDraft,
   computeMatchHandicaps,
@@ -21,6 +22,7 @@ import {
   MATCH_POINTS_ROUND,
   normalizeDraftScores,
   playerDisplayName,
+  RACE_SCORE_OPTIONS,
   saveDraft,
   syncLineupToGames,
   tallyAllRoundPoints,
@@ -1602,6 +1604,8 @@ function ScorePad({
 }) {
   const [local, setLocal] = useState<GameScoreState | null>(game ?? null);
   const [, startPadTransition] = useTransition();
+  const maxWin = match.maxScore > 0 ? match.maxScore : 10;
+  const maxLoss = match.maxLosingScore >= 0 ? match.maxLosingScore : 7;
 
   // Resync when opening/switching games — not on every parent score echo.
   useEffect(() => {
@@ -1610,6 +1614,15 @@ function ScorePad({
     // Intentionally omit `game` so parent transitions don't clobber local taps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, roundNumber, gameIndex]);
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
 
   if (!open || !game || !local) {
     return (
@@ -1621,216 +1634,233 @@ function ScorePad({
 
   const p1 = findPlayer(match.teamOnePlayers, local.teamOnePlayerId);
   const p2 = findPlayer(match.teamTwoPlayers, local.teamTwoPlayerId);
-  const winner = gameWinner(local);
+  const winner = gameWinner(local, {
+    maxScore: maxWin,
+    maxLosingScore: maxLoss,
+  });
 
   const commit = (next: GameScoreState) => {
     setLocal(next);
     startPadTransition(() => onChange(next));
   };
 
-  const bump = (side: 1 | 2, delta: number) => {
-    const key = side === 1 ? "teamOneScore" : "teamTwoScore";
-    const current = local[key] ?? 0;
-    const nextScore = Math.max(
-      match.minScore,
-      Math.min(match.maxScore, current + delta),
-    );
-    commit({
-      ...local,
-      [key]: nextScore,
-      winAdornment: "",
-      isWinZip: false,
-    });
-  };
-
-  const quick = (side: 1 | 2, adornment: WinAdornment = "") => {
+  const setScore = (side: 1 | 2, value: number) => {
     commit(
-      applyQuickWin(local, side, {
-        maxScore: match.maxScore,
-        maxLosingScore: match.maxLosingScore,
-        adornment,
+      applyRaceScore(local, side, value, {
+        maxScore: maxWin,
+        maxLosingScore: maxLoss,
       }),
     );
   };
 
-  const body = (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
-            Round {roundNumber} · Game {gameIndex}
-          </p>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            {p1 ? playerDisplayName(p1) : "Home"}
-            {p1?.fargoRating != null ? ` (${p1.fargoRating})` : ""} vs{" "}
-            {p2 ? playerDisplayName(p2) : "Away"}
-            {p2?.fargoRating != null ? ` (${p2.fargoRating})` : ""}
-          </p>
-          {!winner ? (
-            <p className="mt-1 text-xs text-[var(--amber)]">
-              In progress — counts when someone wins
-            </p>
-          ) : (
-            <p className="mt-1 text-xs text-[var(--felt-deep)]">Game complete</p>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="shrink-0 rounded-full border border-[var(--line)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)] lg:hidden"
-        >
-          Close
-        </button>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        {[1, 2].map((side) => {
-          const score = side === 1 ? local.teamOneScore : local.teamTwoScore;
-          const name =
-            side === 1
-              ? p1
-                ? playerDisplayName(p1)
-                : match.teamOneName
-              : p2
-                ? playerDisplayName(p2)
-                : match.teamTwoName;
-          const breaking = local.breakingTeam === side;
-          return (
-            <div
-              key={side}
-              className="rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-3"
-            >
-              <p className="truncate text-xs font-semibold text-[var(--muted)]">
-                {name}
-                {breaking ? " · break" : ""}
-              </p>
-              <p className="mt-2 font-[family-name:var(--font-display)] text-4xl tabular-nums text-[var(--felt-deep)]">
-                {local.winAdornment && winner === side
-                  ? local.winAdornment
-                  : (score ?? 0)}
-              </p>
-              {side === 1 && p1?.fargoRating != null ? (
-                <p className="mt-1 text-[11px] font-semibold text-[var(--felt)]">
-                  Fargo {p1.fargoRating}
-                </p>
-              ) : null}
-              {side === 2 && p2?.fargoRating != null ? (
-                <p className="mt-1 text-[11px] font-semibold text-[var(--felt)]">
-                  Fargo {p2.fargoRating}
-                </p>
-              ) : null}
-              <div className="mt-3 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => bump(side as 1 | 2, -1)}
-                  className="flex-1 rounded-xl bg-[var(--surface)] py-2 text-lg font-semibold active:scale-[0.98]"
-                >
-                  −
-                </button>
-                <button
-                  type="button"
-                  onClick={() => bump(side as 1 | 2, 1)}
-                  className="flex-1 rounded-xl bg-[var(--surface)] py-2 text-lg font-semibold active:scale-[0.98]"
-                >
-                  +
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => quick(side as 1 | 2)}
-                className="mt-2 w-full rounded-xl bg-[var(--felt)] py-2.5 text-sm font-semibold text-white active:scale-[0.98]"
-              >
-                WIN
-              </button>
-            </div>
-          );
-        })}
-      </div>
-
-      <div>
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-          Win adornment
-        </p>
-        <div className="grid grid-cols-4 gap-2">
-          {(["", "BR", "TR", "WZ"] as WinAdornment[]).map((adornment) => {
-            const label = adornment || "CLR";
-            const active = local.winAdornment === adornment;
-            return (
-              <button
-                key={label}
-                type="button"
-                onClick={() => {
-                  const currentWinner = gameWinner(local);
-                  if (!currentWinner) {
-                    commit({
-                      ...local,
-                      winAdornment: adornment,
-                      isWinZip: adornment === "WZ",
-                    });
-                    return;
-                  }
-                  quick(currentWinner, adornment);
-                }}
-                className={[
-                  "rounded-xl py-2.5 text-sm font-semibold",
-                  active
-                    ? "bg-[var(--amber)] text-[#1a1208]"
-                    : "bg-[var(--surface-2)] text-[var(--ink)]",
-                ].join(" ")}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() =>
-            commit({
-              ...local,
-              breakingTeam: local.breakingTeam === 1 ? 2 : 1,
-            })
-          }
-          className="flex-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] py-2.5 text-sm font-semibold"
-        >
-          Swap break
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            commit({
-              ...local,
-              teamOneScore: 0,
-              teamTwoScore: 0,
-              winAdornment: "",
-              isWinZip: false,
-            })
-          }
-          className="flex-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] py-2.5 text-sm font-semibold text-[var(--muted)]"
-        >
-          Reset 0–0
-        </button>
-      </div>
-    </div>
-  );
+  const scoreOptionsFor = (side: 1 | 2) => {
+    const other =
+      side === 1 ? (local.teamTwoScore ?? 0) : (local.teamOneScore ?? 0);
+    if (other === maxWin) {
+      return RACE_SCORE_OPTIONS.filter((value) => value !== maxWin);
+    }
+    return [...RACE_SCORE_OPTIONS];
+  };
 
   return (
     <>
-      <aside className="hidden w-full animate-rise rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm lg:block">
-        {body}
+      <aside className="hidden rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)]/50 p-5 text-sm text-[var(--muted)] lg:block">
+        Score pad open — use the full-screen editor.
       </aside>
-      <div className="fixed inset-x-0 bottom-0 z-40 lg:hidden">
-        <button
-          type="button"
-          aria-label="Dismiss score pad"
-          className="absolute inset-x-0 bottom-0 top-[-40vh] bg-black/45"
-          onClick={onClose}
-        />
-        <div className="relative max-h-[85dvh] overflow-y-auto animate-rise rounded-t-[1.5rem] border border-[var(--line)] bg-[var(--paper-2)] px-4 pb-[calc(1rem+var(--safe-bottom))] pt-4 shadow-[var(--shadow)]">
-          {body}
+      <div
+        className="fixed inset-x-0 bottom-0 z-50 flex flex-col bg-[var(--paper-2)] shadow-[var(--shadow)]"
+        style={{ top: "var(--score-pad-top, 6.5rem)" }}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Round ${roundNumber} game ${gameIndex} score pad`}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-[var(--line)] px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
+              Round {roundNumber} · Game {gameIndex}
+            </p>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              {p1 ? playerDisplayName(p1) : "Home"}
+              {p1?.fargoRating != null ? ` (${p1.fargoRating})` : ""} vs{" "}
+              {p2 ? playerDisplayName(p2) : "Away"}
+              {p2?.fargoRating != null ? ` (${p2.fargoRating})` : ""}
+            </p>
+            {!winner ? (
+              <p className="mt-1 text-xs text-[var(--amber)]">
+                In progress — first to {maxWin} wins (loser ≤{maxLoss})
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-[var(--felt-deep)]">
+                Game complete
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 pb-[calc(1rem+var(--safe-bottom))]">
+          <div className="grid grid-cols-2 gap-3">
+            {[1, 2].map((side) => {
+              const score =
+                side === 1
+                  ? (local.teamOneScore ?? 0)
+                  : (local.teamTwoScore ?? 0);
+              const name =
+                side === 1
+                  ? p1
+                    ? playerDisplayName(p1)
+                    : match.teamOneName
+                  : p2
+                    ? playerDisplayName(p2)
+                    : match.teamTwoName;
+              const breaking = local.breakingTeam === side;
+              const isWinner = winner === side;
+              const options = scoreOptionsFor(side as 1 | 2);
+              const selectValue = options.includes(
+                score as (typeof RACE_SCORE_OPTIONS)[number],
+              )
+                ? score
+                : 0;
+              return (
+                <div
+                  key={side}
+                  className={[
+                    "rounded-2xl border p-3",
+                    isWinner
+                      ? "border-[var(--felt)]/50 bg-[color-mix(in_srgb,var(--felt)_16%,var(--surface-2))]"
+                      : "border-[var(--line)] bg-[var(--surface-2)]",
+                  ].join(" ")}
+                >
+                  <p className="truncate text-xs font-semibold text-[var(--muted)]">
+                    {name}
+                    {breaking ? " · break" : ""}
+                  </p>
+                  {side === 1 && p1?.fargoRating != null ? (
+                    <p className="mt-1 text-[11px] font-semibold text-[var(--felt)]">
+                      Fargo {p1.fargoRating}
+                    </p>
+                  ) : null}
+                  {side === 2 && p2?.fargoRating != null ? (
+                    <p className="mt-1 text-[11px] font-semibold text-[var(--felt)]">
+                      Fargo {p2.fargoRating}
+                    </p>
+                  ) : null}
+                  <label className="mt-3 block">
+                    <span className="sr-only">Score for {name}</span>
+                    <select
+                      value={selectValue}
+                      onChange={(event) =>
+                        setScore(side as 1 | 2, Number(event.target.value))
+                      }
+                      className={[
+                        "w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-3 text-center font-[family-name:var(--font-display)] text-4xl tabular-nums outline-none ring-[var(--felt)] focus:ring-2",
+                        isWinner
+                          ? "text-[var(--felt-deep)]"
+                          : "text-[var(--ink)]",
+                      ].join(" ")}
+                    >
+                      {options.map((value) => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {isWinner ? (
+                    <p className="mt-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--felt-deep)]">
+                      {local.winAdornment
+                        ? `Winner · ${local.winAdornment}`
+                        : "Winner"}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+              Win adornment
+            </p>
+            <div className="grid grid-cols-4 gap-2">
+              {(["", "BR", "TR", "WZ"] as WinAdornment[]).map((adornment) => {
+                const label = adornment || "CLR";
+                const active = local.winAdornment === adornment;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    disabled={!winner && adornment !== ""}
+                    onClick={() => {
+                      const currentWinner = gameWinner(local, {
+                        maxScore: maxWin,
+                        maxLosingScore: maxLoss,
+                      });
+                      if (!currentWinner) {
+                        commit({
+                          ...local,
+                          winAdornment: "",
+                          isWinZip: false,
+                        });
+                        return;
+                      }
+                      commit(
+                        applyQuickWin(local, currentWinner, {
+                          maxScore: maxWin,
+                          maxLosingScore: maxLoss,
+                          adornment,
+                        }),
+                      );
+                    }}
+                    className={[
+                      "rounded-xl py-2.5 text-sm font-semibold disabled:opacity-35",
+                      active
+                        ? "bg-[var(--amber)] text-[#1a1208]"
+                        : "bg-[var(--surface-2)] text-[var(--ink)]",
+                    ].join(" ")}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                commit({
+                  ...local,
+                  breakingTeam: local.breakingTeam === 1 ? 2 : 1,
+                })
+              }
+              className="flex-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] py-2.5 text-sm font-semibold"
+            >
+              Swap break
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                commit({
+                  ...local,
+                  teamOneScore: 0,
+                  teamTwoScore: 0,
+                  winAdornment: "",
+                  isWinZip: false,
+                })
+              }
+              className="flex-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] py-2.5 text-sm font-semibold text-[var(--muted)]"
+            >
+              Reset 0–0
+            </button>
+          </div>
         </div>
       </div>
     </>

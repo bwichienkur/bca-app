@@ -192,12 +192,30 @@ export function syncLineupToGames(
   return applyHandicapsToDraft(match, next);
 }
 
-/** A game is complete only when one side has a higher score (a winner). */
-export function gameWinner(game: GameScoreState | undefined): 1 | 2 | null {
+/** Legal race scores for the score pad (no 8/9 — jump to race-to win). */
+export const RACE_SCORE_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 7, 10] as const;
+
+/**
+ * A game is complete only when one side reaches the race win score (typically 10)
+ * and the other is at or under the max losing score (typically 7).
+ */
+export function gameWinner(
+  game: GameScoreState | undefined,
+  options?: { maxScore?: number; maxLosingScore?: number },
+): 1 | 2 | null {
   if (!game) return null;
   if (game.teamOneScore == null || game.teamTwoScore == null) return null;
-  if (game.teamOneScore === game.teamTwoScore) return null;
-  return game.teamOneScore > game.teamTwoScore ? 1 : 2;
+  const maxWin =
+    options?.maxScore && options.maxScore > 0 ? options.maxScore : 10;
+  const maxLoss =
+    options?.maxLosingScore != null && options.maxLosingScore >= 0
+      ? options.maxLosingScore
+      : 7;
+  const one = game.teamOneScore;
+  const two = game.teamTwoScore;
+  if (one === maxWin && two <= maxLoss) return 1;
+  if (two === maxWin && one <= maxLoss) return 2;
+  return null;
 }
 
 export function isGameScored(game: GameScoreState | undefined): boolean {
@@ -739,7 +757,12 @@ export function applyQuickWin(
 ): GameScoreState {
   const adornment = options.adornment ?? "";
   const winScore = options.maxScore;
-  const loseScore = adornment === "WZ" ? 0 : 0;
+  const currentLoser =
+    winner === 1 ? (game.teamTwoScore ?? 0) : (game.teamOneScore ?? 0);
+  const loseScore =
+    adornment === "WZ"
+      ? 0
+      : Math.min(Math.max(0, currentLoser), options.maxLosingScore);
   return {
     ...game,
     teamOneScore: winner === 1 ? winScore : loseScore,
@@ -747,6 +770,49 @@ export function applyQuickWin(
     winAdornment: adornment,
     isWinZip: adornment === "WZ",
   };
+}
+
+/** Clamp a side's score selection into legal race options. */
+export function applyRaceScore(
+  game: GameScoreState,
+  side: 1 | 2,
+  value: number,
+  options: { maxScore: number; maxLosingScore: number },
+): GameScoreState {
+  const maxWin = options.maxScore > 0 ? options.maxScore : 10;
+  const maxLoss = options.maxLosingScore >= 0 ? options.maxLosingScore : 7;
+  const allowed = new Set<number>(RACE_SCORE_OPTIONS);
+  const picked = allowed.has(value) ? value : 0;
+
+  let teamOneScore = game.teamOneScore ?? 0;
+  let teamTwoScore = game.teamTwoScore ?? 0;
+
+  if (side === 1) {
+    teamOneScore = picked;
+    if (picked === maxWin) {
+      teamTwoScore = Math.min(teamTwoScore, maxLoss);
+    } else if (teamTwoScore === maxWin) {
+      teamOneScore = Math.min(picked, maxLoss);
+    }
+  } else {
+    teamTwoScore = picked;
+    if (picked === maxWin) {
+      teamOneScore = Math.min(teamOneScore, maxLoss);
+    } else if (teamOneScore === maxWin) {
+      teamTwoScore = Math.min(picked, maxLoss);
+    }
+  }
+
+  const next: GameScoreState = {
+    ...game,
+    teamOneScore,
+    teamTwoScore,
+  };
+  if (!gameWinner(next, { maxScore: maxWin, maxLosingScore: maxLoss })) {
+    next.winAdornment = "";
+    next.isWinZip = false;
+  }
+  return next;
 }
 
 export function normalizeScoringPlayer(raw: Record<string, unknown>): ScoringPlayer {
