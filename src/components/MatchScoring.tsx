@@ -26,6 +26,7 @@ import {
   computeMatchHandicaps,
   emptyDraft,
   gameKey,
+  gamePlayStatus,
   gameWinner,
   loadDraft,
   MATCH_POINTS_ROUND,
@@ -978,7 +979,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                       activeGame?.roundNumber === currentRound.roundNumber &&
                       activeGame?.gameIndex === game.index;
                     const winner = gameWinner(state);
-                    const complete = winner != null;
+                    const status = gamePlayStatus(state);
                     return (
                       <button
                         key={game.index}
@@ -995,9 +996,12 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                           "w-full min-w-0 overflow-hidden rounded-xl border px-2.5 py-2 text-left transition sm:px-3",
                           sheetLocked ? "cursor-default opacity-95" : "",
                           selected
-                            ? "border-[var(--felt)] bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))]"
-                            : complete
-                              ? "border-[var(--felt)]/35 bg-[var(--surface)]"
+                            ? "border-[var(--felt)] ring-2 ring-[var(--felt)]/25"
+                            : "",
+                          status === "complete"
+                            ? "border-[var(--felt)]/55 bg-[color-mix(in_srgb,var(--felt)_12%,var(--surface))]"
+                            : status === "in-progress"
+                              ? "border-[var(--amber)]/65 bg-[color-mix(in_srgb,var(--amber)_14%,var(--surface))]"
                               : "border-[var(--line)] bg-[var(--surface)] hover:bg-[var(--surface-2)]",
                         ].join(" ")}
                       >
@@ -1026,12 +1030,34 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                               {state?.breakingTeam === 1 ? " · Breaks" : ""}
                             </p>
                           </div>
-                          <div className="shrink-0 rounded-lg bg-[var(--surface-2)] px-2.5 py-1 text-center">
+                          <div
+                            className={[
+                              "shrink-0 rounded-lg px-2.5 py-1 text-center",
+                              status === "complete"
+                                ? "bg-[color-mix(in_srgb,var(--felt)_20%,var(--surface))]"
+                                : status === "in-progress"
+                                  ? "bg-[color-mix(in_srgb,var(--amber)_22%,var(--surface))]"
+                                  : "bg-[var(--surface-2)]",
+                            ].join(" ")}
+                          >
                             <p className="text-sm font-semibold tabular-nums leading-none">
                               {scoreLabel(state)}
                             </p>
-                            <p className="mt-0.5 text-[9px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                              {complete ? "Final" : `G${game.index}`}
+                            <p
+                              className={[
+                                "mt-0.5 text-[9px] uppercase tracking-[0.12em]",
+                                status === "complete"
+                                  ? "font-semibold text-[var(--felt-deep)]"
+                                  : status === "in-progress"
+                                    ? "font-semibold text-[var(--amber)]"
+                                    : "text-[var(--muted)]",
+                              ].join(" ")}
+                            >
+                              {status === "complete"
+                                ? "Final"
+                                : status === "in-progress"
+                                  ? "Live"
+                                  : `G${game.index}`}
                             </p>
                           </div>
                           <div className="min-w-0 overflow-hidden text-right">
@@ -1501,10 +1527,19 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
     const formatNeed = (side: 1 | 2, name: string) => {
       const canCatch =
         side === 1 ? tally.canCatchUp.teamOne : tally.canCatchUp.teamTwo;
+      const otherCanCatch =
+        side === 1 ? tally.canCatchUp.teamTwo : tally.canCatchUp.teamOne;
+      const ourTotal =
+        side === 1 ? tally.teamOneTotal : tally.teamTwoTotal;
+      const theirTotal =
+        side === 1 ? tally.teamTwoTotal : tally.teamOneTotal;
       if (!canCatch) return `${name}: can’t catch up`;
       const need =
         side === 1 ? tally.pointsNeeded.teamOne : tally.pointsNeeded.teamTwo;
       if (need == null) return null;
+      if (ourTotal > theirTotal && otherCanCatch) {
+        return `${name}: can still be caught`;
+      }
       if (need === 0) return `${name}: on track`;
       return `${name}: need ${need} pt${need === 1 ? "" : "s"}`;
     };
@@ -1516,7 +1551,7 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
       tally.teamOneHandicap > 0 || tally.teamTwoHandicap > 0
         ? " · HC in totals"
         : "";
-    return `${parts.join(" · ")} from ${gamesLeft} game${gamesLeft === 1 ? "" : "s"} (win ≤${tally.maxWinPoints} / loss ≤${tally.maxLossPoints}${hcNote})`;
+    return `${parts.join(" · ")} from ${gamesLeft} game${gamesLeft === 1 ? "" : "s"} (best catch-up = ${tally.maxWinPoints}–0 sweeps${hcNote})`;
   })();
 
   const sideCard = (
@@ -1533,6 +1568,16 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
       side === 1 ? tally.pointsNeeded.teamOne : tally.pointsNeeded.teamTwo;
     const canCatch =
       side === 1 ? tally.canCatchUp.teamOne : tally.canCatchUp.teamTwo;
+    const otherCanCatch =
+      side === 1 ? tally.canCatchUp.teamTwo : tally.canCatchUp.teamOne;
+    const theirTotal =
+      side === 1 ? tally.teamTwoTotal : tally.teamOneTotal;
+    const aheadAndVulnerable =
+      !tally.roundWinner &&
+      gamesLeft > 0 &&
+      canCatch &&
+      total > theirTotal &&
+      otherCanCatch;
     return (
       <div
         className={[
@@ -1568,14 +1613,18 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
               "mt-1 text-[11px] font-semibold",
               !canCatch
                 ? "text-[var(--danger)]"
-                : "text-[var(--amber)]",
+                : aheadAndVulnerable
+                  ? "text-[var(--amber)]"
+                  : "text-[var(--felt-deep)]",
             ].join(" ")}
           >
             {!canCatch
               ? "Can’t catch up"
-              : need == null || need === 0
-                ? "On track"
-                : `Need ${need} pt${need === 1 ? "" : "s"}`}
+              : aheadAndVulnerable
+                ? "Can still be caught"
+                : need == null || need === 0
+                  ? "On track"
+                  : `Need ${need} pt${need === 1 ? "" : "s"}`}
           </p>
         ) : null}
       </div>

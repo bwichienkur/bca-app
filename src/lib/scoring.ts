@@ -316,8 +316,8 @@ type ClinchArgs = {
 
 /**
  * Side has clinched when even their worst remaining case (lose all at 0 pts)
- * still beats the opponent's best case (win all at maxWin). Totals should
- * already include handicap so HC leads are respected.
+ * still beats the opponent's best case (win all at maxWin, us at 0).
+ * Totals should already include handicap so HC leads are respected.
  */
 export function hasClinchedRound(args: ClinchArgs & { side: 1 | 2 }): boolean {
   const rem = Math.max(0, args.gamesRemaining);
@@ -328,6 +328,7 @@ export function hasClinchedRound(args: ClinchArgs & { side: 1 | 2 }): boolean {
 
   if (rem > 0) {
     if (args.side === 1) {
+      // Worst for us: we take 0; opponent sweeps remaining at maxWin.
       twoPts += args.maxWin * rem;
       twoWins += rem;
     } else {
@@ -348,9 +349,9 @@ export function clinchRoundWinner(args: ClinchArgs): 1 | 2 | null {
 }
 
 /**
- * True when this side can still win by taking every remaining game at maxWin
- * while the opponent is held to at most maxLoss each. Uses HC-inclusive
- * current totals.
+ * True when this side can still win by sweeping every remaining game at
+ * maxWin–0 (opponent adds 0 pts). Example: 14–32 with 2 games left can still
+ * become 34–32. Uses HC-inclusive current totals.
  */
 export function canCatchUpRound(args: ClinchArgs & { side: 1 | 2 }): boolean {
   const rem = Math.max(0, args.gamesRemaining);
@@ -363,11 +364,10 @@ export function canCatchUpRound(args: ClinchArgs & { side: 1 | 2 }): boolean {
     if (args.side === 1) {
       onePts += args.maxWin * rem;
       oneWins += rem;
-      twoPts += args.maxLoss * rem;
+      // Best catch-up path: we win each remaining game  maxWin–0.
     } else {
       twoPts += args.maxWin * rem;
       twoWins += rem;
-      onePts += args.maxLoss * rem;
     }
   }
 
@@ -377,8 +377,7 @@ export function canCatchUpRound(args: ClinchArgs & { side: 1 | 2 }): boolean {
 }
 
 /**
- * Chase number using a coupled outcome: assume we win every remaining game
- * (up to maxWin each) while the opponent is held to at most maxLoss each.
+ * Chase number assuming we sweep remaining games maxWin–0 (opponent adds 0).
  * Current point totals must include handicap.
  */
 export function pointsNeededFromRemaining(
@@ -398,14 +397,25 @@ export function pointsNeededFromRemaining(
   const oppWins =
     args.side === 1 ? args.teamTwoGameWins : args.teamOneGameWins;
 
-  // If we win out, opponent adds at most maxLoss per remaining game.
-  const oppIfWeWinOut = oppPts + args.maxLoss * rem;
+  // Best path: opponent stays flat while we bank remaining wins.
+  const oppIfWeWinOut = oppPts;
   const canWinOnPointsTie = ourWins + rem > oppWins;
   const needed = canWinOnPointsTie
     ? oppIfWeWinOut - ourPts
     : oppIfWeWinOut - ourPts + 1;
 
   return Math.max(0, needed);
+}
+
+/** Card status for a game in the round list. */
+export function gamePlayStatus(
+  game: GameScoreState | undefined,
+): "complete" | "in-progress" | "not-started" {
+  if (gameWinner(game)) return "complete";
+  const one = game?.teamOneScore ?? 0;
+  const two = game?.teamTwoScore ?? 0;
+  if (one > 0 || two > 0) return "in-progress";
+  return "not-started";
 }
 
 function buildRoundDecision(args: ClinchArgs): {
