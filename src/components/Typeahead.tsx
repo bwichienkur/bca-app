@@ -157,10 +157,11 @@ export function Typeahead<T>({
               setQuery(value?.label ?? "");
             }
           }}
+          style={felt ? { backgroundColor: "var(--felt)" } : undefined}
           className={[
             "w-full rounded-2xl border px-4 py-3 outline-none transition focus:ring-2 disabled:opacity-50",
             felt
-              ? "border-white/20 bg-[var(--felt)] text-white ring-white/35 placeholder:text-white/45 [background-color:var(--felt)]"
+              ? "border-white/20 text-white ring-white/35 placeholder:text-white/45"
               : "border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)] ring-[var(--felt-soft)] placeholder:text-[var(--muted)]",
             showClear ? "pr-16" : "pr-10",
           ].join(" ")}
@@ -213,20 +214,23 @@ export function Typeahead<T>({
         <ul
           id={listId}
           role="listbox"
+          style={
+            felt
+              ? { backgroundColor: "var(--felt)" }
+              : { backgroundColor: "var(--surface-2)" }
+          }
           className={[
             "absolute z-[90] mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border py-1 shadow-[var(--shadow)]",
             felt
-              ? "border-white/20 bg-[var(--felt)] [background-color:var(--felt)]"
-              : "border-[var(--line-strong)] bg-[var(--surface-2)] [background-color:var(--surface-2)]",
+              ? "border-white/20 text-white"
+              : "border-[var(--line-strong)] text-[var(--ink)]",
           ].join(" ")}
         >
           {filtered.length === 0 ? (
             <li
               className={[
                 "px-4 py-3 text-sm",
-                felt
-                  ? "bg-[var(--felt)] text-white/70"
-                  : "bg-[var(--surface-2)] text-[var(--muted)]",
+                felt ? "text-white/70" : "text-[var(--muted)]",
               ].join(" ")}
             >
               {emptyText}
@@ -236,10 +240,7 @@ export function Typeahead<T>({
               const active = index === highlight;
               const selected = value?.id === option.id;
               return (
-                <li
-                  key={option.id}
-                  className={felt ? "bg-[var(--felt)]" : "bg-[var(--surface-2)]"}
-                >
+                <li key={option.id}>
                   <button
                     type="button"
                     role="option"
@@ -247,22 +248,27 @@ export function Typeahead<T>({
                     onMouseEnter={() => setHighlight(index)}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => choose(option)}
+                    style={
+                      felt
+                        ? {
+                            backgroundColor: active
+                              ? "color-mix(in srgb, var(--felt) 82%, white)"
+                              : "var(--felt)",
+                          }
+                        : undefined
+                    }
                     className={[
                       "flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm",
                       felt
-                        ? active
-                          ? "bg-black/25"
-                          : "bg-[var(--felt)]"
-                        : active
-                          ? "bg-[var(--surface-3)]"
-                          : "bg-[var(--surface-2)]",
-                      selected
-                        ? felt
+                        ? selected
                           ? "font-semibold text-white"
-                          : "font-semibold text-[var(--felt-deep)]"
-                        : felt
-                          ? "text-white/95"
-                          : "text-[var(--ink)]",
+                          : "text-white/95"
+                        : [
+                            active ? "bg-[var(--surface-3)]" : "bg-[var(--surface-2)]",
+                            selected
+                              ? "font-semibold text-[var(--felt-deep)]"
+                              : "text-[var(--ink)]",
+                          ].join(" "),
                     ].join(" ")}
                   >
                     <span>
