@@ -281,10 +281,25 @@ export function HandicapCalculator({
     if (data) applyTeamMatchup(data, team.id);
   };
 
+  const clearMyTeam = () => {
+    setMyTeamId(null);
+    setOpponentTeamId(null);
+    setMyLineup([]);
+    setOppLineup([]);
+    setWeekMatchup(null);
+    setPresetStatus(null);
+  };
+
   const chooseOpponent = (team: DivisionTeam) => {
     setOpponentTeamId(team.id);
     setWeekMatchup(null);
     setOppLineup(defaultTopLineup(team, slots));
+  };
+
+  const clearOpponent = () => {
+    setOpponentTeamId(null);
+    setWeekMatchup(null);
+    setOppLineup([]);
   };
 
   const setSlotPlayer = (
@@ -431,6 +446,7 @@ export function HandicapCalculator({
           options={teamOptions}
           onChange={(option) => {
             if (option) chooseMyTeam(option.value);
+            else clearMyTeam();
           }}
         />
         <Typeahead
@@ -449,6 +465,7 @@ export function HandicapCalculator({
           options={teamOptions.filter((option) => option.id !== myTeamId)}
           onChange={(option) => {
             if (option) chooseOpponent(option.value);
+            else clearOpponent();
           }}
           disabled={!myTeam}
         />
