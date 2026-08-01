@@ -20,6 +20,8 @@ type TypeaheadProps<T> = {
   emptyText?: string;
   /** Show a clear control when a value is selected. Defaults to true. */
   clearable?: boolean;
+  /** Visual tone for embedding on felt/green surfaces. */
+  tone?: "default" | "felt";
 };
 
 export function Typeahead<T>({
@@ -32,7 +34,9 @@ export function Typeahead<T>({
   disabled,
   emptyText = "No matches",
   clearable = true,
+  tone = "default",
 }: TypeaheadProps<T>) {
+  const felt = tone === "felt";
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -102,7 +106,12 @@ export function Typeahead<T>({
       ref={rootRef}
       className={["relative w-full", open ? "z-[80]" : "z-10"].join(" ")}
     >
-      <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+      <label
+        className={[
+          "mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em]",
+          felt ? "text-white/65" : "text-[var(--muted)]",
+        ].join(" ")}
+      >
         {label}
       </label>
       <div className="relative">
@@ -149,7 +158,10 @@ export function Typeahead<T>({
             }
           }}
           className={[
-            "w-full rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2 disabled:opacity-50",
+            "w-full rounded-2xl border px-4 py-3 outline-none transition focus:ring-2 disabled:opacity-50",
+            felt
+              ? "border-white/20 bg-white/10 text-white ring-white/35 placeholder:text-white/45"
+              : "border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)] ring-[var(--felt-soft)] placeholder:text-[var(--muted)]",
             showClear ? "pr-16" : "pr-10",
           ].join(" ")}
         />
@@ -160,7 +172,12 @@ export function Typeahead<T>({
               aria-label={`Clear ${label}`}
               onMouseDown={(event) => event.preventDefault()}
               onClick={clear}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-lg leading-none text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)]"
+              className={[
+                "flex h-8 w-8 items-center justify-center rounded-full text-lg leading-none transition",
+                felt
+                  ? "text-white/70 hover:bg-white/10 hover:text-white"
+                  : "text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--ink)]",
+              ].join(" ")}
             >
               ×
             </button>
@@ -180,7 +197,12 @@ export function Typeahead<T>({
                 inputRef.current?.focus();
               }
             }}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-sm text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)] disabled:opacity-50"
+            className={[
+              "flex h-8 w-8 items-center justify-center rounded-full text-sm transition disabled:opacity-50",
+              felt
+                ? "text-white/70 hover:bg-white/10 hover:text-white"
+                : "text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--ink)]",
+            ].join(" ")}
           >
             {open ? "▴" : "▾"}
           </button>
