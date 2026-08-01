@@ -817,15 +817,22 @@ function LineupPicker({
   setDragState: (state: DragState | null) => void;
   setDropTarget: (state: DragState | null) => void;
 }) {
-  const HOLD_MS = 350;
-  const MOVE_CANCEL_PX = 10;
+  // Press-and-hold: lock scroll after a short stillness, then start drag.
+  const LOCK_MS = 160;
+  const HOLD_MS = 300;
+  const MOVE_CANCEL_PX = 18;
 
   const filled = filledCount(lineup);
   const listRef = useRef<HTMLOListElement>(null);
   const dropTargetRef = useRef(dropTarget);
+  const onMoveRef = useRef(onMove);
+  const setDragStateRef = useRef(setDragState);
+  const setDropTargetRef = useRef(setDropTarget);
+  const lockTimerRef = useRef<number | null>(null);
   const holdTimerRef = useRef<number | null>(null);
   const pendingHoldRef = useRef<{
     index: number;
+    pointerId: number;
     startX: number;
     startY: number;
     lastX: number;
@@ -834,9 +841,11 @@ function LineupPicker({
     height: number;
     offsetX: number;
     offsetY: number;
+    locked: boolean;
   } | null>(null);
   const [mounted, setMounted] = useState(false);
   const [holdingIndex, setHoldingIndex] = useState<number | null>(null);
+  const [scrollLocked, setScrollLocked] = useState(false);
   const [ghost, setGhost] = useState<{
     x: number;
     y: number;
@@ -870,19 +879,34 @@ function LineupPicker({
     dropTargetRef.current = dropTarget;
   }, [dropTarget]);
 
-  const cancelHold = () => {
+  useEffect(() => {
+    onMoveRef.current = onMove;
+    setDragStateRef.current = setDragState;
+    setDropTargetRef.current = setDropTarget;
+  }, [onMove, setDragState, setDropTarget]);
+
+  const clearHoldTimers = () => {
+    if (lockTimerRef.current != null) {
+      window.clearTimeout(lockTimerRef.current);
+      lockTimerRef.current = null;
+    }
     if (holdTimerRef.current != null) {
       window.clearTimeout(holdTimerRef.current);
       holdTimerRef.current = null;
     }
+  };
+
+  const cancelHold = () => {
+    clearHoldTimers();
     pendingHoldRef.current = null;
     setHoldingIndex(null);
+    setScrollLocked(false);
   };
 
   const clearDrag = () => {
     cancelHold();
-    setDragState(null);
-    setDropTarget(null);
+    setDragStateRef.current(null);
+    setDropTargetRef.current(null);
     setGhost(null);
   };
 
@@ -914,19 +938,21 @@ function LineupPicker({
   const startDragFromHold = () => {
     const pending = pendingHoldRef.current;
     if (!pending) return;
-    holdTimerRef.current = null;
+    clearHoldTimers();
+    const { index, lastX, lastY, width, height, offsetX, offsetY } = pending;
     pendingHoldRef.current = null;
     setHoldingIndex(null);
+    setScrollLocked(true);
     setGhost({
-      x: pending.lastX,
-      y: pending.lastY,
-      width: pending.width,
-      height: pending.height,
-      offsetX: pending.offsetX,
-      offsetY: pending.offsetY,
+      x: lastX,
+      y: lastY,
+      width,
+      height,
+      offsetX,
+      offsetY,
     });
-    setDragState({ side, from: pending.index });
-    setDropTarget({ side, from: pending.index });
+    setDragStateRef.current({ side, from: index });
+    setDropTargetRef.current({ side, from: index });
     if (typeof navigator !== "undefined" && "vibrate" in navigator) {
       try {
         navigator.vibrate(12);
@@ -936,11 +962,14 @@ function LineupPicker({
     }
   };
 
+  // Active drag listeners — keep deps stable so moves don't rebind every frame.
   useEffect(() => {
     if (!draggingHere || dragFrom < 0) return;
 
     const previousTouchAction = document.body.style.touchAction;
+    const previousUserSelect = document.body.style.userSelect;
     document.body.style.touchAction = "none";
+    document.body.style.userSelect = "none";
 
     const onPointerMove = (event: PointerEvent) => {
       event.preventDefault();
@@ -951,7 +980,7 @@ function LineupPicker({
       );
       const next = indexFromClientY(event.clientY);
       if (next == null) return;
-      setDropTarget({ side, from: next });
+      setDropTargetRef.current({ side, from: next });
     };
 
     const onPointerUp = (event: PointerEvent) => {
@@ -961,7 +990,7 @@ function LineupPicker({
           ? currentDrop.from
           : (indexFromClientY(event.clientY) ?? dragFrom);
       if (target !== dragFrom) {
-        onMove(dragFrom, target);
+        onMoveRef.current(dragFrom, target);
       }
       clearDrag();
     };
@@ -971,22 +1000,32 @@ function LineupPicker({
     window.addEventListener("pointercancel", onPointerUp);
     return () => {
       document.body.style.touchAction = previousTouchAction;
+      document.body.style.userSelect = previousUserSelect;
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draggingHere, dragFrom, side, onMove]);
+  }, [draggingHere, dragFrom, side]);
 
-  // While waiting for a long-press, cancel if the pointer moves (scroll/swipe).
+  // Long-press arming: allow scroll until stillness locks, then start drag.
   useEffect(() => {
     if (holdingIndex == null) return;
+
+    const previousTouchAction = document.body.style.touchAction;
 
     const onPointerMove = (event: PointerEvent) => {
       const pending = pendingHoldRef.current;
       if (!pending) return;
       pending.lastX = event.clientX;
       pending.lastY = event.clientY;
+
+      if (pending.locked) {
+        // Scroll is locked; keep the hold alive until drag starts.
+        event.preventDefault();
+        return;
+      }
+
       const distance = Math.hypot(
         event.clientX - pending.startX,
         event.clientY - pending.startY,
@@ -1000,21 +1039,30 @@ function LineupPicker({
       cancelHold();
     };
 
-    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointermove", onPointerMove, { passive: false });
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("pointercancel", onPointerUp);
     return () => {
+      document.body.style.touchAction = previousTouchAction;
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerUp);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [holdingIndex]);
 
   useEffect(() => {
+    if (!scrollLocked) return;
+    const previous = document.body.style.touchAction;
+    document.body.style.touchAction = "none";
     return () => {
-      if (holdTimerRef.current != null) {
-        window.clearTimeout(holdTimerRef.current);
-      }
+      document.body.style.touchAction = previous;
+    };
+  }, [scrollLocked]);
+
+  useEffect(() => {
+    return () => {
+      clearHoldTimers();
     };
   }, []);
 
@@ -1025,11 +1073,12 @@ function LineupPicker({
     if (!lineup[index] || shouldIgnoreDrag(event.target) || draggingHere) {
       return;
     }
-    // Do not preventDefault here — allow the page to scroll until hold activates.
+    // Don't preventDefault yet — quick flicks should still scroll the page.
     const rect = event.currentTarget.getBoundingClientRect();
     cancelHold();
     pendingHoldRef.current = {
       index,
+      pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
       lastX: event.clientX,
@@ -1038,8 +1087,17 @@ function LineupPicker({
       height: rect.height,
       offsetX: event.clientX - rect.left,
       offsetY: event.clientY - rect.top,
+      locked: false,
     };
     setHoldingIndex(index);
+
+    lockTimerRef.current = window.setTimeout(() => {
+      const pending = pendingHoldRef.current;
+      if (!pending || pending.index !== index) return;
+      pending.locked = true;
+      setScrollLocked(true);
+    }, LOCK_MS);
+
     holdTimerRef.current = window.setTimeout(() => {
       startDragFromHold();
     }, HOLD_MS);
@@ -1103,8 +1161,9 @@ function LineupPicker({
                     isLiftedSource
                       ? "z-20 border-[var(--felt)]/40 bg-[var(--surface-3)] opacity-30"
                       : isHolding
-                        ? "z-10 scale-[0.985] border-[var(--felt)]/55 bg-[color-mix(in_srgb,var(--felt)_12%,var(--surface-2))]"
+                        ? "z-10 border-[var(--felt)]/60 bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface-2))] shadow-[inset_0_0_0_1px_rgba(61,155,117,0.35)]"
                         : "z-0 border-[var(--line)] bg-[var(--surface-2)]",
+                    scrollLocked || draggingHere ? "touch-none" : "",
                   ].join(" ")}
                 >
                   <div className="mb-1.5 flex items-center justify-between gap-2">
