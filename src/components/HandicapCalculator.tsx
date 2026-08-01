@@ -521,7 +521,7 @@ export function HandicapCalculator({
           <LineupPicker
             side="mine"
             title={myTeam.name}
-            subtitle={`Pick players · hold ⠿ or use ▲▼ to reorder`}
+            subtitle={`Pick players · drag a card or use ▲▼ to reorder`}
             roster={myTeam.players}
             lineup={myLineup.length === slots ? myLineup : emptyLineup(slots)}
             slots={slots}
@@ -788,25 +788,30 @@ function LineupPicker({
     return closest;
   };
 
-  const onGripPointerDown = (
-    event: ReactPointerEvent<HTMLButtonElement>,
+  const shouldIgnoreDrag = (target: EventTarget | null) => {
+    if (!(target instanceof Element)) return false;
+    return Boolean(target.closest("[data-no-drag]"));
+  };
+
+  const onCardPointerDown = (
+    event: ReactPointerEvent<HTMLDivElement>,
     index: number,
   ) => {
-    if (!lineup[index]) return;
+    if (!lineup[index] || shouldIgnoreDrag(event.target)) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     setDragState({ side, from: index });
     setDropTarget({ side, from: index });
   };
 
-  const onGripPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const onCardPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!dragState || dragState.side !== side) return;
     const next = indexFromClientY(event.clientY);
     if (next == null) return;
     setDropTarget({ side, from: next });
   };
 
-  const onGripPointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const onCardPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!dragState || dragState.side !== side) return;
     const target =
       dropTarget?.side === side
@@ -864,8 +869,13 @@ function LineupPicker({
                 />
               ) : null}
               <div
+                onPointerDown={(event) => onCardPointerDown(event, index)}
+                onPointerMove={onCardPointerMove}
+                onPointerUp={onCardPointerUp}
+                onPointerCancel={clearDrag}
                 className={[
                   "relative select-none rounded-xl border px-3 py-2.5 transition",
+                  player ? "touch-none cursor-grab active:cursor-grabbing" : "",
                   isDragging
                     ? "z-20 border-[var(--felt)]/50 bg-[var(--surface-3)] opacity-45"
                     : isDropTarget
@@ -875,33 +885,22 @@ function LineupPicker({
               >
                 <div className="mb-1.5 flex items-center justify-between gap-2">
                   <div className="inline-flex items-center gap-2">
-                    {player ? (
-                      <button
-                        type="button"
-                        aria-label={`Drag to reorder slot ${index + 1}`}
-                        onPointerDown={(event) =>
-                          onGripPointerDown(event, index)
-                        }
-                        onPointerMove={onGripPointerMove}
-                        onPointerUp={onGripPointerUp}
-                        onPointerCancel={clearDrag}
-                        className="touch-none inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] text-[var(--felt-deep)] active:bg-[var(--surface-3)]"
-                      >
-                        ⠿
-                      </button>
-                    ) : (
-                      <span
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--line)] text-[var(--muted)]"
-                        aria-hidden
-                      >
-                        ⠿
-                      </span>
-                    )}
+                    <span
+                      className={[
+                        "inline-flex h-8 w-8 items-center justify-center rounded-lg border text-sm",
+                        player
+                          ? "border-[var(--line-strong)] bg-[var(--surface)] text-[var(--felt-deep)]"
+                          : "border-[var(--line)] text-[var(--muted)]",
+                      ].join(" ")}
+                      aria-hidden
+                    >
+                      ⠿
+                    </span>
                     <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
                       Slot #{index + 1}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5" data-no-drag>
                     {player ? (
                       <>
                         <button
@@ -929,19 +928,21 @@ function LineupPicker({
                     ) : null}
                   </div>
                 </div>
-                <PlayerSelect
-                  value={player?.id ?? ""}
-                  options={sortedRoster}
-                  placeholder="Open slot…"
-                  onChange={(playerId) => onSelectSlot(index, playerId)}
-                />
+                <div data-no-drag>
+                  <PlayerSelect
+                    value={player?.id ?? ""}
+                    options={sortedRoster}
+                    placeholder="Open slot…"
+                    onChange={(playerId) => onSelectSlot(index, playerId)}
+                  />
+                </div>
               </div>
             </li>
           );
         })}
       </ol>
       <p className="mt-2 text-[11px] text-[var(--muted)]">
-        Hold ⠿ to drag, or use ▲ ▼ to reorder on mobile.
+        Drag a filled card to reorder, or use ▲ ▼ on mobile.
       </p>
     </div>
   );

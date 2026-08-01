@@ -60,7 +60,7 @@ export function LeagueApp() {
   );
   const [selectedDivision, setSelectedDivision] =
     useState<DivisionSummary | null>(null);
-  const [tab, setTab] = useState<ReportTab>("my-team");
+  const [tab, setTab] = useState<ReportTab>("standings");
   const [error, setError] = useState<string | null>(null);
   const [booting, setBooting] = useState(true);
   const [loadingLeagues, setLoadingLeagues] = useState(false);
@@ -116,7 +116,6 @@ export function LeagueApp() {
           null;
         if (division) {
           setSelectedDivision(division);
-          if (saved.teamName) setSelectedTeamName(saved.teamName);
         }
       } catch (err) {
         if (!cancelled) {
@@ -176,10 +175,6 @@ export function LeagueApp() {
         if (cancelled) return;
         setPlayersByTeam(byTeam);
         setDivisionTeams(calculator.teams);
-        if (prefs?.teamId) {
-          const team = calculator.teams.find((item) => item.id === prefs.teamId);
-          if (team) setSelectedTeamName(team.name);
-        }
       } catch {
         // Non-fatal for reports that don't need team context.
       } finally {
@@ -245,7 +240,9 @@ export function LeagueApp() {
 
   useEffect(() => {
     setFilterQuery("");
-    if (tab !== "standings") setSelectedTeamName(null);
+    // Standings drill-in is opt-in via row click only — never carry a team
+    // selection across tabs or division changes.
+    setSelectedTeamName(null);
   }, [tab, selectedDivision?.id]);
 
   const chooseLeague = async (league: LeagueSummary) => {
@@ -289,7 +286,7 @@ export function LeagueApp() {
   const chooseDivision = (division: DivisionSummary) => {
     setSelectedDivision(division);
     setSelectedTeamName(null);
-    setTab(prefs?.teamName ? "my-team" : "standings");
+    setTab("standings");
     setTeamReport(null);
     setPlayerReport(null);
     setPlayerList(null);
@@ -316,7 +313,6 @@ export function LeagueApp() {
 
   const setMyTeam = (team: DivisionTeam) => {
     if (!prefs || !selectedDivision) return;
-    setSelectedTeamName(team.name);
     setTab("my-team");
     persist({
       ...prefs,
@@ -608,7 +604,6 @@ export function LeagueApp() {
                 onChange={(option) => {
                   if (option) {
                     setMyTeam(option.value);
-                    setSelectedTeamName(option.value.name);
                     setContextOpen(false);
                   } else {
                     clearMyTeam();
@@ -712,7 +707,6 @@ export function LeagueApp() {
                   divisionId: selectedDivision.id,
                   divisionName: selectedDivision.name,
                 });
-                setSelectedTeamName(teamName);
               }}
             />
           ) : loadingReport ? (
