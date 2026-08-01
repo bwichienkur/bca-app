@@ -1,5 +1,6 @@
 "use client";
 
+import { normalizeTeamName } from "@/lib/matchups";
 import type { DivisionTeam, PlayersByTeamReport, RosterPlayer } from "@/lib/types";
 import { TeamPlayerStats } from "./TeamPlayerStats";
 
@@ -28,7 +29,8 @@ export function TeamDetail({
   isMyTeam,
 }: TeamDetailProps) {
   const statsTeam = playersByTeam?.teams.find(
-    (item) => item.team.trim().toLowerCase() === teamName.trim().toLowerCase(),
+    (item) =>
+      normalizeTeamName(item.team) === normalizeTeamName(teamName),
   );
 
   return (
