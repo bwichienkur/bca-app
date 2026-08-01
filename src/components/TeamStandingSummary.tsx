@@ -8,6 +8,8 @@ type StandingCell = {
 type TeamStandingSummaryProps = {
   cells: StandingCell[];
   teamName?: string;
+  /** Denser layout for narrow / side-by-side contexts. */
+  compact?: boolean;
 };
 
 function isNameLabel(label: string): boolean {
@@ -48,6 +50,7 @@ function friendlyLabel(label: string): string {
 export function TeamStandingSummary({
   cells,
   teamName,
+  compact = false,
 }: TeamStandingSummaryProps) {
   const rankCell = cells.find((cell) => isRankLabel(cell.label));
   const stats = cells.filter(
@@ -58,31 +61,60 @@ export function TeamStandingSummary({
     <section className="overflow-hidden rounded-[1.4rem] border border-[var(--line)] bg-[linear-gradient(145deg,rgba(61,155,117,0.18),var(--surface)_40%,var(--surface-2))] shadow-[var(--shadow)]">
       <div className="flex items-stretch">
         <div className="w-1.5 shrink-0 bg-[linear-gradient(180deg,var(--felt),var(--amber))]" />
-        <div className="min-w-0 flex-1 px-4 py-4 md:px-5">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
+        <div
+          className={[
+            "min-w-0 flex-1",
+            compact ? "px-3 py-3" : "px-4 py-4 md:px-5",
+          ].join(" ")}
+        >
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
                 Team standing
               </p>
               {teamName ? (
-                <h3 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--felt-deep)] md:text-2xl">
+                <h3
+                  className={[
+                    "mt-1 break-words font-[family-name:var(--font-display)] text-[var(--felt-deep)]",
+                    compact ? "text-lg" : "text-xl md:text-2xl",
+                  ].join(" ")}
+                >
                   {teamName}
                 </h3>
               ) : null}
             </div>
             {rankCell ? (
-              <div className="rounded-2xl border border-[var(--felt)]/25 bg-[var(--surface)]/90 px-4 py-2 text-center shadow-sm">
+              <div
+                className={[
+                  "shrink-0 border border-[var(--felt)]/25 bg-[var(--surface)]/90 text-center shadow-sm",
+                  compact
+                    ? "rounded-xl px-3 py-1.5"
+                    : "rounded-2xl px-4 py-2",
+                ].join(" ")}
+              >
                 <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
                   Rank
                 </p>
-                <p className="mt-0.5 font-[family-name:var(--font-display)] text-3xl font-bold tabular-nums leading-none text-[var(--felt)]">
+                <p
+                  className={[
+                    "mt-0.5 font-[family-name:var(--font-display)] font-bold tabular-nums leading-none text-[var(--felt)]",
+                    compact ? "text-2xl" : "text-3xl",
+                  ].join(" ")}
+                >
                   #{rankCell.value || "—"}
                 </p>
               </div>
             ) : null}
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+          <div
+            className={[
+              "mt-3 grid gap-2",
+              compact
+                ? "grid-cols-2"
+                : "grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4",
+            ].join(" ")}
+          >
             {stats.map((cell) => {
               const ratio = parseRatio(cell.value);
               const label = friendlyLabel(cell.label);
@@ -91,28 +123,41 @@ export function TeamStandingSummary({
                 return (
                   <div
                     key={cell.label}
-                    className="rounded-2xl border border-[var(--line)] bg-[var(--surface)]/90 px-3 py-3 shadow-sm"
+                    className={[
+                      "rounded-2xl border border-[var(--line)] bg-[var(--surface)]/90 shadow-sm",
+                      compact ? "px-2.5 py-2" : "px-3 py-3",
+                    ].join(" ")}
                   >
                     <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
                       {label}
                     </p>
-                    <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-end gap-1.5">
-                      <div className="rounded-lg bg-emerald-500/12 px-2 py-1.5 dark:bg-emerald-400/12">
-                        <p className="text-lg font-bold tabular-nums leading-none text-emerald-800 dark:text-emerald-200">
+                    <div className="mt-1.5 grid grid-cols-[1fr_auto_1fr] items-end gap-1">
+                      <div className="rounded-lg bg-emerald-500/12 px-1.5 py-1 dark:bg-emerald-400/12">
+                        <p
+                          className={[
+                            "font-bold tabular-nums leading-none text-emerald-800 dark:text-emerald-200",
+                            compact ? "text-base" : "text-lg",
+                          ].join(" ")}
+                        >
                           {ratio.forValue}
                         </p>
-                        <p className="mt-1 text-[10px] font-medium uppercase tracking-wider text-emerald-700/80 dark:text-emerald-300/80">
+                        <p className="mt-0.5 text-[9px] font-medium uppercase tracking-wider text-emerald-700/80 dark:text-emerald-300/80">
                           For
                         </p>
                       </div>
-                      <span className="mb-2.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+                      <span className="mb-2 text-[9px] font-semibold uppercase tracking-wider text-[var(--muted)]">
                         vs
                       </span>
-                      <div className="rounded-lg bg-rose-500/12 px-2 py-1.5 text-right dark:bg-rose-400/12">
-                        <p className="text-lg font-bold tabular-nums leading-none text-rose-800 dark:text-rose-200">
+                      <div className="rounded-lg bg-rose-500/12 px-1.5 py-1 text-right dark:bg-rose-400/12">
+                        <p
+                          className={[
+                            "font-bold tabular-nums leading-none text-rose-800 dark:text-rose-200",
+                            compact ? "text-base" : "text-lg",
+                          ].join(" ")}
+                        >
                           {ratio.againstValue}
                         </p>
-                        <p className="mt-1 text-[10px] font-medium uppercase tracking-wider text-rose-700/80 dark:text-rose-300/80">
+                        <p className="mt-0.5 text-[9px] font-medium uppercase tracking-wider text-rose-700/80 dark:text-rose-300/80">
                           Against
                         </p>
                       </div>
@@ -124,12 +169,20 @@ export function TeamStandingSummary({
               return (
                 <div
                   key={cell.label}
-                  className="rounded-2xl border border-[var(--line)] bg-[var(--surface)]/90 px-3 py-3 shadow-sm"
+                  className={[
+                    "rounded-2xl border border-[var(--line)] bg-[var(--surface)]/90 shadow-sm",
+                    compact ? "px-2.5 py-2" : "px-3 py-3",
+                  ].join(" ")}
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
                     {label}
                   </p>
-                  <p className="mt-2 text-2xl font-bold tabular-nums leading-none text-[var(--ink)]">
+                  <p
+                    className={[
+                      "mt-1.5 font-bold tabular-nums leading-none text-[var(--ink)]",
+                      compact ? "text-xl" : "text-2xl",
+                    ].join(" ")}
+                  >
                     {cell.value || "—"}
                   </p>
                 </div>
