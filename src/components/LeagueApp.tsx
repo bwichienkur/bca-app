@@ -1355,6 +1355,7 @@ export function LeagueApp() {
               <ScheduleList
                 days={schedule}
                 teamName={prefs.teamName}
+                divisionName={selectedDivision?.name ?? prefs.divisionName}
                 onMatchClick={(match, day) =>
                   setSelectedScheduleMatch({ match, date: day.date })
                 }

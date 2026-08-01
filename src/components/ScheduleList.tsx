@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { normalizeTeamName } from "@/lib/matchups";
-import { isUpcomingScheduleDate } from "@/lib/schedule";
+import { isUpcomingScheduleDate, parseScheduleDate } from "@/lib/schedule";
 import type { ScheduleDay, ScheduleMatch } from "@/lib/types";
 import { EmptyState } from "./EmptyState";
 import { MatchListCard } from "./MatchListCard";
@@ -10,14 +10,33 @@ import { MatchListCard } from "./MatchListCard";
 type ScheduleListProps = {
   days: ScheduleDay[];
   teamName?: string | null;
+  divisionName?: string | null;
   onMatchClick?: (match: ScheduleMatch, day: ScheduleDay) => void;
 };
 
 type ScheduleView = "upcoming" | "past";
 
+type FlatMatch = {
+  key: string;
+  day: ScheduleDay;
+  match: ScheduleMatch;
+  upcoming: boolean;
+};
+
+function formatScheduleDate(value: string): string {
+  const date = parseScheduleDate(value);
+  if (!date) return value;
+  return date.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export function ScheduleList({
   days,
   teamName,
+  divisionName,
   onMatchClick,
 }: ScheduleListProps) {
   const [view, setView] = useState<ScheduleView>("upcoming");
@@ -37,20 +56,30 @@ export function ScheduleList({
       .filter((day) => day.matches.length > 0);
   }, [days, teamName]);
 
-  const { upcomingDays, pastDays } = useMemo(() => {
-    const upcoming: ScheduleDay[] = [];
-    const past: ScheduleDay[] = [];
+  const { upcomingMatches, pastMatches } = useMemo(() => {
+    const upcoming: FlatMatch[] = [];
+    const past: FlatMatch[] = [];
     for (const day of teamDays) {
-      if (isUpcomingScheduleDate(day.date)) upcoming.push(day);
-      else past.push(day);
+      const isUpcoming = isUpcomingScheduleDate(day.date);
+      day.matches.forEach((match, index) => {
+        const item: FlatMatch = {
+          key: `${day.date}-${index}-${match.matchId ?? match.home}`,
+          day,
+          match,
+          upcoming: isUpcoming,
+        };
+        if (isUpcoming) upcoming.push(item);
+        else past.push(item);
+      });
     }
     return {
-      upcomingDays: upcoming,
-      pastDays: [...past].reverse(),
+      upcomingMatches: upcoming,
+      pastMatches: [...past].reverse(),
     };
   }, [teamDays]);
 
-  const visibleDays = view === "upcoming" ? upcomingDays : pastDays;
+  const visibleMatches =
+    view === "upcoming" ? upcomingMatches : pastMatches;
   const myTeam = teamName ? normalizeTeamName(teamName) : null;
 
   if (!teamDays.length) {
@@ -67,13 +96,39 @@ export function ScheduleList({
   }
 
   return (
-    <div className="space-y-4">
+    <section className="animate-rise space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
+            Schedule
+          </p>
+          <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
+            Your matches
+          </h3>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            {teamName ? (
+              <>
+                Schedule for{" "}
+                <span className="font-medium text-[var(--ink)]">{teamName}</span>
+              </>
+            ) : (
+              "Division schedule"
+            )}
+            {divisionName ? <> · {divisionName}</> : null}
+          </p>
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         {(
           [
-            { id: "upcoming", label: "Upcoming", count: upcomingDays.length },
-            { id: "past", label: "Past", count: pastDays.length },
-          ] as const
+            {
+              id: "upcoming" as const,
+              label: "Upcoming",
+              count: upcomingMatches.length,
+            },
+            { id: "past" as const, label: "Past", count: pastMatches.length },
+          ]
         ).map((item) => {
           const active = view === item.id;
           return (
@@ -102,7 +157,7 @@ export function ScheduleList({
         })}
       </div>
 
-      {!visibleDays.length ? (
+      {!visibleMatches.length ? (
         <EmptyState
           title={view === "upcoming" ? "No upcoming matches" : "No past matches"}
           body={
@@ -112,52 +167,46 @@ export function ScheduleList({
           }
         />
       ) : (
-        <div className="space-y-5">
-          {visibleDays.map((day, dayIndex) => (
-            <section
-              key={`${view}-${day.date}`}
-              className="animate-rise space-y-3"
-              style={{ animationDelay: `${Math.min(dayIndex, 5) * 0.04}s` }}
-            >
-              <div className="flex items-baseline justify-between gap-3 px-0.5">
-                <h3 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
-                  {day.date}
-                </h3>
-                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                  {day.matches.length} match
-                  {day.matches.length === 1 ? "" : "es"}
-                </span>
-              </div>
-              <ul className="space-y-2.5">
-                {day.matches.map((match, index) => (
-                  <li
-                    key={`${day.date}-${index}-${match.matchId ?? match.home}`}
-                  >
-                    <MatchListCard
-                      homeName={match.home}
-                      awayName={match.away}
-                      location={match.location || undefined}
-                      emphasizeHome={
-                        Boolean(
-                          myTeam &&
-                            normalizeTeamName(match.home) === myTeam,
-                        )
-                      }
-                      emphasizeAway={
-                        Boolean(
-                          myTeam &&
-                            normalizeTeamName(match.away) === myTeam,
-                        )
-                      }
-                      onClick={() => onMatchClick?.(match, day)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
+        <div className="space-y-2.5">
+          {visibleMatches.map((item, index) => {
+            const { match, day } = item;
+            const status = [
+              item.upcoming ? "Upcoming" : "Played",
+              myTeam &&
+              (normalizeTeamName(match.home) === myTeam ||
+                normalizeTeamName(match.away) === myTeam)
+                ? "Your match"
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            return (
+              <MatchListCard
+                key={item.key}
+                className="animate-rise"
+                style={{ animationDelay: `${Math.min(index, 6) * 0.04}s` }}
+                homeName={match.home}
+                awayName={match.away}
+                meta={formatScheduleDate(day.date)}
+                location={match.location || undefined}
+                status={status}
+                ctaLabel="View"
+                emphasizeHome={
+                  Boolean(
+                    myTeam && normalizeTeamName(match.home) === myTeam,
+                  )
+                }
+                emphasizeAway={
+                  Boolean(
+                    myTeam && normalizeTeamName(match.away) === myTeam,
+                  )
+                }
+                onClick={() => onMatchClick?.(match, day)}
+              />
+            );
+          })}
         </div>
       )}
-    </div>
+    </section>
   );
 }
