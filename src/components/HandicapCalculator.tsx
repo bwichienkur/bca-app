@@ -895,8 +895,15 @@ function LineupPicker({
     setHoldingIndex(null);
   };
 
+  const unlockBodyScroll = () => {
+    document.body.style.touchAction = "";
+    document.body.style.userSelect = "";
+    document.body.style.overflow = "";
+  };
+
   const clearDrag = () => {
     cancelHold();
+    unlockBodyScroll();
     setDragStateRef.current(null);
     setDropTargetRef.current(null);
     setGhost(null);
@@ -970,9 +977,6 @@ function LineupPicker({
   useEffect(() => {
     if (!draggingHere || dragFrom < 0) return;
 
-    const previousTouchAction = document.body.style.touchAction;
-    const previousUserSelect = document.body.style.userSelect;
-    const previousOverflow = document.body.style.overflow;
     document.body.style.touchAction = "none";
     document.body.style.userSelect = "none";
     document.body.style.overflow = "hidden";
@@ -1006,9 +1010,8 @@ function LineupPicker({
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("pointercancel", onPointerUp);
     return () => {
-      document.body.style.touchAction = previousTouchAction;
-      document.body.style.userSelect = previousUserSelect;
-      document.body.style.overflow = previousOverflow;
+      // Always clear — do not restore a prior "none" left by the hold timer.
+      unlockBodyScroll();
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerUp);
@@ -1053,6 +1056,7 @@ function LineupPicker({
   useEffect(() => {
     return () => {
       clearHoldTimer();
+      unlockBodyScroll();
     };
   }, []);
 
@@ -1100,10 +1104,6 @@ function LineupPicker({
     holdTimerRef.current = window.setTimeout(() => {
       const pending = pendingHoldRef.current;
       if (!pending) return;
-      // Lock touch scrolling as soon as the hold completes so the first
-      // vertical move becomes a drag instead of a page scroll.
-      document.body.style.touchAction = "none";
-      document.body.style.userSelect = "none";
       beginDrag({
         index: pending.index,
         x: pending.lastX,
