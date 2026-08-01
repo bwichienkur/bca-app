@@ -1,5 +1,5 @@
-import { Redis } from "@upstash/redis";
 import type { ScoringDraft } from "./scoring";
+import { getRedis, isRedisConfigured } from "./redis";
 
 const KEY_PREFIX = "tableside:scoring:draft:v1:";
 /** Free-tier friendly: drafts expire if abandoned. */
@@ -11,39 +11,9 @@ export type SharedDraftRecord = {
   submittedAt: string | null;
 };
 
-let redisClient: Redis | null | undefined;
-
-function redisUrl(): string | undefined {
-  return (
-    process.env.UPSTASH_REDIS_REST_URL ||
-    process.env.KV_REST_API_URL ||
-    undefined
-  );
-}
-
-function redisToken(): string | undefined {
-  return (
-    process.env.UPSTASH_REDIS_REST_TOKEN ||
-    process.env.KV_REST_API_TOKEN ||
-    undefined
-  );
-}
-
 /** True when Upstash / Vercel KV REST credentials are present. */
 export function isDraftStoreConfigured(): boolean {
-  return Boolean(redisUrl() && redisToken());
-}
-
-function getRedis(): Redis | null {
-  if (redisClient !== undefined) return redisClient;
-  const url = redisUrl();
-  const token = redisToken();
-  if (!url || !token) {
-    redisClient = null;
-    return null;
-  }
-  redisClient = new Redis({ url, token });
-  return redisClient;
+  return isRedisConfigured();
 }
 
 function draftKey(matchId: string): string {

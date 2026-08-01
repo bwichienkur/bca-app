@@ -56,6 +56,8 @@ type HandicapCalculatorProps = {
   divisionId: string;
   divisionName: string;
   prefs: UserPreferences;
+  /** Bumps when LMS cache is manually refreshed. */
+  refreshToken?: number;
   onSelectTeam: (team: { teamId: string; teamName: string }) => void;
 };
 
@@ -202,6 +204,7 @@ export function HandicapCalculator({
   divisionId,
   divisionName,
   prefs,
+  refreshToken = 0,
   onSelectTeam,
 }: HandicapCalculatorProps) {
   const [data, setData] = useState<CalculatorPayload | null>(null);
@@ -263,7 +266,7 @@ export function HandicapCalculator({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [divisionId, prefs.teamId]);
+  }, [divisionId, prefs.teamId, refreshToken]);
 
   const slots =
     data?.playersPerTeam ||
