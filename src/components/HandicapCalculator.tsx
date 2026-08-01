@@ -1058,7 +1058,6 @@ function LineupPicker({
       clearHoldTimer();
       unlockBodyScroll();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onGripPointerDown = (
