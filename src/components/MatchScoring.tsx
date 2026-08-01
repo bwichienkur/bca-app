@@ -1441,38 +1441,6 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
       ? "text-[var(--amber)]"
       : "text-[var(--muted)]";
 
-  const chaseLine = (() => {
-    if (tally.roundWinner || gamesLeft <= 0) return null;
-    const formatNeed = (side: 1 | 2, name: string) => {
-      const canCatch =
-        side === 1 ? tally.canCatchUp.teamOne : tally.canCatchUp.teamTwo;
-      const otherCanCatch =
-        side === 1 ? tally.canCatchUp.teamTwo : tally.canCatchUp.teamOne;
-      const ourTotal =
-        side === 1 ? tally.teamOneTotal : tally.teamTwoTotal;
-      const theirTotal =
-        side === 1 ? tally.teamTwoTotal : tally.teamOneTotal;
-      if (!canCatch) return `${name}: can’t catch up`;
-      const need =
-        side === 1 ? tally.pointsNeeded.teamOne : tally.pointsNeeded.teamTwo;
-      if (need == null) return null;
-      if (ourTotal > theirTotal && otherCanCatch) {
-        return `${name}: can still be caught`;
-      }
-      if (need === 0) return `${name}: on track`;
-      return `${name}: need ${need} pt${need === 1 ? "" : "s"}`;
-    };
-    const one = formatNeed(1, mySide === 1 ? "You" : "Home");
-    const two = formatNeed(2, mySide === 2 ? "You" : "Away");
-    const parts = [one, two].filter(Boolean);
-    if (!parts.length) return null;
-    const hcNote =
-      tally.teamOneHandicap > 0 || tally.teamTwoHandicap > 0
-        ? " · HC in totals"
-        : "";
-    return `${parts.join(" · ")} from ${gamesLeft} game${gamesLeft === 1 ? "" : "s"} (best catch-up = ${tally.maxWinPoints}–0 sweeps${hcNote})`;
-  })();
-
   const sideCard = (
     side: 1 | 2,
     name: string,
@@ -1579,12 +1547,6 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
         </div>
       </div>
 
-      {chaseLine ? (
-        <p className="mt-2 text-[11px] leading-snug text-[var(--muted)]">
-          {chaseLine}
-        </p>
-      ) : null}
-
       <div className="mt-2 grid grid-cols-2 gap-2">
         {sideCard(
           1,
@@ -1603,15 +1565,6 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
           tally.teamTwoGameWins,
         )}
       </div>
-
-      {isHandicapped &&
-      (tally.teamOneHandicap > 0 || tally.teamTwoHandicap > 0) ? (
-        <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-          {tally.teamOneHandicap > 0
-            ? `${teamOneName.trim()} handicap +${tally.teamOneHandicap} included in total`
-            : `${teamTwoName.trim()} handicap +${tally.teamTwoHandicap} included in total`}
-        </p>
-      ) : null}
 
       {tally.roundComplete &&
       !tally.roundWinner &&
