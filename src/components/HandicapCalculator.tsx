@@ -582,7 +582,7 @@ export function HandicapCalculator({
           <LineupPicker
             side="mine"
             title={myTeam.name}
-            subtitle={`Pick players · drag a card or use ▲▼ to reorder`}
+            subtitle={`Pick players · press & hold a card to drag, or use ▲▼`}
             roster={myTeam.players}
             lineup={myLineup.length === slots ? myLineup : emptyLineup(slots)}
             slots={slots}
@@ -817,10 +817,26 @@ function LineupPicker({
   setDragState: (state: DragState | null) => void;
   setDropTarget: (state: DragState | null) => void;
 }) {
+  const HOLD_MS = 350;
+  const MOVE_CANCEL_PX = 10;
+
   const filled = filledCount(lineup);
   const listRef = useRef<HTMLOListElement>(null);
   const dropTargetRef = useRef(dropTarget);
+  const holdTimerRef = useRef<number | null>(null);
+  const pendingHoldRef = useRef<{
+    index: number;
+    startX: number;
+    startY: number;
+    lastX: number;
+    lastY: number;
+    width: number;
+    height: number;
+    offsetX: number;
+    offsetY: number;
+  } | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [holdingIndex, setHoldingIndex] = useState<number | null>(null);
   const [ghost, setGhost] = useState<{
     x: number;
     y: number;
@@ -854,7 +870,17 @@ function LineupPicker({
     dropTargetRef.current = dropTarget;
   }, [dropTarget]);
 
+  const cancelHold = () => {
+    if (holdTimerRef.current != null) {
+      window.clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    pendingHoldRef.current = null;
+    setHoldingIndex(null);
+  };
+
   const clearDrag = () => {
+    cancelHold();
     setDragState(null);
     setDropTarget(null);
     setGhost(null);
@@ -885,10 +911,39 @@ function LineupPicker({
     return Boolean(target.closest("[data-no-drag]"));
   };
 
+  const startDragFromHold = () => {
+    const pending = pendingHoldRef.current;
+    if (!pending) return;
+    holdTimerRef.current = null;
+    pendingHoldRef.current = null;
+    setHoldingIndex(null);
+    setGhost({
+      x: pending.lastX,
+      y: pending.lastY,
+      width: pending.width,
+      height: pending.height,
+      offsetX: pending.offsetX,
+      offsetY: pending.offsetY,
+    });
+    setDragState({ side, from: pending.index });
+    setDropTarget({ side, from: pending.index });
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      try {
+        navigator.vibrate(12);
+      } catch {
+        // ignore
+      }
+    }
+  };
+
   useEffect(() => {
     if (!draggingHere || dragFrom < 0) return;
 
+    const previousTouchAction = document.body.style.touchAction;
+    document.body.style.touchAction = "none";
+
     const onPointerMove = (event: PointerEvent) => {
+      event.preventDefault();
       setGhost((current) =>
         current
           ? { ...current, x: event.clientX, y: event.clientY }
@@ -911,6 +966,40 @@ function LineupPicker({
       clearDrag();
     };
 
+    window.addEventListener("pointermove", onPointerMove, { passive: false });
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+    return () => {
+      document.body.style.touchAction = previousTouchAction;
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draggingHere, dragFrom, side, onMove]);
+
+  // While waiting for a long-press, cancel if the pointer moves (scroll/swipe).
+  useEffect(() => {
+    if (holdingIndex == null) return;
+
+    const onPointerMove = (event: PointerEvent) => {
+      const pending = pendingHoldRef.current;
+      if (!pending) return;
+      pending.lastX = event.clientX;
+      pending.lastY = event.clientY;
+      const distance = Math.hypot(
+        event.clientX - pending.startX,
+        event.clientY - pending.startY,
+      );
+      if (distance > MOVE_CANCEL_PX) {
+        cancelHold();
+      }
+    };
+
+    const onPointerUp = () => {
+      cancelHold();
+    };
+
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("pointercancel", onPointerUp);
@@ -919,26 +1008,41 @@ function LineupPicker({
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerUp);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draggingHere, dragFrom, side, onMove]);
+  }, [holdingIndex]);
+
+  useEffect(() => {
+    return () => {
+      if (holdTimerRef.current != null) {
+        window.clearTimeout(holdTimerRef.current);
+      }
+    };
+  }, []);
 
   const onCardPointerDown = (
     event: ReactPointerEvent<HTMLDivElement>,
     index: number,
   ) => {
-    if (!lineup[index] || shouldIgnoreDrag(event.target)) return;
-    event.preventDefault();
+    if (!lineup[index] || shouldIgnoreDrag(event.target) || draggingHere) {
+      return;
+    }
+    // Do not preventDefault here — allow the page to scroll until hold activates.
     const rect = event.currentTarget.getBoundingClientRect();
-    setGhost({
-      x: event.clientX,
-      y: event.clientY,
+    cancelHold();
+    pendingHoldRef.current = {
+      index,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastX: event.clientX,
+      lastY: event.clientY,
       width: rect.width,
       height: rect.height,
       offsetX: event.clientX - rect.left,
       offsetY: event.clientY - rect.top,
-    });
-    setDragState({ side, from: index });
-    setDropTarget({ side, from: index });
+    };
+    setHoldingIndex(index);
+    holdTimerRef.current = window.setTimeout(() => {
+      startDragFromHold();
+    }, HOLD_MS);
   };
 
   return (
@@ -973,6 +1077,7 @@ function LineupPicker({
             Boolean(draggedPlayer);
           const isLiftedSource =
             draggingHere && dragFrom === dragTo && index === dragFrom;
+          const isHolding = holdingIndex === index;
 
           return (
             <li key={`slot-${index}`} data-slot={index} className="relative">
@@ -989,10 +1094,17 @@ function LineupPicker({
                   }}
                   className={[
                     "relative select-none rounded-xl border px-3 py-2.5 transition duration-150",
-                    player ? "touch-none cursor-grab active:cursor-grabbing" : "",
+                    // Only lock touch scrolling after a drag has actually started.
+                    draggingHere
+                      ? "touch-none cursor-grabbing"
+                      : player
+                        ? "cursor-grab"
+                        : "",
                     isLiftedSource
                       ? "z-20 border-[var(--felt)]/40 bg-[var(--surface-3)] opacity-30"
-                      : "z-0 border-[var(--line)] bg-[var(--surface-2)]",
+                      : isHolding
+                        ? "z-10 scale-[0.985] border-[var(--felt)]/55 bg-[color-mix(in_srgb,var(--felt)_12%,var(--surface-2))]"
+                        : "z-0 border-[var(--line)] bg-[var(--surface-2)]",
                   ].join(" ")}
                 >
                   <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -1055,7 +1167,7 @@ function LineupPicker({
         })}
       </ol>
       <p className="mt-2 text-[11px] text-[var(--muted)]">
-        Drag a filled card to preview its new slot, or use ▲ ▼ on mobile.
+        Press and hold a filled card to drag, or use ▲ ▼ to reorder.
       </p>
 
       {mounted &&
