@@ -7,7 +7,7 @@ Defaults to **Palm Beach County BCA Pool League**.
 ## Features
 
 - Top-level BCA / FargoRate login + Settings for default league, division, and team
-- When signed in, League · Division · My team selectors are limited to your memberships in the selected league (reports still show the full division)
+- When signed in, memberships are auto-discovered from your LMS roster and League · Division · My team selectors filter to those teams (reports still show the full division)
 - Typeahead selectors for league, division, and my team
 - Team standings with clickable rows → player stats + roster panel
 - Search filters on Teams, Players, and Ratings
