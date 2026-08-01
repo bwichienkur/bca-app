@@ -55,4 +55,37 @@ export async function withLmsCache<T>(
   return value;
 }
 
+/**
+ * Delete LMS cache keys from Redis.
+ * Clears the whole `tableside:lms:v1:` namespace so matches/rosters refresh too.
+ */
+export async function invalidateLmsCaches(): Promise<{
+  shared: boolean;
+  deleted: number;
+}> {
+  const redis = getRedis();
+  if (!redis) {
+    return { shared: false, deleted: 0 };
+  }
+
+  let deleted = 0;
+  let cursor = "0";
+
+  do {
+    const result = await redis.scan(cursor, {
+      match: `${KEY_PREFIX}*`,
+      count: 100,
+    });
+    const nextCursor = String(result[0]);
+    const keys = result[1] as string[];
+    cursor = nextCursor;
+    if (keys.length > 0) {
+      await redis.del(...keys);
+      deleted += keys.length;
+    }
+  } while (cursor !== "0");
+
+  return { shared: true, deleted };
+}
+
 export { isRedisConfigured as isLmsCacheConfigured };

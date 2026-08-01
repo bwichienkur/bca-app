@@ -70,3 +70,5 @@ Parsed league/division/team/player/schedule responses are cached in Redis so Ver
 | Team / roster | 8 hours |
 
 Cache keys use prefix `tableside:lms:v1:`. Failures are not cached.
+
+Use **Refresh data** in the app header (or `POST /api/cache/lms/refresh`) to clear the LMS cache and reload from FargoRate.

@@ -29,8 +29,8 @@ import { TeamDetail } from "./TeamDetail";
 import { TeamStandingSummary } from "./TeamStandingSummary";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url);
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init);
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as {
       error?: string;
@@ -102,12 +102,61 @@ export function LeagueApp() {
     date: string;
   } | null>(null);
   const [contextOpen, setContextOpen] = useState(true);
+  const [refreshToken, setRefreshToken] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const didAutoCollapseContext = useRef(false);
   const [, startTransition] = useTransition();
 
   const persist = (next: UserPreferences) => {
     setPrefs(next);
     savePreferences(next);
+  };
+
+  const refreshCachedData = async () => {
+    setRefreshing(true);
+    setError(null);
+    try {
+      await fetchJson<{ ok: boolean }>("/api/cache/lms/refresh", {
+        method: "POST",
+      });
+      // Clear client-held report state so loaders don't keep stale UI.
+      setTeamReport(null);
+      setPlayerReport(null);
+      setPlayerList(null);
+      setSchedule(null);
+      setPlayersByTeam(null);
+      setDivisionTeams([]);
+
+      const leagueQ = selectedLeague?.name ?? leagueQuery;
+      const leagueData = await fetchJson<{ leagues: LeagueSummary[] }>(
+        `/api/leagues?q=${encodeURIComponent(leagueQ)}`,
+      );
+      setLeagues(leagueData.leagues);
+      if (selectedLeague) {
+        const still =
+          leagueData.leagues.find((item) => item.id === selectedLeague.id) ??
+          null;
+        if (still) setSelectedLeague(still);
+        const divisionData = await fetchJson<{
+          divisions: DivisionSummary[];
+        }>(`/api/leagues/${selectedLeague.id}/divisions`);
+        setDivisions(divisionData.divisions);
+        if (selectedDivision) {
+          const nextDivision =
+            divisionData.divisions.find(
+              (item) => item.id === selectedDivision.id,
+            ) ?? null;
+          if (nextDivision) setSelectedDivision(nextDivision);
+        }
+      }
+      setRefreshToken((value) => value + 1);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to refresh league data.",
+      );
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   useEffect(() => {
@@ -211,7 +260,7 @@ export function LeagueApp() {
     return () => {
       cancelled = true;
     };
-  }, [selectedDivision, prefs?.teamId]);
+  }, [selectedDivision, prefs?.teamId, refreshToken]);
 
   useEffect(() => {
     if (!selectedDivision) return;
@@ -269,7 +318,7 @@ export function LeagueApp() {
     return () => {
       cancelled = true;
     };
-  }, [selectedDivision, tab]);
+  }, [selectedDivision, tab, refreshToken]);
 
   useEffect(() => {
     setFilterQuery("");
@@ -503,10 +552,19 @@ export function LeagueApp() {
 
   return (
     <main className="relative mx-auto min-h-dvh w-full max-w-7xl px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-4 md:px-6 lg:px-8">
-      <header className="animate-rise mb-3 md:mb-4">
+      <header className="animate-rise mb-3 flex items-center justify-between gap-3 md:mb-4">
         <h1 className="font-[family-name:var(--font-display)] text-2xl leading-none tracking-tight text-[var(--felt-deep)] md:text-3xl">
           Tableside
         </h1>
+        <button
+          type="button"
+          onClick={() => void refreshCachedData()}
+          disabled={refreshing}
+          title="Clear cached league data and reload from FargoRate"
+          className="shrink-0 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)] disabled:opacity-60"
+        >
+          {refreshing ? "Refreshing…" : "Refresh data"}
+        </button>
       </header>
 
       {error ? (
@@ -749,6 +807,7 @@ export function LeagueApp() {
               divisionId={selectedDivision.id}
               divisionName={selectedDivision.name}
               prefs={prefs}
+              refreshToken={refreshToken}
               onSelectTeam={({ teamId, teamName }) => {
                 persist({
                   ...prefs,

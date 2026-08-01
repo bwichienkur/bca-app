@@ -462,6 +462,13 @@ const calculatorCache = new Map<
   }
 >();
 
+/** Drop in-process LMS caches (call with Redis invalidation on refresh). */
+export function clearLmsMemoryCaches(): void {
+  divisionsCache.data = null;
+  divisionsCache.fetchedAt = 0;
+  calculatorCache.clear();
+}
+
 /**
  * Build division teams + rosters from the schedule, because
  * /api/divisions/{id}/teams is not available publicly.
