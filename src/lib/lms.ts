@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import { LMS_BASE } from "./constants";
 import type { DivisionFormat } from "./handicap";
+import { resolveHomeAwayFromSchedule } from "./matchups";
 import type {
   CalculatorMatchup,
   DivisionEntry,
@@ -463,14 +464,20 @@ export async function fetchDivisionCalculatorContext(divisionId: string): Promis
       if (!match.matchId) continue;
       const detail = matchDetails.find((item) => item?.id === match.matchId);
       if (!detail) continue;
+      // Schedule lists home first; don't assume LMS teamOne is home.
+      const sides = resolveHomeAwayFromSchedule({
+        scheduleHome: match.home,
+        scheduleAway: match.away,
+        teamOneId: detail.teamOneId,
+        teamOneName: detail.teamOneName,
+        teamTwoId: detail.teamTwoId,
+        teamTwoName: detail.teamTwoName,
+      });
       matchups.push({
         matchId: detail.id,
         date: day.date,
         location: detail.location || match.location,
-        homeTeamId: detail.teamOneId,
-        homeTeamName: detail.teamOneName.trim(),
-        awayTeamId: detail.teamTwoId,
-        awayTeamName: detail.teamTwoName.trim(),
+        ...sides,
       });
     }
   }

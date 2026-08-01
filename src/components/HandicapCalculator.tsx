@@ -18,7 +18,10 @@ import {
   type ParsedMatchFormat,
   type RoundHandicapResult,
 } from "@/lib/handicap";
-import { findWeeklyMatchupForTeam } from "@/lib/matchups";
+import {
+  findMatchupBetweenTeams,
+  findWeeklyMatchupForTeam,
+} from "@/lib/matchups";
 import {
   deleteLineupPreset,
   loadLineupPresets,
@@ -292,8 +295,16 @@ export function HandicapCalculator({
 
   const chooseOpponent = (team: DivisionTeam) => {
     setOpponentTeamId(team.id);
-    setWeekMatchup(null);
     setOppLineup(defaultTopLineup(team, slots));
+    if (data && myTeamId) {
+      const matchup = findMatchupBetweenTeams(data.matchups, myTeamId, team.id);
+      setWeekMatchup(matchup);
+      if (matchup) {
+        setIAmHome(matchup.homeTeamId === myTeamId);
+      }
+    } else {
+      setWeekMatchup(null);
+    }
   };
 
   const clearOpponent = () => {
