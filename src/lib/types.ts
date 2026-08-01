@@ -105,9 +105,25 @@ export type UserPreferences = {
   teamName: string | null;
 };
 
+export type PlayerSearchResult = {
+  id: string;
+  readableId: string | null;
+  membershipId: string | null;
+  firstName: string;
+  lastName: string;
+  name: string;
+  location: string | null;
+  rating: number | null;
+  effectiveRating: number | null;
+  provisionalRating: number | null;
+  robustness: number | null;
+  robustnessStatus: "starter" | "preliminary" | "established";
+};
+
 export type ReportTab =
   | "my-team"
   | "standings"
   | "players"
   | "schedule"
-  | "handicap";
+  | "handicap"
+  | "search";

@@ -19,6 +19,7 @@ import { DataTable } from "./DataTable";
 import { EmptyState } from "./EmptyState";
 import { HandicapCalculator } from "./HandicapCalculator";
 import { LoadingState } from "./LoadingState";
+import { PlayerSearch } from "./PlayerSearch";
 import { ScheduleList } from "./ScheduleList";
 import { SearchField } from "./SearchField";
 import { TeamDetail } from "./TeamDetail";
@@ -194,7 +195,7 @@ export function LeagueApp() {
 
   useEffect(() => {
     if (!selectedDivision) return;
-    if (tab === "handicap") {
+    if (tab === "handicap" || tab === "search") {
       setLoadingReport(false);
       return;
     }
@@ -620,13 +621,8 @@ export function LeagueApp() {
         ) : null}
       </section>
 
-      {!selectedDivision ? (
-        <EmptyState
-          title="Choose a division to continue"
-          body="Use the typeaheads above — start typing your division name for a fast jump."
-        />
-      ) : (
-        <section className="animate-rise animate-delay-2 space-y-4">
+      <section className="animate-rise animate-delay-2 space-y-4">
+        {selectedDivision ? (
           <div className="relative z-0 rounded-[1.4rem] border border-[var(--line)] bg-[linear-gradient(135deg,rgba(20,92,69,0.96),rgba(13,61,46,0.98))] px-4 py-4 text-white shadow-[var(--shadow)] md:px-6 md:py-5">
             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
               <div>
@@ -648,169 +644,177 @@ export function LeagueApp() {
               </div>
             </div>
           </div>
+        ) : null}
 
-          <div className="sticky top-0 z-20 -mx-1 flex flex-col gap-3 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 py-2 backdrop-blur md:flex-row md:items-center md:justify-between">
-            <nav
-              aria-label="Reports"
-              className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:gap-2"
-            >
-              {REPORT_TABS.map((item) => {
-                const active = tab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      setTab(item.id);
-                      if (
-                        (item.id === "schedule" || item.id === "my-team") &&
-                        !prefs.teamName
-                      ) {
-                        setContextOpen(true);
-                      }
-                    }}
-                    className={[
-                      "rounded-xl px-2 py-2 text-center text-[12px] font-semibold leading-tight transition sm:rounded-full sm:px-3.5 sm:py-2 sm:text-sm sm:font-medium",
-                      active
-                        ? "bg-[var(--felt)] text-white shadow-sm"
-                        : "bg-[var(--surface)]/80 text-[var(--muted)] hover:bg-[var(--surface-2)]",
-                    ].join(" ")}
-                  >
-                    {item.label}
-                  </button>
-                );
-              })}
-            </nav>
+        <div className="sticky top-0 z-20 -mx-1 flex flex-col gap-3 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 py-2 backdrop-blur md:flex-row md:items-center md:justify-between">
+          <nav
+            aria-label="Reports"
+            className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:gap-2"
+          >
+            {REPORT_TABS.map((item) => {
+              const active = tab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setTab(item.id);
+                    if (
+                      (item.id === "schedule" || item.id === "my-team") &&
+                      !prefs.teamName
+                    ) {
+                      setContextOpen(true);
+                    }
+                  }}
+                  className={[
+                    "rounded-xl px-2 py-2 text-center text-[12px] font-semibold leading-tight transition sm:rounded-full sm:px-3.5 sm:py-2 sm:text-sm sm:font-medium",
+                    active
+                      ? "bg-[var(--felt)] text-white shadow-sm"
+                      : "bg-[var(--surface)]/80 text-[var(--muted)] hover:bg-[var(--surface-2)]",
+                  ].join(" ")}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </nav>
 
-            {(tab === "standings" && !selectedTeamName) || tab === "players" ? (
-              <SearchField
-                value={filterQuery}
-                onChange={setFilterQuery}
-                placeholder={
-                  tab === "standings" ? "Filter teams…" : "Filter players…"
+          {selectedDivision &&
+          ((tab === "standings" && !selectedTeamName) || tab === "players") ? (
+            <SearchField
+              value={filterQuery}
+              onChange={setFilterQuery}
+              placeholder={
+                tab === "standings" ? "Filter teams…" : "Filter players…"
+              }
+            />
+          ) : null}
+        </div>
+
+        <div className="animate-panel min-w-0 space-y-6">
+          {tab === "search" ? (
+            <PlayerSearch />
+          ) : !selectedDivision ? (
+            <EmptyState
+              title="Choose a division to continue"
+              body="Use the typeaheads above — start typing your division name for a fast jump. Search works without a division."
+            />
+          ) : tab === "handicap" ? (
+            <HandicapCalculator
+              divisionId={selectedDivision.id}
+              divisionName={selectedDivision.name}
+              prefs={prefs}
+              onSelectTeam={({ teamId, teamName }) => {
+                persist({
+                  ...prefs,
+                  teamId,
+                  teamName,
+                  divisionId: selectedDivision.id,
+                  divisionName: selectedDivision.name,
+                });
+                setSelectedTeamName(teamName);
+              }}
+            />
+          ) : loadingReport ? (
+            <LoadingState label="Pulling report from LMS…" />
+          ) : tab === "my-team" ? (
+            prefs.teamName ? (
+              <section className="space-y-4">
+                {myStandingCells ? (
+                  <TeamStandingSummary
+                    cells={myStandingCells}
+                    teamName={prefs.teamName}
+                  />
+                ) : null}
+                <TeamDetail
+                  teamName={prefs.teamName}
+                  team={myTeam}
+                  playersByTeam={playersByTeam}
+                  isMyTeam
+                />
+              </section>
+            ) : (
+              <EmptyState
+                title="Set your team"
+                body="Open League · Division · My team above and pick your team to see roster and player stats here."
+              />
+            )
+          ) : tab === "standings" && teamReport ? (
+            selectedTeamName ? (
+              <TeamDetail
+                teamName={selectedTeamName}
+                team={detailTeam}
+                playersByTeam={playersByTeam}
+                isMyTeam={
+                  normalizeTeamName(prefs.teamName ?? "") ===
+                  normalizeTeamName(selectedTeamName)
+                }
+                backLabel="Back to standings"
+                onClose={() => setSelectedTeamName(null)}
+                onSetAsMyTeam={
+                  detailTeam ? () => setMyTeam(detailTeam) : undefined
                 }
               />
-            ) : null}
-          </div>
-
-          <div className="animate-panel min-w-0 space-y-6">
-            {tab === "handicap" ? (
-              <HandicapCalculator
-                divisionId={selectedDivision.id}
-                divisionName={selectedDivision.name}
-                prefs={prefs}
-                onSelectTeam={({ teamId, teamName }) => {
-                  persist({
-                    ...prefs,
-                    teamId,
-                    teamName,
-                    divisionId: selectedDivision.id,
-                    divisionName: selectedDivision.name,
-                  });
-                  setSelectedTeamName(teamName);
-                }}
-              />
-            ) : loadingReport ? (
-              <LoadingState label="Pulling report from LMS…" />
-            ) : tab === "my-team" ? (
-              prefs.teamName ? (
-                <section className="space-y-4">
-                  {myStandingCells ? (
-                    <TeamStandingSummary
-                      cells={myStandingCells}
-                      teamName={prefs.teamName}
-                    />
-                  ) : null}
-                  <TeamDetail
-                    teamName={prefs.teamName}
-                    team={myTeam}
-                    playersByTeam={playersByTeam}
-                    isMyTeam
-                  />
-                </section>
-              ) : (
-                <EmptyState
-                  title="Set your team"
-                  body="Open League · Division · My team above and pick your team to see roster and player stats here."
-                />
-              )
-            ) : tab === "standings" && teamReport ? (
-              selectedTeamName ? (
-                <TeamDetail
-                  teamName={selectedTeamName}
-                  team={detailTeam}
-                  playersByTeam={playersByTeam}
-                  isMyTeam={
-                    normalizeTeamName(prefs.teamName ?? "") ===
-                    normalizeTeamName(selectedTeamName)
-                  }
-                  backLabel="Back to standings"
-                  onClose={() => setSelectedTeamName(null)}
-                  onSetAsMyTeam={
-                    detailTeam ? () => setMyTeam(detailTeam) : undefined
-                  }
-                />
-              ) : (
-                <section className="space-y-3">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-                      Division
-                    </p>
-                    <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-                      Team standings
-                    </h3>
-                    <p className="mt-1 text-sm text-[var(--muted)]">
-                      Tap a team to view player statistics. Use back to return
-                      to the standings grid.
-                    </p>
-                  </div>
-                  <DataTable
-                    headers={teamReport.headers}
-                    rows={filteredTeamRows}
-                    isRowSelected={(row) =>
-                      Boolean(
-                        prefs.teamName &&
-                          normalizeTeamName(
-                            row[teamNameIndex(teamReport.headers)] ?? "",
-                          ) === normalizeTeamName(prefs.teamName),
-                      )
-                    }
-                    onRowClick={(row) => {
-                      const name =
-                        row[teamNameIndex(teamReport.headers)]?.trim() ?? "";
-                      const matched = divisionTeams.find(
-                        (team) =>
-                          normalizeTeamName(team.name) ===
-                          normalizeTeamName(name),
-                      );
-                      setSelectedTeamName(matched?.name ?? name);
-                    }}
-                    emptyText="No teams match your filter."
-                  />
-                </section>
-              )
-            ) : tab === "players" && playersWithRatings ? (
-              <DataTable
-                headers={playersWithRatings.headers}
-                rows={filteredPlayerRows}
-                stickyFirst
-                emptyText="No players match your filter."
-              />
-            ) : tab === "schedule" && schedule ? (
-              prefs.teamName ? (
-                <ScheduleList days={schedule} teamName={prefs.teamName} />
-              ) : (
-                <EmptyState
-                  title="Set My team for schedule"
-                  body="Open League · Division · My team above and pick your team. Schedule always uses that selection."
-                />
-              )
             ) : (
-              <EmptyState title="Nothing to show yet" />
-            )}
-          </div>
-        </section>
-      )}
+              <section className="space-y-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
+                    Division
+                  </p>
+                  <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
+                    Team standings
+                  </h3>
+                  <p className="mt-1 text-sm text-[var(--muted)]">
+                    Tap a team to view player statistics. Use back to return
+                    to the standings grid.
+                  </p>
+                </div>
+                <DataTable
+                  headers={teamReport.headers}
+                  rows={filteredTeamRows}
+                  isRowSelected={(row) =>
+                    Boolean(
+                      prefs.teamName &&
+                        normalizeTeamName(
+                          row[teamNameIndex(teamReport.headers)] ?? "",
+                        ) === normalizeTeamName(prefs.teamName),
+                    )
+                  }
+                  onRowClick={(row) => {
+                    const name =
+                      row[teamNameIndex(teamReport.headers)]?.trim() ?? "";
+                    const matched = divisionTeams.find(
+                      (team) =>
+                        normalizeTeamName(team.name) ===
+                        normalizeTeamName(name),
+                    );
+                    setSelectedTeamName(matched?.name ?? name);
+                  }}
+                  emptyText="No teams match your filter."
+                />
+              </section>
+            )
+          ) : tab === "players" && playersWithRatings ? (
+            <DataTable
+              headers={playersWithRatings.headers}
+              rows={filteredPlayerRows}
+              stickyFirst
+              emptyText="No players match your filter."
+            />
+          ) : tab === "schedule" && schedule ? (
+            prefs.teamName ? (
+              <ScheduleList days={schedule} teamName={prefs.teamName} />
+            ) : (
+              <EmptyState
+                title="Set My team for schedule"
+                body="Open League · Division · My team above and pick your team. Schedule always uses that selection."
+              />
+            )
+          ) : (
+            <EmptyState title="Nothing to show yet" />
+          )}
+        </div>
+      </section>
     </main>
   );
 }
