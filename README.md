@@ -61,6 +61,8 @@ Also:
 2. Verifies your saved team with one roster call when prefs already include team + division
 3. Falls back to a preferred-league public roster scan only if the player-schedule call returns nothing
 
+Settings → **Refresh my teams** re-runs that same global player-schedule discovery (there is no separate league-only scan).
+
 ## Upstash Redis (Vercel)
 
 One free [Upstash Redis](https://upstash.com/) database powers both Score draft sync and LMS response caching. Without these env vars, the app still works (local drafts + direct LMS fetches).

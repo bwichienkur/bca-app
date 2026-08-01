@@ -7,7 +7,7 @@ import { lmsAuthFetch, requireScoringSession } from "@/lib/scoring-auth";
 import type { MembershipSnapshot } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-/** League-scoped scan is usually a few seconds; deep state probe needs headroom. */
+/** Player-schedule discovery is usually a few seconds. */
 export const maxDuration = 60;
 
 /** Membership cache — shorter than LMS data so roster moves show up sooner. */
@@ -22,14 +22,10 @@ export async function GET(request: NextRequest) {
     const divisionId = request.nextUrl.searchParams.get("divisionId");
     const teamId = request.nextUrl.searchParams.get("teamId");
     const teamName = request.nextUrl.searchParams.get("teamName");
-    const deep = request.nextUrl.searchParams.get("deep") === "1";
     const fresh = request.nextUrl.searchParams.get("fresh") === "1";
 
-    // v5: one BCAPL player-schedule call (active sessions only).
-    const cacheKey = lmsCacheKey(
-      "membership-v5",
-      `${session.lmsId}:${deep ? "deep" : "league"}:${leagueId}`,
-    );
+    // v6: one global BCAPL player-schedule discovery per player.
+    const cacheKey = lmsCacheKey("membership-v6", session.lmsId);
 
     if (fresh) {
       const redis = getRedis();
@@ -52,7 +48,6 @@ export async function GET(request: NextRequest) {
         divisionId,
         teamId,
         teamName,
-        deep,
         authFetch: lmsAuthFetch,
       });
       // Only cache successful discoveries so empty misses can be retried.
