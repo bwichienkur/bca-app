@@ -5,6 +5,7 @@ import { REPORT_TABS } from "@/lib/constants";
 import { normalizeTeamName } from "@/lib/matchups";
 import { enrichPlayersWithRatings } from "@/lib/players";
 import { loadPreferences, savePreferences } from "@/lib/preferences";
+import { useViewportAnchor } from "@/lib/use-viewport-anchor";
 import type {
   DivisionSummary,
   DivisionTeam,
@@ -106,6 +107,7 @@ export function LeagueApp() {
   const [refreshing, setRefreshing] = useState(false);
   const didAutoCollapseContext = useRef(false);
   const [, startTransition] = useTransition();
+  const filterAnchor = useViewportAnchor<HTMLDivElement>();
 
   const persist = (next: UserPreferences) => {
     setPrefs(next);
@@ -734,6 +736,7 @@ export function LeagueApp() {
         ) : null}
 
         <div
+          ref={filterAnchor.ref}
           data-report-tabs
           className={[
             "sticky top-0 z-20 -mx-1 flex flex-col gap-2 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 backdrop-blur md:flex-row md:items-center md:justify-between",
@@ -776,6 +779,7 @@ export function LeagueApp() {
           ((tab === "standings" && !selectedTeamName) || tab === "players") ? (
             <SearchField
               value={filterQuery}
+              onBeforeChange={filterAnchor.mark}
               onChange={setFilterQuery}
               placeholder={
                 tab === "standings" ? "Filter teams…" : "Filter players…"
@@ -786,7 +790,7 @@ export function LeagueApp() {
 
         <div
           className={[
-            "animate-panel min-w-0",
+            "animate-panel min-w-0 [overflow-anchor:none]",
             tab === "score" ? "mt-0 space-y-0" : "space-y-6",
           ].join(" ")}
         >
@@ -859,18 +863,32 @@ export function LeagueApp() {
                 }
               />
             ) : (
-              <section className="space-y-3">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-                    Division
-                  </p>
-                  <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-                    Team standings
-                  </h3>
-                  <p className="mt-1 text-sm text-[var(--muted)]">
-                    Tap a team to view player statistics. Use back to return
-                    to the standings grid.
-                  </p>
+              <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
+                <div className="flex flex-wrap items-end justify-between gap-2">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
+                      Division
+                    </p>
+                    <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
+                      Team standings
+                    </h3>
+                    <p className="mt-1 text-sm text-[var(--muted)]">
+                      Tap a team to view player statistics. Use back to return
+                      to the standings grid.
+                    </p>
+                  </div>
+                  {filterQuery.trim() ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        filterAnchor.mark();
+                        setFilterQuery("");
+                      }}
+                      className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]"
+                    >
+                      Clear filter
+                    </button>
+                  ) : null}
                 </div>
                 <DataTable
                   headers={teamReport.headers}
@@ -900,13 +918,29 @@ export function LeagueApp() {
               </section>
             )
           ) : tab === "players" && playersWithRatings ? (
-            <DataTable
-              headers={playersWithRatings.headers}
-              rows={filteredPlayerRows}
-              stickyFirst
-              compact
-              emptyText="No players match your filter."
-            />
+            <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
+              {filterQuery.trim() ? (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      filterAnchor.mark();
+                      setFilterQuery("");
+                    }}
+                    className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]"
+                  >
+                    Clear filter
+                  </button>
+                </div>
+              ) : null}
+              <DataTable
+                headers={playersWithRatings.headers}
+                rows={filteredPlayerRows}
+                stickyFirst
+                compact
+                emptyText="No players match your filter."
+              />
+            </section>
           ) : tab === "schedule" && schedule ? (
             !prefs.teamName ? (
               <EmptyState
