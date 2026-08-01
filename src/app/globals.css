@@ -23,6 +23,7 @@
   --radius: 18px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --danger: #f0a8a0;
+  --danger-strong: #d6453d;
   --danger-bg: rgba(180, 60, 50, 0.18);
 }
 

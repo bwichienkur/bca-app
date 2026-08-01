@@ -1022,7 +1022,7 @@ export function MatchScoring({
                         if (!match || sheetLocked) return;
                         setConfirmDialog("reset");
                       }}
-                      className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-[var(--muted)]"
+                      className="rounded-xl border border-[var(--danger-strong)]/55 bg-[var(--danger-strong)] px-4 py-3 text-sm font-semibold text-white shadow-[0_0_0_1px_rgba(214,69,61,0.25)] transition hover:brightness-110"
                     >
                       Reset sheet
                     </button>
@@ -2348,7 +2348,7 @@ function ConfirmDialog({
             className={[
               "rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50",
               confirmTone === "danger"
-                ? "bg-[var(--danger)]"
+                ? "border border-[var(--danger-strong)]/55 bg-[var(--danger-strong)] shadow-[0_0_0_1px_rgba(214,69,61,0.25)] transition hover:brightness-110"
                 : "bg-[var(--felt)]",
             ].join(" ")}
           >
