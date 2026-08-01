@@ -1899,13 +1899,13 @@ function ReviewPanel({
                     {tally.teamOneHandicap > 0 || tally.teamTwoHandicap > 0
                       ? ` (incl HC ${tally.teamOneHandicap}–${tally.teamTwoHandicap})`
                       : ""}
-                    {tally.roundComplete
-                      ? tally.roundWinner === 1
-                        ? ` · ${match.teamOneName.trim()} won`
-                        : tally.roundWinner === 2
-                          ? ` · ${match.teamTwoName.trim()} won`
-                          : " · tied"
-                      : " · in progress"}
+                    {tally.roundWinner === 1
+                      ? ` · ${match.teamOneName.trim()} won${tally.clinchedEarly ? " (clinched)" : ""}`
+                      : tally.roundWinner === 2
+                        ? ` · ${match.teamTwoName.trim()} won${tally.clinchedEarly ? " (clinched)" : ""}`
+                        : tally.roundComplete
+                          ? " · tied"
+                          : " · in progress"}
                   </p>
                 ) : null}
               </div>
