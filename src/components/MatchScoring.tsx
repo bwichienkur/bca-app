@@ -147,6 +147,9 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
   const [remoteSubmittedAt, setRemoteSubmittedAt] = useState<string | null>(
     null,
   );
+  const [confirmDialog, setConfirmDialog] = useState<
+    null | "reset" | "submit"
+  >(null);
   const [, startTransition] = useTransition();
   const saveTimerRef = useRef<number | null>(null);
   const dirtyRef = useRef(false);
@@ -545,17 +548,29 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
     });
   };
 
+  const resetSheet = () => {
+    if (!match || sheetLockedRef.current) return;
+    const fresh: ScoringDraft = {
+      ...emptyDraft(match),
+      updatedAt: new Date().toISOString(),
+    };
+    dirtyRef.current = true;
+    draftRef.current = fresh;
+    setDraft(fresh);
+    persistDraft(fresh);
+    setActiveGame(null);
+    setConfirmDialog(null);
+  };
+
   const submitMatch = async () => {
     if (!match || !draft || !user) return;
     if (sheetLockedRef.current || match.hasBeenPlayed) {
       setSheetError("This scoresheet is already submitted and locked.");
+      setConfirmDialog(null);
       return;
     }
-    const confirmed = window.confirm(
-      `Submit this scoresheet to LMS for ${match.teamOneName.trim()} vs ${match.teamTwoName.trim()}?\n\nThis cannot be undone from Tableside.`,
-    );
-    if (!confirmed) return;
 
+    setConfirmDialog(null);
     setSubmitting(true);
     setSheetError(null);
     setSubmitMessage(null);
@@ -770,7 +785,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
             submitting={submitting}
             locked={sheetLocked}
             onEdit={() => setView({ mode: "sheet", matchId: match.id })}
-            onSubmit={() => void submitMatch()}
+            onSubmit={() => setConfirmDialog("submit")}
           />
         ) : (
           <div className="grid w-full min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -1070,19 +1085,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                       type="button"
                       onClick={() => {
                         if (!match || sheetLocked) return;
-                        const confirmed = window.confirm(
-                          "Reset this scoresheet? All lineups and scores for this match will be cleared.",
-                        );
-                        if (!confirmed) return;
-                        const fresh: ScoringDraft = {
-                          ...emptyDraft(match),
-                          updatedAt: new Date().toISOString(),
-                        };
-                        dirtyRef.current = true;
-                        draftRef.current = fresh;
-                        setDraft(fresh);
-                        persistDraft(fresh);
-                        setActiveGame(null);
+                        setConfirmDialog("reset");
                       }}
                       className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-[var(--muted)]"
                     >
@@ -1111,6 +1114,32 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
             />
           </div>
         )}
+
+        {confirmDialog ? (
+          <ConfirmDialog
+            title={
+              confirmDialog === "reset"
+                ? "Reset this scoresheet?"
+                : "Submit to LMS?"
+            }
+            body={
+              confirmDialog === "reset"
+                ? "All lineups and scores for this match will be cleared. This cannot be undone."
+                : `Send the scoresheet for ${match.teamOneName.trim()} vs ${match.teamTwoName.trim()} to LMS? This cannot be undone from Tableside.`
+            }
+            confirmLabel={confirmDialog === "reset" ? "Reset sheet" : "Submit"}
+            confirmTone={confirmDialog === "reset" ? "danger" : "primary"}
+            busy={confirmDialog === "submit" && submitting}
+            onCancel={() => {
+              if (submitting) return;
+              setConfirmDialog(null);
+            }}
+            onConfirm={() => {
+              if (confirmDialog === "reset") resetSheet();
+              else void submitMatch();
+            }}
+          />
+        ) : null}
       </section>
     );
   }
@@ -2251,6 +2280,97 @@ function ScorePad({
   );
 }
 
+function ConfirmDialog({
+  title,
+  body,
+  confirmLabel,
+  confirmTone = "primary",
+  busy = false,
+  onCancel,
+  onConfirm,
+}: {
+  title: string;
+  body: string;
+  confirmLabel: string;
+  confirmTone?: "primary" | "danger";
+  busy?: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [busy, onCancel]);
+
+  const dialog = (
+    <div
+      className="fixed inset-0 z-[120] flex items-end justify-center bg-black/45 p-4 sm:items-center"
+      role="presentation"
+      onClick={() => {
+        if (!busy) onCancel();
+      }}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="score-confirm-title"
+        aria-describedby="score-confirm-body"
+        className="w-full max-w-md rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 shadow-[var(--shadow)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h4
+          id="score-confirm-title"
+          className="font-[family-name:var(--font-display)] text-xl text-[var(--felt-deep)]"
+        >
+          {title}
+        </h4>
+        <p id="score-confirm-body" className="mt-2 text-sm text-[var(--muted)]">
+          {body}
+        </p>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onCancel}
+            className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onConfirm}
+            className={[
+              "rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50",
+              confirmTone === "danger"
+                ? "bg-[var(--danger)]"
+                : "bg-[var(--felt)]",
+            ].join(" ")}
+          >
+            {busy ? "Working…" : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (!mounted || typeof document === "undefined") return null;
+  return createPortal(dialog, document.body);
+}
+
 function ReviewPanel({
   match,
   draft,
@@ -2397,7 +2517,7 @@ function ReviewPanel({
         </p>
       ) : (
         <p className="text-xs text-[var(--muted)]">
-          You will be asked to confirm before this is sent through the same LMS
+          Next step asks you to confirm, then sends through the same LMS
           endpoint as the official BCAPL scoring app.
         </p>
       )}
