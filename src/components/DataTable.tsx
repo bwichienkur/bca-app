@@ -78,8 +78,12 @@ function columnWidth(
   compact: boolean,
 ): string {
   if (kind === "rank") return compact ? "2.5rem" : "3rem";
-  if (kind === "name") return compact ? "9.5rem" : "14rem";
-  if (header.trim().toLowerCase() === "fargo") {
+  // Keep names compact so stat columns stay visible; full value is in title.
+  if (kind === "name") return compact ? "7rem" : "9rem";
+  if (
+    header.trim().toLowerCase() === "fargo" ||
+    header.trim().toLowerCase() === "rating"
+  ) {
     return compact ? "4rem" : "4.5rem";
   }
 
@@ -297,9 +301,7 @@ export function DataTable({
                             ? "tabular-nums font-medium text-[var(--muted)]"
                             : "tabular-nums font-semibold text-[var(--ink)]",
                         kind === "name"
-                          ? compact
-                            ? "truncate whitespace-nowrap font-semibold text-[var(--ink)]"
-                            : "whitespace-normal break-words font-semibold text-[var(--ink)]"
+                          ? "truncate whitespace-nowrap font-semibold text-[var(--ink)]"
                           : "whitespace-nowrap",
                         isLastRow && isFirst
                           ? "rounded-bl-[calc(var(--radius)-1px)]"
