@@ -3,9 +3,19 @@
 import {
   DEFAULT_PREFERENCES,
   LINEUP_PRESETS_STORAGE_KEY,
+  MEMBERSHIP_STORAGE_KEY,
   PREFERENCES_STORAGE_KEY,
 } from "./constants";
-import type { LineupPreset, UserPreferences } from "./types";
+import type {
+  LineupPreset,
+  MembershipSnapshot,
+  UserPreferences,
+} from "./types";
+
+type StoredMembership = {
+  savedAt: number;
+  membership: MembershipSnapshot;
+};
 
 export function loadPreferences(): UserPreferences {
   if (typeof window === "undefined") return DEFAULT_PREFERENCES;
@@ -83,4 +93,36 @@ export function deleteLineupPreset(id: string): LineupPreset[] {
   const next = loadLineupPresets().filter((item) => item.id !== id);
   saveLineupPresets(next);
   return next;
+}
+
+/** Client cache so selectors can filter immediately on return visits. */
+export function loadStoredMembership(
+  playerId: string,
+): MembershipSnapshot | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(MEMBERSHIP_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredMembership;
+    if (!parsed?.membership?.teams?.length) return null;
+    if (parsed.membership.playerId !== playerId) return null;
+    return parsed.membership;
+  } catch {
+    return null;
+  }
+}
+
+export function saveStoredMembership(membership: MembershipSnapshot): void {
+  if (typeof window === "undefined") return;
+  if (!membership.teams.length) return;
+  const payload: StoredMembership = {
+    savedAt: Date.now(),
+    membership,
+  };
+  window.localStorage.setItem(MEMBERSHIP_STORAGE_KEY, JSON.stringify(payload));
+}
+
+export function clearStoredMembership(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(MEMBERSHIP_STORAGE_KEY);
 }

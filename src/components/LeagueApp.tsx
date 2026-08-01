@@ -4,7 +4,13 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { DEFAULT_LEAGUE_ID, REPORT_TABS } from "@/lib/constants";
 import { normalizeTeamName } from "@/lib/matchups";
 import { enrichPlayersWithRatings } from "@/lib/players";
-import { loadPreferences, savePreferences } from "@/lib/preferences";
+import {
+  clearStoredMembership,
+  loadPreferences,
+  loadStoredMembership,
+  savePreferences,
+  saveStoredMembership,
+} from "@/lib/preferences";
 import { useViewportAnchor } from "@/lib/use-viewport-anchor";
 import type {
   DivisionSummary,
@@ -125,27 +131,34 @@ export function LeagueApp() {
     savePreferences(next);
   };
 
-  const loadMembership = async (
-    fresh = false,
-    leagueId?: string | null,
-    auto = true,
-  ) => {
+  const loadMembership = async (options?: {
+    fresh?: boolean;
+    leagueId?: string | null;
+    deep?: boolean;
+    prefsOverride?: UserPreferences | null;
+  }) => {
+    const base = options?.prefsOverride ?? prefs;
     const scopedLeagueId =
-      (leagueId || prefs?.leagueId || DEFAULT_LEAGUE_ID).trim() ||
+      (options?.leagueId || base?.leagueId || DEFAULT_LEAGUE_ID).trim() ||
       DEFAULT_LEAGUE_ID;
     setLoadingMembership(true);
     setMembershipError(null);
     try {
       const params = new URLSearchParams({ leagueId: scopedLeagueId });
-      if (fresh) params.set("fresh", "1");
-      if (auto) params.set("auto", "1");
+      if (options?.fresh) params.set("fresh", "1");
+      if (options?.deep) params.set("deep", "1");
+      if (base?.divisionId) params.set("divisionId", base.divisionId);
+      if (base?.teamId) params.set("teamId", base.teamId);
+      if (base?.teamName) params.set("teamName", base.teamName);
       const data = await fetchJson<{ membership: MembershipSnapshot }>(
         `/api/scoring/membership?${params.toString()}`,
       );
       setMembership(data.membership);
+      if (data.membership.teams.length) {
+        saveStoredMembership(data.membership);
+      }
       return data.membership;
     } catch (err) {
-      setMembership(null);
       setMembershipError(
         err instanceof Error ? err.message : "Failed to load memberships.",
       );
@@ -218,6 +231,7 @@ export function LeagueApp() {
     setUser(null);
     setMembership(null);
     setMembershipError(null);
+    clearStoredMembership();
     setScreen("main");
   };
 
@@ -284,43 +298,59 @@ export function LeagueApp() {
         setUser(sessionData.user);
         setAuthLoading(false);
 
-        const data = await fetchJson<{ leagues: LeagueSummary[] }>(
-          `/api/leagues?q=${encodeURIComponent(saved.leagueName)}`,
-        );
-        if (cancelled) return;
-        setLeagues(data.leagues);
-        const league =
-          data.leagues.find((item) => item.id === saved.leagueId) ??
-          data.leagues[0] ??
-          null;
-        setSelectedLeague(league);
-        if (league) {
-          const divisionData = await fetchJson<{
-            divisions: DivisionSummary[];
-          }>(`/api/leagues/${league.id}/divisions`);
+        // Instant filter from last successful membership scan.
+        const cachedMembership = sessionData.user
+          ? loadStoredMembership(sessionData.user.lmsId)
+          : null;
+        if (sessionData.user && cachedMembership?.teams.length) {
+          setMembership(cachedMembership);
+          applyMembershipDefaults(
+            cachedMembership,
+            saved,
+            sessionData.user.name,
+          );
+        } else {
+          const data = await fetchJson<{ leagues: LeagueSummary[] }>(
+            `/api/leagues?q=${encodeURIComponent(saved.leagueName)}`,
+          );
           if (cancelled) return;
-          setDivisions(divisionData.divisions);
-          const division =
-            divisionData.divisions.find(
-              (item) => item.id === saved.divisionId,
-            ) ?? null;
-          if (division) {
-            setSelectedDivision(division);
+          setLeagues(data.leagues);
+          const league =
+            data.leagues.find((item) => item.id === saved.leagueId) ??
+            data.leagues[0] ??
+            null;
+          setSelectedLeague(league);
+          if (league) {
+            const divisionData = await fetchJson<{
+              divisions: DivisionSummary[];
+            }>(`/api/leagues/${league.id}/divisions`);
+            if (cancelled) return;
+            setDivisions(divisionData.divisions);
+            const division =
+              divisionData.divisions.find(
+                (item) => item.id === saved.divisionId,
+              ) ?? null;
+            if (division) {
+              setSelectedDivision(division);
+            }
           }
         }
 
-        // Auto-discover memberships in the background; never block boot.
+        // Refresh membership in the background (preferred league only).
         if (sessionData.user) {
-          void loadMembership(false, saved.leagueId, true).then(
-            (nextMembership) => {
-              if (cancelled || !nextMembership?.teams.length) return;
-              applyMembershipDefaults(
-                nextMembership,
-                loadPreferences(),
-                sessionData.user!.name,
-              );
-            },
-          );
+          void loadMembership({
+            fresh: false,
+            leagueId: saved.leagueId,
+            deep: false,
+            prefsOverride: saved,
+          }).then((nextMembership) => {
+            if (cancelled || !nextMembership?.teams.length) return;
+            applyMembershipDefaults(
+              nextMembership,
+              loadPreferences(),
+              sessionData.user!.name,
+            );
+          });
         }
       } catch (err) {
         if (!cancelled) {
@@ -746,11 +776,13 @@ export function LeagueApp() {
             setScreen("main");
             const basePrefs = prefs ?? loadPreferences();
             void (async () => {
-              const nextMembership = await loadMembership(
-                true,
-                basePrefs.leagueId,
-                true,
-              );
+              // Prefer Redis/local cache; only scan the preferred league.
+              const nextMembership = await loadMembership({
+                fresh: false,
+                leagueId: basePrefs.leagueId,
+                deep: false,
+                prefsOverride: basePrefs,
+              });
               if (nextMembership?.teams.length) {
                 applyMembershipDefaults(
                   nextMembership,
@@ -782,12 +814,15 @@ export function LeagueApp() {
           loadingMembership={loadingMembership}
           membershipError={membershipError}
           onClose={() => setScreen("main")}
-          onRefreshMembership={(leagueId) => {
-            // Settings picks a concrete league — scan that league (with auto
-            // state probe only when no league override was provided).
+          onRefreshMembership={(leagueId, deep) => {
             const scoped = leagueId ?? prefs.leagueId;
-            void loadMembership(true, scoped, !leagueId).then((next) => {
-              if (next?.teams.length && prefs) {
+            void loadMembership({
+              fresh: true,
+              leagueId: scoped,
+              deep: Boolean(deep),
+              prefsOverride: prefs,
+            }).then((next) => {
+              if (next?.teams.length) {
                 applyMembershipDefaults(next, prefs, user.name);
               }
             });
@@ -871,12 +906,12 @@ export function LeagueApp() {
 
       {user && loadingMembership ? (
         <p className="mb-3 text-xs text-[var(--muted)]">
-          Finding the leagues and divisions on your roster…
+          Loading your active BCAPL sessions…
         </p>
       ) : user && membership && !membership.teams.length ? (
         <p className="mb-3 text-xs text-[var(--muted)]">
-          No team memberships found yet. Open Settings to scan a league, or
-          keep browsing public reports.
+          No team memberships found in this league yet. Open Settings to scan
+          another league or find all your teams.
         </p>
       ) : user && membershipReady ? (
         <p className="mb-3 text-xs text-[var(--muted)]">

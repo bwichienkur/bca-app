@@ -80,7 +80,10 @@ export async function GET(request: NextRequest) {
     const cache = new Map<string, boolean>();
     const matches: ScoringMatchSummary[] = [];
 
+    // LMS ignores the division path segment and returns every active-session
+    // match for the player (same as the official BCAPL app). Filter here.
     for (const match of raw) {
+      if (match.divisionId && match.divisionId !== divisionId) continue;
       if (
         teamId &&
         match.teamOneId !== teamId &&
