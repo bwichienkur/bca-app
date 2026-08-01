@@ -2116,7 +2116,7 @@ function ScorePad({
                     </p>
                   ) : null}
 
-                  <label className="mt-3 block">
+                  <label className="relative mt-3 block">
                     <span className="sr-only">Score for {name}</span>
                     <select
                       value={selectValue}
@@ -2124,32 +2124,40 @@ function ScorePad({
                         setScore(side as 1 | 2, Number(event.target.value))
                       }
                       className={[
-                        "w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-3 text-center font-[family-name:var(--font-display)] text-4xl tabular-nums outline-none ring-[var(--felt)] focus:ring-2",
-                        isWinner
-                          ? "text-[var(--felt-deep)]"
-                          : "text-[var(--ink)]",
+                        "w-full appearance-none rounded-xl border border-white/20 bg-[var(--felt)] px-3 py-3 pr-8 text-center font-[family-name:var(--font-display)] text-4xl tabular-nums text-white outline-none ring-white/35 focus:ring-2 [background-color:var(--felt)]",
+                        isWinner ? "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.28)]" : "",
                       ].join(" ")}
                     >
                       {options.map((value) => (
-                        <option key={value} value={value}>
+                        <option
+                          key={value}
+                          value={value}
+                          className="bg-[var(--felt)] text-white"
+                        >
                           {value}
                         </option>
                       ))}
                     </select>
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-white/70"
+                    >
+                      ▾
+                    </span>
                   </label>
 
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => bump(side as 1 | 2, -1)}
-                      className="rounded-xl bg-[var(--surface)] py-2 text-lg font-semibold active:scale-[0.98]"
+                      className="rounded-xl border border-white/15 bg-[color-mix(in_srgb,var(--felt)_72%,black)] py-2 text-lg font-semibold text-white active:scale-[0.98]"
                     >
                       −
                     </button>
                     <button
                       type="button"
                       onClick={() => bump(side as 1 | 2, 1)}
-                      className="rounded-xl bg-[var(--surface)] py-2 text-lg font-semibold active:scale-[0.98]"
+                      className="rounded-xl border border-white/15 bg-[color-mix(in_srgb,var(--felt)_72%,black)] py-2 text-lg font-semibold text-white active:scale-[0.98]"
                     >
                       +
                     </button>
