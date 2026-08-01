@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  deleteSharedDraft,
+  isDraftStoreConfigured,
+  markSharedDraftSubmitted,
+} from "@/lib/draft-store";
+import {
   lmsAuthFetch,
   requireScoringSession,
 } from "@/lib/scoring-auth";
@@ -71,6 +76,14 @@ export async function POST(request: NextRequest) {
       if (check.ok) {
         const match = (await check.json()) as { hasBeenPlayed?: boolean };
         verifiedPlayed = Boolean(match.hasBeenPlayed);
+      }
+    }
+
+    if (matchId && isDraftStoreConfigured()) {
+      if (verifiedPlayed) {
+        await deleteSharedDraft(matchId);
+      } else {
+        await markSharedDraftSubmitted(matchId, session.lmsId);
       }
     }
 

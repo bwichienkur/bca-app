@@ -41,3 +41,24 @@ Stored in `localStorage`:
 
 - `tableside.preferences.v1` — league, division, my team
 - `tableside.lineups.v1` — saved handicap lineups
+- `tableside.scoring.draft.v1.*` — local scoresheet drafts (also synced when Redis is configured)
+
+## Multi-device Score drafts (Upstash Redis)
+
+Score drafts can sync across phones/tablets via a free [Upstash Redis](https://upstash.com/) database (also works with Vercel KV REST credentials). Without these env vars, Score still works with browser `localStorage` only.
+
+In the [Upstash console](https://console.upstash.com/), create a Redis database (free tier), then copy the REST URL and token into Vercel project env (or `.env.local`):
+
+```bash
+UPSTASH_REDIS_REST_URL=https://xxxx.upstash.io
+UPSTASH_REDIS_REST_TOKEN=xxxxxxxx
+```
+
+Vercel KV REST names are also accepted:
+
+```bash
+KV_REST_API_URL=...
+KV_REST_API_TOKEN=...
+```
+
+Drafts are keyed by match id, TTL 60 days, last-write-wins with ~3s polling while a scoresheet is open. LMS submit still happens once from any device.
