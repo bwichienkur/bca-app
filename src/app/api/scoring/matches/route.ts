@@ -76,10 +76,19 @@ export async function GET(request: NextRequest) {
     const raw = (await response.json()) as RawMatch[];
     const mineOnly =
       request.nextUrl.searchParams.get("mine") !== "0";
+    const teamId = request.nextUrl.searchParams.get("teamId");
     const cache = new Map<string, boolean>();
     const matches: ScoringMatchSummary[] = [];
 
     for (const match of raw) {
+      if (
+        teamId &&
+        match.teamOneId !== teamId &&
+        match.teamTwoId !== teamId
+      ) {
+        continue;
+      }
+
       let mySide: 1 | 2 | null = null;
       if (mineOnly) {
         const onOne = await teamIncludesPlayer(
@@ -96,6 +105,8 @@ export async function GET(request: NextRequest) {
             );
         if (!onOne && !onTwo) continue;
         mySide = onOne ? 1 : 2;
+      } else if (teamId) {
+        mySide = match.teamOneId === teamId ? 1 : 2;
       }
 
       matches.push({

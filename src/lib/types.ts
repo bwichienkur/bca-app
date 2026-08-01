@@ -128,3 +128,21 @@ export type ReportTab =
   | "handicap"
   | "search"
   | "score";
+
+export type MembershipTeam = {
+  teamId: string;
+  teamName: string;
+  divisionId: string;
+  divisionName: string;
+  leagueId: string;
+  leagueName: string;
+  state: string;
+  year: string;
+};
+
+export type MembershipSnapshot = {
+  playerId: string;
+  teams: MembershipTeam[];
+  leagues: LeagueSummary[];
+  divisions: DivisionSummary[];
+};
