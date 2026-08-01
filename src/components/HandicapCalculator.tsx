@@ -72,6 +72,67 @@ function playerLabel(player: RosterPlayer): string {
   return `${player.firstName} ${player.lastName}`.trim();
 }
 
+function moveSlotPreview(
+  lineup: LineupSlot[],
+  from: number,
+  to: number,
+): LineupSlot[] {
+  if (
+    from === to ||
+    from < 0 ||
+    to < 0 ||
+    from >= lineup.length ||
+    to >= lineup.length
+  ) {
+    return lineup;
+  }
+  const next = [...lineup];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
+function DragGhostCard({
+  player,
+  slotNumber,
+  floating,
+  style,
+}: {
+  player: RosterPlayer;
+  slotNumber: number;
+  floating?: boolean;
+  style?: CSSProperties;
+}) {
+  return (
+    <div
+      style={style}
+      className={[
+        "rounded-xl border px-3 py-2.5 shadow-[var(--shadow)]",
+        floating
+          ? "pointer-events-none border-[var(--felt)] bg-[color-mix(in_srgb,var(--surface)_82%,var(--felt))] opacity-90 backdrop-blur-sm"
+          : "border-dashed border-[var(--felt)] bg-[color-mix(in_srgb,var(--felt)_16%,var(--surface))] opacity-80",
+      ].join(" ")}
+    >
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <div className="inline-flex items-center gap-2">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--felt)]/40 bg-[var(--surface)]/80 text-sm text-[var(--felt-deep)]">
+            ⠿
+          </span>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            Slot #{slotNumber}
+          </span>
+        </div>
+        <span className="tabular-nums text-xs font-semibold text-[var(--felt)]">
+          {player.fargoRating}
+        </span>
+      </div>
+      <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)]/90 px-3 py-2.5 text-sm font-medium text-[var(--ink)]">
+        {playerLabel(player)}
+      </div>
+    </div>
+  );
+}
+
 function emptyLineup(slots: number): LineupSlot[] {
   return Array.from({ length: slots }, () => null);
 }
@@ -758,14 +819,45 @@ function LineupPicker({
 }) {
   const filled = filledCount(lineup);
   const listRef = useRef<HTMLOListElement>(null);
+  const dropTargetRef = useRef(dropTarget);
+  const [mounted, setMounted] = useState(false);
+  const [ghost, setGhost] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    offsetX: number;
+    offsetY: number;
+  } | null>(null);
+
   const sortedRoster = useMemo(
     () => [...roster].sort((a, b) => b.fargoRating - a.fargoRating),
     [roster],
   );
 
+  const draggingHere = dragState?.side === side;
+  const dragFrom = draggingHere ? dragState.from : -1;
+  const dragTo =
+    draggingHere && dropTarget?.side === side ? dropTarget.from : dragFrom;
+  const draggedPlayer = dragFrom >= 0 ? lineup[dragFrom] : null;
+
+  const previewLineup = useMemo(() => {
+    if (!draggingHere || dragFrom < 0 || dragTo < 0) return lineup;
+    return moveSlotPreview(lineup, dragFrom, dragTo);
+  }, [draggingHere, dragFrom, dragTo, lineup]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    dropTargetRef.current = dropTarget;
+  }, [dropTarget]);
+
   const clearDrag = () => {
     setDragState(null);
     setDropTarget(null);
+    setGhost(null);
   };
 
   const indexFromClientY = (clientY: number): number | null => {
@@ -793,39 +885,60 @@ function LineupPicker({
     return Boolean(target.closest("[data-no-drag]"));
   };
 
+  useEffect(() => {
+    if (!draggingHere || dragFrom < 0) return;
+
+    const onPointerMove = (event: PointerEvent) => {
+      setGhost((current) =>
+        current
+          ? { ...current, x: event.clientX, y: event.clientY }
+          : current,
+      );
+      const next = indexFromClientY(event.clientY);
+      if (next == null) return;
+      setDropTarget({ side, from: next });
+    };
+
+    const onPointerUp = (event: PointerEvent) => {
+      const currentDrop = dropTargetRef.current;
+      const target =
+        currentDrop?.side === side
+          ? currentDrop.from
+          : (indexFromClientY(event.clientY) ?? dragFrom);
+      if (target !== dragFrom) {
+        onMove(dragFrom, target);
+      }
+      clearDrag();
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draggingHere, dragFrom, side, onMove]);
+
   const onCardPointerDown = (
     event: ReactPointerEvent<HTMLDivElement>,
     index: number,
   ) => {
     if (!lineup[index] || shouldIgnoreDrag(event.target)) return;
     event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
+    const rect = event.currentTarget.getBoundingClientRect();
+    setGhost({
+      x: event.clientX,
+      y: event.clientY,
+      width: rect.width,
+      height: rect.height,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+    });
     setDragState({ side, from: index });
     setDropTarget({ side, from: index });
-  };
-
-  const onCardPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!dragState || dragState.side !== side) return;
-    const next = indexFromClientY(event.clientY);
-    if (next == null) return;
-    setDropTarget({ side, from: next });
-  };
-
-  const onCardPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!dragState || dragState.side !== side) return;
-    const target =
-      dropTarget?.side === side
-        ? dropTarget.from
-        : (indexFromClientY(event.clientY) ?? dragState.from);
-    if (target !== dragState.from) {
-      onMove(dragState.from, target);
-    }
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    } catch {
-      // ignore if already released
-    }
-    clearDrag();
   };
 
   return (
@@ -851,99 +964,123 @@ function LineupPicker({
 
       <ol ref={listRef} className="space-y-2">
         {Array.from({ length: slots }).map((_, index) => {
-          const player = lineup[index];
-          const isDragging =
-            dragState?.side === side && dragState.from === index;
-          const isDropTarget =
-            dropTarget?.side === side &&
-            dropTarget.from === index &&
-            dragState?.side === side &&
-            dragState.from !== index;
+          const player = previewLineup[index];
+          // Preview order already moves the card; mark its new slot as the landing ghost.
+          const isLandingGhost =
+            draggingHere &&
+            dragFrom !== dragTo &&
+            dragTo === index &&
+            Boolean(draggedPlayer);
+          const isLiftedSource =
+            draggingHere && dragFrom === dragTo && index === dragFrom;
 
           return (
-            <li key={index} data-slot={index} className="relative">
-              {isDropTarget ? (
-                <div
-                  className="pointer-events-none absolute -top-1 left-2 right-2 z-10 h-1 rounded-full bg-[var(--felt)] shadow-[0_0_12px_rgba(61,155,117,0.7)]"
-                  aria-hidden
+            <li key={`slot-${index}`} data-slot={index} className="relative">
+              {isLandingGhost && draggedPlayer ? (
+                <DragGhostCard
+                  player={draggedPlayer}
+                  slotNumber={index + 1}
                 />
-              ) : null}
-              <div
-                onPointerDown={(event) => onCardPointerDown(event, index)}
-                onPointerMove={onCardPointerMove}
-                onPointerUp={onCardPointerUp}
-                onPointerCancel={clearDrag}
-                className={[
-                  "relative select-none rounded-xl border px-3 py-2.5 transition",
-                  player ? "touch-none cursor-grab active:cursor-grabbing" : "",
-                  isDragging
-                    ? "z-20 border-[var(--felt)]/50 bg-[var(--surface-3)] opacity-45"
-                    : isDropTarget
-                      ? "z-10 animate-drop-target border-[var(--felt)] bg-[color-mix(in_srgb,var(--felt)_18%,var(--surface-2))]"
+              ) : (
+                <div
+                  onPointerDown={(event) => {
+                    if (draggingHere) return;
+                    onCardPointerDown(event, index);
+                  }}
+                  className={[
+                    "relative select-none rounded-xl border px-3 py-2.5 transition duration-150",
+                    player ? "touch-none cursor-grab active:cursor-grabbing" : "",
+                    isLiftedSource
+                      ? "z-20 border-[var(--felt)]/40 bg-[var(--surface-3)] opacity-30"
                       : "z-0 border-[var(--line)] bg-[var(--surface-2)]",
-                ].join(" ")}
-              >
-                <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <div className="inline-flex items-center gap-2">
-                    <span
-                      className={[
-                        "inline-flex h-8 w-8 items-center justify-center rounded-lg border text-sm",
-                        player
-                          ? "border-[var(--line-strong)] bg-[var(--surface)] text-[var(--felt-deep)]"
-                          : "border-[var(--line)] text-[var(--muted)]",
-                      ].join(" ")}
-                      aria-hidden
-                    >
-                      ⠿
-                    </span>
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                      Slot #{index + 1}
-                    </span>
+                  ].join(" ")}
+                >
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <div className="inline-flex items-center gap-2">
+                      <span
+                        className={[
+                          "inline-flex h-8 w-8 items-center justify-center rounded-lg border text-sm",
+                          player
+                            ? "border-[var(--line-strong)] bg-[var(--surface)] text-[var(--felt-deep)]"
+                            : "border-[var(--line)] text-[var(--muted)]",
+                        ].join(" ")}
+                        aria-hidden
+                      >
+                        ⠿
+                      </span>
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                        Slot #{index + 1}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5" data-no-drag>
+                      {player ? (
+                        <>
+                          <button
+                            type="button"
+                            aria-label="Move up"
+                            disabled={index === 0 || draggingHere}
+                            onClick={() => onMove(index, index - 1)}
+                            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
+                          >
+                            ▲
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Move down"
+                            disabled={index >= slots - 1 || draggingHere}
+                            onClick={() => onMove(index, index + 1)}
+                            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
+                          >
+                            ▼
+                          </button>
+                          <span className="ml-1 tabular-nums text-xs font-semibold text-[var(--felt)]">
+                            {player.fargoRating}
+                          </span>
+                        </>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5" data-no-drag>
-                    {player ? (
-                      <>
-                        <button
-                          type="button"
-                          aria-label="Move up"
-                          disabled={index === 0}
-                          onClick={() => onMove(index, index - 1)}
-                          className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
-                        >
-                          ▲
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="Move down"
-                          disabled={index >= slots - 1}
-                          onClick={() => onMove(index, index + 1)}
-                          className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
-                        >
-                          ▼
-                        </button>
-                        <span className="ml-1 tabular-nums text-xs font-semibold text-[var(--felt)]">
-                          {player.fargoRating}
-                        </span>
-                      </>
-                    ) : null}
+                  <div data-no-drag>
+                    <PlayerSelect
+                      value={player?.id ?? ""}
+                      options={sortedRoster}
+                      placeholder="Open slot…"
+                      onChange={(playerId) => onSelectSlot(index, playerId)}
+                    />
                   </div>
                 </div>
-                <div data-no-drag>
-                  <PlayerSelect
-                    value={player?.id ?? ""}
-                    options={sortedRoster}
-                    placeholder="Open slot…"
-                    onChange={(playerId) => onSelectSlot(index, playerId)}
-                  />
-                </div>
-              </div>
+              )}
             </li>
           );
         })}
       </ol>
       <p className="mt-2 text-[11px] text-[var(--muted)]">
-        Drag a filled card to reorder, or use ▲ ▼ on mobile.
+        Drag a filled card to preview its new slot, or use ▲ ▼ on mobile.
       </p>
+
+      {mounted &&
+      draggingHere &&
+      draggedPlayer &&
+      ghost &&
+      typeof document !== "undefined"
+        ? createPortal(
+            <DragGhostCard
+              player={draggedPlayer}
+              slotNumber={(dragTo >= 0 ? dragTo : dragFrom) + 1}
+              floating
+              style={{
+                position: "fixed",
+                left: ghost.x - ghost.offsetX,
+                top: ghost.y - ghost.offsetY,
+                width: ghost.width,
+                minHeight: ghost.height,
+                zIndex: 200,
+                transform: "scale(1.03) rotate(-1.2deg)",
+              }}
+            />,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
