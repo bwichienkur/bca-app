@@ -22,6 +22,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
 
 export const PREFERENCES_STORAGE_KEY = "tableside.preferences.v1";
 export const LINEUP_PRESETS_STORAGE_KEY = "tableside.lineups.v1";
+export const MEMBERSHIP_STORAGE_KEY = "tableside.membership.v1";
 
 export const REPORT_TABS: { id: ReportTab; label: string }[] = [
   { id: "my-team", label: "My Team" },

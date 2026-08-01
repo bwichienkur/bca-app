@@ -7,7 +7,7 @@ Defaults to **Palm Beach County BCA Pool League**.
 ## Features
 
 - Top-level BCA / FargoRate login + Settings for default league, division, and team
-- When signed in, memberships are auto-discovered from your LMS roster and League · Division · My team selectors filter to those teams (reports still show the full division)
+- When signed in, memberships are discovered from your LMS roster (preferred league first; saved team is verified in one call) and League · Division · My team selectors filter to those teams (reports still show the full division)
 - Typeahead selectors for league, division, and my team
 - Team standings with clickable rows → player stats + roster panel
 - Search filters on Teams, Players, and Ratings
@@ -43,8 +43,20 @@ npm run dev
 Stored in `localStorage`:
 
 - `tableside.preferences.v1` — league, division, my team
+- `tableside.membership.v1` — last discovered roster memberships (instant filter on return visits)
 - `tableside.lineups.v1` — saved handicap lineups
 - `tableside.scoring.draft.v1.*` — local scoresheet drafts (also synced when Redis is configured)
+
+### Membership discovery (after login)
+
+Sign-in does **not** scan every LMS league. It:
+
+1. Reuses the last membership snapshot from `localStorage` / Redis when present
+2. Verifies your saved team with one roster call (when prefs include team + division)
+3. Auth-probes only divisions in your preferred league (~12 for Palm Beach)
+4. Falls back to a public schedule/roster scan of that league only if auth finds nothing
+
+Settings → **Find all my teams** optionally probes other leagues in the same state.
 
 ## Upstash Redis (Vercel)
 

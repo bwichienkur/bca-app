@@ -7,7 +7,7 @@ import { lmsAuthFetch, requireScoringSession } from "@/lib/scoring-auth";
 import type { MembershipSnapshot } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-/** Membership scan may probe many divisions; keep serverless headroom. */
+/** League-scoped scan is usually a few seconds; deep state probe needs headroom. */
 export const maxDuration = 60;
 
 /** Membership cache — shorter than LMS data so roster moves show up sooner. */
@@ -19,13 +19,17 @@ export async function GET(request: NextRequest) {
     const leagueId =
       request.nextUrl.searchParams.get("leagueId")?.trim() ||
       DEFAULT_LEAGUE_ID;
-    const auto = request.nextUrl.searchParams.get("auto") === "1";
+    const divisionId = request.nextUrl.searchParams.get("divisionId");
+    const teamId = request.nextUrl.searchParams.get("teamId");
+    const teamName = request.nextUrl.searchParams.get("teamName");
+    const deep = request.nextUrl.searchParams.get("deep") === "1";
     const fresh = request.nextUrl.searchParams.get("fresh") === "1";
 
-    // v3: auth probe + public roster fallback (empty results are not cached).
+    // v4: preferred-league auth probe (+ optional deep state). Hints are not
+    // part of the cache key; a hit is still valid for the player/league scope.
     const cacheKey = lmsCacheKey(
-      "membership-v3",
-      `${session.lmsId}:${auto ? "auto" : "league"}:${leagueId}`,
+      "membership-v4",
+      `${session.lmsId}:${deep ? "deep" : "league"}:${leagueId}`,
     );
 
     if (fresh) {
@@ -46,7 +50,10 @@ export async function GET(request: NextRequest) {
     if (!membership) {
       membership = await discoverMembership(session.lmsId, {
         leagueId,
-        auto,
+        divisionId,
+        teamId,
+        teamName,
+        deep,
         authFetch: lmsAuthFetch,
       });
       // Only cache successful discoveries so empty misses can be retried.

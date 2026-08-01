@@ -19,7 +19,7 @@ type SettingsScreenProps = {
   loadingMembership: boolean;
   membershipError: string | null;
   onSave: (next: UserPreferences) => void;
-  onRefreshMembership: (leagueId?: string) => void;
+  onRefreshMembership: (leagueId?: string, deep?: boolean) => void;
   onSignOut: () => void;
   onClose: () => void;
 };
@@ -293,7 +293,7 @@ export function SettingsScreen({
             </button>
             <button
               type="button"
-              onClick={() => onRefreshMembership()}
+              onClick={() => onRefreshMembership(undefined, true)}
               className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 text-sm font-semibold text-[var(--muted)]"
             >
               Find all my teams

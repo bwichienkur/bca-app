@@ -14,6 +14,16 @@ export type MembershipAuthFetch = (
   init?: RequestInit,
 ) => Promise<Response>;
 
+export type DiscoverMembershipOptions = {
+  leagueId?: string | null;
+  divisionId?: string | null;
+  teamId?: string | null;
+  teamName?: string | null;
+  /** Probe other leagues in the same state (Settings “Find all my teams”). */
+  deep?: boolean;
+  authFetch?: MembershipAuthFetch;
+};
+
 type PlayerScheduledMatch = {
   teamOneId?: string;
   teamOneName?: string;
@@ -77,6 +87,14 @@ function matchTeamIds(match: PlayerScheduledMatch): Array<[string, string]> {
   return pairs;
 }
 
+function mergeTeams(teams: MembershipTeam[]): MembershipTeam[] {
+  const byKey = new Map<string, MembershipTeam>();
+  for (const team of teams) {
+    byKey.set(`${team.divisionId}:${team.teamId}`, team);
+  }
+  return Array.from(byKey.values());
+}
+
 async function loadRoster(
   teamId: string,
   teamName: string,
@@ -106,22 +124,29 @@ async function teamsFromTeamMap(
   authFetch?: MembershipAuthFetch,
 ): Promise<MembershipTeam[]> {
   const hits: MembershipTeam[] = [];
-  await mapPool(Array.from(teamNames.entries()), 6, async ([teamId, teamName]) => {
-    try {
-      const players = await loadRoster(teamId, teamName || "Team", authFetch);
-      if (players.some((player) => player.id === playerId)) {
-        hits.push(
-          toMembershipTeam(
-            entry,
-            teamId,
-            teamName || players[0]?.teamName || "Team",
-          ),
-        );
+  // Stop checking more teams in this division once the player is found.
+  const entries = Array.from(teamNames.entries());
+  for (let i = 0; i < entries.length; i += 6) {
+    if (hits.length) break;
+    const batch = entries.slice(i, i + 6);
+    await mapPool(batch, 6, async ([teamId, teamName]) => {
+      if (hits.length) return;
+      try {
+        const players = await loadRoster(teamId, teamName || "Team", authFetch);
+        if (players.some((player) => player.id === playerId)) {
+          hits.push(
+            toMembershipTeam(
+              entry,
+              teamId,
+              teamName || players[0]?.teamName || "Team",
+            ),
+          );
+        }
+      } catch {
+        // Ignore roster failures for individual teams.
       }
-    } catch {
-      // Ignore roster failures for individual teams.
-    }
-  });
+    });
+  }
   return hits;
 }
 
@@ -141,7 +166,7 @@ async function collectTeamsFromSchedule(
 
   let previousSize = 0;
   let stableRounds = 0;
-  for (let i = 0; i < uniqueMatchIds.length && i < 48; i += 6) {
+  for (let i = 0; i < uniqueMatchIds.length && i < 36; i += 6) {
     const batch = uniqueMatchIds.slice(i, i + 6);
     const details = await mapPool(batch, 6, async (matchId) => {
       try {
@@ -164,7 +189,6 @@ async function collectTeamsFromSchedule(
       stableRounds = 0;
       previousSize = teamNames.size;
     }
-    // Most divisions stabilize well before the full schedule is fetched.
     if (stableRounds >= 2 && teamNames.size >= 4) break;
   }
   return teamNames;
@@ -187,39 +211,12 @@ async function authMatchesForDivision(
   }
 }
 
-/**
- * Discover teams for one division.
- * Prefer authenticated player-schedule hints, then always fall back to a
- * bounded public schedule/roster scan when that yields no membership.
- */
-async function discoverDivisionTeams(
+/** Public schedule → teams → roster scan for one division (slow path). */
+async function discoverDivisionTeamsPublic(
   playerId: string,
   entry: DivisionEntry,
   authFetch?: MembershipAuthFetch,
 ): Promise<MembershipTeam[]> {
-  if (authFetch) {
-    const matches = await authMatchesForDivision(
-      playerId,
-      entry.DivisionId,
-      authFetch,
-    );
-    if (matches && matches.length > 0) {
-      const teamNames = new Map<string, string>();
-      for (const match of matches) {
-        for (const [teamId, teamName] of matchTeamIds(match)) {
-          teamNames.set(teamId, teamName);
-        }
-      }
-      const fromAuth = await teamsFromTeamMap(
-        playerId,
-        entry,
-        teamNames,
-        authFetch,
-      );
-      if (fromAuth.length) return fromAuth;
-    }
-  }
-
   try {
     const teamNames = await collectTeamsFromSchedule(entry);
     if (!teamNames.size) return [];
@@ -253,8 +250,9 @@ function snapshotFromTeams(
   entries: DivisionEntry[],
   teams: MembershipTeam[],
 ): MembershipSnapshot {
-  const divisionIds = new Set(teams.map((team) => team.divisionId));
-  const leagueIds = new Set(teams.map((team) => team.leagueId));
+  const merged = mergeTeams(teams);
+  const divisionIds = new Set(merged.map((team) => team.divisionId));
+  const leagueIds = new Set(merged.map((team) => team.leagueId));
   const leagues = groupLeagues(entries).filter((league) =>
     leagueIds.has(league.id),
   );
@@ -263,12 +261,12 @@ function snapshotFromTeams(
       divisionIds.has(division.id),
     ),
   );
-  return { playerId, teams, leagues, divisions };
+  return { playerId, teams: merged, leagues, divisions };
 }
 
 /**
- * Fast path: probe many divisions via the authenticated player-schedule API.
- * Only divisions that return matches are roster-checked.
+ * Auth-only probe: one schedule call per division, then roster-check only
+ * teams that appear in returned matches.
  */
 async function discoverViaAuthProbe(
   playerId: string,
@@ -276,7 +274,7 @@ async function discoverViaAuthProbe(
   authFetch: MembershipAuthFetch,
 ): Promise<MembershipTeam[]> {
   const withMatches = (
-    await mapPool(candidates, 12, async (entry) => {
+    await mapPool(candidates, 8, async (entry) => {
       const matches = await authMatchesForDivision(
         playerId,
         entry.DivisionId,
@@ -302,46 +300,92 @@ async function discoverViaAuthProbe(
   return nested.flat();
 }
 
+async function verifyKnownTeam(
+  playerId: string,
+  entries: DivisionEntry[],
+  options: DiscoverMembershipOptions,
+): Promise<MembershipTeam | null> {
+  const teamId = options.teamId?.trim();
+  const divisionId = options.divisionId?.trim();
+  if (!teamId || !divisionId) return null;
+
+  const entry = entries.find((item) => item.DivisionId === divisionId);
+  if (!entry) return null;
+
+  try {
+    const players = await loadRoster(
+      teamId,
+      options.teamName?.trim() || "Team",
+      options.authFetch,
+    );
+    if (!players.some((player) => player.id === playerId)) return null;
+    return toMembershipTeam(
+      entry,
+      teamId,
+      options.teamName?.trim() || "Team",
+    );
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Discover leagues/divisions/teams where `playerId` appears on a roster.
  *
- * - `auto`: probe the player's state (or all recent divisions) via auth, then
- *   fall back to a public roster scan of the preferred league.
- * - otherwise: scan only the given/default league.
+ * Hot path (sign-in):
+ * 1. Verify saved team (1 roster call) when prefs include team/division
+ * 2. Auth-probe only the preferred league (~dozen divisions)
+ * 3. Public roster scan of that league only if auth found nothing
+ *
+ * Deep path (Settings → Find all my teams):
+ * Also auth-probe other recent divisions in the same state.
  */
 export async function discoverMembership(
   playerId: string,
-  options?: {
-    leagueId?: string | null;
-    auto?: boolean;
-    authFetch?: MembershipAuthFetch;
-  },
+  options?: DiscoverMembershipOptions,
 ): Promise<MembershipSnapshot> {
   const leagueId = (options?.leagueId || "").trim() || DEFAULT_LEAGUE_ID;
   const entries = await fetchAllDivisions();
+  const leagueDivisions = recentDivisionEntries(entries, { leagueId });
+  const known = await verifyKnownTeam(playerId, entries, options ?? {});
 
-  if (options?.auto && options.authFetch) {
-    const seed = entries.find((entry) => entry.LeagueId === leagueId);
-    const stateCandidates = recentDivisionEntries(entries, {
-      state: seed?.State || null,
-    });
-    // If we can't resolve a state, keep the probe bounded to the preferred league.
-    const probeList = stateCandidates.length
-      ? stateCandidates
-      : recentDivisionEntries(entries, { leagueId });
+  let teams: MembershipTeam[] = known ? [known] : [];
+
+  if (options?.authFetch) {
     const authTeams = await discoverViaAuthProbe(
       playerId,
-      probeList,
+      leagueDivisions,
       options.authFetch,
     );
-    if (authTeams.length) {
-      return snapshotFromTeams(playerId, entries, authTeams);
+    teams = mergeTeams([...teams, ...authTeams]);
+
+    if (options.deep) {
+      const seed =
+        entries.find((entry) => entry.LeagueId === leagueId) ??
+        (known
+          ? entries.find((entry) => entry.DivisionId === known.divisionId)
+          : undefined);
+      if (seed?.State) {
+        const stateDivisions = recentDivisionEntries(entries, {
+          state: seed.State,
+        }).filter((entry) => entry.LeagueId !== leagueId);
+        const stateTeams = await discoverViaAuthProbe(
+          playerId,
+          stateDivisions,
+          options.authFetch,
+        );
+        teams = mergeTeams([...teams, ...stateTeams]);
+      }
     }
   }
 
-  const leagueDivisions = recentDivisionEntries(entries, { leagueId });
-  const teamsNested = await mapPool(leagueDivisions, 3, (entry) =>
-    discoverDivisionTeams(playerId, entry, options?.authFetch),
-  );
-  return snapshotFromTeams(playerId, entries, teamsNested.flat());
+  // Slow public fallback — preferred league only, and only when still empty.
+  if (!teams.length) {
+    const publicTeams = await mapPool(leagueDivisions, 3, (entry) =>
+      discoverDivisionTeamsPublic(playerId, entry, options?.authFetch),
+    );
+    teams = publicTeams.flat();
+  }
+
+  return snapshotFromTeams(playerId, entries, teams);
 }
