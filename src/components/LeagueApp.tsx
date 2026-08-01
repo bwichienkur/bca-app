@@ -1,12 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import {
-  BROWSE_TABS,
-  DEFAULT_LEAGUE_ID,
-  PLAY_TAB,
-  TOOL_TABS,
-} from "@/lib/constants";
+import { DEFAULT_LEAGUE_ID, REPORT_TABS } from "@/lib/constants";
 import { normalizeTeamName } from "@/lib/matchups";
 import { enrichPlayersWithRatings } from "@/lib/players";
 import {
@@ -1146,69 +1141,32 @@ export function LeagueApp() {
         <div
           ref={filterAnchor.ref}
           data-report-tabs
-          className="sticky top-0 z-20 -mx-1 space-y-1.5 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 py-1 backdrop-blur"
+          className="sticky top-0 z-20 -mx-1 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 py-1 backdrop-blur"
         >
-          <nav aria-label="Browse reports" className="contents">
-            <div className="grid grid-cols-4 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
-              {BROWSE_TABS.map((item) => {
-                const active = tab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    aria-current={active ? "page" : undefined}
-                    onClick={() => {
-                      setTab(item.id);
-                      if (
-                        (item.id === "schedule" || item.id === "my-team") &&
-                        !prefs.teamName
-                      ) {
-                        setContextOpen(true);
-                      }
-                    }}
-                    className={[
-                      "rounded-xl px-2 py-2 text-center text-[12px] font-semibold leading-tight transition sm:rounded-full sm:px-3.5 sm:py-2 sm:text-sm sm:font-medium",
-                      active
-                        ? "bg-[var(--felt)] text-white shadow-sm"
-                        : "bg-[var(--surface)]/80 text-[var(--muted)] hover:bg-[var(--surface-2)]",
-                    ].join(" ")}
-                  >
-                    {item.label}
-                  </button>
-                );
-              })}
-            </div>
-          </nav>
           <nav
-            aria-label="Score and tools"
-            className="grid grid-cols-[minmax(0,1.35fr)_repeat(2,minmax(0,1fr))] gap-1.5 sm:flex sm:flex-wrap sm:gap-2"
+            aria-label="Reports"
+            className="grid grid-cols-4 gap-1.5 sm:flex sm:flex-wrap sm:gap-2"
           >
-            <button
-              type="button"
-              aria-current={tab === PLAY_TAB.id ? "page" : undefined}
-              onClick={() => {
-                setTab(PLAY_TAB.id);
-                if (!prefs.teamName) setContextOpen(true);
-              }}
-              className={[
-                "rounded-xl px-3 py-2.5 text-center text-[13px] font-bold leading-tight transition sm:rounded-full sm:px-5 sm:py-2.5 sm:text-sm",
-                tab === PLAY_TAB.id
-                  ? "bg-[var(--felt)] text-white shadow-sm"
-                  : "bg-[color-mix(in_srgb,var(--felt)_88%,black)] text-white hover:bg-[var(--felt)]",
-              ].join(" ")}
-            >
-              {PLAY_TAB.label}
-            </button>
-            {TOOL_TABS.map((item) => {
+            {REPORT_TABS.map((item) => {
               const active = tab === item.id;
               return (
                 <button
                   key={item.id}
                   type="button"
                   aria-current={active ? "page" : undefined}
-                  onClick={() => setTab(item.id)}
+                  onClick={() => {
+                    setTab(item.id);
+                    if (
+                      (item.id === "schedule" ||
+                        item.id === "my-team" ||
+                        item.id === "score") &&
+                      !prefs.teamName
+                    ) {
+                      setContextOpen(true);
+                    }
+                  }}
                   className={[
-                    "rounded-xl px-2 py-2.5 text-center text-[12px] font-semibold leading-tight transition sm:rounded-full sm:px-3.5 sm:py-2 sm:text-sm sm:font-medium",
+                    "rounded-xl px-2 py-2 text-center text-[12px] font-semibold leading-tight transition sm:rounded-full sm:px-3.5 sm:py-2 sm:text-sm sm:font-medium",
                     active
                       ? "bg-[var(--felt)] text-white shadow-sm"
                       : "bg-[var(--surface)]/80 text-[var(--muted)] hover:bg-[var(--surface-2)]",
