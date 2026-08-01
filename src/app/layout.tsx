@@ -17,7 +17,7 @@ const body = Figtree({
 export const metadata: Metadata = {
   title: "Tableside | Palm Beach County BCA Pool League",
   description:
-    "Mobile-friendly companion for FargoRate LMS league standings, players, and schedules. Defaults to Palm Beach County BCA Pool League.",
+    "Mobile-friendly companion for FargoRate LMS league standings, schedules, handicaps, and match scoring. Defaults to Palm Beach County BCA Pool League.",
   applicationName: "Tableside",
   appleWebApp: {
     capable: true,

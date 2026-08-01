@@ -126,4 +126,5 @@ export type ReportTab =
   | "players"
   | "schedule"
   | "handicap"
-  | "search";
+  | "search"
+  | "score";

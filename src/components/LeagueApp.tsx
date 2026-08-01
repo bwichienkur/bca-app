@@ -20,6 +20,7 @@ import { DataTable } from "./DataTable";
 import { EmptyState } from "./EmptyState";
 import { HandicapCalculator } from "./HandicapCalculator";
 import { LoadingState } from "./LoadingState";
+import { MatchScoring } from "./MatchScoring";
 import { PlayerSearch } from "./PlayerSearch";
 import { ScheduleList } from "./ScheduleList";
 import { ScheduleMatchDetail } from "./ScheduleMatchDetail";
@@ -214,7 +215,7 @@ export function LeagueApp() {
 
   useEffect(() => {
     if (!selectedDivision) return;
-    if (tab === "handicap" || tab === "search") {
+    if (tab === "handicap" || tab === "search" || tab === "score") {
       setLoadingReport(false);
       return;
     }
@@ -672,7 +673,7 @@ export function LeagueApp() {
         <div className="sticky top-0 z-20 -mx-1 flex flex-col gap-3 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 py-2 backdrop-blur md:flex-row md:items-center md:justify-between">
           <nav
             aria-label="Reports"
-            className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:gap-2"
+            className="grid grid-cols-4 gap-1.5 sm:flex sm:flex-wrap sm:gap-2"
           >
             {REPORT_TABS.map((item) => {
               const active = tab === item.id;
@@ -717,10 +718,15 @@ export function LeagueApp() {
         <div className="animate-panel min-w-0 space-y-6">
           {tab === "search" ? (
             <PlayerSearch />
+          ) : tab === "score" ? (
+            <MatchScoring
+              divisionId={selectedDivision?.id ?? null}
+              divisionName={selectedDivision?.name ?? null}
+            />
           ) : !selectedDivision ? (
             <EmptyState
               title="Choose a division to continue"
-              body="Use the typeaheads above — start typing your division name for a fast jump. Search works without a division."
+              body="Use the typeaheads above — start typing your division name for a fast jump. Search and Score sign-in work without a full division, but Score needs one to list matches."
             />
           ) : tab === "handicap" ? (
             <HandicapCalculator
