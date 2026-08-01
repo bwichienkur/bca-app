@@ -344,7 +344,25 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
     return { teamOne, teamTwo };
   }, [matchPointsTally, roundPointTallies]);
 
+  const matchPointTotals = useMemo(() => {
+    if (matchPointsTally) {
+      return {
+        teamOne: matchPointsTally.teamOneTotal,
+        teamTwo: matchPointsTally.teamTwoTotal,
+      };
+    }
+    return roundPointTallies.reduce(
+      (acc, round) => ({
+        teamOne: acc.teamOne + round.teamOneTotal,
+        teamTwo: acc.teamTwo + round.teamTwoTotal,
+      }),
+      { teamOne: 0, teamTwo: 0 },
+    );
+  }, [matchPointsTally, roundPointTallies]);
+
   const rounds = match?.matchFormat?.rounds ?? [];
+  const roundsAvailable =
+    rounds.length + (includeMatchPointsRound ? 1 : 0);
   const currentRound = isMatchPointsRound
     ? null
     : (rounds.find((round) => round.roundNumber === activeRound) ??
@@ -527,91 +545,25 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
           </button>
         </div>
 
-        <div className="w-full overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[linear-gradient(135deg,rgba(20,92,69,0.96),rgba(13,61,46,0.98))] px-3 py-3 text-white shadow-[var(--shadow)] sm:px-4 md:px-5 md:py-3.5">
-          <p className="text-[11px] uppercase tracking-[0.14em] text-white/65">
-            {formatMatchDate(match.datePlayed)} · {match.location}
-          </p>
-
-          {/* Mobile: stacked full team names so nothing truncates */}
-          <div className="mt-2.5 space-y-2 sm:hidden">
-            <div className="text-center">
-              <p className="font-[family-name:var(--font-display)] text-lg leading-snug break-words">
-                {match.teamOneName.trim()}
-              </p>
-              {match.mySide === 1 ? (
-                <p className="mt-0.5 text-[11px] text-[var(--amber)]">
-                  Your team
-                </p>
-              ) : null}
-            </div>
-            <div className="mx-auto w-fit rounded-2xl bg-black/25 px-4 py-2 text-center">
-              <p className="font-[family-name:var(--font-display)] text-2xl tabular-nums leading-none">
-                {totals?.teamOneWins ?? 0}
-                <span className="mx-1 text-white/45">:</span>
-                {totals?.teamTwoWins ?? 0}
-              </p>
-              <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-white/55">
-                {totals?.scored ?? 0}/{totals?.total ?? 0} games
-              </p>
-              <p className="mt-1 text-[10px] tabular-nums text-white/70">
-                Rounds {roundWins.teamOne}–{roundWins.teamTwo}
-                {includeMatchPointsRound ? " (incl. match pts)" : ""}
-                {match.isHandicapped &&
-                (handicapTotals.teamOne > 0 || handicapTotals.teamTwo > 0)
-                  ? ` · HC ${handicapTotals.teamOne}–${handicapTotals.teamTwo}`
-                  : ""}
-              </p>
-            </div>
-            <div className="text-center">
-              <p className="font-[family-name:var(--font-display)] text-lg leading-snug break-words">
-                {match.teamTwoName.trim()}
-              </p>
-              {match.mySide === 2 ? (
-                <p className="mt-0.5 text-[11px] text-[var(--amber)]">
-                  Your team
-                </p>
-              ) : null}
-            </div>
-          </div>
-
-          {/* Tablet/desktop: side-by-side with wrapping names */}
-          <div className="mt-2.5 hidden grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 sm:grid">
-            <div className="min-w-0 text-right">
-              <p className="font-[family-name:var(--font-display)] text-lg leading-snug break-words md:text-xl">
-                {match.teamOneName.trim()}
-              </p>
-              {match.mySide === 1 ? (
-                <p className="text-[11px] text-[var(--amber)]">Your team</p>
-              ) : null}
-            </div>
-            <div className="shrink-0 rounded-2xl bg-black/25 px-3 py-2 text-center">
-              <p className="font-[family-name:var(--font-display)] text-2xl tabular-nums leading-none">
-                {totals?.teamOneWins ?? 0}
-                <span className="mx-1 text-white/45">:</span>
-                {totals?.teamTwoWins ?? 0}
-              </p>
-              <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-white/55">
-                {totals?.scored ?? 0}/{totals?.total ?? 0} games
-              </p>
-              <p className="mt-1 text-[10px] tabular-nums text-white/70">
-                Rounds {roundWins.teamOne}–{roundWins.teamTwo}
-                {includeMatchPointsRound ? " (incl. match pts)" : ""}
-                {match.isHandicapped &&
-                (handicapTotals.teamOne > 0 || handicapTotals.teamTwo > 0)
-                  ? ` · HC ${handicapTotals.teamOne}–${handicapTotals.teamTwo}`
-                  : ""}
-              </p>
-            </div>
-            <div className="min-w-0">
-              <p className="font-[family-name:var(--font-display)] text-lg leading-snug break-words md:text-xl">
-                {match.teamTwoName.trim()}
-              </p>
-              {match.mySide === 2 ? (
-                <p className="text-[11px] text-[var(--amber)]">Your team</p>
-              ) : null}
-            </div>
-          </div>
-        </div>
+        <MatchScoreboard
+          dateLabel={formatMatchDate(match.datePlayed)}
+          location={match.location}
+          teamOneName={match.teamOneName}
+          teamTwoName={match.teamTwoName}
+          mySide={match.mySide}
+          roundWins={roundWins}
+          roundsAvailable={roundsAvailable}
+          includeMatchPointsRound={includeMatchPointsRound}
+          pointTotals={matchPointTotals}
+          gameWins={{
+            teamOne: totals?.teamOneWins ?? 0,
+            teamTwo: totals?.teamTwoWins ?? 0,
+          }}
+          gamesPlayed={totals?.scored ?? 0}
+          gamesTotal={totals?.total ?? 0}
+          isHandicapped={match.isHandicapped}
+          handicapTotals={handicapTotals}
+        />
 
         {sheetError ? (
           <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
@@ -1042,6 +994,210 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
     </section>
   );
 }
+
+const MatchScoreboard = memo(function MatchScoreboard({
+  dateLabel,
+  location,
+  teamOneName,
+  teamTwoName,
+  mySide,
+  roundWins,
+  roundsAvailable,
+  includeMatchPointsRound,
+  pointTotals,
+  gameWins,
+  gamesPlayed,
+  gamesTotal,
+  isHandicapped,
+  handicapTotals,
+}: {
+  dateLabel: string;
+  location: string;
+  teamOneName: string;
+  teamTwoName: string;
+  mySide: 1 | 2 | null;
+  roundWins: { teamOne: number; teamTwo: number };
+  roundsAvailable: number;
+  includeMatchPointsRound: boolean;
+  pointTotals: { teamOne: number; teamTwo: number };
+  gameWins: { teamOne: number; teamTwo: number };
+  gamesPlayed: number;
+  gamesTotal: number;
+  isHandicapped: boolean;
+  handicapTotals: { teamOne: number; teamTwo: number };
+}) {
+  const roundsDecided = roundWins.teamOne + roundWins.teamTwo;
+  const progress =
+    gamesTotal > 0 ? Math.min(1, gamesPlayed / gamesTotal) : 0;
+
+  const teamHeader = (side: 1 | 2, name: string, align: "left" | "right") => {
+    const mine = mySide === side;
+    return (
+      <div
+        className={[
+          "min-w-0",
+          align === "right" ? "text-right" : "text-left",
+        ].join(" ")}
+      >
+        <p className="font-[family-name:var(--font-display)] text-[15px] leading-snug break-words sm:text-lg">
+          {name.trim()}
+        </p>
+        <p
+          className={[
+            "mt-0.5 text-[10px] font-semibold uppercase tracking-[0.14em]",
+            mine ? "text-[var(--amber)]" : "text-white/50",
+          ].join(" ")}
+        >
+          {mine ? "Your team" : side === 1 ? "Home" : "Away"}
+        </p>
+      </div>
+    );
+  };
+
+  const metricRow = ({
+    label,
+    one,
+    two,
+    emphasis,
+    hint,
+  }: {
+    label: string;
+    one: number;
+    two: number;
+    emphasis: "hero" | "secondary" | "tertiary";
+    hint?: string;
+  }) => {
+    const oneLeads = one > two;
+    const twoLeads = two > one;
+    const valueClass =
+      emphasis === "hero"
+        ? "font-[family-name:var(--font-display)] text-[2.35rem] leading-none tracking-tight sm:text-[2.75rem]"
+        : emphasis === "secondary"
+          ? "font-[family-name:var(--font-display)] text-[1.35rem] leading-none tabular-nums sm:text-[1.55rem]"
+          : "text-sm font-semibold leading-none tabular-nums sm:text-[15px]";
+    const leadClass = "text-white";
+    const trailClass =
+      emphasis === "hero" ? "text-white/70" : "text-white/55";
+    const labelClass =
+      emphasis === "hero"
+        ? "text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--amber)]"
+        : emphasis === "secondary"
+          ? "text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55"
+          : "text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40";
+
+    return (
+      <div
+        className={[
+          "grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2",
+          emphasis === "hero" ? "py-1" : emphasis === "secondary" ? "pt-2.5" : "pt-1.5",
+        ].join(" ")}
+      >
+        <div className="min-w-0 text-right">
+          <p
+            className={[
+              "tabular-nums",
+              valueClass,
+              oneLeads ? leadClass : trailClass,
+            ].join(" ")}
+          >
+            {one}
+          </p>
+        </div>
+        <div className="flex w-[4.5rem] flex-col items-center justify-center text-center sm:w-20">
+          <p className={labelClass}>{label}</p>
+          {hint ? (
+            <p className="mt-0.5 text-[9px] tabular-nums text-white/40">
+              {hint}
+            </p>
+          ) : null}
+        </div>
+        <div className="min-w-0 text-left">
+          <p
+            className={[
+              "tabular-nums",
+              valueClass,
+              twoLeads ? leadClass : trailClass,
+            ].join(" ")}
+          >
+            {two}
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="w-full overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[linear-gradient(145deg,rgba(24,102,74,0.98),rgba(11,52,38,0.99))] px-3 py-3 text-white shadow-[var(--shadow)] sm:px-4 md:px-5 md:py-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <p className="min-w-0 text-[11px] uppercase tracking-[0.14em] text-white/60">
+          {dateLabel}
+          {location ? ` · ${location}` : ""}
+        </p>
+        {includeMatchPointsRound ? (
+          <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40">
+            R1–5 + pts
+          </p>
+        ) : null}
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        {teamHeader(1, teamOneName, "left")}
+        {teamHeader(2, teamTwoName, "right")}
+      </div>
+
+      <div className="mt-3 rounded-2xl bg-black/30 px-2.5 py-2.5 ring-1 ring-white/10 sm:px-3.5 sm:py-3">
+        {metricRow({
+          label: "Rounds",
+          one: roundWins.teamOne,
+          two: roundWins.teamTwo,
+          emphasis: "hero",
+          hint:
+            roundsAvailable > 0
+              ? `${roundsDecided}/${roundsAvailable}`
+              : undefined,
+        })}
+
+        <div className="mx-auto mt-2 h-px w-[min(100%,16rem)] bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+
+        {metricRow({
+          label: "Points",
+          one: pointTotals.teamOne,
+          two: pointTotals.teamTwo,
+          emphasis: "secondary",
+        })}
+
+        {metricRow({
+          label: "Games",
+          one: gameWins.teamOne,
+          two: gameWins.teamTwo,
+          emphasis: "tertiary",
+        })}
+      </div>
+
+      <div className="mt-2.5 space-y-1.5">
+        <div className="h-1 overflow-hidden rounded-full bg-black/35">
+          <div
+            className="h-full rounded-full bg-[color-mix(in_srgb,var(--amber)_75%,white)] transition-[width] duration-300"
+            style={{ width: `${progress * 100}%` }}
+          />
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-[10px] tabular-nums text-white/55">
+          <p>
+            {gamesPlayed}/{gamesTotal} games scored
+          </p>
+          {isHandicapped &&
+          (handicapTotals.teamOne > 0 || handicapTotals.teamTwo > 0) ? (
+            <p>
+              HC {handicapTotals.teamOne}–{handicapTotals.teamTwo}
+            </p>
+          ) : (
+            <p className="text-white/35">Match scoreboard</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
 
 const RoundPointsBoard = memo(function RoundPointsBoard({
   tally,
