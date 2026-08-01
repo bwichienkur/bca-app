@@ -310,14 +310,15 @@ export function tallyRoundPoints(args: {
 export function tallyAllRoundPoints(
   match: ScoringMatchDetail,
   draft: ScoringDraft,
+  handicaps?: RoundHandicapResult[],
 ): RoundPointsTally[] {
-  const handicaps = computeMatchHandicaps(match, draft);
+  const resolved = handicaps ?? computeMatchHandicaps(match, draft);
   return (match.matchFormat?.rounds ?? []).map((round) =>
     tallyRoundPoints({
       match,
       draft,
       roundNumber: round.roundNumber,
-      handicaps,
+      handicaps: resolved,
     }),
   );
 }

@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  memo,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
   type FormEvent,
@@ -122,6 +124,21 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [draftMatchIds, setDraftMatchIds] = useState<Set<string>>(new Set());
   const [, startTransition] = useTransition();
+  const saveTimerRef = useRef<number | null>(null);
+
+  const scheduleSaveDraft = (next: ScoringDraft) => {
+    if (saveTimerRef.current != null) window.clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = window.setTimeout(() => {
+      saveDraft(next);
+      saveTimerRef.current = null;
+    }, 280);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -209,11 +226,19 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
     }
   };
 
-  const updateDraft = (updater: (prev: ScoringDraft) => ScoringDraft) => {
+  const updateDraft = (
+    updater: (prev: ScoringDraft) => ScoringDraft,
+    options?: { immediate?: boolean },
+  ) => {
     setDraft((prev) => {
       if (!prev || !match) return prev;
       const next = updater(prev);
-      saveDraft(next);
+      if (options?.immediate) {
+        if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+        saveDraft(next);
+      } else {
+        scheduleSaveDraft(next);
+      }
       return next;
     });
   };
@@ -254,14 +279,19 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
     [draft],
   );
 
+  // Handicaps depend only on lineups — keep stable across score taps.
   const roundHandicaps = useMemo(
     () => (match && draft ? computeMatchHandicaps(match, draft) : []),
-    [match, draft],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- lineup refs stay stable when only games change
+    [match, draft?.teamOneLineup, draft?.teamTwoLineup],
   );
 
   const roundPointTallies = useMemo(
-    () => (match && draft ? tallyAllRoundPoints(match, draft) : []),
-    [match, draft],
+    () =>
+      match && draft
+        ? tallyAllRoundPoints(match, draft, roundHandicaps)
+        : [],
+    [match, draft, roundHandicaps],
   );
 
   const activeRoundPoints = useMemo(
@@ -305,13 +335,16 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
     gameIndex: number,
     next: GameScoreState,
   ) => {
-    updateDraft((prev) => ({
-      ...prev,
-      games: {
-        ...prev.games,
-        [gameKey(roundNumber, gameIndex)]: next,
-      },
-    }));
+    // Keep the score pad snappy; heavy sheet recalcs can land in a transition.
+    startTransition(() => {
+      updateDraft((prev) => ({
+        ...prev,
+        games: {
+          ...prev.games,
+          [gameKey(roundNumber, gameIndex)]: next,
+        },
+      }));
+    });
   };
 
   const submitMatch = async () => {
@@ -442,8 +475,8 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
   if (view.mode !== "list" && match && draft) {
     const reviewMode = view.mode === "review";
     return (
-      <section className="animate-panel min-w-0 space-y-4 overflow-x-hidden">
-        <div className="sticky top-[3.25rem] z-30 -mx-1 min-w-0 space-y-3 bg-[color-mix(in_srgb,var(--paper)_92%,transparent)] px-1 py-2 backdrop-blur">
+      <section className="animate-panel w-full min-w-0 space-y-4 overflow-x-hidden">
+        <div className="sticky top-[3.25rem] z-30 w-full min-w-0 space-y-3 bg-[color-mix(in_srgb,var(--paper)_92%,transparent)] py-2 backdrop-blur">
           <div className="flex items-start justify-between gap-3">
             <button
               type="button"
@@ -468,20 +501,24 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
             </button>
           </div>
 
-          <div className="overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[linear-gradient(135deg,rgba(20,92,69,0.96),rgba(13,61,46,0.98))] px-4 py-4 text-white shadow-[var(--shadow)] md:px-5">
+          <div className="w-full overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[linear-gradient(135deg,rgba(20,92,69,0.96),rgba(13,61,46,0.98))] px-3 py-3.5 text-white shadow-[var(--shadow)] sm:px-4 md:px-5 md:py-4">
             <p className="text-[11px] uppercase tracking-[0.14em] text-white/65">
               {formatMatchDate(match.datePlayed)} · {match.location}
             </p>
-            <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-3">
-              <div className="min-w-0 overflow-hidden text-right">
-                <p className="truncate font-[family-name:var(--font-display)] text-base leading-tight sm:text-lg md:text-xl">
-                  {match.teamOneName}
+
+            {/* Mobile: stacked full team names so nothing truncates */}
+            <div className="mt-3 space-y-3 sm:hidden">
+              <div className="text-center">
+                <p className="font-[family-name:var(--font-display)] text-lg leading-snug break-words">
+                  {match.teamOneName.trim()}
                 </p>
                 {match.mySide === 1 ? (
-                  <p className="text-[11px] text-[var(--amber)]">Your team</p>
+                  <p className="mt-0.5 text-[11px] text-[var(--amber)]">
+                    Your team
+                  </p>
                 ) : null}
               </div>
-              <div className="shrink-0 rounded-2xl bg-black/25 px-2.5 py-2 text-center sm:px-3">
+              <div className="mx-auto w-fit rounded-2xl bg-black/25 px-4 py-2 text-center">
                 <p className="font-[family-name:var(--font-display)] text-2xl tabular-nums leading-none">
                   {totals?.teamOneWins ?? 0}
                   <span className="mx-1 text-white/45">:</span>
@@ -498,9 +535,48 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                     : ""}
                 </p>
               </div>
-              <div className="min-w-0 overflow-hidden">
-                <p className="truncate font-[family-name:var(--font-display)] text-base leading-tight sm:text-lg md:text-xl">
-                  {match.teamTwoName}
+              <div className="text-center">
+                <p className="font-[family-name:var(--font-display)] text-lg leading-snug break-words">
+                  {match.teamTwoName.trim()}
+                </p>
+                {match.mySide === 2 ? (
+                  <p className="mt-0.5 text-[11px] text-[var(--amber)]">
+                    Your team
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            {/* Tablet/desktop: side-by-side with wrapping names */}
+            <div className="mt-3 hidden grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 sm:grid">
+              <div className="min-w-0 text-right">
+                <p className="font-[family-name:var(--font-display)] text-lg leading-snug break-words md:text-xl">
+                  {match.teamOneName.trim()}
+                </p>
+                {match.mySide === 1 ? (
+                  <p className="text-[11px] text-[var(--amber)]">Your team</p>
+                ) : null}
+              </div>
+              <div className="shrink-0 rounded-2xl bg-black/25 px-3 py-2 text-center">
+                <p className="font-[family-name:var(--font-display)] text-2xl tabular-nums leading-none">
+                  {totals?.teamOneWins ?? 0}
+                  <span className="mx-1 text-white/45">:</span>
+                  {totals?.teamTwoWins ?? 0}
+                </p>
+                <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-white/55">
+                  {totals?.scored ?? 0}/{totals?.total ?? 0} games
+                </p>
+                <p className="mt-1 text-[10px] tabular-nums text-white/70">
+                  Rounds {roundWins.teamOne}–{roundWins.teamTwo}
+                  {match.isHandicapped &&
+                  (handicapTotals.teamOne > 0 || handicapTotals.teamTwo > 0)
+                    ? ` · HC ${handicapTotals.teamOne}–${handicapTotals.teamTwo}`
+                    : ""}
+                </p>
+              </div>
+              <div className="min-w-0">
+                <p className="font-[family-name:var(--font-display)] text-lg leading-snug break-words md:text-xl">
+                  {match.teamTwoName.trim()}
                 </p>
                 {match.mySide === 2 ? (
                   <p className="text-[11px] text-[var(--amber)]">Your team</p>
@@ -537,8 +613,8 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
             onSubmit={() => void submitMatch()}
           />
         ) : (
-          <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-            <div className="min-w-0 space-y-4 overflow-x-hidden">
+          <div className="grid w-full min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+            <div className="w-full min-w-0 space-y-4 overflow-x-hidden">
               <LineupEditor
                 match={match}
                 draft={draft}
@@ -948,7 +1024,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
   );
 }
 
-function RoundPointsBoard({
+const RoundPointsBoard = memo(function RoundPointsBoard({
   tally,
   teamOneName,
   teamTwoName,
@@ -1027,7 +1103,7 @@ function RoundPointsBoard({
   return (
     <div
       className={[
-        "min-w-0 overflow-hidden rounded-2xl border px-3 py-3 sm:px-4",
+        "w-full min-w-0 overflow-hidden rounded-2xl border px-3 py-3 sm:px-4",
         tally.roundComplete && tally.roundWinner
           ? tally.roundWinner === mySide
             ? "border-[var(--felt)]/45 bg-[color-mix(in_srgb,var(--felt)_12%,var(--surface))]"
@@ -1078,7 +1154,7 @@ function RoundPointsBoard({
       ) : null}
     </div>
   );
-}
+});
 
 function LineupEditor({
   match,
@@ -1095,7 +1171,7 @@ function LineupEditor({
   ) => void;
   onMoveLineup: (side: 1 | 2, from: number, to: number) => void;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const slots = Math.max(
     draft.teamOneLineup.length,
     draft.teamTwoLineup.length,
@@ -1279,7 +1355,18 @@ function ScorePad({
   onClose: () => void;
   onChange: (next: GameScoreState) => void;
 }) {
-  if (!open || !game) {
+  const [local, setLocal] = useState<GameScoreState | null>(game ?? null);
+  const [, startPadTransition] = useTransition();
+
+  // Resync when opening/switching games — not on every parent score echo.
+  useEffect(() => {
+    if (!open) return;
+    setLocal(game ?? null);
+    // Intentionally omit `game` so parent transitions don't clobber local taps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, roundNumber, gameIndex]);
+
+  if (!open || !game || !local) {
     return (
       <aside className="hidden rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)]/50 p-5 text-sm text-[var(--muted)] lg:block">
         Tap a game to open the score pad.
@@ -1287,28 +1374,33 @@ function ScorePad({
     );
   }
 
-  const p1 = findPlayer(match.teamOnePlayers, game.teamOnePlayerId);
-  const p2 = findPlayer(match.teamTwoPlayers, game.teamTwoPlayerId);
-  const winner = gameWinner(game);
+  const p1 = findPlayer(match.teamOnePlayers, local.teamOnePlayerId);
+  const p2 = findPlayer(match.teamTwoPlayers, local.teamTwoPlayerId);
+  const winner = gameWinner(local);
+
+  const commit = (next: GameScoreState) => {
+    setLocal(next);
+    startPadTransition(() => onChange(next));
+  };
 
   const bump = (side: 1 | 2, delta: number) => {
     const key = side === 1 ? "teamOneScore" : "teamTwoScore";
-    const current = game[key] ?? 0;
-    const next = Math.max(
+    const current = local[key] ?? 0;
+    const nextScore = Math.max(
       match.minScore,
       Math.min(match.maxScore, current + delta),
     );
-    onChange({
-      ...game,
-      [key]: next,
+    commit({
+      ...local,
+      [key]: nextScore,
       winAdornment: "",
       isWinZip: false,
     });
   };
 
-  const quick = (winner: 1 | 2, adornment: WinAdornment = "") => {
-    onChange(
-      applyQuickWin(game, winner, {
+  const quick = (side: 1 | 2, adornment: WinAdornment = "") => {
+    commit(
+      applyQuickWin(local, side, {
         maxScore: match.maxScore,
         maxLosingScore: match.maxLosingScore,
         adornment,
@@ -1319,7 +1411,7 @@ function ScorePad({
   const body = (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
             Round {roundNumber} · Game {gameIndex}
           </p>
@@ -1340,7 +1432,7 @@ function ScorePad({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-full border border-[var(--line)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)] lg:hidden"
+          className="shrink-0 rounded-full border border-[var(--line)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)] lg:hidden"
         >
           Close
         </button>
@@ -1348,7 +1440,7 @@ function ScorePad({
 
       <div className="grid grid-cols-2 gap-3">
         {[1, 2].map((side) => {
-          const score = side === 1 ? game.teamOneScore : game.teamTwoScore;
+          const score = side === 1 ? local.teamOneScore : local.teamTwoScore;
           const name =
             side === 1
               ? p1
@@ -1357,7 +1449,7 @@ function ScorePad({
               : p2
                 ? playerDisplayName(p2)
                 : match.teamTwoName;
-          const breaking = game.breakingTeam === side;
+          const breaking = local.breakingTeam === side;
           return (
             <div
               key={side}
@@ -1368,8 +1460,8 @@ function ScorePad({
                 {breaking ? " · break" : ""}
               </p>
               <p className="mt-2 font-[family-name:var(--font-display)] text-4xl tabular-nums text-[var(--felt-deep)]">
-                {game.winAdornment && winner === side
-                  ? game.winAdornment
+                {local.winAdornment && winner === side
+                  ? local.winAdornment
                   : (score ?? 0)}
               </p>
               {side === 1 && p1?.fargoRating != null ? (
@@ -1386,14 +1478,14 @@ function ScorePad({
                 <button
                   type="button"
                   onClick={() => bump(side as 1 | 2, -1)}
-                  className="flex-1 rounded-xl bg-[var(--surface)] py-2 text-lg font-semibold"
+                  className="flex-1 rounded-xl bg-[var(--surface)] py-2 text-lg font-semibold active:scale-[0.98]"
                 >
                   −
                 </button>
                 <button
                   type="button"
                   onClick={() => bump(side as 1 | 2, 1)}
-                  className="flex-1 rounded-xl bg-[var(--surface)] py-2 text-lg font-semibold"
+                  className="flex-1 rounded-xl bg-[var(--surface)] py-2 text-lg font-semibold active:scale-[0.98]"
                 >
                   +
                 </button>
@@ -1401,7 +1493,7 @@ function ScorePad({
               <button
                 type="button"
                 onClick={() => quick(side as 1 | 2)}
-                className="mt-2 w-full rounded-xl bg-[var(--felt)] py-2.5 text-sm font-semibold text-white"
+                className="mt-2 w-full rounded-xl bg-[var(--felt)] py-2.5 text-sm font-semibold text-white active:scale-[0.98]"
               >
                 WIN
               </button>
@@ -1417,22 +1509,22 @@ function ScorePad({
         <div className="grid grid-cols-4 gap-2">
           {(["", "BR", "TR", "WZ"] as WinAdornment[]).map((adornment) => {
             const label = adornment || "CLR";
-            const active = game.winAdornment === adornment;
+            const active = local.winAdornment === adornment;
             return (
               <button
                 key={label}
                 type="button"
                 onClick={() => {
-                  const winner = gameWinner(game);
-                  if (!winner) {
-                    onChange({
-                      ...game,
+                  const currentWinner = gameWinner(local);
+                  if (!currentWinner) {
+                    commit({
+                      ...local,
                       winAdornment: adornment,
                       isWinZip: adornment === "WZ",
                     });
                     return;
                   }
-                  quick(winner, adornment);
+                  quick(currentWinner, adornment);
                 }}
                 className={[
                   "rounded-xl py-2.5 text-sm font-semibold",
@@ -1452,9 +1544,9 @@ function ScorePad({
         <button
           type="button"
           onClick={() =>
-            onChange({
-              ...game,
-              breakingTeam: game.breakingTeam === 1 ? 2 : 1,
+            commit({
+              ...local,
+              breakingTeam: local.breakingTeam === 1 ? 2 : 1,
             })
           }
           className="flex-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] py-2.5 text-sm font-semibold"
@@ -1464,8 +1556,8 @@ function ScorePad({
         <button
           type="button"
           onClick={() =>
-            onChange({
-              ...game,
+            commit({
+              ...local,
               teamOneScore: 0,
               teamTwoScore: 0,
               winAdornment: "",
@@ -1482,7 +1574,7 @@ function ScorePad({
 
   return (
     <>
-      <aside className="hidden animate-rise rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm lg:block">
+      <aside className="hidden w-full animate-rise rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm lg:block">
         {body}
       </aside>
       <div className="fixed inset-x-0 bottom-0 z-40 lg:hidden">
@@ -1492,7 +1584,7 @@ function ScorePad({
           className="absolute inset-x-0 bottom-0 top-[-40vh] bg-black/45"
           onClick={onClose}
         />
-        <div className="relative animate-rise rounded-t-[1.5rem] border border-[var(--line)] bg-[var(--paper-2)] px-4 pb-[calc(1rem+var(--safe-bottom))] pt-4 shadow-[var(--shadow)]">
+        <div className="relative max-h-[85dvh] overflow-y-auto animate-rise rounded-t-[1.5rem] border border-[var(--line)] bg-[var(--paper-2)] px-4 pb-[calc(1rem+var(--safe-bottom))] pt-4 shadow-[var(--shadow)]">
           {body}
         </div>
       </div>
