@@ -834,6 +834,7 @@ export function LeagueApp() {
               />
             ) : selectedScheduleMatch ? (
               <ScheduleMatchDetail
+                key={`${selectedScheduleMatch.date}-${selectedScheduleMatch.match.matchId ?? selectedScheduleMatch.match.home}-${selectedScheduleMatch.match.away}`}
                 date={selectedScheduleMatch.date}
                 match={selectedScheduleMatch.match}
                 homeTeam={findDivisionTeam(selectedScheduleMatch.match.home)}
