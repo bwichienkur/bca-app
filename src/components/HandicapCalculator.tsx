@@ -511,21 +511,53 @@ export function HandicapCalculator({
       preset.divisionId === divisionId && preset.teamId === myTeamId,
   );
 
+  const sectionHeader = (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
+        Handicap
+      </p>
+      <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
+        Matchup calculator
+      </h3>
+      <p className="mt-1 text-sm text-[var(--muted)]">
+        Build lineups and see round handicaps
+        {prefs.teamName ? (
+          <>
+            {" "}
+            for{" "}
+            <span className="font-medium text-[var(--ink)]">{prefs.teamName}</span>
+          </>
+        ) : null}
+        {divisionName ? <> · {divisionName}</> : null}
+      </p>
+    </div>
+  );
+
   if (loading) {
-    return <LoadingState label="Loading teams, ratings, and format…" />;
+    return (
+      <section className="animate-rise space-y-4">
+        {sectionHeader}
+        <LoadingState label="Loading teams, ratings, and format…" />
+      </section>
+    );
   }
 
   if (error || !data) {
     return (
-      <EmptyState
-        title="Couldn't load calculator"
-        body={error ?? "Try again in a moment."}
-      />
+      <section className="animate-rise space-y-4">
+        {sectionHeader}
+        <EmptyState
+          title="Couldn't load calculator"
+          body={error ?? "Try again in a moment."}
+        />
+      </section>
     );
   }
 
   return (
     <div className="animate-panel space-y-4">
+      {sectionHeader}
+
       {weekMatchup ? (
         <section className="rounded-2xl border border-[var(--line)] bg-[var(--felt-soft)] px-4 py-3 text-white shadow-sm">
           <p className="text-[11px] uppercase tracking-[0.14em] text-white/70">

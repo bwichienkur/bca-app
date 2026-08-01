@@ -1310,6 +1310,21 @@ export function LeagueApp() {
             )
           ) : tab === "players" && playersWithRatings ? (
             <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
+                  Players
+                </p>
+                <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
+                  Division players
+                </h3>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  Standings and Fargo ratings for everyone in{" "}
+                  <span className="font-medium text-[var(--ink)]">
+                    {selectedDivision.name}
+                  </span>
+                  . Use the filter above to find someone quickly.
+                </p>
+              </div>
               <DataTable
                 headers={playersWithRatings.headers}
                 rows={filteredPlayerRows}
