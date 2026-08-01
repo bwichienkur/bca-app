@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
   useTransition,
-  type FormEvent,
 } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -48,6 +47,7 @@ import {
 } from "@/lib/scoring";
 import { EmptyState } from "./EmptyState";
 import { LoadingState } from "./LoadingState";
+import type { AuthUser } from "./LoginScreen";
 import { DraggableLineupList } from "./DraggableLineupList";
 import {
   deleteLineupPreset,
@@ -56,16 +56,14 @@ import {
 } from "@/lib/preferences";
 import type { LineupPreset } from "@/lib/types";
 
-type ScoringUser = {
-  lmsId: string;
-  readableId: string | null;
-  name: string | null;
-  email: string | null;
-};
-
 type MatchScoringProps = {
   divisionId: string | null;
   divisionName: string | null;
+  teamId: string | null;
+  teamName: string | null;
+  user: AuthUser | null;
+  authLoading?: boolean;
+  onRequestLogin: () => void;
 };
 
 type View =
@@ -118,14 +116,15 @@ function findPlayer(
   return players.find((p) => p.id === id) ?? null;
 }
 
-export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
-  const [user, setUser] = useState<ScoringUser | null>(null);
-  const [booting, setBooting] = useState(true);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [loggingIn, setLoggingIn] = useState(false);
-
+export function MatchScoring({
+  divisionId,
+  divisionName,
+  teamId,
+  teamName,
+  user,
+  authLoading = false,
+  onRequestLogin,
+}: MatchScoringProps) {
   const [matches, setMatches] = useState<ScoringMatchSummary[]>([]);
   const [loadingMatches, setLoadingMatches] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
@@ -211,26 +210,6 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    async function boot() {
-      try {
-        const data = await fetchJson<{ user: ScoringUser | null }>(
-          "/api/scoring/session",
-        );
-        if (!cancelled) setUser(data.user);
-      } catch {
-        if (!cancelled) setUser(null);
-      } finally {
-        if (!cancelled) setBooting(false);
-      }
-    }
-    void boot();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
     if (!user || !divisionId) {
       setMatches([]);
       return;
@@ -240,8 +219,12 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
       setLoadingMatches(true);
       setListError(null);
       try {
+        const params = new URLSearchParams({
+          divisionId: divisionId!,
+        });
+        if (teamId) params.set("teamId", teamId);
         const data = await fetchJson<{ matches: ScoringMatchSummary[] }>(
-          `/api/scoring/matches?divisionId=${encodeURIComponent(divisionId!)}`,
+          `/api/scoring/matches?${params.toString()}`,
         );
         if (!cancelled) {
           setMatches(data.matches);
@@ -276,7 +259,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
     return () => {
       cancelled = true;
     };
-  }, [user, divisionId]);
+  }, [user, divisionId, teamId]);
 
   const openMatch = async (matchId: string) => {
     setLoadingMatch(true);
@@ -406,37 +389,6 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
     }, 3000);
     return () => window.clearInterval(timer);
   }, [view, match]);
-
-  const onLogin = async (event: FormEvent) => {
-    event.preventDefault();
-    setLoggingIn(true);
-    setAuthError(null);
-    try {
-      const data = await fetchJson<{ user: ScoringUser }>(
-        "/api/scoring/login",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        },
-      );
-      setUser(data.user);
-      setPassword("");
-    } catch (err) {
-      setAuthError(err instanceof Error ? err.message : "Login failed.");
-    } finally {
-      setLoggingIn(false);
-    }
-  };
-
-  const onLogout = async () => {
-    await fetch("/api/scoring/logout", { method: "POST" });
-    setUser(null);
-    setMatches([]);
-    setMatch(null);
-    setDraft(null);
-    setView({ mode: "list" });
-  };
 
   const totals = useMemo(
     () => (draft ? tallyDraft(draft) : null),
@@ -623,70 +575,25 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
     }
   };
 
-  if (booting) {
+  if (authLoading) {
     return <LoadingState label="Checking scoring session…" />;
   }
 
   if (!user) {
     return (
-      <section className="animate-rise mx-auto max-w-lg space-y-5">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-            Score
-          </p>
-          <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-            Tableside scoring
-          </h3>
-          <p className="mt-2 text-sm text-[var(--muted)]">
-            Sign in with your FargoRate / BCAPL account to score your matches
-            and submit them to LMS.
-          </p>
-        </div>
-
-        <form
-          onSubmit={onLogin}
-          className="space-y-4 rounded-[1.4rem] border border-[var(--line)] bg-[var(--surface)] p-5 shadow-sm"
-        >
-          <label className="block space-y-1.5">
-            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-              Email
-            </span>
-            <input
-              type="email"
-              autoComplete="username"
-              required
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-3 outline-none ring-[var(--felt)] focus:ring-2"
-            />
-          </label>
-          <label className="block space-y-1.5">
-            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-              Password
-            </span>
-            <input
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-3 outline-none ring-[var(--felt)] focus:ring-2"
-            />
-          </label>
-          {authError ? (
-            <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
-              {authError}
-            </p>
-          ) : null}
+      <EmptyState
+        title="Sign in to score"
+        body="Use Login at the top of the page with your BCA / FargoRate account. Scoring submits to LMS and only lists matches for your selected team."
+        action={
           <button
-            type="submit"
-            disabled={loggingIn}
-            className="w-full rounded-xl bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--felt-soft)] disabled:opacity-60"
+            type="button"
+            onClick={onRequestLogin}
+            className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
           >
-            {loggingIn ? "Signing in…" : "Sign in to score"}
+            Go to login
           </button>
-        </form>
-      </section>
+        }
+      />
     );
   }
 
@@ -694,7 +601,16 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
     return (
       <EmptyState
         title="Choose a division to score"
-        body="Pick your division above, then open Score to see your upcoming matches."
+        body="Pick your division above (from the teams you belong to), then open Score."
+      />
+    );
+  }
+
+  if (!teamId) {
+    return (
+      <EmptyState
+        title="Set My team to score"
+        body="Score only lists matches for your selected team. Set My team in the League · Division · My team section or in Settings."
       />
     );
   }
@@ -725,13 +641,6 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
             className={actionBtnClass}
           >
             {reviewMode ? "← Back to sheet" : "← Matches"}
-          </button>
-          <button
-            type="button"
-            onClick={() => void onLogout()}
-            className={actionBtnClass}
-          >
-            Sign out
           </button>
         </div>
 
@@ -1181,10 +1090,14 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
             Your matches
           </h3>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            Signed in as{" "}
-            <span className="font-medium text-[var(--ink)]">
-              {user.name ?? user.email ?? "Player"}
-            </span>
+            {teamName ? (
+              <>
+                Scoring for{" "}
+                <span className="font-medium text-[var(--ink)]">{teamName}</span>
+              </>
+            ) : (
+              "Your matches"
+            )}
             {divisionName ? (
               <>
                 {" "}
@@ -1194,13 +1107,6 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
             {sharedDrafts ? " · multi-device draft sync on" : null}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void onLogout()}
-          className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]"
-        >
-          Sign out
-        </button>
       </div>
 
       {listError ? (
@@ -1218,8 +1124,12 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
         <LoadingState label="Loading your matches…" />
       ) : matches.length === 0 ? (
         <EmptyState
-          title="No matches for your teams"
-          body="When your team is scheduled in this division, those matches will show up here ready to score."
+          title={
+            teamName
+              ? `No matches for ${teamName}`
+              : "No matches for your team"
+          }
+          body="When this team is scheduled in the selected division, those matches will show up here ready to score."
         />
       ) : (
         <div className="space-y-2">

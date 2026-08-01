@@ -10,6 +10,7 @@ import type {
   DivisionSummary,
   DivisionTeam,
   LeagueSummary,
+  MembershipSnapshot,
   PlayersByTeamReport,
   ReportTab,
   ScheduleDay,
@@ -21,14 +22,18 @@ import { DataTable } from "./DataTable";
 import { EmptyState } from "./EmptyState";
 import { HandicapCalculator } from "./HandicapCalculator";
 import { LoadingState } from "./LoadingState";
+import { LoginScreen, type AuthUser } from "./LoginScreen";
 import { MatchScoring } from "./MatchScoring";
 import { PlayerSearch } from "./PlayerSearch";
 import { ScheduleList } from "./ScheduleList";
 import { ScheduleMatchDetail } from "./ScheduleMatchDetail";
 import { SearchField } from "./SearchField";
+import { SettingsScreen } from "./SettingsScreen";
 import { TeamDetail } from "./TeamDetail";
 import { TeamStandingSummary } from "./TeamStandingSummary";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
+
+type AppScreen = "main" | "login" | "settings";
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
@@ -83,6 +88,12 @@ export function LeagueApp() {
   const [selectedDivision, setSelectedDivision] =
     useState<DivisionSummary | null>(null);
   const [tab, setTab] = useState<ReportTab>("standings");
+  const [screen, setScreen] = useState<AppScreen>("main");
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [membership, setMembership] = useState<MembershipSnapshot | null>(null);
+  const [loadingMembership, setLoadingMembership] = useState(false);
+  const [membershipError, setMembershipError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [booting, setBooting] = useState(true);
   const [loadingLeagues, setLoadingLeagues] = useState(false);
@@ -112,6 +123,92 @@ export function LeagueApp() {
   const persist = (next: UserPreferences) => {
     setPrefs(next);
     savePreferences(next);
+  };
+
+  const loadMembership = async (fresh = false) => {
+    setLoadingMembership(true);
+    setMembershipError(null);
+    try {
+      const data = await fetchJson<{ membership: MembershipSnapshot }>(
+        `/api/scoring/membership${fresh ? "?fresh=1" : ""}`,
+      );
+      setMembership(data.membership);
+      return data.membership;
+    } catch (err) {
+      setMembership(null);
+      setMembershipError(
+        err instanceof Error ? err.message : "Failed to load memberships.",
+      );
+      return null;
+    } finally {
+      setLoadingMembership(false);
+    }
+  };
+
+  const applyMembershipDefaults = (
+    nextMembership: MembershipSnapshot,
+    basePrefs: UserPreferences,
+    playerName?: string | null,
+  ) => {
+    const preferredTeam =
+      nextMembership.teams.find((team) => team.teamId === basePrefs.teamId) ??
+      nextMembership.teams.find(
+        (team) => team.divisionId === basePrefs.divisionId,
+      ) ??
+      nextMembership.teams[0] ??
+      null;
+    const preferredDivision =
+      nextMembership.divisions.find(
+        (division) =>
+          division.id === (preferredTeam?.divisionId ?? basePrefs.divisionId),
+      ) ??
+      nextMembership.divisions[0] ??
+      null;
+    const preferredLeague =
+      nextMembership.leagues.find(
+        (league) =>
+          league.id === (preferredDivision?.leagueId ?? basePrefs.leagueId),
+      ) ??
+      nextMembership.leagues[0] ??
+      null;
+
+    if (preferredLeague) {
+      setSelectedLeague(preferredLeague);
+      setLeagues(nextMembership.leagues);
+      setLeagueQuery(preferredLeague.name);
+    }
+    if (preferredDivision) {
+      setSelectedDivision(preferredDivision);
+      setDivisions(
+        nextMembership.divisions.filter(
+          (division) => division.leagueId === preferredDivision.leagueId,
+        ),
+      );
+    } else {
+      setSelectedDivision(null);
+      setDivisions([]);
+    }
+
+    const nextPrefs: UserPreferences = {
+      ...basePrefs,
+      playerId: nextMembership.playerId,
+      playerName: playerName ?? basePrefs.playerName,
+      leagueId: preferredLeague?.id ?? basePrefs.leagueId,
+      leagueName: preferredLeague?.name ?? basePrefs.leagueName,
+      divisionId: preferredDivision?.id ?? null,
+      divisionName: preferredDivision?.name ?? null,
+      teamId: preferredTeam?.teamId ?? null,
+      teamName: preferredTeam?.teamName ?? null,
+    };
+    persist(nextPrefs);
+  };
+
+  const signOut = async () => {
+    await fetch("/api/scoring/logout", { method: "POST" });
+    setUser(null);
+    setMembership(null);
+    setMembershipError(null);
+    setScreen("main");
   };
 
   const refreshCachedData = async () => {
@@ -170,6 +267,26 @@ export function LeagueApp() {
       setBooting(true);
       setError(null);
       try {
+        const sessionData = await fetchJson<{ user: AuthUser | null }>(
+          "/api/scoring/session",
+        );
+        if (cancelled) return;
+        setUser(sessionData.user);
+        setAuthLoading(false);
+
+        if (sessionData.user) {
+          const nextMembership = await loadMembership(false);
+          if (cancelled) return;
+          if (nextMembership?.teams.length) {
+            applyMembershipDefaults(
+              nextMembership,
+              saved,
+              sessionData.user.name,
+            );
+            return;
+          }
+        }
+
         const data = await fetchJson<{ leagues: LeagueSummary[] }>(
           `/api/leagues?q=${encodeURIComponent(saved.leagueName)}`,
         );
@@ -195,6 +312,7 @@ export function LeagueApp() {
         }
       } catch (err) {
         if (!cancelled) {
+          setAuthLoading(false);
           setError(err instanceof Error ? err.message : "Failed to start app");
         }
       } finally {
@@ -205,10 +323,11 @@ export function LeagueApp() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (booting) return;
+    if (booting || user) return;
     const controller = new AbortController();
     const handle = window.setTimeout(async () => {
       setLoadingLeagues(true);
@@ -229,7 +348,7 @@ export function LeagueApp() {
       controller.abort();
       window.clearTimeout(handle);
     };
-  }, [leagueQuery, booting]);
+  }, [leagueQuery, booting, user]);
 
   useEffect(() => {
     if (!selectedDivision) return;
@@ -337,14 +456,22 @@ export function LeagueApp() {
     setLoadingDivisions(true);
     setError(null);
     try {
-      const data = await fetchJson<{ divisions: DivisionSummary[] }>(
-        `/api/leagues/${league.id}/divisions`,
-      );
-      setDivisions(data.divisions);
+      if (user && membership) {
+        setDivisions(
+          membership.divisions.filter(
+            (division) => division.leagueId === league.id,
+          ),
+        );
+      } else {
+        const data = await fetchJson<{ divisions: DivisionSummary[] }>(
+          `/api/leagues/${league.id}/divisions`,
+        );
+        setDivisions(data.divisions);
+      }
       persist({
         ...(prefs ?? {
-          playerId: null,
-          playerName: null,
+          playerId: user?.lmsId ?? null,
+          playerName: user?.name ?? null,
           teamId: null,
           teamName: null,
           divisionId: null,
@@ -358,8 +485,8 @@ export function LeagueApp() {
         divisionName: null,
         teamId: null,
         teamName: null,
-        playerId: null,
-        playerName: null,
+        playerId: user?.lmsId ?? prefs?.playerId ?? null,
+        playerName: user?.name ?? prefs?.playerName ?? null,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load divisions");
@@ -382,17 +509,28 @@ export function LeagueApp() {
       leagueName: division.leagueName,
       divisionId: null,
       divisionName: null,
-      playerId: null,
-      playerName: null,
+      playerId: user?.lmsId ?? null,
+      playerName: user?.name ?? null,
       teamId: null,
       teamName: null,
     };
+    const keepTeam =
+      prefs?.teamId &&
+      membership?.teams.some(
+        (team) =>
+          team.teamId === prefs.teamId && team.divisionId === division.id,
+      )
+        ? { teamId: prefs.teamId, teamName: prefs.teamName }
+        : { teamId: null, teamName: null };
     persist({
       ...base,
       leagueId: division.leagueId,
       leagueName: division.leagueName,
       divisionId: division.id,
       divisionName: division.name,
+      ...keepTeam,
+      playerId: user?.lmsId ?? base.playerId,
+      playerName: user?.name ?? base.playerName,
     });
   };
 
@@ -461,38 +599,65 @@ export function LeagueApp() {
     }
   };
 
-  const leagueOptions: TypeaheadOption<LeagueSummary>[] = useMemo(
-    () =>
-      leagues.map((league) => ({
-        id: league.id,
-        label: league.name,
-        meta: `${league.state} · ${league.divisionCount} divisions`,
-        value: league,
-      })),
-    [leagues],
-  );
+  const leagueOptions: TypeaheadOption<LeagueSummary>[] = useMemo(() => {
+    const source =
+      user && membership?.leagues.length ? membership.leagues : leagues;
+    return source.map((league) => ({
+      id: league.id,
+      label: league.name,
+      meta: `${league.state} · ${league.divisionCount} divisions`,
+      value: league,
+    }));
+  }, [user, membership, leagues]);
 
-  const divisionOptions: TypeaheadOption<DivisionSummary>[] = useMemo(
-    () =>
-      divisions.map((division) => ({
-        id: division.id,
-        label: division.name,
-        meta: `${division.year} · ${division.leagueName}`,
-        value: division,
-      })),
-    [divisions],
-  );
+  const divisionOptions: TypeaheadOption<DivisionSummary>[] = useMemo(() => {
+    const source =
+      user && membership
+        ? membership.divisions.filter(
+            (division) =>
+              !selectedLeague || division.leagueId === selectedLeague.id,
+          )
+        : divisions;
+    return source.map((division) => ({
+      id: division.id,
+      label: division.name,
+      meta: `${division.year} · ${division.leagueName}`,
+      value: division,
+    }));
+  }, [user, membership, divisions, selectedLeague]);
 
-  const teamOptions: TypeaheadOption<DivisionTeam>[] = useMemo(
-    () =>
-      divisionTeams.map((team) => ({
-        id: team.id,
-        label: team.name,
-        meta: `${team.players.length} players`,
-        value: team,
-      })),
-    [divisionTeams],
-  );
+  const teamOptions: TypeaheadOption<DivisionTeam>[] = useMemo(() => {
+    if (user && membership && selectedDivision) {
+      const mine = membership.teams.filter(
+        (team) => team.divisionId === selectedDivision.id,
+      );
+      return mine.map((team) => {
+        const full =
+          divisionTeams.find((item) => item.id === team.teamId) ?? null;
+        const value: DivisionTeam = full ?? {
+          id: team.teamId,
+          name: team.teamName,
+          isBye: false,
+          locationId: null,
+          players: [],
+        };
+        return {
+          id: team.teamId,
+          label: team.teamName,
+          meta: full
+            ? `${full.players.length} players`
+            : "Your team",
+          value,
+        };
+      });
+    }
+    return divisionTeams.map((team) => ({
+      id: team.id,
+      label: team.name,
+      meta: `${team.players.length} players`,
+      value: team,
+    }));
+  }, [user, membership, selectedDivision, divisionTeams]);
 
   /** Followed team from the top League / Division / My team section */
   const myTeam =
@@ -552,27 +717,146 @@ export function LeagueApp() {
     );
   }
 
+  if (screen === "login") {
+    return (
+      <main className="relative mx-auto min-h-dvh w-full max-w-7xl px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-4 md:px-6 lg:px-8">
+        <header className="mb-6">
+          <h1 className="font-[family-name:var(--font-display)] text-2xl leading-none tracking-tight text-[var(--felt-deep)] md:text-3xl">
+            Tableside
+          </h1>
+        </header>
+        <LoginScreen
+          onCancel={() => setScreen("main")}
+          onSuccess={(nextUser) => {
+            setUser(nextUser);
+            setScreen("main");
+            void (async () => {
+              const nextMembership = await loadMembership(true);
+              if (nextMembership && prefs) {
+                applyMembershipDefaults(
+                  nextMembership,
+                  prefs,
+                  nextUser.name,
+                );
+              } else if (nextMembership) {
+                applyMembershipDefaults(
+                  nextMembership,
+                  loadPreferences(),
+                  nextUser.name,
+                );
+              } else {
+                setScreen("settings");
+              }
+            })();
+          }}
+        />
+      </main>
+    );
+  }
+
+  if (screen === "settings" && user && prefs) {
+    return (
+      <main className="relative mx-auto min-h-dvh w-full max-w-7xl px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-4 md:px-6 lg:px-8">
+        <header className="mb-6">
+          <h1 className="font-[family-name:var(--font-display)] text-2xl leading-none tracking-tight text-[var(--felt-deep)] md:text-3xl">
+            Tableside
+          </h1>
+        </header>
+        <SettingsScreen
+          user={user}
+          prefs={prefs}
+          membership={membership}
+          loadingMembership={loadingMembership}
+          membershipError={membershipError}
+          onClose={() => setScreen("main")}
+          onRefreshMembership={() => {
+            void loadMembership(true).then((next) => {
+              if (next && prefs) {
+                applyMembershipDefaults(next, prefs, user.name);
+              }
+            });
+          }}
+          onSave={(next) => {
+            persist(next);
+            const league =
+              membership?.leagues.find((item) => item.id === next.leagueId) ??
+              null;
+            const division =
+              membership?.divisions.find(
+                (item) => item.id === next.divisionId,
+              ) ?? null;
+            if (league) {
+              setSelectedLeague(league);
+              setLeagues(membership?.leagues ?? [league]);
+              setLeagueQuery(league.name);
+            }
+            if (division) {
+              setSelectedDivision(division);
+              setDivisions(
+                (membership?.divisions ?? []).filter(
+                  (item) => item.leagueId === division.leagueId,
+                ),
+              );
+            }
+            setScreen("main");
+          }}
+          onSignOut={() => void signOut()}
+        />
+      </main>
+    );
+  }
+
   return (
     <main className="relative mx-auto min-h-dvh w-full max-w-7xl px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-4 md:px-6 lg:px-8">
       <header className="animate-rise mb-3 flex items-center justify-between gap-3 md:mb-4">
         <h1 className="font-[family-name:var(--font-display)] text-2xl leading-none tracking-tight text-[var(--felt-deep)] md:text-3xl">
           Tableside
         </h1>
-        <button
-          type="button"
-          onClick={() => void refreshCachedData()}
-          disabled={refreshing}
-          title="Clear cached league data and reload from FargoRate"
-          className="shrink-0 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)] disabled:opacity-60"
-        >
-          {refreshing ? "Refreshing…" : "Refresh data"}
-        </button>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => void refreshCachedData()}
+            disabled={refreshing}
+            title="Clear cached league data and reload from FargoRate"
+            className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)] disabled:opacity-60"
+          >
+            {refreshing ? "Refreshing…" : "Refresh data"}
+          </button>
+          {user ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setScreen("settings")}
+                className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
+              >
+                Settings
+              </button>
+              <span className="hidden max-w-[10rem] truncate text-xs font-medium text-[var(--felt-deep)] sm:inline">
+                {user.name ?? user.email ?? "Signed in"}
+              </span>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setScreen("login")}
+              className="rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--felt-soft)]"
+            >
+              Login
+            </button>
+          )}
+        </div>
       </header>
 
       {error ? (
         <div className="mb-4 rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
           {error}
         </div>
+      ) : null}
+
+      {user && loadingMembership ? (
+        <p className="mb-3 text-xs text-[var(--muted)]">
+          Loading your team memberships…
+        </p>
       ) : null}
 
       <section className="animate-rise animate-delay-1 relative z-40 mb-5 overflow-visible rounded-[1.5rem] border border-[var(--line)] bg-[var(--surface)] shadow-sm [background-color:var(--surface)]">
@@ -588,7 +872,9 @@ export function LeagueApp() {
             </p>
             {contextOpen ? (
               <p className="mt-1 text-sm text-[var(--muted)]">
-                Set once — Schedule and Handicap follow My team.
+                {user
+                  ? "Signed in — selectors show only leagues, divisions, and teams you belong to. Standings and players still include the whole division."
+                  : "Set once — Schedule and Handicap follow My team. Login to limit this to your teams."}
               </p>
             ) : (
               <div className="mt-1.5 space-y-0.5">
@@ -623,7 +909,13 @@ export function LeagueApp() {
               <Typeahead
                 label="League"
                 placeholder={
-                  loadingLeagues ? "Searching leagues…" : "Search leagues"
+                  user
+                    ? loadingMembership
+                      ? "Loading your leagues…"
+                      : "Your leagues"
+                    : loadingLeagues
+                      ? "Searching leagues…"
+                      : "Search leagues"
                 }
                 value={
                   selectedLeague
@@ -636,7 +928,7 @@ export function LeagueApp() {
                     : null
                 }
                 options={leagueOptions}
-                onQueryChange={setLeagueQuery}
+                onQueryChange={user ? undefined : setLeagueQuery}
                 onChange={(option) => {
                   if (option) void chooseLeague(option.value);
                   else clearLeague();
@@ -649,7 +941,9 @@ export function LeagueApp() {
                     ? "Pick a league first"
                     : loadingDivisions
                       ? "Loading divisions…"
-                      : "Type to find your division"
+                      : user
+                        ? "Your divisions"
+                        : "Type to find your division"
                 }
                 value={
                   selectedDivision
@@ -676,7 +970,9 @@ export function LeagueApp() {
                     ? "Pick a division first"
                     : loadingContext
                       ? "Loading teams…"
-                      : "Set your team for schedule & handicap"
+                      : user
+                        ? "Your teams in this division"
+                        : "Set your team for schedule & handicap"
                 }
                 value={
                   myTeam
@@ -800,6 +1096,11 @@ export function LeagueApp() {
             <MatchScoring
               divisionId={selectedDivision?.id ?? null}
               divisionName={selectedDivision?.name ?? null}
+              teamId={prefs.teamId}
+              teamName={prefs.teamName}
+              user={user}
+              authLoading={authLoading}
+              onRequestLogin={() => setScreen("login")}
             />
           ) : !selectedDivision ? (
             <EmptyState
