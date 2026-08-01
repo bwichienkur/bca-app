@@ -6,11 +6,14 @@ Defaults to **Palm Beach County BCA Pool League**.
 
 ## Features
 
+- Top-level BCA / FargoRate login + Settings for default league, division, and team
+- When signed in, League · Division · My team selectors are limited to your memberships (reports still show the full division)
 - Typeahead selectors for league, division, and my team
 - Team standings with clickable rows → player stats + roster panel
 - Search filters on Teams, Players, and Ratings
 - Schedule filtered by selected team
 - Handicap calculator based on your team and this week’s opponent
+- Score tab lists matches for your selected team only (login required)
 - 5-player lineups (division format), drag-to-reorder, saved lineup presets
 
 ## Data source
