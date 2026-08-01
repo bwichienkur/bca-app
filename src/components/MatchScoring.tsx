@@ -3,6 +3,7 @@
 import {
   memo,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -1603,6 +1604,7 @@ function ScorePad({
   onChange: (next: GameScoreState) => void;
 }) {
   const [local, setLocal] = useState<GameScoreState | null>(game ?? null);
+  const [padTop, setPadTop] = useState(104);
   const [, startPadTransition] = useTransition();
   const maxWin = match.maxScore > 0 ? match.maxScore : 10;
   const maxLoss = match.maxLosingScore >= 0 ? match.maxLosingScore : 7;
@@ -1615,12 +1617,44 @@ function ScorePad({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, roundNumber, gameIndex]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
+
+    const measure = () => {
+      const tabs = document.querySelector<HTMLElement>("[data-report-tabs]");
+      const viewportHeight =
+        window.visualViewport?.height ?? window.innerHeight;
+      // Keep most of the viewport for the scorer no matter where tabs sit.
+      const maxTop = Math.max(72, Math.floor(viewportHeight * 0.35));
+
+      let top = 104;
+      if (tabs) {
+        const rect = tabs.getBoundingClientRect();
+        const stuck = rect.top <= 1;
+        // Sticky tabs: sit flush under them.
+        // Mid-page tabs: use bar height only (not document Y), so the pad
+        // stays on-screen instead of starting hundreds of px down.
+        top = stuck
+          ? Math.ceil(rect.bottom)
+          : Math.ceil(tabs.offsetHeight);
+      }
+
+      setPadTop(Math.min(Math.max(top, 0), maxTop));
+    };
+
+    measure();
+    const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
+    window.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("scroll", measure);
+
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("scroll", measure);
     };
   }, [open]);
 
@@ -1669,12 +1703,12 @@ function ScorePad({
       </aside>
       <div
         className="fixed inset-x-0 bottom-0 z-50 flex flex-col bg-[var(--paper-2)] shadow-[var(--shadow)]"
-        style={{ top: "var(--score-pad-top, 6.5rem)" }}
+        style={{ top: padTop, bottom: 0 }}
         role="dialog"
         aria-modal="true"
         aria-label={`Round ${roundNumber} game ${gameIndex} score pad`}
       >
-        <div className="flex items-start justify-between gap-3 border-b border-[var(--line)] px-4 py-3">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--line)] px-4 py-3">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
               Round {roundNumber} · Game {gameIndex}
@@ -1704,7 +1738,7 @@ function ScorePad({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 pb-[calc(1rem+var(--safe-bottom))]">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 pb-[calc(1rem+var(--safe-bottom))]">
           <div className="grid grid-cols-2 gap-3">
             {[1, 2].map((side) => {
               const score =
