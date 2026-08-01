@@ -71,6 +71,17 @@ function columnKind(header: string): ColumnKind {
   return "stat";
 }
 
+/** Size the name column from the longest label in the data so full names show. */
+function nameColumnWidth(maxChars: number, compact: boolean): string {
+  const min = compact ? 6.5 : 8;
+  // Cap only extreme outliers; the table scrolls horizontally for stats.
+  const max = compact ? 18 : 22;
+  const perChar = compact ? 0.54 : 0.58;
+  const pad = compact ? 1.15 : 1.4;
+  const width = Math.min(Math.max(maxChars * perChar + pad, min), max);
+  return `${width.toFixed(2)}rem`;
+}
+
 /** Fixed rem widths so short rank cols stay narrow and headers stay readable. */
 function columnWidth(
   header: string,
@@ -78,8 +89,6 @@ function columnWidth(
   compact: boolean,
 ): string {
   if (kind === "rank") return compact ? "2.5rem" : "3rem";
-  // Keep names compact so stat columns stay visible; full value is in title.
-  if (kind === "name") return compact ? "7rem" : "9rem";
   if (
     header.trim().toLowerCase() === "fargo" ||
     header.trim().toLowerCase() === "rating"
@@ -95,6 +104,15 @@ function columnWidth(
   if (len <= 4) return compact ? "4rem" : "4.5rem";
   if (len <= 5) return compact ? "4.6rem" : "5.25rem";
   return `${Math.min(len * 0.85 + 1.5, compact ? 6.5 : 8)}rem`;
+}
+
+function longestCellLength(rows: string[][], columnIndex: number): number {
+  let maxLen = 0;
+  for (const row of rows) {
+    const len = (row[columnIndex] ?? "").trim().length;
+    if (len > maxLen) maxLen = len;
+  }
+  return maxLen;
 }
 
 function stickyColumnIndex(headers: string[], stickyEnabled: boolean): number {
@@ -123,11 +141,18 @@ export function DataTable({
 
   const columnMeta = useMemo(
     () =>
-      headers.map((header) => {
+      headers.map((header, index) => {
         const kind = columnKind(header);
+        if (kind === "name") {
+          const maxChars = Math.max(
+            header.trim().length,
+            longestCellLength(rows, index),
+          );
+          return { kind, width: nameColumnWidth(maxChars, compact) };
+        }
         return { kind, width: columnWidth(header, kind, compact) };
       }),
-    [headers, compact],
+    [headers, rows, compact],
   );
 
   const stickyIndex = useMemo(
