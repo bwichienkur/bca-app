@@ -3,6 +3,7 @@
 import {
   memo,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -1899,6 +1900,122 @@ function nextRaceScore(current: number, delta: number, options: number[]): numbe
   return lower ?? sorted[0] ?? current;
 }
 
+/** Custom listbox so the open menu can use felt blue (native <select> menus cannot). */
+function RaceScoreSelect({
+  label,
+  value,
+  options,
+  emphasized = false,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  options: number[];
+  emphasized?: boolean;
+  onChange: (value: number) => void;
+}) {
+  const listId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(() =>
+    Math.max(0, options.indexOf(value)),
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(event: MouseEvent | TouchEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("touchstart", onDoc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("touchstart", onDoc);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setHighlight(Math.max(0, options.indexOf(value)));
+  }, [open, options, value]);
+
+  const choose = (next: number) => {
+    onChange(next);
+    setOpen(false);
+  };
+
+  return (
+    <div
+      ref={rootRef}
+      className={["relative mt-3 block", open ? "z-20" : "z-10"].join(" ")}
+    >
+      <span className="sr-only">{label}</span>
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-label={label}
+        onClick={() => setOpen((next) => !next)}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setOpen(true);
+          } else if (event.key === "Escape") {
+            setOpen(false);
+          }
+        }}
+        className={[
+          "relative w-full rounded-xl border border-white/20 bg-[var(--felt)] px-3 py-3 pr-8 text-center font-[family-name:var(--font-display)] text-4xl tabular-nums text-white outline-none ring-white/35 [background-color:var(--felt)] focus:ring-2",
+          emphasized ? "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.28)]" : "",
+        ].join(" ")}
+      >
+        {value}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-white/70"
+        >
+          {open ? "▴" : "▾"}
+        </span>
+      </button>
+
+      {open ? (
+        <ul
+          id={listId}
+          role="listbox"
+          aria-label={label}
+          className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-white/20 bg-[var(--felt)] py-1 shadow-[var(--shadow)] [background-color:var(--felt)]"
+        >
+          {options.map((option, index) => {
+            const selected = option === value;
+            const active = index === highlight;
+            return (
+              <li key={option}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  onMouseEnter={() => setHighlight(index)}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => choose(option)}
+                  className={[
+                    "flex w-full items-center justify-center gap-2 px-3 py-2.5 font-[family-name:var(--font-display)] text-2xl tabular-nums text-white",
+                    active ? "bg-black/25" : "bg-[var(--felt)]",
+                    selected ? "font-semibold" : "font-normal",
+                  ].join(" ")}
+                >
+                  <span>{option}</span>
+                  {selected ? <span className="text-sm text-white/80">✓</span> : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 function ScorePad({
   open,
   match,
@@ -2116,35 +2233,13 @@ function ScorePad({
                     </p>
                   ) : null}
 
-                  <label className="relative mt-3 block">
-                    <span className="sr-only">Score for {name}</span>
-                    <select
-                      value={selectValue}
-                      onChange={(event) =>
-                        setScore(side as 1 | 2, Number(event.target.value))
-                      }
-                      className={[
-                        "w-full appearance-none rounded-xl border border-white/20 bg-[var(--felt)] px-3 py-3 pr-8 text-center font-[family-name:var(--font-display)] text-4xl tabular-nums text-white outline-none ring-white/35 focus:ring-2 [background-color:var(--felt)]",
-                        isWinner ? "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.28)]" : "",
-                      ].join(" ")}
-                    >
-                      {options.map((value) => (
-                        <option
-                          key={value}
-                          value={value}
-                          className="bg-[var(--felt)] text-white"
-                        >
-                          {value}
-                        </option>
-                      ))}
-                    </select>
-                    <span
-                      aria-hidden
-                      className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-white/70"
-                    >
-                      ▾
-                    </span>
-                  </label>
+                  <RaceScoreSelect
+                    label={`Score for ${name}`}
+                    value={selectValue}
+                    options={options}
+                    emphasized={isWinner}
+                    onChange={(next) => setScore(side as 1 | 2, next)}
+                  />
 
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     <button
