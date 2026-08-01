@@ -40,7 +40,13 @@ import {
 } from "@/lib/scoring";
 import { EmptyState } from "./EmptyState";
 import { LoadingState } from "./LoadingState";
-import { PlayerSelect } from "./PlayerSelect";
+import { DraggableLineupList } from "./DraggableLineupList";
+import {
+  deleteLineupPreset,
+  loadLineupPresets,
+  upsertLineupPreset,
+} from "@/lib/preferences";
+import type { LineupPreset } from "@/lib/types";
 
 type ScoringUser = {
   lmsId: string;
@@ -598,6 +604,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
               <LineupEditor
                 match={match}
                 draft={draft}
+                divisionId={divisionId}
                 onChangeLineup={(side, index, playerId) => {
                   updateDraft((prev) => {
                     const lineupKey =
@@ -626,6 +633,16 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                     }
                     const [item] = nextLineup.splice(from, 1);
                     nextLineup.splice(to, 0, item);
+                    return syncLineupToGames(
+                      { ...prev, [lineupKey]: nextLineup },
+                      match,
+                    );
+                  });
+                }}
+                onReplaceLineup={(side, nextLineup) => {
+                  updateDraft((prev) => {
+                    const lineupKey =
+                      side === 1 ? "teamOneLineup" : "teamTwoLineup";
                     return syncLineupToGames(
                       { ...prev, [lineupKey]: nextLineup },
                       match,
@@ -1254,20 +1271,24 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
   const chaseLine = (() => {
     if (tally.roundWinner || gamesLeft <= 0) return null;
     const formatNeed = (side: 1 | 2, name: string) => {
+      const canCatch =
+        side === 1 ? tally.canCatchUp.teamOne : tally.canCatchUp.teamTwo;
+      if (!canCatch) return `${name}: can’t catch up`;
       const need =
         side === 1 ? tally.pointsNeeded.teamOne : tally.pointsNeeded.teamTwo;
       if (need == null) return null;
-      const maxAvail = gamesLeft * tally.maxWinPoints;
-      if (need > maxAvail) {
-        return `${name}: can’t catch up`;
-      }
+      if (need === 0) return `${name}: on track`;
       return `${name}: need ${need} pt${need === 1 ? "" : "s"}`;
     };
     const one = formatNeed(1, mySide === 1 ? "You" : "Home");
     const two = formatNeed(2, mySide === 2 ? "You" : "Away");
     const parts = [one, two].filter(Boolean);
     if (!parts.length) return null;
-    return `${parts.join(" · ")} from ${gamesLeft} game${gamesLeft === 1 ? "" : "s"} (win ≤${tally.maxWinPoints} / loss ≤${tally.maxLossPoints})`;
+    const hcNote =
+      tally.teamOneHandicap > 0 || tally.teamTwoHandicap > 0
+        ? " · HC in totals"
+        : "";
+    return `${parts.join(" · ")} from ${gamesLeft} game${gamesLeft === 1 ? "" : "s"} (win ≤${tally.maxWinPoints} / loss ≤${tally.maxLossPoints}${hcNote})`;
   })();
 
   const sideCard = (
@@ -1282,6 +1303,8 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
     const isMine = mySide === side;
     const need =
       side === 1 ? tally.pointsNeeded.teamOne : tally.pointsNeeded.teamTwo;
+    const canCatch =
+      side === 1 ? tally.canCatchUp.teamOne : tally.canCatchUp.teamTwo;
     return (
       <div
         className={[
@@ -1311,18 +1334,20 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
           ) : null}
           <span className="text-[var(--muted)]"> · {gameWins}g</span>
         </p>
-        {!tally.roundWinner && need != null && gamesLeft > 0 ? (
+        {!tally.roundWinner && gamesLeft > 0 ? (
           <p
             className={[
               "mt-1 text-[11px] font-semibold",
-              need > gamesLeft * tally.maxWinPoints
+              !canCatch
                 ? "text-[var(--danger)]"
                 : "text-[var(--amber)]",
             ].join(" ")}
           >
-            {need > gamesLeft * tally.maxWinPoints
+            {!canCatch
               ? "Can’t catch up"
-              : `Need ${need} pt${need === 1 ? "" : "s"}`}
+              : need == null || need === 0
+                ? "On track"
+                : `Need ${need} pt${need === 1 ? "" : "s"}`}
           </p>
         ) : null}
       </div>
@@ -1404,22 +1429,39 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
   );
 });
 
+function presetId(teamId: string, name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `${teamId}:${slug || "lineup"}`;
+}
+
 function LineupEditor({
   match,
   draft,
+  divisionId,
   onChangeLineup,
   onMoveLineup,
+  onReplaceLineup,
 }: {
   match: ScoringMatchDetail;
   draft: ScoringDraft;
+  divisionId: string;
   onChangeLineup: (
     side: 1 | 2,
     index: number,
     playerId: string | null,
   ) => void;
   onMoveLineup: (side: 1 | 2, from: number, to: number) => void;
+  onReplaceLineup: (side: 1 | 2, next: (string | null)[]) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [presets, setPresets] = useState<LineupPreset[]>([]);
+  const [presetName, setPresetName] = useState("Default lineup");
+  const [presetStatus, setPresetStatus] = useState<string | null>(null);
+
   const slots = Math.max(
     draft.teamOneLineup.length,
     draft.teamTwoLineup.length,
@@ -1427,6 +1469,87 @@ function LineupEditor({
   );
   const filledOne = draft.teamOneLineup.filter(Boolean).length;
   const filledTwo = draft.teamTwoLineup.filter(Boolean).length;
+
+  const mySide = match.mySide;
+  const myTeamId =
+    mySide === 1 ? match.teamOneId : mySide === 2 ? match.teamTwoId : null;
+  const myLineup =
+    mySide === 1
+      ? draft.teamOneLineup
+      : mySide === 2
+        ? draft.teamTwoLineup
+        : null;
+  const myPlayers =
+    mySide === 1
+      ? match.teamOnePlayers
+      : mySide === 2
+        ? match.teamTwoPlayers
+        : [];
+
+  useEffect(() => {
+    setPresets(loadLineupPresets());
+  }, []);
+
+  const teamPresets = presets.filter(
+    (preset) =>
+      preset.divisionId === divisionId &&
+      Boolean(myTeamId) &&
+      preset.teamId === myTeamId,
+  );
+
+  const rosterFor = (players: ScoringPlayer[]) =>
+    [...players]
+      .filter((player) => player.showOnRoster !== false)
+      .sort((a, b) => (b.fargoRating ?? 0) - (a.fargoRating ?? 0))
+      .map((player) => ({
+        id: player.id,
+        label: playerDisplayName(player),
+        rating: player.fargoRating,
+      }));
+
+  const savePreset = () => {
+    if (!mySide || !myTeamId || !myLineup) {
+      setPresetStatus("Sign in on your team’s match to save a lineup.");
+      return;
+    }
+    if (myLineup.some((id) => !id)) {
+      setPresetStatus(`Fill all ${slots} of your slots before saving.`);
+      return;
+    }
+    const name = presetName.trim() || "Default lineup";
+    const preset: LineupPreset = {
+      id: presetId(myTeamId, name),
+      name,
+      divisionId,
+      teamId: myTeamId,
+      playerIds: myLineup.filter((id): id is string => Boolean(id)),
+      updatedAt: new Date().toISOString(),
+    };
+    try {
+      const next = upsertLineupPreset(preset);
+      setPresets(next);
+      setPresetName(name);
+      setPresetStatus(`Saved “${name}”.`);
+    } catch {
+      setPresetStatus("Couldn't save lineup — local storage may be blocked.");
+    }
+  };
+
+  const applyPreset = (preset: LineupPreset) => {
+    if (!mySide) return;
+    const ids = Array.from({ length: slots }, (_, index) => {
+      const id = preset.playerIds[index] ?? null;
+      return id && myPlayers.some((player) => player.id === id) ? id : null;
+    });
+    onReplaceLineup(mySide, ids);
+    setPresetName(preset.name);
+    setPresetStatus(`Loaded “${preset.name}”.`);
+  };
+
+  const removePreset = (preset: LineupPreset) => {
+    setPresets(deleteLineupPreset(preset.id));
+    setPresetStatus(`Deleted “${preset.name}”.`);
+  };
 
   return (
     <div className="min-w-0 space-y-3">
@@ -1441,148 +1564,109 @@ function LineupEditor({
             Lineups
           </p>
           <p className="mt-0.5 text-xs text-[var(--muted)] sm:text-sm">
-            {filledOne + filledTwo}/{slots * 2} filled · ▲▼ to reorder
+            {filledOne + filledTwo}/{slots * 2} filled · drag ⠿ or ▲▼ · presets
           </p>
         </div>
         <span className="shrink-0 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
           {open ? "Collapse ▴" : "Change ▾"}
         </span>
       </button>
+
       {open ? (
-        <div className="grid min-w-0 gap-4 md:grid-cols-2">
-          <ScoringLineupSide
-            title={match.teamOneName}
-            subtitle={`Home · H1–H${slots}`}
-            prefix="H"
-            players={match.teamOnePlayers}
-            lineup={draft.teamOneLineup}
-            onChange={(index, id) => onChangeLineup(1, index, id)}
-            onMove={(from, to) => onMoveLineup(1, from, to)}
-          />
-          <ScoringLineupSide
-            title={match.teamTwoName}
-            subtitle={`Away · A1–A${slots}`}
-            prefix="A"
-            players={match.teamTwoPlayers}
-            lineup={draft.teamTwoLineup}
-            onChange={(index, id) => onChangeLineup(2, index, id)}
-            onMove={(from, to) => onMoveLineup(2, from, to)}
-          />
+        <div className="space-y-4">
+          {mySide && myTeamId ? (
+            <div className="rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-3 sm:p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
+                Your lineup presets
+              </p>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                Same saved lineups as Handicap — load or save for{" "}
+                {mySide === 1 ? match.teamOneName : match.teamTwoName}.
+              </p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <input
+                  value={presetName}
+                  onChange={(event) => setPresetName(event.target.value)}
+                  placeholder="Preset name"
+                  className="w-full flex-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]"
+                />
+                <button
+                  type="button"
+                  onClick={savePreset}
+                  className="rounded-full bg-[var(--felt)] px-4 py-2 text-sm font-semibold text-white"
+                >
+                  Save lineup
+                </button>
+              </div>
+              {presetStatus ? (
+                <p className="mt-2 text-xs text-[var(--felt-deep)]">
+                  {presetStatus}
+                </p>
+              ) : null}
+              {teamPresets.length > 0 ? (
+                <ul className="mt-3 space-y-2">
+                  {teamPresets.map((preset) => (
+                    <li
+                      key={preset.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--surface-2)] px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-[var(--ink)]">
+                          {preset.name}
+                        </p>
+                        <p className="text-[11px] text-[var(--muted)]">
+                          {preset.playerIds.length} players
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => applyPreset(preset)}
+                          className="rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white"
+                        >
+                          Load
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removePreset(preset)}
+                          className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-3 text-xs text-[var(--muted)]">
+                  No saved lineups yet for this team.
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          <div className="grid min-w-0 gap-4 md:grid-cols-2">
+            <DraggableLineupList
+              title={match.teamOneName}
+              subtitle={`Home · H1–H${slots}${mySide === 1 ? " · Your team" : ""}`}
+              slotPrefix="H"
+              lineupIds={draft.teamOneLineup}
+              roster={rosterFor(match.teamOnePlayers)}
+              onChange={(index, id) => onChangeLineup(1, index, id)}
+              onMove={(from, to) => onMoveLineup(1, from, to)}
+            />
+            <DraggableLineupList
+              title={match.teamTwoName}
+              subtitle={`Away · A1–A${slots}${mySide === 2 ? " · Your team" : ""}`}
+              slotPrefix="A"
+              lineupIds={draft.teamTwoLineup}
+              roster={rosterFor(match.teamTwoPlayers)}
+              onChange={(index, id) => onChangeLineup(2, index, id)}
+              onMove={(from, to) => onMoveLineup(2, from, to)}
+            />
+          </div>
         </div>
       ) : null}
-    </div>
-  );
-}
-
-function ScoringLineupSide({
-  title,
-  subtitle,
-  prefix,
-  players,
-  lineup,
-  onChange,
-  onMove,
-}: {
-  title: string;
-  subtitle: string;
-  prefix: string;
-  players: ScoringPlayer[];
-  lineup: (string | null)[];
-  onChange: (index: number, playerId: string | null) => void;
-  onMove: (from: number, to: number) => void;
-}) {
-  const slots = lineup.length;
-  const filled = lineup.filter(Boolean).length;
-  const sortedRoster = useMemo(
-    () =>
-      [...players]
-        .filter((player) => player.showOnRoster !== false)
-        .sort((a, b) => (b.fargoRating ?? 0) - (a.fargoRating ?? 0)),
-    [players],
-  );
-  const options = useMemo(
-    () =>
-      sortedRoster.map((player) => ({
-        id: player.id,
-        label: playerDisplayName(player),
-        rating: player.fargoRating,
-      })),
-    [sortedRoster],
-  );
-
-  return (
-    <div className="min-w-0 overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm sm:p-4">
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1 overflow-hidden">
-          <h4 className="truncate font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
-            {title}
-          </h4>
-          <p className="truncate text-xs text-[var(--muted)]">{subtitle}</p>
-        </div>
-        <span
-          className={[
-            "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
-            filled === slots
-              ? "bg-[var(--felt)] text-white"
-              : "bg-[var(--surface-2)] text-[var(--muted)]",
-          ].join(" ")}
-        >
-          {filled}/{slots}
-        </span>
-      </div>
-      <ol className="min-w-0 space-y-2">
-        {lineup.map((playerId, index) => {
-          const player = findPlayer(players, playerId);
-          return (
-            <li key={`${prefix}-${index}`} className="min-w-0">
-              <div className="min-w-0 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-2.5 py-2.5 sm:px-3">
-                <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                    {prefix}
-                    {index + 1}
-                  </span>
-                  <div className="flex shrink-0 items-center gap-1">
-                    {player ? (
-                      <>
-                        <button
-                          type="button"
-                          aria-label="Move up"
-                          disabled={index === 0}
-                          onClick={() => onMove(index, index - 1)}
-                          className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
-                        >
-                          ▲
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="Move down"
-                          disabled={index >= slots - 1}
-                          onClick={() => onMove(index, index + 1)}
-                          className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
-                        >
-                          ▼
-                        </button>
-                        <span className="ml-0.5 min-w-[2rem] text-right tabular-nums text-xs font-semibold text-[var(--felt)]">
-                          {player.fargoRating ?? "—"}
-                        </span>
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-                <PlayerSelect
-                  value={playerId ?? ""}
-                  options={options}
-                  placeholder="Open slot…"
-                  onChange={(id) => onChange(index, id || null)}
-                />
-              </div>
-            </li>
-          );
-        })}
-      </ol>
-      <p className="mt-2 text-[11px] text-[var(--muted)]">
-        ▲ ▼ reorder · handicaps follow Fargo
-      </p>
     </div>
   );
 }

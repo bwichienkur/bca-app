@@ -274,6 +274,8 @@ export type RoundPointsTally = {
   clinchedEarly: boolean;
   /** Points still needed from remaining games to win; null if decided/N/A. */
   pointsNeeded: { teamOne: number | null; teamTwo: number | null };
+  /** False when the opponent has already clinched (HC included in totals). */
+  canCatchUp: { teamOne: boolean; teamTwo: boolean };
   maxWinPoints: number;
   maxLossPoints: number;
 };
@@ -302,18 +304,20 @@ export function decideByPointsThenGames(
 }
 
 type ClinchArgs = {
+  /** Current totals — must already include round handicap. */
   teamOnePoints: number;
   teamTwoPoints: number;
   teamOneGameWins: number;
   teamTwoGameWins: number;
   gamesRemaining: number;
   maxWin: number;
+  maxLoss: number;
 };
 
 /**
  * Side has clinched when even their worst remaining case (lose all at 0 pts)
- * still beats the opponent's best case (win all at maxWin), using the
- * points-then-game-wins tiebreak.
+ * still beats the opponent's best case (win all at maxWin). Totals should
+ * already include handicap so HC leads are respected.
  */
 export function hasClinchedRound(args: ClinchArgs & { side: 1 | 2 }): boolean {
   const rem = Math.max(0, args.gamesRemaining);
@@ -344,15 +348,45 @@ export function clinchRoundWinner(args: ClinchArgs): 1 | 2 | null {
 }
 
 /**
- * Chase number: points `side` still needs from remaining games to beat the
- * opponent's ceiling (opp current + rem×maxWin), with game-win tiebreak
- * available if they can still win enough remaining games.
+ * True when this side can still win by taking every remaining game at maxWin
+ * while the opponent is held to at most maxLoss each. Uses HC-inclusive
+ * current totals.
+ */
+export function canCatchUpRound(args: ClinchArgs & { side: 1 | 2 }): boolean {
+  const rem = Math.max(0, args.gamesRemaining);
+  let onePts = args.teamOnePoints;
+  let twoPts = args.teamTwoPoints;
+  let oneWins = args.teamOneGameWins;
+  let twoWins = args.teamTwoGameWins;
+
+  if (rem > 0) {
+    if (args.side === 1) {
+      onePts += args.maxWin * rem;
+      oneWins += rem;
+      twoPts += args.maxLoss * rem;
+    } else {
+      twoPts += args.maxWin * rem;
+      twoWins += rem;
+      onePts += args.maxLoss * rem;
+    }
+  }
+
+  return (
+    decideByPointsThenGames(onePts, twoPts, oneWins, twoWins) === args.side
+  );
+}
+
+/**
+ * Chase number using a coupled outcome: assume we win every remaining game
+ * (up to maxWin each) while the opponent is held to at most maxLoss each.
+ * Current point totals must include handicap.
  */
 export function pointsNeededFromRemaining(
   args: ClinchArgs & { side: 1 | 2 },
 ): number | null {
   const rem = args.gamesRemaining;
   if (rem <= 0) return null;
+  if (!canCatchUpRound(args)) return null;
   if (clinchRoundWinner(args) != null) return null;
 
   const ourPts =
@@ -364,12 +398,12 @@ export function pointsNeededFromRemaining(
   const oppWins =
     args.side === 1 ? args.teamTwoGameWins : args.teamOneGameWins;
 
-  const oppCeiling = oppPts + args.maxWin * rem;
-  // Best case for tiebreak: we take every remaining game win.
+  // If we win out, opponent adds at most maxLoss per remaining game.
+  const oppIfWeWinOut = oppPts + args.maxLoss * rem;
   const canWinOnPointsTie = ourWins + rem > oppWins;
   const needed = canWinOnPointsTie
-    ? oppCeiling - ourPts
-    : oppCeiling - ourPts + 1;
+    ? oppIfWeWinOut - ourPts
+    : oppIfWeWinOut - ourPts + 1;
 
   return Math.max(0, needed);
 }
@@ -378,6 +412,7 @@ function buildRoundDecision(args: ClinchArgs): {
   roundWinner: 1 | 2 | null;
   clinchedEarly: boolean;
   pointsNeeded: { teamOne: number | null; teamTwo: number | null };
+  canCatchUp: { teamOne: boolean; teamTwo: boolean };
 } {
   const roundComplete = args.gamesRemaining <= 0;
   const roundWinner = clinchRoundWinner(args);
@@ -387,6 +422,10 @@ function buildRoundDecision(args: ClinchArgs): {
     pointsNeeded: {
       teamOne: pointsNeededFromRemaining({ ...args, side: 1 }),
       teamTwo: pointsNeededFromRemaining({ ...args, side: 2 }),
+    },
+    canCatchUp: {
+      teamOne: canCatchUpRound({ ...args, side: 1 }),
+      teamTwo: canCatchUpRound({ ...args, side: 2 }),
     },
   };
 }
@@ -443,6 +482,7 @@ export function tallyRoundPoints(args: {
     teamTwoGameWins,
     gamesRemaining,
     maxWin,
+    maxLoss,
   });
 
   return {
@@ -462,6 +502,7 @@ export function tallyRoundPoints(args: {
     roundWinner: decision.roundWinner,
     clinchedEarly: decision.clinchedEarly,
     pointsNeeded: decision.pointsNeeded,
+    canCatchUp: decision.canCatchUp,
     maxWinPoints: maxWin,
     maxLossPoints: maxLoss,
   };
@@ -539,6 +580,7 @@ export function tallyMatchPointsRound(args: {
     teamTwoGameWins,
     gamesRemaining,
     maxWin,
+    maxLoss,
   });
 
   return {
@@ -558,6 +600,7 @@ export function tallyMatchPointsRound(args: {
     roundWinner: decision.roundWinner,
     clinchedEarly: decision.clinchedEarly,
     pointsNeeded: decision.pointsNeeded,
+    canCatchUp: decision.canCatchUp,
     maxWinPoints: maxWin,
     maxLossPoints: maxLoss,
   };
