@@ -1277,31 +1277,17 @@ export function LeagueApp() {
               />
             ) : (
               <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
-                <div className="flex flex-wrap items-end justify-between gap-2">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-                      Division
-                    </p>
-                    <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-                      Team standings
-                    </h3>
-                    <p className="mt-1 text-sm text-[var(--muted)]">
-                      Tap a team to view player statistics. Use back to return
-                      to the standings grid.
-                    </p>
-                  </div>
-                  {filterQuery.trim() ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        filterAnchor.mark();
-                        setFilterQuery("");
-                      }}
-                      className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]"
-                    >
-                      Clear filter
-                    </button>
-                  ) : null}
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
+                    Division
+                  </p>
+                  <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
+                    Team standings
+                  </h3>
+                  <p className="mt-1 text-sm text-[var(--muted)]">
+                    Tap a team to view player statistics. Use back to return to
+                    the standings grid.
+                  </p>
                 </div>
                 <DataTable
                   headers={teamReport.headers}
@@ -1332,20 +1318,6 @@ export function LeagueApp() {
             )
           ) : tab === "players" && playersWithRatings ? (
             <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
-              {filterQuery.trim() ? (
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      filterAnchor.mark();
-                      setFilterQuery("");
-                    }}
-                    className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]"
-                  >
-                    Clear filter
-                  </button>
-                </div>
-              ) : null}
               <DataTable
                 headers={playersWithRatings.headers}
                 rows={filteredPlayerRows}
