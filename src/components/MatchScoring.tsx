@@ -144,18 +144,23 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
   const [draftMatchIds, setDraftMatchIds] = useState<Set<string>>(new Set());
   const [sharedDrafts, setSharedDrafts] = useState(false);
   const [syncNote, setSyncNote] = useState<string | null>(null);
+  const [remoteSubmittedAt, setRemoteSubmittedAt] = useState<string | null>(
+    null,
+  );
   const [, startTransition] = useTransition();
   const saveTimerRef = useRef<number | null>(null);
   const dirtyRef = useRef(false);
   const baseUpdatedAtRef = useRef<string | null>(null);
   const draftRef = useRef<ScoringDraft | null>(null);
   const pushSeqRef = useRef(0);
+  const sheetLockedRef = useRef(false);
 
   useEffect(() => {
     draftRef.current = draft;
   }, [draft]);
 
   const persistDraft = (next: ScoringDraft) => {
+    if (sheetLockedRef.current) return;
     saveDraft(next);
     dirtyRef.current = true;
     const seq = ++pushSeqRef.current;
@@ -274,22 +279,29 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
     setSheetError(null);
     setSubmitMessage(null);
     setSyncNote(null);
+    setRemoteSubmittedAt(null);
     try {
       const data = await fetchJson<{ match: ScoringMatchDetail }>(
         `/api/scoring/matches/${matchId}`,
       );
       const local = loadDraft(matchId);
       let remoteDraft: ScoringDraft | null = null;
+      let submittedAt: string | null = null;
       try {
         const remote = await fetchRemoteDraft(matchId);
         if (remote.shared) setSharedDrafts(true);
         remoteDraft = remote.draft;
-        if (remote.submittedAt) {
-          setSyncNote("This match may already have been submitted.");
+        submittedAt = remote.submittedAt ?? null;
+        if (submittedAt) {
+          setSyncNote("This match was already submitted from Tableside.");
         }
       } catch {
         // Fall back to localStorage-only.
       }
+
+      const locked = Boolean(data.match.hasBeenPlayed || submittedAt);
+      sheetLockedRef.current = locked;
+      setRemoteSubmittedAt(submittedAt);
 
       const chosen = newerDraft(remoteDraft, local, "a");
       const nextDraft = chosen
@@ -304,15 +316,21 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
       setActiveRound(data.match.matchFormat?.rounds[0]?.roundNumber ?? 1);
       setActiveGame(null);
       setView({ mode: "sheet", matchId });
-      saveDraft(nextDraft);
-      // Seed shared store when we opened from local-only or empty.
-      void pushRemoteDraft(nextDraft, baseUpdatedAtRef.current)
-        .then((remote) => {
-          if (remote.shared) setSharedDrafts(true);
-          if (remote.draft) baseUpdatedAtRef.current = remote.draft.updatedAt;
-        })
-        .catch(() => undefined);
-      setDraftMatchIds((prev) => new Set(prev).add(matchId));
+      if (!locked) {
+        saveDraft(nextDraft);
+        // Seed shared store when we opened from local-only or empty.
+        void pushRemoteDraft(nextDraft, baseUpdatedAtRef.current)
+          .then((remote) => {
+            if (remote.shared) setSharedDrafts(true);
+            if (remote.draft) baseUpdatedAtRef.current = remote.draft.updatedAt;
+            if (remote.submittedAt) {
+              setRemoteSubmittedAt(remote.submittedAt);
+              sheetLockedRef.current = true;
+            }
+          })
+          .catch(() => undefined);
+        setDraftMatchIds((prev) => new Set(prev).add(matchId));
+      }
     } catch (err) {
       setListError(
         err instanceof Error ? err.message : "Failed to open match.",
@@ -326,6 +344,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
     updater: (prev: ScoringDraft) => ScoringDraft,
     options?: { immediate?: boolean },
   ) => {
+    if (sheetLockedRef.current) return;
     setDraft((prev) => {
       if (!prev || !match) return prev;
       const next: ScoringDraft = {
@@ -355,6 +374,10 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
         .then((remote) => {
           if (!remote.shared) return;
           setSharedDrafts(true);
+          if (remote.submittedAt) {
+            setRemoteSubmittedAt(remote.submittedAt);
+            sheetLockedRef.current = true;
+          }
           if (!remote.draft) return;
           const local = draftRef.current;
           if (!local) return;
@@ -373,7 +396,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
           baseUpdatedAtRef.current = merged.updatedAt;
           draftRef.current = merged;
           setDraft(merged);
-          saveDraft(merged);
+          if (!sheetLockedRef.current) saveDraft(merged);
         })
         .catch(() => undefined);
     }, 3000);
@@ -524,6 +547,15 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
 
   const submitMatch = async () => {
     if (!match || !draft || !user) return;
+    if (sheetLockedRef.current || match.hasBeenPlayed) {
+      setSheetError("This scoresheet is already submitted and locked.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Submit this scoresheet to LMS for ${match.teamOneName.trim()} vs ${match.teamTwoName.trim()}?\n\nThis cannot be undone from Tableside.`,
+    );
+    if (!confirmed) return;
+
     setSubmitting(true);
     setSheetError(null);
     setSubmitMessage(null);
@@ -545,6 +577,8 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
       if (result.verifiedPlayed) {
         clearDraft(match.id);
         void deleteRemoteDraft(match.id);
+        sheetLockedRef.current = true;
+        setRemoteSubmittedAt(new Date().toISOString());
         setSubmitMessage("Match submitted to LMS.");
         setView({ mode: "list" });
         setMatch(null);
@@ -655,6 +689,8 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
 
   if (view.mode !== "list" && match && draft) {
     const reviewMode = view.mode === "review";
+    const sheetLocked = Boolean(match.hasBeenPlayed || remoteSubmittedAt);
+    sheetLockedRef.current = sheetLocked;
     const actionBtnClass =
       "rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]";
     return (
@@ -719,10 +755,11 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
           </p>
         ) : null}
 
-        {match.hasBeenPlayed ? (
+        {sheetLocked ? (
           <p className="rounded-xl border border-[var(--amber)]/35 bg-[color-mix(in_srgb,var(--amber)_12%,transparent)] px-3 py-2 text-sm text-[var(--amber)]">
-            LMS already has a scoresheet for this match. You can still review
-            locally, but submit may be rejected.
+            This scoresheet has been submitted
+            {match.hasBeenPlayed ? " to LMS" : ""}. Editing is locked — you can
+            still review lineups and scores.
           </p>
         ) : null}
 
@@ -731,6 +768,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
             match={match}
             draft={draft}
             submitting={submitting}
+            locked={sheetLocked}
             onEdit={() => setView({ mode: "sheet", matchId: match.id })}
             onSubmit={() => void submitMatch()}
           />
@@ -741,6 +779,7 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                 match={match}
                 draft={draft}
                 divisionId={divisionId}
+                readOnly={sheetLocked}
                 onChangeLineup={(side, index, playerId) => {
                   updateDraft((prev) => {
                     const lineupKey =
@@ -929,14 +968,17 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
                       <button
                         key={game.index}
                         type="button"
-                        onClick={() =>
+                        onClick={() => {
+                          if (sheetLocked) return;
                           setActiveGame({
                             roundNumber: currentRound.roundNumber,
                             gameIndex: game.index,
-                          })
-                        }
+                          });
+                        }}
+                        disabled={sheetLocked}
                         className={[
                           "w-full min-w-0 overflow-hidden rounded-xl border px-2.5 py-2 text-left transition sm:px-3",
+                          sheetLocked ? "cursor-default opacity-95" : "",
                           selected
                             ? "border-[var(--felt)] bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))]"
                             : complete
@@ -1009,42 +1051,57 @@ export function MatchScoring({ divisionId, divisionName }: MatchScoringProps) {
               )}
 
               <div className="flex flex-wrap gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setView({ mode: "review", matchId: match.id })}
-                  className="rounded-xl bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white"
-                >
-                  Review & submit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!match) return;
-                    const fresh: ScoringDraft = {
-                      ...emptyDraft(match),
-                      updatedAt: new Date().toISOString(),
-                    };
-                    dirtyRef.current = true;
-                    draftRef.current = fresh;
-                    setDraft(fresh);
-                    persistDraft(fresh);
-                  }}
-                  className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-[var(--muted)]"
-                >
-                  Reset sheet
-                </button>
+                {sheetLocked ? (
+                  <p className="text-sm text-[var(--muted)]">
+                    Scoresheet is locked after submit.
+                  </p>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setView({ mode: "review", matchId: match.id })
+                      }
+                      className="rounded-xl bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white"
+                    >
+                      Review & submit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!match || sheetLocked) return;
+                        const confirmed = window.confirm(
+                          "Reset this scoresheet? All lineups and scores for this match will be cleared.",
+                        );
+                        if (!confirmed) return;
+                        const fresh: ScoringDraft = {
+                          ...emptyDraft(match),
+                          updatedAt: new Date().toISOString(),
+                        };
+                        dirtyRef.current = true;
+                        draftRef.current = fresh;
+                        setDraft(fresh);
+                        persistDraft(fresh);
+                        setActiveGame(null);
+                      }}
+                      className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-[var(--muted)]"
+                    >
+                      Reset sheet
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
             <ScorePad
-              open={Boolean(activeGame && padGame)}
+              open={Boolean(!sheetLocked && activeGame && padGame)}
               match={match}
               game={padGame}
               roundNumber={activeGame?.roundNumber ?? activeRound}
               gameIndex={activeGame?.gameIndex ?? 1}
               onClose={() => setActiveGame(null)}
               onChange={(next) => {
-                if (!activeGame) return;
+                if (!activeGame || sheetLocked) return;
                 setGameScore(
                   activeGame.roundNumber,
                   activeGame.gameIndex,
@@ -1584,6 +1641,7 @@ function LineupEditor({
   match,
   draft,
   divisionId,
+  readOnly = false,
   onChangeLineup,
   onMoveLineup,
   onReplaceLineup,
@@ -1591,6 +1649,7 @@ function LineupEditor({
   match: ScoringMatchDetail;
   draft: ScoringDraft;
   divisionId: string;
+  readOnly?: boolean;
   onChangeLineup: (
     side: 1 | 2,
     index: number,
@@ -1706,17 +1765,20 @@ function LineupEditor({
             Lineups
           </p>
           <p className="mt-0.5 text-xs text-[var(--muted)] sm:text-sm">
-            {filledOne + filledTwo}/{slots * 2} filled · drag ⠿ or ▲▼ · presets
+            {filledOne + filledTwo}/{slots * 2} filled
+            {readOnly
+              ? " · view only"
+              : " · drag ⠿ or ▲▼ · presets"}
           </p>
         </div>
         <span className="shrink-0 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-          {open ? "Collapse ▴" : "Change ▾"}
+          {open ? "Collapse ▴" : readOnly ? "View ▾" : "Change ▾"}
         </span>
       </button>
 
       {open ? (
         <div className="space-y-4">
-          {mySide && myTeamId ? (
+          {mySide && myTeamId && !readOnly ? (
             <div className="rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-3 sm:p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
                 Your lineup presets
@@ -1794,6 +1856,7 @@ function LineupEditor({
               slotPrefix="H"
               lineupIds={draft.teamOneLineup}
               roster={rosterFor(match.teamOnePlayers)}
+              disabled={readOnly}
               onChange={(index, id) => onChangeLineup(1, index, id)}
               onMove={(from, to) => onMoveLineup(1, from, to)}
             />
@@ -1803,6 +1866,7 @@ function LineupEditor({
               slotPrefix="A"
               lineupIds={draft.teamTwoLineup}
               roster={rosterFor(match.teamTwoPlayers)}
+              disabled={readOnly}
               onChange={(index, id) => onChangeLineup(2, index, id)}
               onMove={(from, to) => onMoveLineup(2, from, to)}
             />
@@ -2191,12 +2255,14 @@ function ReviewPanel({
   match,
   draft,
   submitting,
+  locked = false,
   onEdit,
   onSubmit,
 }: {
   match: ScoringMatchDetail;
   draft: ScoringDraft;
   submitting: boolean;
+  locked?: boolean;
   onEdit: () => void;
   onSubmit: () => void;
 }) {
@@ -2220,13 +2286,13 @@ function ReviewPanel({
           Review
         </p>
         <h4 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--felt-deep)]">
-          Ready to send to LMS?
+          {locked ? "Submitted scoresheet" : "Ready to send to LMS?"}
         </h4>
         <p className="mt-1 text-sm text-[var(--muted)]">
           Rounds {roundWins.teamOne}–{roundWins.teamTwo} · games{" "}
           {totals.teamOneWins}–{totals.teamTwoWins} · {totals.scored} of{" "}
           {totals.total} complete
-          {incomplete ? " · finish every game first" : ""}
+          {incomplete && !locked ? " · finish every game first" : ""}
           {match.isHandicapped ? ` · HC ${hcOne}–${hcTwo}` : ""}
         </p>
       </div>
@@ -2307,26 +2373,32 @@ function ReviewPanel({
           onClick={onEdit}
           className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 text-sm font-semibold"
         >
-          Keep editing
+          {locked ? "Back to sheet" : "Keep editing"}
         </button>
-        <button
-          type="button"
-          disabled={submitting || incomplete}
-          onClick={onSubmit}
-          className="rounded-xl bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
-        >
-          {submitting ? "Submitting…" : "Submit to LMS"}
-        </button>
+        {!locked ? (
+          <button
+            type="button"
+            disabled={submitting || incomplete}
+            onClick={onSubmit}
+            className="rounded-xl bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {submitting ? "Submitting…" : "Submit to LMS"}
+          </button>
+        ) : null}
       </div>
-      {incomplete ? (
+      {locked ? (
+        <p className="text-xs text-[var(--muted)]">
+          Editing and resubmit are disabled after a scoresheet is submitted.
+        </p>
+      ) : incomplete ? (
         <p className="text-xs text-[var(--muted)]">
           Score every game before submitting — LMS expects a complete
           scoresheet.
         </p>
       ) : (
         <p className="text-xs text-[var(--muted)]">
-          This sends the scoresheet through the same LMS endpoint as the
-          official BCAPL scoring app.
+          You will be asked to confirm before this is sent through the same LMS
+          endpoint as the official BCAPL scoring app.
         </p>
       )}
     </div>
