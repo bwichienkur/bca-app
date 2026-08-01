@@ -50,12 +50,14 @@ import { EmptyState } from "./EmptyState";
 import { LoadingState } from "./LoadingState";
 import type { AuthUser } from "./LoginScreen";
 import { DraggableLineupList } from "./DraggableLineupList";
+import { MatchListCard } from "./MatchListCard";
 import {
   loadTeamLineupPresets,
   removeTeamLineupPreset,
   saveTeamLineupPreset,
 } from "@/lib/lineup-sync";
 import type { LineupPreset } from "@/lib/types";
+import { normalizeTeamName } from "@/lib/matchups";
 
 type MatchScoringProps = {
   divisionId: string | null;
@@ -1133,39 +1135,45 @@ export function MatchScoring({
           body="When this team is scheduled in the selected division, those matches will show up here ready to score."
         />
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {matches.map((item, index) => {
             const draftExists = draftMatchIds.has(item.id);
+            const myTeamKey = teamName ? normalizeTeamName(teamName) : null;
+            const status = [
+              item.hasBeenPlayed
+                ? "Submitted on LMS"
+                : draftExists
+                  ? "Draft in progress"
+                  : "Ready to score",
+              item.mySide ? "Your match" : null,
+            ]
+              .filter(Boolean)
+              .join(" · ");
             return (
-              <button
+              <MatchListCard
                 key={item.id}
-                type="button"
-                onClick={() => void openMatch(item.id)}
-                className="animate-rise flex w-full items-center justify-between gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3.5 text-left transition hover:bg-[var(--surface-2)]"
+                className="animate-rise"
                 style={{ animationDelay: `${Math.min(index, 6) * 0.04}s` }}
-              >
-                <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--amber)]">
-                    {formatMatchDate(item.datePlayed)} · {item.location}
-                  </p>
-                  <p className="mt-1 truncate font-[family-name:var(--font-display)] text-lg text-[var(--ink)]">
-                    {item.teamOneName}{" "}
-                    <span className="text-[var(--muted)]">vs</span>{" "}
-                    {item.teamTwoName}
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--muted)]">
-                    {item.hasBeenPlayed
-                      ? "Submitted on LMS"
-                      : draftExists
-                        ? "Draft in progress"
-                        : "Ready to score"}
-                    {item.mySide ? " · Your match" : null}
-                  </p>
-                </div>
-                <span className="shrink-0 rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white">
-                  {item.hasBeenPlayed ? "View" : "Score"}
-                </span>
-              </button>
+                homeName={item.teamOneName}
+                awayName={item.teamTwoName}
+                meta={formatMatchDate(item.datePlayed)}
+                location={item.location || undefined}
+                status={status}
+                ctaLabel={item.hasBeenPlayed ? "View" : "Score"}
+                emphasizeHome={
+                  Boolean(
+                    myTeamKey &&
+                      normalizeTeamName(item.teamOneName) === myTeamKey,
+                  )
+                }
+                emphasizeAway={
+                  Boolean(
+                    myTeamKey &&
+                      normalizeTeamName(item.teamTwoName) === myTeamKey,
+                  )
+                }
+                onClick={() => void openMatch(item.id)}
+              />
             );
           })}
         </div>

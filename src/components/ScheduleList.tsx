@@ -5,6 +5,7 @@ import { normalizeTeamName } from "@/lib/matchups";
 import { isUpcomingScheduleDate } from "@/lib/schedule";
 import type { ScheduleDay, ScheduleMatch } from "@/lib/types";
 import { EmptyState } from "./EmptyState";
+import { MatchListCard } from "./MatchListCard";
 
 type ScheduleListProps = {
   days: ScheduleDay[];
@@ -50,6 +51,7 @@ export function ScheduleList({
   }, [teamDays]);
 
   const visibleDays = view === "upcoming" ? upcomingDays : pastDays;
+  const myTeam = teamName ? normalizeTeamName(teamName) : null;
 
   if (!teamDays.length) {
     return (
@@ -110,52 +112,45 @@ export function ScheduleList({
           }
         />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {visibleDays.map((day) => (
+        <div className="space-y-5">
+          {visibleDays.map((day, dayIndex) => (
             <section
               key={`${view}-${day.date}`}
-              className="animate-rise rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)]/90 p-4 shadow-sm"
+              className="animate-rise space-y-3"
+              style={{ animationDelay: `${Math.min(dayIndex, 5) * 0.04}s` }}
             >
-              <div className="mb-3 flex items-baseline justify-between gap-3">
+              <div className="flex items-baseline justify-between gap-3 px-0.5">
                 <h3 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
                   {day.date}
                 </h3>
-                <span className="text-xs uppercase tracking-[0.14em] text-[var(--muted)]">
-                  {day.matches.length} match{day.matches.length === 1 ? "" : "es"}
+                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                  {day.matches.length} match
+                  {day.matches.length === 1 ? "" : "es"}
                 </span>
               </div>
-              <ul className="space-y-2">
+              <ul className="space-y-2.5">
                 {day.matches.map((match, index) => (
                   <li
                     key={`${day.date}-${index}-${match.matchId ?? match.home}`}
                   >
-                    <button
-                      type="button"
+                    <MatchListCard
+                      homeName={match.home}
+                      awayName={match.away}
+                      location={match.location || undefined}
+                      emphasizeHome={
+                        Boolean(
+                          myTeam &&
+                            normalizeTeamName(match.home) === myTeam,
+                        )
+                      }
+                      emphasizeAway={
+                        Boolean(
+                          myTeam &&
+                            normalizeTeamName(match.away) === myTeam,
+                        )
+                      }
                       onClick={() => onMatchClick?.(match, day)}
-                      className="block w-full rounded-2xl border border-[var(--line)] bg-[var(--paper)]/60 px-4 py-3 text-left transition hover:border-[var(--felt-soft)] hover:bg-[var(--surface-2)]"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-medium text-[var(--ink)]">
-                            {match.home}
-                          </p>
-                          <p className="mt-0.5 text-sm text-[var(--muted)]">
-                            vs {match.away}
-                          </p>
-                        </div>
-                        <span
-                          className="mt-1 text-[var(--amber)]"
-                          aria-hidden
-                        >
-                          →
-                        </span>
-                      </div>
-                      {match.location ? (
-                        <p className="mt-2 text-xs uppercase tracking-[0.12em] text-[var(--chalk)]">
-                          {match.location}
-                        </p>
-                      ) : null}
-                    </button>
+                    />
                   </li>
                 ))}
               </ul>
