@@ -128,6 +128,7 @@ export function LeagueApp() {
   const loadMembership = async (
     fresh = false,
     leagueId?: string | null,
+    auto = true,
   ) => {
     const scopedLeagueId =
       (leagueId || prefs?.leagueId || DEFAULT_LEAGUE_ID).trim() ||
@@ -137,6 +138,7 @@ export function LeagueApp() {
     try {
       const params = new URLSearchParams({ leagueId: scopedLeagueId });
       if (fresh) params.set("fresh", "1");
+      if (auto) params.set("auto", "1");
       const data = await fetchJson<{ membership: MembershipSnapshot }>(
         `/api/scoring/membership?${params.toString()}`,
       );
@@ -307,16 +309,18 @@ export function LeagueApp() {
           }
         }
 
-        // Membership is league-scoped and can take a few seconds — never block boot.
+        // Auto-discover memberships in the background; never block boot.
         if (sessionData.user) {
-          void loadMembership(false, saved.leagueId).then((nextMembership) => {
-            if (cancelled || !nextMembership?.teams.length) return;
-            applyMembershipDefaults(
-              nextMembership,
-              loadPreferences(),
-              sessionData.user!.name,
-            );
-          });
+          void loadMembership(false, saved.leagueId, true).then(
+            (nextMembership) => {
+              if (cancelled || !nextMembership?.teams.length) return;
+              applyMembershipDefaults(
+                nextMembership,
+                loadPreferences(),
+                sessionData.user!.name,
+              );
+            },
+          );
         }
       } catch (err) {
         if (!cancelled) {
@@ -745,6 +749,7 @@ export function LeagueApp() {
               const nextMembership = await loadMembership(
                 true,
                 basePrefs.leagueId,
+                true,
               );
               if (nextMembership?.teams.length) {
                 applyMembershipDefaults(
@@ -778,13 +783,14 @@ export function LeagueApp() {
           membershipError={membershipError}
           onClose={() => setScreen("main")}
           onRefreshMembership={(leagueId) => {
-            void loadMembership(true, leagueId ?? prefs.leagueId).then(
-              (next) => {
-                if (next && prefs) {
-                  applyMembershipDefaults(next, prefs, user.name);
-                }
-              },
-            );
+            // Settings picks a concrete league — scan that league (with auto
+            // state probe only when no league override was provided).
+            const scoped = leagueId ?? prefs.leagueId;
+            void loadMembership(true, scoped, !leagueId).then((next) => {
+              if (next?.teams.length && prefs) {
+                applyMembershipDefaults(next, prefs, user.name);
+              }
+            });
           }}
           onSave={(next) => {
             persist(next);
@@ -865,7 +871,19 @@ export function LeagueApp() {
 
       {user && loadingMembership ? (
         <p className="mb-3 text-xs text-[var(--muted)]">
-          Loading your team memberships…
+          Finding the leagues and divisions on your roster…
+        </p>
+      ) : user && membership && !membership.teams.length ? (
+        <p className="mb-3 text-xs text-[var(--muted)]">
+          No team memberships found yet. Open Settings to scan a league, or
+          keep browsing public reports.
+        </p>
+      ) : user && membershipReady ? (
+        <p className="mb-3 text-xs text-[var(--muted)]">
+          Showing {membership!.teams.length} team
+          {membership!.teams.length === 1 ? "" : "s"} across{" "}
+          {membership!.leagues.length} league
+          {membership!.leagues.length === 1 ? "" : "s"} from your roster.
         </p>
       ) : null}
 

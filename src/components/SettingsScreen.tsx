@@ -175,7 +175,7 @@ export function SettingsScreen({
       </div>
 
       {loadingMembership ? (
-        <LoadingState label="Finding your teams in this league…" />
+        <LoadingState label="Finding your leagues, divisions, and teams…" />
       ) : membershipError ? (
         <div className="space-y-3 rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
           <p>{membershipError}</p>
@@ -290,6 +290,13 @@ export function SettingsScreen({
               className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 text-sm font-semibold text-[var(--muted)]"
             >
               Rescan this league
+            </button>
+            <button
+              type="button"
+              onClick={() => onRefreshMembership()}
+              className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 text-sm font-semibold text-[var(--muted)]"
+            >
+              Find all my teams
             </button>
           </div>
         </div>
