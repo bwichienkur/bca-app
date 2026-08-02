@@ -33,3 +33,16 @@ export const REPORT_TABS: { id: ReportTab; label: string }[] = [
   { id: "score", label: "Score" },
   { id: "search", label: "Search" },
 ];
+
+/** Primary destination nav — Search lives in the header instead. */
+export const PRIMARY_NAV_TABS: {
+  id: Exclude<ReportTab, "search">;
+  label: string;
+}[] = [
+  { id: "my-team", label: "My Team" },
+  { id: "standings", label: "Standings" },
+  { id: "players", label: "Players" },
+  { id: "schedule", label: "Schedule" },
+  { id: "handicap", label: "Handicap" },
+  { id: "score", label: "Score" },
+];
