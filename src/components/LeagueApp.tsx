@@ -924,73 +924,77 @@ export function LeagueApp() {
   }
 
   return (
-    <main className="relative mx-auto min-h-dvh w-full max-w-7xl px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-4 md:px-6 lg:px-8">
-      <header className="animate-rise mb-3 flex items-center justify-between gap-3 md:mb-4">
-        <h1 className="font-[family-name:var(--font-display)] text-2xl leading-none tracking-tight text-[var(--felt-deep)] md:text-3xl">
+    <main className="relative mx-auto min-h-dvh w-full max-w-7xl overflow-x-clip px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-4 md:px-6 lg:px-8">
+      <header className="animate-rise mb-3 flex min-w-0 items-center justify-between gap-2 md:mb-4 md:gap-3">
+        <h1 className="min-w-0 shrink truncate font-[family-name:var(--font-display)] text-2xl leading-none tracking-tight text-[var(--felt-deep)] md:text-3xl">
           Tableside
         </h1>
-        <div className="flex min-w-0 shrink-0 items-center justify-end gap-1.5 sm:gap-2">
+        <div className="flex min-w-0 items-center justify-end gap-1.5 sm:gap-2">
           {user ? (
             <div
               title={`Signed in as ${user.name ?? user.email ?? "player"}`}
-              className="flex min-w-0 max-w-[11rem] items-center gap-2 rounded-full border border-[var(--felt)]/25 bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))] px-2.5 py-1.5 sm:max-w-[14rem]"
+              className="flex min-w-0 max-w-[2.25rem] items-center gap-2 rounded-full border border-[var(--felt)]/25 bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))] p-1 sm:max-w-[14rem] sm:px-2.5 sm:py-1.5"
             >
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--felt)] text-[10px] font-bold uppercase text-white">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--felt)] text-[10px] font-bold uppercase text-white sm:h-6 sm:w-6">
                 {(user.name ?? user.email ?? "?").trim().charAt(0) || "?"}
               </span>
-              <span className="min-w-0 truncate text-xs font-semibold text-[var(--felt-deep)]">
+              <span className="hidden min-w-0 truncate text-xs font-semibold text-[var(--felt-deep)] sm:inline">
                 {user.name ?? user.email ?? "Signed in"}
               </span>
             </div>
           ) : null}
-          <button
-            type="button"
-            onClick={() => setTab("search")}
-            title="Search players"
-            aria-label="Search players"
-            aria-current={tab === "search" ? "page" : undefined}
-            className={[
-              "inline-flex h-9 w-9 items-center justify-center rounded-full border transition",
-              tab === "search"
-                ? "border-[var(--felt)] bg-[var(--felt)] text-white"
-                : "border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
-            ].join(" ")}
-          >
-            <SearchIcon className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => void refreshCachedData()}
-            disabled={refreshing}
-            title="Resync league data from FargoRate"
-            aria-label={refreshing ? "Resyncing league data" : "Resync league data"}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)] disabled:opacity-60"
-          >
-            <ResyncIcon
-              className={["h-4 w-4", refreshing ? "animate-spin" : ""].join(
-                " ",
-              )}
-            />
-          </button>
-          {user ? (
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <button
               type="button"
-              onClick={() => setScreen("settings")}
-              title="Settings"
-              aria-label="Settings"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
+              onClick={() => setTab("search")}
+              title="Search players"
+              aria-label="Search players"
+              aria-current={tab === "search" ? "page" : undefined}
+              className={[
+                "inline-flex h-9 w-9 items-center justify-center rounded-full border transition",
+                tab === "search"
+                  ? "border-[var(--felt)] bg-[var(--felt)] text-white"
+                  : "border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
+              ].join(" ")}
             >
-              <GearIcon className="h-4 w-4" />
+              <SearchIcon className="h-4 w-4" />
             </button>
-          ) : (
             <button
               type="button"
-              onClick={() => setScreen("login")}
-              className="rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--felt-soft)]"
+              onClick={() => void refreshCachedData()}
+              disabled={refreshing}
+              title="Resync league data from FargoRate"
+              aria-label={
+                refreshing ? "Resyncing league data" : "Resync league data"
+              }
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)] disabled:opacity-60"
             >
-              Login
+              <ResyncIcon
+                className={["h-4 w-4", refreshing ? "animate-spin" : ""].join(
+                  " ",
+                )}
+              />
             </button>
-          )}
+            {user ? (
+              <button
+                type="button"
+                onClick={() => setScreen("settings")}
+                title="Settings"
+                aria-label="Settings"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
+              >
+                <GearIcon className="h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setScreen("login")}
+                className="rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--felt-soft)]"
+              >
+                Login
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
