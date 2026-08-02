@@ -1333,7 +1333,10 @@ export function LeagueApp() {
                     description="Division rank, games, and season totals"
                   />
                   {myStandingCells ? (
-                    <TeamStandingSummary cells={myStandingCells} />
+                    <TeamStandingSummary
+                      cells={myStandingCells}
+                      teamName={prefs.teamName}
+                    />
                   ) : (
                     <EmptyState
                       title="Standing unavailable"

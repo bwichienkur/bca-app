@@ -1,11 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Figtree, Syne } from "next/font/google";
+import { Figtree, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
-const display = Syne({
+const display = Plus_Jakarta_Sans({
   variable: "--font-display",
   subsets: ["latin"],
-  weight: ["600", "700", "800"],
+  weight: ["500", "600", "700", "800"],
 });
 
 const body = Figtree({
