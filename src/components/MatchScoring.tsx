@@ -1735,6 +1735,9 @@ function LineupEditor({
   const [presets, setPresets] = useState<LineupPreset[]>([]);
   const [presetName, setPresetName] = useState("Default lineup");
   const [presetStatus, setPresetStatus] = useState<string | null>(null);
+  const [mobileSide, setMobileSide] = useState<1 | 2>(
+    match.mySide === 2 ? 2 : 1,
+  );
 
   const slots = Math.max(
     draft.teamOneLineup.length,
@@ -1745,6 +1748,10 @@ function LineupEditor({
   const filledTwo = draft.teamTwoLineup.filter(Boolean).length;
 
   const mySide = match.mySide;
+
+  useEffect(() => {
+    setMobileSide(mySide === 2 ? 2 : 1);
+  }, [match.id, mySide]);
   const myTeamId =
     mySide === 1 ? match.teamOneId : mySide === 2 ? match.teamTwoId : null;
   const myLineup =
@@ -1947,7 +1954,98 @@ function LineupEditor({
             </div>
           ) : null}
 
-          <div className="grid min-w-0 gap-4 md:grid-cols-2">
+          {/* Mobile: one team at a time, same toggle pattern as schedule match detail */}
+          <div className="space-y-3 md:hidden">
+            <div
+              role="tablist"
+              aria-label="Lineup teams"
+              className="grid grid-cols-2 gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-1"
+            >
+              {(
+                [
+                  {
+                    id: 1 as const,
+                    label: "Home",
+                    teamName: match.teamOneName,
+                    filled: filledOne,
+                    isMyTeam: mySide === 1,
+                  },
+                  {
+                    id: 2 as const,
+                    label: "Away",
+                    teamName: match.teamTwoName,
+                    filled: filledTwo,
+                    isMyTeam: mySide === 2,
+                  },
+                ]
+              ).map((side) => {
+                const selected = mobileSide === side.id;
+                return (
+                  <button
+                    key={side.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => setMobileSide(side.id)}
+                    className={[
+                      "min-w-0 rounded-xl px-2.5 py-2.5 text-left transition",
+                      selected
+                        ? "bg-[var(--felt)] text-white shadow-sm"
+                        : "text-[var(--ink)] hover:bg-[var(--surface)]",
+                    ].join(" ")}
+                  >
+                    <p
+                      className={[
+                        "text-[10px] font-semibold uppercase tracking-[0.12em]",
+                        selected ? "text-white/75" : "text-[var(--muted)]",
+                      ].join(" ")}
+                    >
+                      {side.label}
+                      {side.isMyTeam ? " · Mine" : ""}
+                      <span
+                        className={[
+                          "ml-1.5 tabular-nums",
+                          selected ? "text-white/80" : "text-[var(--muted)]",
+                        ].join(" ")}
+                      >
+                        {side.filled}/{slots}
+                      </span>
+                    </p>
+                    <p className="mt-0.5 truncate text-sm font-semibold leading-tight">
+                      {side.teamName}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {mobileSide === 1 ? (
+              <DraggableLineupList
+                title={match.teamOneName}
+                subtitle={`Home · H1–H${slots}${mySide === 1 ? " · Your team" : ""}`}
+                slotPrefix="H"
+                lineupIds={draft.teamOneLineup}
+                roster={rosterFor(match.teamOnePlayers)}
+                disabled={readOnly}
+                onChange={(index, id) => onChangeLineup(1, index, id)}
+                onMove={(from, to) => onMoveLineup(1, from, to)}
+              />
+            ) : (
+              <DraggableLineupList
+                title={match.teamTwoName}
+                subtitle={`Away · A1–A${slots}${mySide === 2 ? " · Your team" : ""}`}
+                slotPrefix="A"
+                lineupIds={draft.teamTwoLineup}
+                roster={rosterFor(match.teamTwoPlayers)}
+                disabled={readOnly}
+                onChange={(index, id) => onChangeLineup(2, index, id)}
+                onMove={(from, to) => onMoveLineup(2, from, to)}
+              />
+            )}
+          </div>
+
+          {/* Desktop / tablet: both teams side by side */}
+          <div className="hidden min-w-0 gap-4 md:grid md:grid-cols-2">
             <DraggableLineupList
               title={match.teamOneName}
               subtitle={`Home · H1–H${slots}${mySide === 1 ? " · Your team" : ""}`}
@@ -1955,7 +2053,6 @@ function LineupEditor({
               lineupIds={draft.teamOneLineup}
               roster={rosterFor(match.teamOnePlayers)}
               disabled={readOnly}
-              defaultCollapsed={mySide === 2}
               onChange={(index, id) => onChangeLineup(1, index, id)}
               onMove={(from, to) => onMoveLineup(1, from, to)}
             />
@@ -1966,7 +2063,6 @@ function LineupEditor({
               lineupIds={draft.teamTwoLineup}
               roster={rosterFor(match.teamTwoPlayers)}
               disabled={readOnly}
-              defaultCollapsed={mySide !== 2}
               onChange={(index, id) => onChangeLineup(2, index, id)}
               onMove={(from, to) => onMoveLineup(2, from, to)}
             />
