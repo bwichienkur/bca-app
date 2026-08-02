@@ -226,6 +226,11 @@ export function HandicapCalculator({
   }, [opponentTeamId]);
 
   useEffect(() => {
+    setDragState(null);
+    setDropTarget(null);
+  }, [mobileSide]);
+
+  useEffect(() => {
     if (!myTeamId) {
       setPresets(loadLineupPresets());
       return;
@@ -661,128 +666,80 @@ export function HandicapCalculator({
         />
       ) : (
         <section className="relative z-0 grid gap-4 xl:grid-cols-[1.1fr_1.1fr_0.9fr]">
-          {/* Mobile: one team at a time, same toggle pattern as schedule match detail */}
-          <div className="space-y-3 xl:hidden">
-            {oppTeam ? (
-              <div
-                role="tablist"
-                aria-label="Handicap teams"
-                className="grid grid-cols-2 gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-1"
-              >
-                {(
-                  [
-                    {
-                      id: "mine" as const,
-                      label: "Your team",
-                      teamName: myTeam.name,
-                      filled: filledCount(
-                        myLineup.length === slots
-                          ? myLineup
-                          : emptyLineup(slots),
-                      ),
-                    },
-                    {
-                      id: "opp" as const,
-                      label: "Opponent",
-                      teamName: oppTeam.name,
-                      filled: filledCount(
-                        oppLineup.length === slots
-                          ? oppLineup
-                          : emptyLineup(slots),
-                      ),
-                    },
-                  ]
-                ).map((side) => {
-                  const selected = mobileSide === side.id;
-                  return (
-                    <button
-                      key={side.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={selected}
-                      onClick={() => setMobileSide(side.id)}
+          {/* One picker per side — CSS toggles mobile visibility so shared drag state stays unique */}
+          {oppTeam ? (
+            <div
+              role="tablist"
+              aria-label="Handicap teams"
+              className="grid grid-cols-2 gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-1 xl:hidden"
+            >
+              {(
+                [
+                  {
+                    id: "mine" as const,
+                    label: "Your team",
+                    teamName: myTeam.name,
+                    filled: filledCount(
+                      myLineup.length === slots ? myLineup : emptyLineup(slots),
+                    ),
+                  },
+                  {
+                    id: "opp" as const,
+                    label: "Opponent",
+                    teamName: oppTeam.name,
+                    filled: filledCount(
+                      oppLineup.length === slots
+                        ? oppLineup
+                        : emptyLineup(slots),
+                    ),
+                  },
+                ]
+              ).map((side) => {
+                const selected = mobileSide === side.id;
+                return (
+                  <button
+                    key={side.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => setMobileSide(side.id)}
+                    className={[
+                      "min-w-0 rounded-xl px-2.5 py-2.5 text-left transition",
+                      selected
+                        ? "bg-[var(--felt)] text-white shadow-sm"
+                        : "text-[var(--ink)] hover:bg-[var(--surface)]",
+                    ].join(" ")}
+                  >
+                    <p
                       className={[
-                        "min-w-0 rounded-xl px-2.5 py-2.5 text-left transition",
-                        selected
-                          ? "bg-[var(--felt)] text-white shadow-sm"
-                          : "text-[var(--ink)] hover:bg-[var(--surface)]",
+                        "text-[10px] font-semibold uppercase tracking-[0.12em]",
+                        selected ? "text-white/75" : "text-[var(--muted)]",
                       ].join(" ")}
                     >
-                      <p
+                      {side.label}
+                      <span
                         className={[
-                          "text-[10px] font-semibold uppercase tracking-[0.12em]",
-                          selected ? "text-white/75" : "text-[var(--muted)]",
+                          "ml-1.5 tabular-nums",
+                          selected ? "text-white/80" : "text-[var(--muted)]",
                         ].join(" ")}
                       >
-                        {side.label}
-                        <span
-                          className={[
-                            "ml-1.5 tabular-nums",
-                            selected ? "text-white/80" : "text-[var(--muted)]",
-                          ].join(" ")}
-                        >
-                          {side.filled}/{slots}
-                        </span>
-                      </p>
-                      <p className="mt-0.5 truncate text-sm font-semibold leading-tight">
-                        {side.teamName}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
+                        {side.filled}/{slots}
+                      </span>
+                    </p>
+                    <p className="mt-0.5 truncate text-sm font-semibold leading-tight">
+                      {side.teamName}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
 
-            {mobileSide === "opp" && oppTeam ? (
-              <LineupPicker
-                side="opp"
-                title={oppTeam.name}
-                subtitle={`Choose ${slots} opponents by slot`}
-                roster={oppTeam.players}
-                lineup={
-                  oppLineup.length === slots ? oppLineup : emptyLineup(slots)
-                }
-                slots={slots}
-                onSelectSlot={(slotIndex, playerId) =>
-                  setSlotPlayer("opp", slotIndex, playerId)
-                }
-                onMove={(from, to) => moveInLineup("opp", from, to)}
-                dragState={dragState}
-                dropTarget={dropTarget}
-                setDragState={setDragState}
-                setDropTarget={setDropTarget}
-              />
-            ) : (
-              <LineupPicker
-                side="mine"
-                title={myTeam.name}
-                subtitle={`Pick players · drag ⠿ to reorder · ▲▼ also work`}
-                roster={myTeam.players}
-                lineup={
-                  myLineup.length === slots ? myLineup : emptyLineup(slots)
-                }
-                slots={slots}
-                onSelectSlot={(slotIndex, playerId) =>
-                  setSlotPlayer("mine", slotIndex, playerId)
-                }
-                onMove={(from, to) => moveInLineup("mine", from, to)}
-                dragState={dragState}
-                dropTarget={dropTarget}
-                setDragState={setDragState}
-                setDropTarget={setDropTarget}
-              />
-            )}
-
-            {!oppTeam ? (
-              <EmptyState
-                title="Select an opponent"
-                body="Or wait for schedule auto-match once your team is set."
-              />
-            ) : null}
-          </div>
-
-          {/* Desktop / xl: both teams side by side */}
-          <div className="hidden xl:contents">
+          <div
+            className={
+              !oppTeam || mobileSide === "mine" ? "min-w-0" : "hidden xl:block"
+            }
+          >
             <LineupPicker
               side="mine"
               title={myTeam.name}
@@ -799,7 +756,14 @@ export function HandicapCalculator({
               setDragState={setDragState}
               setDropTarget={setDropTarget}
             />
-            {oppTeam ? (
+          </div>
+
+          {oppTeam ? (
+            <div
+              className={
+                mobileSide === "opp" ? "min-w-0" : "hidden xl:block"
+              }
+            >
               <LineupPicker
                 side="opp"
                 title={oppTeam.name}
@@ -818,13 +782,13 @@ export function HandicapCalculator({
                 setDragState={setDragState}
                 setDropTarget={setDropTarget}
               />
-            ) : (
-              <EmptyState
-                title="Select an opponent"
-                body="Or wait for schedule auto-match once your team is set."
-              />
-            )}
-          </div>
+            </div>
+          ) : (
+            <EmptyState
+              title="Select an opponent"
+              body="Or wait for schedule auto-match once your team is set."
+            />
+          )}
 
           <div className="relative z-0 space-y-3 rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
             <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
