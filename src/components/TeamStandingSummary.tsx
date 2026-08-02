@@ -298,43 +298,61 @@ export function TeamStandingSummary({
 
   return (
     <section className="overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] shadow-sm">
-      <div
-        className={[
-          "flex items-start justify-between gap-3",
-          compact ? "px-3 pt-3 pb-2.5" : "px-4 pt-4 pb-3 sm:px-5",
-        ].join(" ")}
-      >
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
-            Team standing
-          </p>
-          {teamName ? (
-            <h3
-              className={[
-                "mt-1 break-words font-[family-name:var(--font-display)] leading-tight text-[var(--felt-deep)]",
-                compact ? "text-lg" : "text-xl sm:text-2xl",
-              ].join(" ")}
-            >
-              {teamName}
-            </h3>
+      {teamName || rankCell ? (
+        <div
+          className={[
+            "flex items-start justify-between gap-3",
+            compact ? "px-3 pt-3 pb-2.5" : "px-4 pt-4 pb-3 sm:px-5",
+          ].join(" ")}
+        >
+          <div className="min-w-0 flex-1">
+            {teamName ? (
+              <>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
+                  Team standing
+                </p>
+                <h3
+                  className={[
+                    "mt-1 break-words font-[family-name:var(--font-display)] leading-tight text-[var(--felt-deep)]",
+                    compact ? "text-lg" : "text-xl sm:text-2xl",
+                  ].join(" ")}
+                >
+                  {teamName}
+                </h3>
+              </>
+            ) : (
+              <>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
+                  Division rank
+                </p>
+                <p
+                  className={[
+                    "mt-1 font-[family-name:var(--font-display)] font-semibold tabular-nums leading-none text-[var(--ink)]",
+                    compact ? "text-2xl" : "text-3xl",
+                  ].join(" ")}
+                >
+                  #{rankCell?.value || "—"}
+                </p>
+              </>
+            )}
+          </div>
+          {teamName && rankCell ? (
+            <div className="shrink-0 text-right">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                Rank
+              </p>
+              <p
+                className={[
+                  "mt-0.5 font-[family-name:var(--font-display)] font-semibold tabular-nums leading-none text-[var(--ink)]",
+                  compact ? "text-2xl" : "text-3xl",
+                ].join(" ")}
+              >
+                #{rankCell.value || "—"}
+              </p>
+            </div>
           ) : null}
         </div>
-        {rankCell ? (
-          <div className="shrink-0 text-right">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-              Rank
-            </p>
-            <p
-              className={[
-                "mt-0.5 font-[family-name:var(--font-display)] font-semibold tabular-nums leading-none text-[var(--ink)]",
-                compact ? "text-2xl" : "text-3xl",
-              ].join(" ")}
-            >
-              #{rankCell.value || "—"}
-            </p>
-          </div>
-        ) : null}
-      </div>
+      ) : null}
 
       {gamesRatio ? (
         <GamesMeter

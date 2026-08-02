@@ -51,12 +51,15 @@ type TeamLineupTemplatesProps = {
   divisionId: string;
   team: DivisionTeam;
   slots?: number;
+  /** When true, page already shows the section title/description. */
+  embedded?: boolean;
 };
 
 export function TeamLineupTemplates({
   divisionId,
   team,
   slots = DEFAULT_PLAYERS_PER_TEAM,
+  embedded = false,
 }: TeamLineupTemplatesProps) {
   const [presets, setPresets] = useState<LineupPreset[]>([]);
   const [lineupIds, setLineupIds] = useState<(string | null)[]>(() =>
@@ -197,19 +200,21 @@ export function TeamLineupTemplates({
 
   return (
     <section className="space-y-4">
-      <div>
-        <h3 className="font-[family-name:var(--font-display)] text-xl text-[var(--felt-deep)]">
-          Lineup templates
-        </h3>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          Save {slots}-player orders for league night. Load them from Handicap
-          or Score with the Load menu.
-        </p>
-      </div>
+      {embedded ? null : (
+        <div>
+          <h3 className="font-[family-name:var(--font-display)] text-xl text-[var(--felt-deep)]">
+            Lineup templates
+          </h3>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Save {slots}-player orders for league night. Load them from Handicap
+            or Score with the Load menu.
+          </p>
+        </div>
+      )}
 
       <DraggableLineupList
-        title={team.name}
-        subtitle="Draft lineup · drag ⠿ or ▲▼ to reorder"
+        title="Draft lineup"
+        subtitle="Drag ⠿ or ▲▼ to reorder · handicaps follow Fargo"
         slotPrefix="#"
         lineupIds={lineupIds.length === slots ? lineupIds : emptyIds(slots)}
         roster={roster}

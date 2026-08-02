@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { DEFAULT_LEAGUE_ID, PRIMARY_NAV_TABS } from "@/lib/constants";
+import {
+  DEFAULT_LEAGUE_ID,
+  DEFAULT_PLAYERS_PER_TEAM,
+  PRIMARY_NAV_TABS,
+} from "@/lib/constants";
 import { normalizeTeamName } from "@/lib/matchups";
 import { enrichPlayersWithRatings } from "@/lib/players";
 import {
@@ -40,6 +44,7 @@ import { ScheduleList } from "./ScheduleList";
 import { ScheduleMatchDetail } from "./ScheduleMatchDetail";
 import { SearchField } from "./SearchField";
 import { SettingsScreen } from "./SettingsScreen";
+import { MyTeamSectionHeader } from "./MyTeamSectionHeader";
 import { TeamDetail } from "./TeamDetail";
 import { TeamLineupTemplates } from "./TeamLineupTemplates";
 import { TeamStandingSummary } from "./TeamStandingSummary";
@@ -1326,14 +1331,17 @@ export function LeagueApp() {
                 </div>
 
                 <div
-                  className={myTeamSubTab === "standing" ? "min-w-0" : "hidden"}
+                  className={
+                    myTeamSubTab === "standing" ? "min-w-0 space-y-3" : "hidden"
+                  }
                   aria-hidden={myTeamSubTab !== "standing"}
                 >
+                  <MyTeamSectionHeader
+                    title="Standing"
+                    description="Division rank, games, and season totals"
+                  />
                   {myStandingCells ? (
-                    <TeamStandingSummary
-                      cells={myStandingCells}
-                      teamName={prefs.teamName}
-                    />
+                    <TeamStandingSummary cells={myStandingCells} />
                   ) : (
                     <EmptyState
                       title="Standing unavailable"
@@ -1343,25 +1351,48 @@ export function LeagueApp() {
                 </div>
 
                 <div
-                  className={myTeamSubTab === "roster" ? "min-w-0" : "hidden"}
+                  className={
+                    myTeamSubTab === "roster" ? "min-w-0 space-y-3" : "hidden"
+                  }
                   aria-hidden={myTeamSubTab !== "roster"}
                 >
+                  <MyTeamSectionHeader
+                    title="Roster"
+                    description={
+                      myTeam?.players.length
+                        ? `${myTeam.players.length} rostered · avg Fargo ${Math.round(
+                            myTeam.players.reduce(
+                              (sum, player) => sum + player.fargoRating,
+                              0,
+                            ) / myTeam.players.length,
+                          )}`
+                        : "Player statistics and Fargo ratings"
+                    }
+                  />
                   <TeamDetail
                     teamName={prefs.teamName}
                     team={myTeam}
                     playersByTeam={playersByTeam}
                     isMyTeam
+                    embedded
                   />
                 </div>
 
                 <div
-                  className={myTeamSubTab === "lineups" ? "min-w-0" : "hidden"}
+                  className={
+                    myTeamSubTab === "lineups" ? "min-w-0 space-y-3" : "hidden"
+                  }
                   aria-hidden={myTeamSubTab !== "lineups"}
                 >
+                  <MyTeamSectionHeader
+                    title="Lineups"
+                    description={`Save ${DEFAULT_PLAYERS_PER_TEAM}-player orders for league night. Load them from Handicap or Score.`}
+                  />
                   {myTeam && selectedDivision ? (
                     <TeamLineupTemplates
                       divisionId={selectedDivision.id}
                       team={myTeam}
+                      embedded
                     />
                   ) : (
                     <EmptyState
