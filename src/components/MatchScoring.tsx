@@ -1710,20 +1710,15 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
           : "border-[var(--line)] bg-[var(--surface)]",
       ].join(" ")}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
-            {matchPointsRound
-              ? "Match points (R6)"
-              : `Round ${tally.roundNumber} points`}
-          </p>
-          <p className={["mt-0.5 text-sm font-semibold", resultTone].join(" ")}>
-            {resultLabel}
-          </p>
-        </div>
-        <div className="rounded-full bg-[var(--surface-2)] px-3 py-1 text-sm font-semibold tabular-nums text-[var(--ink)]">
-          {tally.teamOneTotal}–{tally.teamTwoTotal}
-        </div>
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
+          {matchPointsRound
+            ? "Match points (R6)"
+            : `Round ${tally.roundNumber} points`}
+        </p>
+        <p className={["mt-0.5 text-sm font-semibold", resultTone].join(" ")}>
+          {resultLabel}
+        </p>
       </div>
 
       <div className="mt-2 grid grid-cols-2 gap-2">
