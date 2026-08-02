@@ -855,17 +855,9 @@ export function LeagueApp() {
   if (screen === "login") {
     return (
       <main className="relative mx-auto flex min-h-dvh w-full max-w-lg flex-col justify-center px-5 py-10">
-        <div className="mb-10 text-center">
-          <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--muted)]">
-            Tableside
-          </p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-[var(--ink)]">
-            Sign in
-          </h1>
-          <p className="mt-3 text-[15px] text-[var(--muted)]">
-            Connect your BCAPL account to sync teams and score matches.
-          </p>
-        </div>
+        <p className="mb-8 text-center text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--muted)]">
+          Tableside
+        </p>
         <LoginScreen
           onCancel={() => setScreen("main")}
           onSuccess={(nextUser) => {
@@ -896,14 +888,9 @@ export function LeagueApp() {
   if (screen === "settings" && user && prefs) {
     return (
       <main className="relative mx-auto min-h-dvh w-full max-w-3xl px-5 py-8 md:px-8">
-        <header className="mb-8">
-          <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--muted)]">
-            Tableside
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--ink)]">
-            Settings
-          </h1>
-        </header>
+        <p className="mb-6 text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--muted)]">
+          Tableside
+        </p>
         <SettingsScreen
           user={user}
           prefs={prefs}
@@ -1102,7 +1089,7 @@ export function LeagueApp() {
             } as CSSProperties
           }
         >
-          <header className="animate-rise mb-4 flex items-center justify-between gap-3 lg:mb-6">
+          <header className="animate-rise mb-4 flex items-center justify-between gap-3 lg:mb-5">
             <div className="min-w-0 lg:hidden">
               <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--muted)]">
                 Tableside
@@ -1111,19 +1098,30 @@ export function LeagueApp() {
                 {activeTabMeta?.label ?? "League"}
               </h1>
             </div>
-            <div className="hidden min-w-0 lg:block">
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--muted)]">
-                {selectedLeague?.name ?? "Palm Beach County BCA"}
-              </p>
-              <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[var(--ink)]">
-                {activeTabMeta?.label ?? "Dashboard"}
-              </h1>
-              {activeTabMeta?.hint ? (
-                <p className="mt-1 text-sm text-[var(--muted)]">
-                  {activeTabMeta.hint}
-                </p>
+            <nav
+              aria-label="Breadcrumb"
+              className="hidden min-w-0 items-center gap-2 text-sm lg:flex"
+            >
+              <span className="truncate text-[var(--muted)]">
+                {selectedLeague?.name ?? "Tableside"}
+              </span>
+              <span className="text-[var(--muted)]/50" aria-hidden>
+                /
+              </span>
+              {selectedDivision ? (
+                <>
+                  <span className="truncate text-[var(--muted)]">
+                    {selectedDivision.name}
+                  </span>
+                  <span className="text-[var(--muted)]/50" aria-hidden>
+                    /
+                  </span>
+                </>
               ) : null}
-            </div>
+              <span className="truncate font-semibold text-[var(--ink)]">
+                {activeTabMeta?.label ?? "Home"}
+              </span>
+            </nav>
 
             <div className="flex shrink-0 items-center gap-2">
               <button
