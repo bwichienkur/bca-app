@@ -587,19 +587,50 @@ export function HandicapCalculator({
 
       <section className="relative z-40 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] md:items-end">
         <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-            Your team
-          </p>
-          <p className="mt-1 font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
-            {myTeam.name}
-          </p>
-          <button
-            type="button"
-            onClick={onRequestSetTeam}
-            className="mt-2 text-xs font-semibold text-[var(--chalk)] underline-offset-2 hover:underline"
-          >
-            Change in context card
-          </button>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                Your team
+              </p>
+              <p className="mt-1 font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
+                {myTeam.name}
+              </p>
+            </div>
+            {oppTeam ? (
+              <div
+                role="group"
+                aria-label="Home or away"
+                className="inline-flex shrink-0 rounded-full border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+              >
+                <button
+                  type="button"
+                  aria-pressed={iAmHome}
+                  onClick={() => setIAmHome(true)}
+                  className={[
+                    "rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                    iAmHome
+                      ? "bg-[var(--felt)] text-white shadow-sm"
+                      : "text-[var(--muted)]",
+                  ].join(" ")}
+                >
+                  Home
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={!iAmHome}
+                  onClick={() => setIAmHome(false)}
+                  className={[
+                    "rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                    !iAmHome
+                      ? "bg-[var(--felt)] text-white shadow-sm"
+                      : "text-[var(--muted)]",
+                  ].join(" ")}
+                >
+                  Away
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
         <Typeahead
           label="Opponent"
@@ -621,35 +652,6 @@ export function HandicapCalculator({
           }}
         />
       </section>
-
-      {myTeam && oppTeam ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setIAmHome(true)}
-            className={[
-              "rounded-full px-3 py-1.5 text-xs font-semibold",
-              iAmHome
-                ? "bg-[var(--felt)] text-white"
-                : "border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]",
-            ].join(" ")}
-          >
-            We’re home (Team One)
-          </button>
-          <button
-            type="button"
-            onClick={() => setIAmHome(false)}
-            className={[
-              "rounded-full px-3 py-1.5 text-xs font-semibold",
-              !iAmHome
-                ? "bg-[var(--felt)] text-white"
-                : "border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]",
-            ].join(" ")}
-          >
-            We’re away (Team Two)
-          </button>
-        </div>
-      ) : null}
 
       {!myTeam ? (
         <EmptyState
