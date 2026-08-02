@@ -25,8 +25,8 @@ export const LINEUP_PRESETS_STORAGE_KEY = "tableside.lineups.v1";
 export const MEMBERSHIP_STORAGE_KEY = "tableside.membership.v1";
 
 export const REPORT_TABS: { id: ReportTab; label: string }[] = [
-  { id: "my-team", label: "My Team" },
-  { id: "standings", label: "Standings" },
+  { id: "my-team", label: "Team" },
+  { id: "standings", label: "League" },
   { id: "players", label: "Players" },
   { id: "schedule", label: "Schedule" },
   { id: "handicap", label: "Handicap" },
@@ -39,8 +39,8 @@ export const PRIMARY_NAV_TABS: {
   id: Exclude<ReportTab, "search">;
   label: string;
 }[] = [
-  { id: "my-team", label: "My Team" },
-  { id: "standings", label: "Standings" },
+  { id: "my-team", label: "Team" },
+  { id: "standings", label: "League" },
   { id: "players", label: "Players" },
   { id: "schedule", label: "Schedule" },
   { id: "handicap", label: "Handicap" },

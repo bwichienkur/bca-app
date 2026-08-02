@@ -1810,7 +1810,7 @@ function LineupEditor({
             {filledOne + filledTwo}/{slots * 2} filled
             {readOnly
               ? " · view only"
-              : " · drag ⠿ or ▲▼ · Load from My Team"}
+              : " · drag ⠿ or ▲▼ · Load from Team"}
           </p>
         </div>
         <span className="shrink-0 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
