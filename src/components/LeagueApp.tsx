@@ -1056,13 +1056,6 @@ export function LeagueApp() {
           No team memberships found in this league yet. Open Settings to scan
           another league or find all your teams.
         </p>
-      ) : user && membershipReady ? (
-        <p className="mb-3 text-xs text-[var(--muted)]">
-          Showing {membership!.teams.length} team
-          {membership!.teams.length === 1 ? "" : "s"} across{" "}
-          {membership!.leagues.length} league
-          {membership!.leagues.length === 1 ? "" : "s"} from your roster.
-        </p>
       ) : null}
 
       <section className="animate-rise animate-delay-1 relative z-40 mb-2 overflow-visible rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] text-white shadow-[var(--shadow)]">
