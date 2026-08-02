@@ -559,19 +559,22 @@ export type FargoMatchQuery = {
   bucket?: number | null;
 };
 
-const DEFAULT_BUCKETS = [300, 400, 500, 600, 700, 800];
+const DEFAULT_BUCKETS = [200, 300, 400, 500, 600, 700, 800, 900];
 
 function countBuckets(
   matches: FargoPlayerMatch[],
 ): Array<{ bucket: number; count: number }> {
   const counts = new Map<number, number>();
-  for (const value of DEFAULT_BUCKETS) counts.set(value, 0);
   for (const match of matches) {
     if (match.opponentRatingBucket == null) continue;
     counts.set(
       match.opponentRatingBucket,
       (counts.get(match.opponentRatingBucket) ?? 0) + 1,
     );
+  }
+  // Keep common empty buckets visible in the dropdown so ranges stay predictable.
+  for (const value of DEFAULT_BUCKETS) {
+    if (!counts.has(value)) counts.set(value, 0);
   }
   return [...counts.entries()]
     .sort((a, b) => a[0] - b[0])
