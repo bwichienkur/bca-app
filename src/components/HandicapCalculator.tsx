@@ -682,6 +682,7 @@ export function HandicapCalculator({
                 oppLineup.length === slots ? oppLineup : emptyLineup(slots)
               }
               slots={slots}
+              defaultCollapsed
               onSelectSlot={(slotIndex, playerId) =>
                 setSlotPlayer("opp", slotIndex, playerId)
               }
@@ -880,6 +881,7 @@ function LineupPicker({
   dropTarget,
   setDragState,
   setDropTarget,
+  defaultCollapsed = false,
 }: {
   side: LineupSide;
   title: string;
@@ -893,6 +895,7 @@ function LineupPicker({
   dropTarget: DragState | null;
   setDragState: (state: DragState | null) => void;
   setDropTarget: (state: DragState | null) => void;
+  defaultCollapsed?: boolean;
 }) {
   // Only the top-left ⠿ grip starts a drag — the rest of the card stays interactive.
   const filled = filledCount(lineup);
@@ -902,6 +905,7 @@ function LineupPicker({
   const setDragStateRef = useRef(setDragState);
   const setDropTargetRef = useRef(setDropTarget);
   const [mounted, setMounted] = useState(false);
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [ghost, setGhost] = useState<{
     x: number;
     y: number;
@@ -1075,7 +1079,18 @@ function LineupPicker({
 
   return (
     <div className="min-w-0 overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm sm:p-3.5">
-      <div className="mb-2 flex items-center justify-between gap-2">
+      <button
+        type="button"
+        aria-expanded={!collapsed}
+        onClick={() => {
+          setCollapsed((current) => !current);
+          if (draggingHere) clearDrag();
+        }}
+        className={[
+          "flex w-full items-center justify-between gap-2 text-left",
+          collapsed ? "" : "mb-2",
+        ].join(" ")}
+      >
         <div className="min-w-0 flex-1 overflow-hidden">
           <h4 className="truncate font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
             {title}
@@ -1092,8 +1107,19 @@ function LineupPicker({
         >
           {filled}/{slots}
         </span>
-      </div>
+        <span
+          aria-hidden
+          className={[
+            "shrink-0 text-sm text-[var(--muted)] transition-transform duration-150",
+            collapsed ? "-rotate-90" : "rotate-0",
+          ].join(" ")}
+        >
+          ▾
+        </span>
+      </button>
 
+      {collapsed ? null : (
+      <>
       <ol
         ref={listRef}
         className="min-w-0 divide-y divide-[var(--line)] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface-2)]"
@@ -1202,8 +1228,11 @@ function LineupPicker({
       <p className="mt-2 text-[11px] text-[var(--muted)]">
         Drag ⠿ to reorder, or use ▲ ▼ · handicaps follow Fargo
       </p>
+      </>
+      )}
 
       {mounted &&
+      !collapsed &&
       draggingHere &&
       draggedPlayer &&
       ghost &&

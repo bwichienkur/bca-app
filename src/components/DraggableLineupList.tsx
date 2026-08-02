@@ -108,6 +108,7 @@ export function DraggableLineupList({
   onMove,
   footer,
   disabled = false,
+  defaultCollapsed = false,
 }: {
   title: string;
   subtitle: string;
@@ -118,12 +119,14 @@ export function DraggableLineupList({
   onMove: (from: number, to: number) => void;
   footer?: ReactNode;
   disabled?: boolean;
+  defaultCollapsed?: boolean;
 }) {
   const slots = lineupIds.length;
   const filled = lineupIds.filter(Boolean).length;
   const listRef = useRef<HTMLOListElement>(null);
   const onMoveRef = useRef(onMove);
   const [mounted, setMounted] = useState(false);
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [dropTo, setDropTo] = useState<number>(-1);
   const dropToRef = useRef(-1);
@@ -282,7 +285,18 @@ export function DraggableLineupList({
 
   return (
     <div className="min-w-0 overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm sm:p-3.5">
-      <div className="mb-2 flex items-center justify-between gap-2">
+      <button
+        type="button"
+        aria-expanded={!collapsed}
+        onClick={() => {
+          setCollapsed((current) => !current);
+          if (drag) clearDrag();
+        }}
+        className={[
+          "flex w-full items-center justify-between gap-2 text-left",
+          collapsed ? "" : "mb-2",
+        ].join(" ")}
+      >
         <div className="min-w-0 flex-1 overflow-hidden">
           <h4 className="truncate font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
             {title}
@@ -299,8 +313,19 @@ export function DraggableLineupList({
         >
           {filled}/{slots}
         </span>
-      </div>
+        <span
+          aria-hidden
+          className={[
+            "shrink-0 text-sm text-[var(--muted)] transition-transform duration-150",
+            collapsed ? "-rotate-90" : "rotate-0",
+          ].join(" ")}
+        >
+          ▾
+        </span>
+      </button>
 
+      {collapsed ? null : (
+      <>
       <ol
         ref={listRef}
         className="min-w-0 divide-y divide-[var(--line)] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface-2)]"
@@ -410,8 +435,11 @@ export function DraggableLineupList({
           : "Drag ⠿ to reorder, or use ▲ ▼ · handicaps follow Fargo"}
       </p>
       {footer}
+      </>
+      )}
 
       {mounted &&
+      !collapsed &&
       drag &&
       draggedPlayer &&
       ghost &&
