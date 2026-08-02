@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type {
   FargoLeagueTeam,
   FargoPlayerMatch,
@@ -178,6 +178,142 @@ function StatPill({
   );
 }
 
+type BucketOption = {
+  id: string;
+  label: string;
+  meta?: string;
+  value: number | null;
+};
+
+/** Themed listbox — native <select> menus cannot use app surface/felt colors. */
+function MatchBucketSelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: number | null;
+  options: BucketOption[];
+  onChange: (value: number | null) => void;
+}) {
+  const listId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const selected =
+    options.find((option) => option.value === value) ?? options[0] ?? null;
+  const [highlight, setHighlight] = useState(0);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(event: MouseEvent | TouchEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("touchstart", onDoc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("touchstart", onDoc);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const index = Math.max(
+      0,
+      options.findIndex((option) => option.value === value),
+    );
+    setHighlight(index);
+  }, [open, options, value]);
+
+  return (
+    <div
+      ref={rootRef}
+      className={["relative min-w-0", open ? "z-[80]" : "z-10"].join(" ")}
+    >
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-label="Opponent Fargo range"
+        onClick={() => setOpen((next) => !next)}
+        onKeyDown={(event) => {
+          if (
+            event.key === "ArrowDown" ||
+            event.key === "Enter" ||
+            event.key === " "
+          ) {
+            event.preventDefault();
+            setOpen(true);
+          } else if (event.key === "Escape") {
+            setOpen(false);
+          }
+        }}
+        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-2.5 text-left text-sm text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition focus:ring-2"
+      >
+        <span className="min-w-0 truncate font-medium">
+          {selected?.label ?? "All ratings"}
+          {selected?.meta ? (
+            <span className="ml-1.5 font-normal text-[var(--muted)]">
+              {selected.meta}
+            </span>
+          ) : null}
+        </span>
+        <span aria-hidden className="shrink-0 text-[var(--muted)]">
+          {open ? "▴" : "▾"}
+        </span>
+      </button>
+
+      {open ? (
+        <ul
+          id={listId}
+          role="listbox"
+          aria-label="Opponent Fargo range"
+          className="absolute z-[90] mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 text-[var(--ink)] shadow-[var(--shadow)] [background-color:var(--surface-2)]"
+        >
+          {options.map((option, index) => {
+            const isSelected = option.value === value;
+            const active = index === highlight;
+            return (
+              <li key={option.id}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onMouseEnter={() => setHighlight(index)}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                  }}
+                  className={[
+                    "flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm",
+                    active ? "bg-[var(--surface-3)]" : "bg-[var(--surface-2)]",
+                    isSelected
+                      ? "font-semibold text-[var(--felt-deep)]"
+                      : "text-[var(--ink)]",
+                  ].join(" ")}
+                >
+                  <span>
+                    <span className="block">{option.label}</span>
+                    {option.meta ? (
+                      <span className="mt-0.5 block text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                        {option.meta}
+                      </span>
+                    ) : null}
+                  </span>
+                  {isSelected ? (
+                    <span className="text-[var(--felt)]">✓</span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 export function PlayerDetail({
   playerId,
   fallbackName,
@@ -324,6 +460,25 @@ export function PlayerDetail({
   const goToMatchesPage = (next: number) => {
     setMatchesPage(Math.min(Math.max(1, next), matchesTotalPages));
   };
+
+  const bucketOptions = useMemo<BucketOption[]>(() => {
+    const rows = bucketCounts.length
+      ? bucketCounts.filter(({ count }) => count !== 0)
+      : [200, 300, 400, 500, 600, 700, 800, 900].map((bucket) => ({
+          bucket,
+          count: -1,
+        }));
+
+    return [
+      { id: "all", label: "All ratings", value: null },
+      ...rows.map(({ bucket, count }) => ({
+        id: String(bucket),
+        label: `${bucket}–${bucket + 99}`,
+        meta: count >= 0 ? `${count} matches` : undefined,
+        value: bucket,
+      })),
+    ];
+  }, [bucketCounts]);
 
   return (
     <section className="space-y-4 md:space-y-5">
@@ -669,7 +824,7 @@ export function PlayerDetail({
             ) : null}
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_12.5rem]">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_13.5rem]">
             <label className="relative block min-w-0">
               <span className="sr-only">Search matches</span>
               <input
@@ -678,42 +833,18 @@ export function PlayerDetail({
                 placeholder="Search opponent or event…"
                 autoComplete="off"
                 spellCheck={false}
-                className="w-full rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2"
+                className="w-full rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2"
               />
             </label>
 
-            <label className="relative block min-w-0">
-              <span className="sr-only">Opponent Fargo range</span>
-              <select
-                value={matchBucket == null ? "" : String(matchBucket)}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setMatchBucket(value === "" ? null : Number(value));
-                  setMatchesPage(1);
-                }}
-                className="w-full appearance-none rounded-2xl border border-[var(--line)] bg-[var(--surface)] py-2.5 pl-4 pr-10 text-sm font-medium text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition focus:ring-2"
-              >
-                <option value="">All ratings</option>
-                {(bucketCounts.length
-                  ? bucketCounts.filter(({ count }) => count !== 0)
-                  : [200, 300, 400, 500, 600, 700, 800, 900].map((bucket) => ({
-                      bucket,
-                      count: -1,
-                    }))
-                ).map(({ bucket, count }) => (
-                  <option key={bucket} value={bucket}>
-                    {bucket}–{bucket + 99}
-                    {count >= 0 ? ` (${count})` : ""}
-                  </option>
-                ))}
-              </select>
-              <span
-                aria-hidden
-                className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--muted)]"
-              >
-                ▾
-              </span>
-            </label>
+            <MatchBucketSelect
+              value={matchBucket}
+              options={bucketOptions}
+              onChange={(next) => {
+                setMatchBucket(next);
+                setMatchesPage(1);
+              }}
+            />
           </div>
 
           {matchesError ? (
