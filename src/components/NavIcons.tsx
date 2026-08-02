@@ -74,11 +74,14 @@ function ScheduleIcon({ className }: IconProps) {
 }
 
 function HandicapIcon({ className }: IconProps) {
+  // International-style accessibility / disability mark (wheelchair)
   return (
     <IconShell className={className}>
-      <path d="M12 3v18" />
-      <path d="M5 8h4l2 3 2-3h4" />
-      <path d="M7 16h3l2-3 2 3h3" />
+      <circle cx="14" cy="4.5" r="2" />
+      <path d="M12 8.5h3.2l1.6 5.2" />
+      <path d="M9.2 20.5a4.2 4.2 0 1 1 3.3-6.7" />
+      <path d="m14.8 13.7 2.4 6.3" />
+      <path d="M11.5 14.2h5.2" />
     </IconShell>
   );
 }

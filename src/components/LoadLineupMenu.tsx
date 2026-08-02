@@ -95,7 +95,7 @@ export function LoadLineupMenu({
           >
             {presets.length === 0 ? (
               <div className="px-3 py-3 text-sm text-[var(--muted)]">
-                No templates yet. Save one under My Team → Lineups.
+                No templates yet. Save one under Team → Lineups.
               </div>
             ) : (
               <ul className="max-h-full overflow-y-auto py-1">
