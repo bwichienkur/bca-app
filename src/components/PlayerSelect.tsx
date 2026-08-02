@@ -23,6 +23,8 @@ type PlayerSelectProps = {
   placeholder?: string;
   onChange: (playerId: string) => void;
   disabled?: boolean;
+  /** Denser control for tight rows (lineup lists). */
+  compact?: boolean;
 };
 
 export function PlayerSelect({
@@ -31,6 +33,7 @@ export function PlayerSelect({
   placeholder = "Open slot…",
   onChange,
   disabled,
+  compact = false,
 }: PlayerSelectProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -174,7 +177,12 @@ export function PlayerSelect({
           if (disabled) return;
           setOpen((current) => !current);
         }}
-        className="flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-left text-sm text-[var(--ink)] outline-none transition hover:border-[var(--line-strong)] focus:ring-2 focus:ring-[var(--felt-soft)] disabled:opacity-50"
+        className={[
+          "flex w-full min-w-0 items-center justify-between gap-2 border border-[var(--line)] bg-[var(--surface)] text-left text-sm text-[var(--ink)] outline-none transition hover:border-[var(--line-strong)] focus:ring-2 focus:ring-[var(--felt-soft)] disabled:opacity-50",
+          compact
+            ? "rounded-xl px-2.5 py-1.5"
+            : "rounded-2xl px-3 py-2",
+        ].join(" ")}
       >
         <span
           className={[
