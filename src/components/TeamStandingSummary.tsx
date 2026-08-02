@@ -287,9 +287,12 @@ export function TeamStandingSummary({
     );
   }
 
+  const nameFromCells = cells.find((cell) => isNameLabel(cell.label))?.value;
+  const resolvedTeamName = teamName?.trim() || nameFromCells?.trim() || "";
+
   return (
     <section className="overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
-      {teamName || rankCell ? (
+      {resolvedTeamName || rankCell ? (
         <div
           className={[
             "relative overflow-hidden bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] text-white",
@@ -304,53 +307,38 @@ export function TeamStandingSummary({
                 "radial-gradient(120% 80% at 100% 0%, rgba(224,163,90,0.28), transparent 55%)",
             }}
           />
-          <div className="relative flex items-end justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/65">
-                {teamName ? "Team standing" : "Division rank"}
+          <div className="relative min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/65">
+              Division rank
+            </p>
+            <div
+              className={[
+                "mt-1.5 flex min-w-0 items-baseline gap-2.5 sm:gap-3",
+                compact ? "flex-wrap" : "flex-wrap sm:flex-nowrap",
+              ].join(" ")}
+            >
+              <p
+                className={[
+                  "shrink-0 font-[family-name:var(--font-display)] font-semibold tabular-nums leading-none tracking-tight",
+                  compact ? "text-3xl" : "text-4xl sm:text-5xl",
+                ].join(" ")}
+              >
+                #{rankCell?.value || "—"}
               </p>
-              {teamName ? (
+              {resolvedTeamName ? (
                 <h3
                   className={[
-                    "mt-1 break-words font-[family-name:var(--font-display)] leading-tight",
+                    "min-w-0 break-words font-[family-name:var(--font-display)] font-semibold leading-tight text-white",
                     compact ? "text-lg" : "text-xl sm:text-2xl",
                   ].join(" ")}
                 >
-                  {teamName}
+                  {resolvedTeamName}
                 </h3>
-              ) : (
-                <p
-                  className={[
-                    "mt-1 font-[family-name:var(--font-display)] font-semibold tabular-nums leading-none tracking-tight",
-                    compact ? "text-4xl" : "text-5xl",
-                  ].join(" ")}
-                >
-                  #{rankCell?.value || "—"}
-                </p>
-              )}
-              {!teamName ? (
-                <p className="mt-2 text-xs text-white/70">
-                  Current place in the division
-                </p>
               ) : null}
             </div>
-            {teamName && rankCell ? (
-              <div className="shrink-0 rounded-2xl bg-black/25 px-3 py-2 text-right ring-1 ring-white/15">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/65">
-                  Rank
-                </p>
-                <p
-                  className={[
-                    "mt-0.5 font-[family-name:var(--font-display)] font-semibold tabular-nums leading-none",
-                    compact ? "text-3xl" : "text-4xl",
-                  ].join(" ")}
-                >
-                  #{rankCell.value || "—"}
-                </p>
-              </div>
-            ) : !teamName && rankCell ? (
-              <div className="hidden shrink-0 sm:block" aria-hidden />
-            ) : null}
+            <p className="mt-2 text-xs text-white/70">
+              Current place in the division
+            </p>
           </div>
         </div>
       ) : null}
