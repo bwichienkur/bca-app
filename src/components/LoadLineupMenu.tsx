@@ -15,15 +15,38 @@ type LoadLineupMenuProps = {
   presets: LineupPreset[];
   onLoad: (preset: LineupPreset) => void;
   disabled?: boolean;
-  /** Compact label for tight headers. */
+  /** Accessible name for the icon button. */
   label?: string;
 };
+
+function LoadTemplateIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.85"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 7.5h16" />
+      <path d="M4 12h16" />
+      <path d="M4 16.5h10" />
+      <path d="M17 14.5v5" />
+      <path d="m15 17.5 2 2 2-2" />
+    </svg>
+  );
+}
 
 export function LoadLineupMenu({
   presets,
   onLoad,
   disabled = false,
-  label = "Load",
+  label = "Load lineup template",
 }: LoadLineupMenuProps) {
   const listId = useId();
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -132,6 +155,8 @@ export function LoadLineupMenu({
         ref={buttonRef}
         type="button"
         disabled={disabled}
+        aria-label={label}
+        title={label}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listId}
@@ -139,12 +164,14 @@ export function LoadLineupMenu({
           if (disabled) return;
           setOpen((current) => !current);
         }}
-        className="inline-flex items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--ink)] transition hover:border-[var(--line-strong)] hover:bg-[var(--surface-3)] disabled:opacity-40"
+        className={[
+          "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] transition",
+          "hover:border-[var(--line-strong)] hover:bg-[var(--surface-3)]",
+          "disabled:opacity-40",
+          open ? "border-[var(--felt)]/55 text-[var(--felt-deep)]" : "",
+        ].join(" ")}
       >
-        {label}
-        <span aria-hidden className="text-[var(--muted)]">
-          ▾
-        </span>
+        <LoadTemplateIcon />
       </button>
       {menu}
     </div>

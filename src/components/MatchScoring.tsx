@@ -873,10 +873,14 @@ export function MatchScoring({
               />
 
               <div
-                className={[
-                  "grid gap-1",
-                  includeMatchPointsRound ? "grid-cols-6" : "grid-cols-5",
-                ].join(" ")}
+                role="tablist"
+                aria-label="Rounds"
+                className="grid gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+                style={{
+                  gridTemplateColumns: `repeat(${
+                    rounds.length + (includeMatchPointsRound ? 1 : 0)
+                  }, minmax(0, 1fr))`,
+                }}
               >
                 {rounds.map((round) => {
                   const active = round.roundNumber === activeRound;
@@ -886,6 +890,12 @@ export function MatchScoring({
                     ) ?? null;
                   const done = tally?.gamesComplete ?? 0;
                   const decided = tally?.roundWinner != null;
+                  const myWin =
+                    decided && tally!.roundWinner === match.mySide;
+                  const myLoss =
+                    decided &&
+                    Boolean(match.mySide) &&
+                    tally!.roundWinner !== match.mySide;
                   const winnerLabel = decided
                     ? tally!.roundWinner === match.mySide
                       ? "W"
@@ -901,6 +911,8 @@ export function MatchScoring({
                     <button
                       key={round.roundNumber}
                       type="button"
+                      role="tab"
+                      aria-selected={active}
                       onClick={() => {
                         startTransition(() => {
                           setActiveRound(round.roundNumber);
@@ -908,30 +920,35 @@ export function MatchScoring({
                         });
                       }}
                       className={[
-                        "min-w-0 rounded-xl px-0.5 py-1.5 text-center transition",
+                        "min-w-0 rounded-lg px-1 py-1.5 text-center transition",
                         active
                           ? "bg-[var(--felt)] text-white shadow-sm"
-                          : decided && tally!.roundWinner === match.mySide
-                            ? "bg-[color-mix(in_srgb,var(--felt)_22%,var(--surface))] text-[var(--felt-deep)]"
-                            : decided &&
-                                match.mySide &&
-                                tally!.roundWinner !== match.mySide
-                              ? "bg-[color-mix(in_srgb,var(--danger)_16%,var(--surface))] text-[var(--danger)]"
-                              : "bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface-2)]",
+                          : myWin
+                            ? "text-[var(--felt-deep)] hover:bg-[var(--surface)]"
+                            : myLoss
+                              ? "text-[var(--danger)] hover:bg-[var(--surface)]"
+                              : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
                       ].join(" ")}
                     >
-                      <span className="block text-[11px] font-semibold leading-none">
+                      <p className="text-[11px] font-semibold leading-none sm:text-xs">
                         R{round.roundNumber}
-                      </span>
-                      <span className="mt-0.5 block truncate text-[9px] font-semibold tabular-nums leading-none opacity-80">
+                      </p>
+                      <p
+                        className={[
+                          "mt-0.5 truncate text-[10px] font-semibold tabular-nums leading-none",
+                          active ? "text-white/85" : "",
+                        ].join(" ")}
+                      >
                         {winnerLabel ?? `${done}/${round.games.length}`}
-                      </span>
+                      </p>
                     </button>
                   );
                 })}
                 {includeMatchPointsRound && matchPointsTally ? (
                   <button
                     type="button"
+                    role="tab"
+                    aria-selected={isMatchPointsRound}
                     onClick={() => {
                       startTransition(() => {
                         setActiveRound(MATCH_POINTS_ROUND);
@@ -939,22 +956,27 @@ export function MatchScoring({
                       });
                     }}
                     className={[
-                      "min-w-0 rounded-xl px-0.5 py-1.5 text-center transition",
+                      "min-w-0 rounded-lg px-1 py-1.5 text-center transition",
                       isMatchPointsRound
                         ? "bg-[var(--felt)] text-white shadow-sm"
                         : matchPointsTally.roundWinner === match.mySide
-                          ? "bg-[color-mix(in_srgb,var(--felt)_22%,var(--surface))] text-[var(--felt-deep)]"
+                          ? "text-[var(--felt-deep)] hover:bg-[var(--surface)]"
                           : match.mySide &&
                               matchPointsTally.roundWinner &&
                               matchPointsTally.roundWinner !== match.mySide
-                            ? "bg-[color-mix(in_srgb,var(--danger)_16%,var(--surface))] text-[var(--danger)]"
-                            : "bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface-2)]",
+                            ? "text-[var(--danger)] hover:bg-[var(--surface)]"
+                            : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
                     ].join(" ")}
                   >
-                    <span className="block text-[11px] font-semibold leading-none">
+                    <p className="text-[11px] font-semibold leading-none sm:text-xs">
                       R6
-                    </span>
-                    <span className="mt-0.5 block truncate text-[9px] font-semibold tabular-nums leading-none opacity-80">
+                    </p>
+                    <p
+                      className={[
+                        "mt-0.5 truncate text-[10px] font-semibold tabular-nums leading-none",
+                        isMatchPointsRound ? "text-white/85" : "",
+                      ].join(" ")}
+                    >
                       {matchPointsTally.roundWinner
                         ? matchPointsTally.roundWinner === match.mySide
                           ? "W"
@@ -966,7 +988,7 @@ export function MatchScoring({
                         : matchPointsTally.roundComplete
                           ? "T"
                           : `${matchPointsTally.gamesComplete}/${matchPointsTally.gamesTotal}`}
-                    </span>
+                    </p>
                   </button>
                 ) : null}
               </div>
