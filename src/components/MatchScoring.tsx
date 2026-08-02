@@ -1955,6 +1955,7 @@ function LineupEditor({
               lineupIds={draft.teamOneLineup}
               roster={rosterFor(match.teamOnePlayers)}
               disabled={readOnly}
+              defaultCollapsed={mySide === 2}
               onChange={(index, id) => onChangeLineup(1, index, id)}
               onMove={(from, to) => onMoveLineup(1, from, to)}
             />
@@ -1965,6 +1966,7 @@ function LineupEditor({
               lineupIds={draft.teamTwoLineup}
               roster={rosterFor(match.teamTwoPlayers)}
               disabled={readOnly}
+              defaultCollapsed={mySide !== 2}
               onChange={(index, id) => onChangeLineup(2, index, id)}
               onMove={(from, to) => onMoveLineup(2, from, to)}
             />
