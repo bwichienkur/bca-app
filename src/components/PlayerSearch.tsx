@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { PlayerSearchResult } from "@/lib/types";
 import { useViewportAnchor } from "@/lib/use-viewport-anchor";
 import { EmptyState } from "./EmptyState";
+import { PlayerDetail } from "./PlayerDetail";
 
 const MIN_QUERY = 2;
 const DEBOUNCE_MS = 320;
@@ -48,6 +49,8 @@ export function PlayerSearch() {
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const [page, setPage] = useState(1);
+  const [selectedPlayer, setSelectedPlayer] =
+    useState<PlayerSearchResult | null>(null);
   const requestId = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const searchAnchor = useViewportAnchor<HTMLDivElement>();
@@ -139,6 +142,24 @@ export function PlayerSearch() {
     query.trim().length > 0 && query.trim().length < MIN_QUERY && !loading;
   const hasQuery = query.trim().length > 0;
 
+  if (selectedPlayer) {
+    return (
+      <PlayerDetail
+        playerId={selectedPlayer.id}
+        fallbackName={selectedPlayer.name}
+        onBack={() => {
+          setSelectedPlayer(null);
+          requestAnimationFrame(() => {
+            searchAnchor.ref.current?.scrollIntoView({
+              block: "nearest",
+              behavior: "smooth",
+            });
+          });
+        }}
+      />
+    );
+  }
+
   return (
     <section className="space-y-3 md:space-y-4">
       {/* Sticky under report tabs so typing never loses the search box */}
@@ -154,7 +175,8 @@ export function PlayerSearch() {
             Player search
           </h3>
           <p className="mt-1 max-w-xl text-sm text-[var(--muted)]">
-            Look up any FargoRate rating by name or membership ID.
+            Look up any FargoRate rating by name or membership ID, then open a
+            player for match history and stats.
           </p>
         </div>
 
@@ -250,41 +272,49 @@ export function PlayerSearch() {
               ].join(" ")}
             >
               {pagePlayers.map((player) => (
-                <li
-                  key={player.id}
-                  className="flex items-start justify-between gap-4 px-4 py-3.5 md:px-5"
-                >
-                  <div className="min-w-0">
-                    <p className="font-medium text-[var(--ink)]">{player.name}</p>
-                    <p className="mt-0.5 text-sm text-[var(--muted)]">
-                      {[
-                        player.readableId ? `#${player.readableId}` : null,
-                        player.membershipId,
-                        player.location,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                    <span
-                      className={[
-                        "mt-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]",
-                        statusClass(player.robustnessStatus),
-                      ].join(" ")}
-                    >
-                      {statusLabel(player.robustnessStatus)}
-                      {player.robustness != null
-                        ? ` · ${player.robustness}`
-                        : ""}
-                    </span>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="font-[family-name:var(--font-display)] text-2xl tabular-nums leading-none text-[var(--felt-deep)]">
-                      {player.effectiveRating ?? "—"}
-                    </p>
-                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                      Rating
-                    </p>
-                  </div>
+                <li key={player.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      searchAnchor.mark();
+                      setSelectedPlayer(player);
+                    }}
+                    className="flex w-full items-start justify-between gap-4 px-4 py-3.5 text-left transition hover:bg-[var(--surface-2)]/70 md:px-5"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-[var(--ink)]">
+                        {player.name}
+                      </p>
+                      <p className="mt-0.5 text-sm text-[var(--muted)]">
+                        {[
+                          player.readableId ? `#${player.readableId}` : null,
+                          player.membershipId,
+                          player.location,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                      <span
+                        className={[
+                          "mt-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]",
+                          statusClass(player.robustnessStatus),
+                        ].join(" ")}
+                      >
+                        {statusLabel(player.robustnessStatus)}
+                        {player.robustness != null
+                          ? ` · ${player.robustness}`
+                          : ""}
+                      </span>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="font-[family-name:var(--font-display)] text-2xl tabular-nums leading-none text-[var(--felt-deep)]">
+                        {player.effectiveRating ?? "—"}
+                      </p>
+                      <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                        View stats
+                      </p>
+                    </div>
+                  </button>
                 </li>
               ))}
             </ul>
