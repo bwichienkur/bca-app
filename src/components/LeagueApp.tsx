@@ -169,6 +169,9 @@ export function LeagueApp() {
   const [refreshToken, setRefreshToken] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const didAutoCollapseContext = useRef(false);
+  const teamReportKeyRef = useRef<string | null>(null);
+  const playerReportKeyRef = useRef<string | null>(null);
+  const scheduleKeyRef = useRef<string | null>(null);
   const [, startTransition] = useTransition();
   const filterAnchor = useViewportAnchor<HTMLDivElement>();
 
@@ -500,16 +503,44 @@ export function LeagueApp() {
 
     let cancelled = false;
     async function loadReport() {
-      setLoadingReport(true);
+      const id = selectedDivision!.id;
+      const cacheKey = `${id}:${refreshToken}`;
+      const needsTeams = tab === "standings" || tab === "my-team";
+      const needsPlayers = tab === "players";
+      const needsSchedule = tab === "schedule";
+
+      const hasTeams = Boolean(teamReport) && teamReportKeyRef.current === cacheKey;
+      const hasPlayers =
+        Boolean(playerReport) && playerReportKeyRef.current === cacheKey;
+      const hasSchedule =
+        Boolean(schedule) && scheduleKeyRef.current === cacheKey;
+
+      if (
+        (needsTeams && hasTeams) ||
+        (needsPlayers && hasPlayers) ||
+        (needsSchedule && hasSchedule)
+      ) {
+        setLoadingReport(false);
+        return;
+      }
+
+      // Keep current UI up while refetching if we already have something to show.
+      const hasSoftContent =
+        (needsTeams && Boolean(teamReport)) ||
+        (needsPlayers && Boolean(playerReport)) ||
+        (needsSchedule && Boolean(schedule));
+      if (!hasSoftContent) setLoadingReport(true);
       setError(null);
       try {
-        const id = selectedDivision!.id;
-        if (tab === "standings" || tab === "my-team") {
+        if (needsTeams) {
           const data = await fetchJson<TableReport>(
             `/api/reports/teams?divisionId=${id}`,
           );
-          if (!cancelled) setTeamReport(data);
-        } else if (tab === "players") {
+          if (!cancelled) {
+            setTeamReport(data);
+            teamReportKeyRef.current = cacheKey;
+          }
+        } else if (needsPlayers) {
           const [players, ratings] = await Promise.all([
             fetchJson<TableReport>(`/api/reports/players?divisionId=${id}`),
             fetchJson<TableReport>(
@@ -519,8 +550,9 @@ export function LeagueApp() {
           if (!cancelled) {
             setPlayerReport(players);
             setPlayerList(ratings);
+            playerReportKeyRef.current = cacheKey;
           }
-        } else if (tab === "schedule") {
+        } else if (needsSchedule) {
           const [scheduleData, teams] = await Promise.all([
             fetchJson<{ days: ScheduleDay[] }>(
               `/api/reports/schedule?divisionId=${id}`,
@@ -531,7 +563,11 @@ export function LeagueApp() {
           ]);
           if (!cancelled) {
             setSchedule(scheduleData.days);
-            if (teams) setTeamReport(teams);
+            scheduleKeyRef.current = cacheKey;
+            if (teams) {
+              setTeamReport(teams);
+              teamReportKeyRef.current = cacheKey;
+            }
           }
         }
       } catch (err) {
@@ -547,6 +583,8 @@ export function LeagueApp() {
     return () => {
       cancelled = true;
     };
+    // teamReport/playerReport/schedule intentionally omitted — cache keys gate refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDivision, tab, refreshToken]);
 
   useEffect(() => {
@@ -946,7 +984,7 @@ export function LeagueApp() {
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <button
               type="button"
-              onClick={() => setTab("search")}
+              onClick={() => startTransition(() => setTab("search"))}
               title="Search players"
               aria-label="Search players"
               aria-current={tab === "search" ? "page" : undefined}
@@ -1177,7 +1215,9 @@ export function LeagueApp() {
                   type="button"
                   aria-current={active ? "page" : undefined}
                   onClick={() => {
-                    setTab(item.id);
+                    startTransition(() => {
+                      setTab(item.id);
+                    });
                     if (
                       (item.id === "schedule" ||
                         item.id === "my-team" ||
@@ -1269,7 +1309,9 @@ export function LeagueApp() {
                         type="button"
                         role="tab"
                         aria-selected={selected}
-                        onClick={() => setMyTeamSubTab(item.id)}
+                        onClick={() =>
+                          startTransition(() => setMyTeamSubTab(item.id))
+                        }
                         className={[
                           "rounded-lg px-2 py-1.5 text-center text-xs font-semibold transition sm:text-sm",
                           selected
@@ -1283,8 +1325,11 @@ export function LeagueApp() {
                   })}
                 </div>
 
-                {myTeamSubTab === "standing" ? (
-                  myStandingCells ? (
+                <div
+                  className={myTeamSubTab === "standing" ? "min-w-0" : "hidden"}
+                  aria-hidden={myTeamSubTab !== "standing"}
+                >
+                  {myStandingCells ? (
                     <TeamStandingSummary
                       cells={myStandingCells}
                       teamName={prefs.teamName}
@@ -1294,20 +1339,26 @@ export function LeagueApp() {
                       title="Standing unavailable"
                       body="Team standings will show here once the division report loads."
                     />
-                  )
-                ) : null}
+                  )}
+                </div>
 
-                {myTeamSubTab === "roster" ? (
+                <div
+                  className={myTeamSubTab === "roster" ? "min-w-0" : "hidden"}
+                  aria-hidden={myTeamSubTab !== "roster"}
+                >
                   <TeamDetail
                     teamName={prefs.teamName}
                     team={myTeam}
                     playersByTeam={playersByTeam}
                     isMyTeam
                   />
-                ) : null}
+                </div>
 
-                {myTeamSubTab === "lineups" ? (
-                  myTeam && selectedDivision ? (
+                <div
+                  className={myTeamSubTab === "lineups" ? "min-w-0" : "hidden"}
+                  aria-hidden={myTeamSubTab !== "lineups"}
+                >
+                  {myTeam && selectedDivision ? (
                     <TeamLineupTemplates
                       divisionId={selectedDivision.id}
                       team={myTeam}
@@ -1317,8 +1368,8 @@ export function LeagueApp() {
                       title="Team roster needed"
                       body="Lineup templates need your team’s roster from this division."
                     />
-                  )
-                ) : null}
+                  )}
+                </div>
               </section>
             ) : (
               <EmptyState
