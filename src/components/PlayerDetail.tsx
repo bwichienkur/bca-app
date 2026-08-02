@@ -669,59 +669,51 @@ export function PlayerDetail({
             ) : null}
           </div>
 
-          <label className="relative block">
-            <span className="sr-only">Search matches</span>
-            <input
-              value={matchQuery}
-              onChange={(event) => setMatchQuery(event.target.value)}
-              placeholder="Search opponent or event…"
-              autoComplete="off"
-              spellCheck={false}
-              className="w-full rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2"
-            />
-          </label>
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_12.5rem]">
+            <label className="relative block min-w-0">
+              <span className="sr-only">Search matches</span>
+              <input
+                value={matchQuery}
+                onChange={(event) => setMatchQuery(event.target.value)}
+                placeholder="Search opponent or event…"
+                autoComplete="off"
+                spellCheck={false}
+                className="w-full rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2"
+              />
+            </label>
 
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                setMatchBucket(null);
-                setMatchesPage(1);
-              }}
-              className={[
-                "rounded-full px-3 py-1 text-xs font-semibold transition",
-                matchBucket == null
-                  ? "bg-[var(--felt)] text-white"
-                  : "bg-[var(--surface-2)] text-[var(--muted)] hover:text-[var(--ink)]",
-              ].join(" ")}
-            >
-              All ratings
-            </button>
-            {(bucketCounts.length
-              ? bucketCounts
-              : [300, 400, 500, 600, 700, 800].map((bucket) => ({
-                  bucket,
-                  count: -1,
-                }))
-            ).map(({ bucket, count }) => (
-              <button
-                key={bucket}
-                type="button"
-                onClick={() => {
-                  setMatchBucket(bucket);
+            <label className="relative block min-w-0">
+              <span className="sr-only">Opponent Fargo range</span>
+              <select
+                value={matchBucket == null ? "" : String(matchBucket)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setMatchBucket(value === "" ? null : Number(value));
                   setMatchesPage(1);
                 }}
-                className={[
-                  "rounded-full px-3 py-1 text-xs font-semibold tabular-nums transition",
-                  matchBucket === bucket
-                    ? "bg-[var(--felt)] text-white"
-                    : "bg-[var(--surface-2)] text-[var(--muted)] hover:text-[var(--ink)]",
-                ].join(" ")}
+                className="w-full appearance-none rounded-2xl border border-[var(--line)] bg-[var(--surface)] py-2.5 pl-4 pr-10 text-sm font-medium text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition focus:ring-2"
               >
-                {bucket}s
-                {count >= 0 ? ` · ${count}` : ""}
-              </button>
-            ))}
+                <option value="">All ratings</option>
+                {(bucketCounts.length
+                  ? bucketCounts.filter(({ count }) => count !== 0)
+                  : [200, 300, 400, 500, 600, 700, 800, 900].map((bucket) => ({
+                      bucket,
+                      count: -1,
+                    }))
+                ).map(({ bucket, count }) => (
+                  <option key={bucket} value={bucket}>
+                    {bucket}–{bucket + 99}
+                    {count >= 0 ? ` (${count})` : ""}
+                  </option>
+                ))}
+              </select>
+              <span
+                aria-hidden
+                className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--muted)]"
+              >
+                ▾
+              </span>
+            </label>
           </div>
 
           {matchesError ? (
