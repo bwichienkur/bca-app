@@ -130,28 +130,24 @@ function DragGhostCard({
     <div
       style={style}
       className={[
-        "rounded-xl border px-3 py-2.5 shadow-[var(--shadow)]",
+        "flex items-center gap-2 rounded-xl border px-2.5 py-2 shadow-[var(--shadow)]",
         floating
           ? "pointer-events-none border-[var(--felt)] bg-[color-mix(in_srgb,var(--surface)_82%,var(--felt))] opacity-90 backdrop-blur-sm"
           : "border-dashed border-[var(--felt)] bg-[color-mix(in_srgb,var(--felt)_16%,var(--surface))] opacity-80",
       ].join(" ")}
     >
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <div className="inline-flex items-center gap-2">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--felt)]/40 bg-[var(--surface)]/80 text-[var(--felt-deep)]">
-            <GripIcon />
-          </span>
-          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-            Slot #{slotNumber}
-          </span>
-        </div>
-        <span className="tabular-nums text-xs font-semibold text-[var(--felt)]">
+      <span className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--felt-deep)]">
+        <GripIcon />
+      </span>
+      <span className="w-6 shrink-0 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+        #{slotNumber}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--ink)]">
+        {playerLabel(player)}
+        <span className="ml-1.5 tabular-nums text-[var(--felt-deep)]">
           {player.fargoRating}
         </span>
-      </div>
-      <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)]/90 px-3 py-2.5 text-sm font-medium text-[var(--ink)]">
-        {playerLabel(player)}
-      </div>
+      </span>
     </div>
   );
 }
@@ -1078,17 +1074,17 @@ function LineupPicker({
   };
 
   return (
-    <div className="rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
-      <div className="mb-3 flex items-baseline justify-between gap-2">
-        <div>
-          <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
+    <div className="min-w-0 overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm sm:p-3.5">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <h4 className="truncate font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
             {title}
           </h4>
-          <p className="text-xs text-[var(--muted)]">{subtitle}</p>
+          <p className="truncate text-xs text-[var(--muted)]">{subtitle}</p>
         </div>
         <span
           className={[
-            "rounded-full px-2.5 py-1 text-xs font-semibold",
+            "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
             filled === slots
               ? "bg-[var(--felt)] text-white"
               : "bg-[var(--surface-2)] text-[var(--muted)]",
@@ -1098,10 +1094,13 @@ function LineupPicker({
         </span>
       </div>
 
-      <ol ref={listRef} className="space-y-2">
+      <ol
+        ref={listRef}
+        className="min-w-0 divide-y divide-[var(--line)] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface-2)]"
+      >
         {Array.from({ length: slots }).map((_, index) => {
           const player = previewLineup[index];
-          // Preview order already moves the card; mark its new slot as the landing ghost.
+          // Preview order already moves the row; mark its new slot as the landing ghost.
           const isLandingGhost =
             draggingHere &&
             dragFrom !== dragTo &&
@@ -1113,86 +1112,87 @@ function LineupPicker({
           return (
             <li key={`slot-${index}`} data-slot={index} className="relative">
               {isLandingGhost && draggedPlayer ? (
-                <DragGhostCard
-                  player={draggedPlayer}
-                  slotNumber={index + 1}
-                />
+                <div className="px-2 py-1.5">
+                  <DragGhostCard
+                    player={draggedPlayer}
+                    slotNumber={index + 1}
+                  />
+                </div>
               ) : (
                 <div
                   data-lineup-card
                   className={[
-                    "relative rounded-xl border px-3 py-2.5 transition duration-150",
+                    "flex min-w-0 items-center gap-1.5 px-2 py-1.5 transition duration-150 sm:gap-2 sm:px-2.5",
                     isLiftedSource
-                      ? "z-20 border-[var(--felt)]/40 bg-[var(--surface-3)] opacity-30"
-                      : "z-0 border-[var(--line)] bg-[var(--surface-2)]",
+                      ? "z-20 bg-[var(--surface-3)] opacity-30"
+                      : "z-0",
                   ].join(" ")}
                 >
-                  <div className="mb-1.5 flex items-center justify-between gap-2">
-                    <div className="inline-flex items-center gap-2">
-                      {player ? (
-                        <button
-                          type="button"
-                          aria-label={`Drag slot ${index + 1}`}
-                          onPointerDown={(event) => {
-                            const card = event.currentTarget.closest(
-                              "[data-lineup-card]",
-                            ) as HTMLElement | null;
-                            onGripPointerDown(event, index, card);
-                          }}
-                          className="touch-none inline-flex h-8 w-8 cursor-grab items-center justify-center rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--felt-deep)] active:cursor-grabbing active:bg-[var(--surface-3)]"
-                        >
-                          <GripIcon />
-                        </button>
-                      ) : (
-                        <span
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--line)] text-[var(--muted)]"
-                          aria-hidden
-                        >
-                          <GripIcon />
-                        </span>
-                      )}
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                        Slot #{index + 1}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {player ? (
-                        <>
-                          <button
-                            type="button"
-                            aria-label="Move up"
-                            disabled={index === 0 || draggingHere}
-                            onClick={() => onMove(index, index - 1)}
-                            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
-                          >
-                            ▲
-                          </button>
-                          <button
-                            type="button"
-                            aria-label="Move down"
-                            disabled={index >= slots - 1 || draggingHere}
-                            onClick={() => onMove(index, index + 1)}
-                            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)] disabled:opacity-30"
-                          >
-                            ▼
-                          </button>
-                          <span className="ml-1 tabular-nums text-xs font-semibold text-[var(--felt)]">
-                            {player.fargoRating}
-                          </span>
-                        </>
-                      ) : null}
-                    </div>
+                  {player ? (
+                    <button
+                      type="button"
+                      aria-label={`Drag slot ${index + 1}`}
+                      onPointerDown={(event) => {
+                        const row = event.currentTarget.closest(
+                          "[data-lineup-card]",
+                        ) as HTMLElement | null;
+                        onGripPointerDown(event, index, row);
+                      }}
+                      className="touch-none inline-flex h-7 w-7 shrink-0 cursor-grab items-center justify-center rounded-md text-[var(--felt-deep)] transition hover:bg-[var(--surface-3)] active:cursor-grabbing"
+                    >
+                      <GripIcon />
+                    </button>
+                  ) : (
+                    <span
+                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--muted)]"
+                      aria-hidden
+                    >
+                      <GripIcon />
+                    </span>
+                  )}
+
+                  <span className="w-6 shrink-0 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                    #{index + 1}
+                  </span>
+
+                  <div className="min-w-0 flex-1">
+                    <PlayerSelect
+                      value={player?.id ?? ""}
+                      options={sortedRoster.map((option) => ({
+                        id: option.id,
+                        label: playerLabel(option),
+                        rating: option.fargoRating,
+                      }))}
+                      placeholder="Open slot…"
+                      compact
+                      onChange={(playerId) => onSelectSlot(index, playerId)}
+                    />
                   </div>
-                  <PlayerSelect
-                    value={player?.id ?? ""}
-                    options={sortedRoster.map((option) => ({
-                      id: option.id,
-                      label: playerLabel(option),
-                      rating: option.fargoRating,
-                    }))}
-                    placeholder="Open slot…"
-                    onChange={(playerId) => onSelectSlot(index, playerId)}
-                  />
+
+                  {player ? (
+                    <div className="flex shrink-0 items-center">
+                      <button
+                        type="button"
+                        aria-label="Move up"
+                        disabled={index === 0 || draggingHere}
+                        onClick={() => onMove(index, index - 1)}
+                        className="inline-flex h-7 w-6 items-center justify-center rounded-md text-[10px] text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)] disabled:opacity-25"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Move down"
+                        disabled={index >= slots - 1 || draggingHere}
+                        onClick={() => onMove(index, index + 1)}
+                        className="inline-flex h-7 w-6 items-center justify-center rounded-md text-[10px] text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)] disabled:opacity-25"
+                      >
+                        ▼
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="w-12 shrink-0" aria-hidden />
+                  )}
                 </div>
               )}
             </li>
@@ -1200,7 +1200,7 @@ function LineupPicker({
         })}
       </ol>
       <p className="mt-2 text-[11px] text-[var(--muted)]">
-        Drag ⠿ to reorder, or use ▲ ▼.
+        Drag ⠿ to reorder, or use ▲ ▼ · handicaps follow Fargo
       </p>
 
       {mounted &&
@@ -1220,7 +1220,7 @@ function LineupPicker({
                 width: ghost.width,
                 minHeight: ghost.height,
                 zIndex: 200,
-                transform: "scale(1.03) rotate(-1.2deg)",
+                transform: "scale(1.02) rotate(-0.8deg)",
               }}
             />,
             document.body,
