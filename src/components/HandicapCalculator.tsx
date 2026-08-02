@@ -7,6 +7,7 @@ import {
   useState,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import { DEFAULT_PLAYERS_PER_TEAM } from "@/lib/constants";
@@ -22,8 +23,6 @@ import {
 } from "@/lib/matchups";
 import {
   loadTeamLineupPresets,
-  removeTeamLineupPreset,
-  saveTeamLineupPreset,
 } from "@/lib/lineup-sync";
 import { loadLineupPresets } from "@/lib/preferences";
 import type {
@@ -34,6 +33,7 @@ import type {
   UserPreferences,
 } from "@/lib/types";
 import { EmptyState } from "./EmptyState";
+import { LoadLineupMenu } from "./LoadLineupMenu";
 import { LoadingState } from "./LoadingState";
 import { PlayerSelect } from "./PlayerSelect";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
@@ -189,15 +189,6 @@ function compactPlayers(lineup: LineupSlot[]): RosterPlayer[] {
   return lineup.filter((player): player is RosterPlayer => Boolean(player));
 }
 
-function presetId(teamId: string, name: string): string {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-  return `${teamId}:${slug || "lineup"}`;
-}
-
 export function HandicapCalculator({
   divisionId,
   divisionName,
@@ -215,8 +206,6 @@ export function HandicapCalculator({
   const [oppLineup, setOppLineup] = useState<LineupSlot[]>([]);
   const [weekMatchup, setWeekMatchup] = useState<CalculatorMatchup | null>(null);
   const [presets, setPresets] = useState<LineupPreset[]>([]);
-  const [presetName, setPresetName] = useState("Default lineup");
-  const [presetStatus, setPresetStatus] = useState<string | null>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [dropTarget, setDropTarget] = useState<DragState | null>(null);
   const [mobileSide, setMobileSide] = useState<LineupSide>("mine");
@@ -367,7 +356,6 @@ export function HandicapCalculator({
           : defaultTopLineup(team, slotCount),
       );
       setOppLineup(defaultTopLineup(opponent, slotCount));
-      if (saved) setPresetName(saved.name);
     } else {
       setOpponentTeamId(null);
       setOppLineup(emptyLineup(slotCount));
@@ -376,7 +364,6 @@ export function HandicapCalculator({
           ? lineupFromIds(team, saved.playerIds, slotCount)
           : defaultTopLineup(team, slotCount),
       );
-      if (saved) setPresetName(saved.name);
     }
   }
 
@@ -440,61 +427,9 @@ export function HandicapCalculator({
     setter(current);
   };
 
-  const savePreset = () => {
-    if (!myTeamId) {
-      setPresetStatus("Select your team before saving a lineup.");
-      return;
-    }
-    if (!isComplete(myLineup, slots)) {
-      setPresetStatus(`Fill all ${slots} slots before saving.`);
-      return;
-    }
-
-    const name = presetName.trim() || "Default lineup";
-    const preset: LineupPreset = {
-      id: presetId(myTeamId, name),
-      name,
-      divisionId,
-      teamId: myTeamId,
-      playerIds: compactPlayers(myLineup).map((player) => player.id),
-      updatedAt: new Date().toISOString(),
-    };
-
-    void saveTeamLineupPreset(preset)
-      .then((result) => {
-        setPresets(result.presets);
-        setPresetName(name);
-        setPresetStatus(
-          result.shared
-            ? `Saved “${name}” for the team. Tap a preset anytime to load it.`
-            : `Saved “${name}” on this device. Tap a preset anytime to load it.`,
-        );
-      })
-      .catch(() => {
-        setPresetStatus("Couldn't save lineup.");
-      });
-  };
-
   const applyPreset = (preset: LineupPreset) => {
-    if (!myTeam) {
-      setPresetStatus("Select your team first.");
-      return;
-    }
+    if (!myTeam) return;
     setMyLineup(lineupFromIds(myTeam, preset.playerIds, slots));
-    setPresetName(preset.name);
-    setPresetStatus(`Loaded “${preset.name}”.`);
-  };
-
-  const removePreset = (preset: LineupPreset) => {
-    if (!myTeamId) return;
-    void removeTeamLineupPreset({
-      teamId: myTeamId,
-      divisionId,
-      presetId: preset.id,
-    }).then((result) => {
-      setPresets(result.presets);
-      setPresetStatus(`Deleted “${preset.name}”.`);
-    });
   };
 
   const teamPresets = presets.filter(
@@ -665,7 +600,7 @@ export function HandicapCalculator({
           body="Handicap starts from your team. We’ll auto-fill this week’s opponent from the schedule."
         />
       ) : (
-        <section className="relative z-0 grid gap-4 xl:grid-cols-[1.1fr_1.1fr_0.9fr]">
+        <section className="relative z-0 grid gap-4 xl:grid-cols-2">
           {/* One picker per side — CSS toggles mobile visibility so shared drag state stays unique */}
           {oppTeam ? (
             <div
@@ -747,6 +682,12 @@ export function HandicapCalculator({
               roster={myTeam.players}
               lineup={myLineup.length === slots ? myLineup : emptyLineup(slots)}
               slots={slots}
+              actions={
+                <LoadLineupMenu
+                  presets={teamPresets}
+                  onLoad={applyPreset}
+                />
+              }
               onSelectSlot={(slotIndex, playerId) =>
                 setSlotPlayer("mine", slotIndex, playerId)
               }
@@ -789,96 +730,6 @@ export function HandicapCalculator({
               body="Or wait for schedule auto-match once your team is set."
             />
           )}
-
-          <div className="relative z-0 space-y-3 rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
-            <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
-              Saved lineups
-            </h4>
-            <p className="text-sm text-[var(--muted)]">
-              Store your {slots}-player order for this team, then load it before
-              league night.
-            </p>
-            <input
-              value={presetName}
-              onChange={(event) => {
-                setPresetName(event.target.value);
-                setPresetStatus(null);
-              }}
-              placeholder="Preset name"
-              className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]"
-            />
-            <button
-              type="button"
-              disabled={!isComplete(myLineup, slots)}
-              onClick={savePreset}
-              className="w-full rounded-full bg-[var(--felt)] px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--felt-soft)] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {teamPresets.some(
-                (preset) =>
-                  preset.name.trim().toLowerCase() ===
-                  presetName.trim().toLowerCase(),
-              )
-                ? "Update saved lineup"
-                : "Save current lineup"}
-            </button>
-            {presetStatus ? (
-              <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
-                {presetStatus}
-              </p>
-            ) : null}
-            <ul className="space-y-2">
-              {teamPresets.length === 0 ? (
-                <li className="rounded-xl border border-dashed border-[var(--line)] px-3 py-4 text-center text-sm text-[var(--muted)]">
-                  No presets yet — fill all slots, name it, then save.
-                </li>
-              ) : (
-                teamPresets.map((preset) => {
-                  const names = lineupFromIds(myTeam, preset.playerIds, slots)
-                    .map((player) => (player ? playerLabel(player) : "—"))
-                    .join(" · ");
-                  return (
-                    <li
-                      key={preset.id}
-                      className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2.5"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <button
-                          type="button"
-                          onClick={() => applyPreset(preset)}
-                          className="text-left text-sm font-semibold text-[var(--ink)] hover:text-[var(--felt-deep)]"
-                        >
-                          {preset.name}
-                        </button>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => applyPreset(preset)}
-                            className="rounded-full bg-[var(--felt)]/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--felt-deep)]"
-                          >
-                            Load
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removePreset(preset)}
-                            className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--danger)]"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-[11px] text-[var(--muted)]">
-                        {names}
-                      </p>
-                      <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                        {preset.playerIds.length} players ·{" "}
-                        {new Date(preset.updatedAt).toLocaleString()}
-                      </p>
-                    </li>
-                  );
-                })
-              )}
-            </ul>
-          </div>
         </section>
       )}
 
@@ -1058,6 +909,7 @@ function LineupPicker({
   dropTarget,
   setDragState,
   setDropTarget,
+  actions,
 }: {
   side: LineupSide;
   title: string;
@@ -1071,6 +923,7 @@ function LineupPicker({
   dropTarget: DragState | null;
   setDragState: (state: DragState | null) => void;
   setDropTarget: (state: DragState | null) => void;
+  actions?: ReactNode;
 }) {
   // Only the top-left ⠿ grip starts a drag — the rest of the card stays interactive.
   const filled = filledCount(lineup);
@@ -1260,16 +1113,19 @@ function LineupPicker({
           </h4>
           <p className="truncate text-xs text-[var(--muted)]">{subtitle}</p>
         </div>
-        <span
-          className={[
-            "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
-            filled === slots
-              ? "bg-[var(--felt)] text-white"
-              : "bg-[var(--surface-2)] text-[var(--muted)]",
-          ].join(" ")}
-        >
-          {filled}/{slots}
-        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {actions}
+          <span
+            className={[
+              "rounded-full px-2.5 py-1 text-xs font-semibold",
+              filled === slots
+                ? "bg-[var(--felt)] text-white"
+                : "bg-[var(--surface-2)] text-[var(--muted)]",
+            ].join(" ")}
+          >
+            {filled}/{slots}
+          </span>
+        </div>
       </div>
 
       <ol
