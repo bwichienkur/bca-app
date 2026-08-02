@@ -120,7 +120,11 @@ export function ScheduleList({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div
+        role="group"
+        aria-label="Schedule time range"
+        className="inline-flex rounded-full border border-[var(--line)] bg-[var(--surface)] p-0.5"
+      >
         {(
           [
             {
@@ -136,12 +140,13 @@ export function ScheduleList({
             <button
               key={item.id}
               type="button"
+              aria-pressed={active}
               onClick={() => setView(item.id)}
               className={[
                 "rounded-full px-3.5 py-1.5 text-sm font-semibold transition",
                 active
-                  ? "bg-[var(--felt)] text-white shadow-sm"
-                  : "bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface-2)]",
+                  ? "bg-[var(--felt)] text-white"
+                  : "text-[var(--muted)] hover:text-[var(--ink)]",
               ].join(" ")}
             >
               {item.label}

@@ -86,7 +86,7 @@ export function MatchListCard({
         className ?? "",
       ].join(" ")}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
           {metaLine ? (
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--amber)]">
@@ -105,12 +105,12 @@ export function MatchListCard({
         </div>
 
         {ctaLabel ? (
-          <span className="mt-0.5 shrink-0 rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white transition group-hover:bg-[var(--felt-soft)]">
+          <span className="shrink-0 rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white transition group-hover:bg-[var(--felt-soft)]">
             {ctaLabel}
           </span>
         ) : (
           <span
-            className="mt-1 shrink-0 text-[var(--amber)] transition group-hover:translate-x-0.5"
+            className="shrink-0 text-[var(--amber)] transition group-hover:translate-x-0.5"
             aria-hidden
           >
             →
