@@ -103,6 +103,7 @@ export function TeamPlayerStats({
       rows={enriched.rows}
       stickyFirst
       compact
+      tone="quiet"
       emptyText="No player stats for this team."
     />
   );
