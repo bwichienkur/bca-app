@@ -1288,7 +1288,6 @@ export function LeagueApp() {
               divisionName={selectedDivision.name}
               prefs={prefs}
               refreshToken={refreshToken}
-              onRequestSetTeam={() => setContextOpen(true)}
             />
           ) : loadingReport ? (
             <LoadingState label="Pulling report from LMS…" />

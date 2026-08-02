@@ -17,10 +17,7 @@ import {
   type ParsedMatchFormat,
   type RoundHandicapResult,
 } from "@/lib/handicap";
-import {
-  findMatchupBetweenTeams,
-  findWeeklyMatchupForTeam,
-} from "@/lib/matchups";
+import { findWeeklyMatchupForTeam } from "@/lib/matchups";
 import {
   loadTeamLineupPresets,
 } from "@/lib/lineup-sync";
@@ -59,12 +56,10 @@ type HandicapCalculatorProps = {
   prefs: UserPreferences;
   /** Bumps when LMS cache is manually refreshed. */
   refreshToken?: number;
-  /** Opens the league context card so My team can be set once. */
-  onRequestSetTeam: () => void;
 };
 
 type LineupSlot = RosterPlayer | null;
-type LineupSide = "mine" | "opp";
+type LineupSide = "home" | "away";
 
 type DragState = {
   side: LineupSide;
@@ -194,25 +189,23 @@ export function HandicapCalculator({
   divisionName,
   prefs,
   refreshToken = 0,
-  onRequestSetTeam,
 }: HandicapCalculatorProps) {
   const [data, setData] = useState<CalculatorPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [myTeamId, setMyTeamId] = useState<string | null>(prefs.teamId);
-  const [opponentTeamId, setOpponentTeamId] = useState<string | null>(null);
-  const [iAmHome, setIAmHome] = useState(true);
-  const [myLineup, setMyLineup] = useState<LineupSlot[]>([]);
-  const [oppLineup, setOppLineup] = useState<LineupSlot[]>([]);
-  const [weekMatchup, setWeekMatchup] = useState<CalculatorMatchup | null>(null);
+  const [homeTeamId, setHomeTeamId] = useState<string | null>(null);
+  const [awayTeamId, setAwayTeamId] = useState<string | null>(null);
+  const [homeLineup, setHomeLineup] = useState<LineupSlot[]>([]);
+  const [awayLineup, setAwayLineup] = useState<LineupSlot[]>([]);
   const [presets, setPresets] = useState<LineupPreset[]>([]);
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [dropTarget, setDropTarget] = useState<DragState | null>(null);
-  const [mobileSide, setMobileSide] = useState<LineupSide>("mine");
+  const [mobileSide, setMobileSide] = useState<LineupSide>("home");
+  const [activeRound, setActiveRound] = useState(1);
 
   useEffect(() => {
-    if (!opponentTeamId) setMobileSide("mine");
-  }, [opponentTeamId]);
+    if (!awayTeamId) setMobileSide("home");
+  }, [awayTeamId]);
 
   useEffect(() => {
     setDragState(null);
@@ -220,12 +213,12 @@ export function HandicapCalculator({
   }, [mobileSide]);
 
   useEffect(() => {
-    if (!myTeamId) {
+    if (!prefs.teamId) {
       setPresets(loadLineupPresets());
       return;
     }
     let cancelled = false;
-    void loadTeamLineupPresets({ teamId: myTeamId, divisionId }).then(
+    void loadTeamLineupPresets({ teamId: prefs.teamId, divisionId }).then(
       (result) => {
         if (!cancelled) setPresets(result.presets);
       },
@@ -233,7 +226,7 @@ export function HandicapCalculator({
     return () => {
       cancelled = true;
     };
-  }, [myTeamId, divisionId]);
+  }, [prefs.teamId, divisionId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -251,17 +244,7 @@ export function HandicapCalculator({
         const payload = (await response.json()) as CalculatorPayload;
         if (cancelled) return;
         setData(payload);
-
-        const teamId =
-          prefs.teamId &&
-          payload.teams.some((team) => team.id === prefs.teamId)
-            ? prefs.teamId
-            : null;
-        setMyTeamId(teamId);
-
-        if (teamId) {
-          applyTeamMatchup(payload, teamId);
-        }
+        seedTeams(payload);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load");
@@ -282,9 +265,10 @@ export function HandicapCalculator({
     data?.parsedFormat.numOfPlayers ||
     DEFAULT_PLAYERS_PER_TEAM;
 
-  const myTeam = data?.teams.find((team) => team.id === myTeamId) ?? null;
-  const oppTeam =
-    data?.teams.find((team) => team.id === opponentTeamId) ?? null;
+  const homeTeam =
+    data?.teams.find((team) => team.id === homeTeamId) ?? null;
+  const awayTeam =
+    data?.teams.find((team) => team.id === awayTeamId) ?? null;
 
   const teamOptions: TypeaheadOption<DivisionTeam>[] = useMemo(
     () =>
@@ -296,11 +280,6 @@ export function HandicapCalculator({
       })),
     [data],
   );
-
-  const homeTeam = iAmHome ? myTeam : oppTeam;
-  const awayTeam = iAmHome ? oppTeam : myTeam;
-  const homeLineup = iAmHome ? myLineup : oppLineup;
-  const awayLineup = iAmHome ? oppLineup : myLineup;
 
   const results: RoundHandicapResult[] | null = useMemo(() => {
     if (!data || !homeTeam || !awayTeam) return null;
@@ -327,64 +306,90 @@ export function HandicapCalculator({
     });
   }, [data, homeTeam, awayTeam, homeLineup, awayLineup, slots]);
 
-  function applyTeamMatchup(payload: CalculatorPayload, teamId: string) {
-    const team = payload.teams.find((item) => item.id === teamId) ?? null;
-    const matchup = findWeeklyMatchupForTeam(payload.matchups, teamId);
-    setWeekMatchup(matchup);
+  useEffect(() => {
+    if (!results?.length) return;
+    setActiveRound((current) =>
+      results.some((item) => item.round === current)
+        ? current
+        : results[0]!.round,
+    );
+  }, [results]);
+
+  function lineupForTeam(
+    team: DivisionTeam | null,
+    slotCount: number,
+  ): LineupSlot[] {
+    if (!team) return emptyLineup(slotCount);
+    const saved = loadLineupPresets().find(
+      (preset) =>
+        preset.divisionId === divisionId &&
+        preset.teamId === team.id &&
+        preset.playerIds.length === slotCount,
+    );
+    return saved
+      ? lineupFromIds(team, saved.playerIds, slotCount)
+      : defaultTopLineup(team, slotCount);
+  }
+
+  function seedTeams(payload: CalculatorPayload) {
     const slotCount =
       payload.playersPerTeam ||
       payload.parsedFormat.numOfPlayers ||
       DEFAULT_PLAYERS_PER_TEAM;
-
-    const saved = loadLineupPresets().find(
-      (preset) =>
-        preset.divisionId === divisionId &&
-        preset.teamId === teamId &&
-        preset.playerIds.length === slotCount,
-    );
+    const myId =
+      prefs.teamId &&
+      payload.teams.some((team) => team.id === prefs.teamId)
+        ? prefs.teamId
+        : null;
+    const matchup = myId
+      ? findWeeklyMatchupForTeam(payload.matchups, myId)
+      : null;
 
     if (matchup) {
-      const home = matchup.homeTeamId === teamId;
-      setIAmHome(home);
-      const opponentId = home ? matchup.awayTeamId : matchup.homeTeamId;
-      setOpponentTeamId(opponentId);
-      const opponent =
-        payload.teams.find((item) => item.id === opponentId) ?? null;
-      setMyLineup(
-        saved
-          ? lineupFromIds(team, saved.playerIds, slotCount)
-          : defaultTopLineup(team, slotCount),
-      );
-      setOppLineup(defaultTopLineup(opponent, slotCount));
-    } else {
-      setOpponentTeamId(null);
-      setOppLineup(emptyLineup(slotCount));
-      setMyLineup(
-        saved
-          ? lineupFromIds(team, saved.playerIds, slotCount)
-          : defaultTopLineup(team, slotCount),
-      );
+      const home =
+        payload.teams.find((item) => item.id === matchup.homeTeamId) ?? null;
+      const away =
+        payload.teams.find((item) => item.id === matchup.awayTeamId) ?? null;
+      setHomeTeamId(home?.id ?? null);
+      setAwayTeamId(away?.id ?? null);
+      setHomeLineup(lineupForTeam(home, slotCount));
+      setAwayLineup(lineupForTeam(away, slotCount));
+      return;
     }
+
+    if (myId) {
+      const mine = payload.teams.find((item) => item.id === myId) ?? null;
+      setHomeTeamId(myId);
+      setAwayTeamId(null);
+      setHomeLineup(lineupForTeam(mine, slotCount));
+      setAwayLineup(emptyLineup(slotCount));
+      return;
+    }
+
+    setHomeTeamId(null);
+    setAwayTeamId(null);
+    setHomeLineup(emptyLineup(slotCount));
+    setAwayLineup(emptyLineup(slotCount));
   }
 
-  const chooseOpponent = (team: DivisionTeam) => {
-    setOpponentTeamId(team.id);
-    setOppLineup(defaultTopLineup(team, slots));
-    if (data && myTeamId) {
-      const matchup = findMatchupBetweenTeams(data.matchups, myTeamId, team.id);
-      setWeekMatchup(matchup);
-      if (matchup) {
-        setIAmHome(matchup.homeTeamId === myTeamId);
-      }
-    } else {
-      setWeekMatchup(null);
+  const chooseHome = (team: DivisionTeam | null) => {
+    if (!team) {
+      setHomeTeamId(null);
+      setHomeLineup(emptyLineup(slots));
+      return;
     }
+    setHomeTeamId(team.id);
+    setHomeLineup(lineupForTeam(team, slots));
   };
 
-  const clearOpponent = () => {
-    setOpponentTeamId(null);
-    setWeekMatchup(null);
-    setOppLineup([]);
+  const chooseAway = (team: DivisionTeam | null) => {
+    if (!team) {
+      setAwayTeamId(null);
+      setAwayLineup(emptyLineup(slots));
+      return;
+    }
+    setAwayTeamId(team.id);
+    setAwayLineup(lineupForTeam(team, slots));
   };
 
   const setSlotPlayer = (
@@ -392,10 +397,10 @@ export function HandicapCalculator({
     slotIndex: number,
     playerId: string,
   ) => {
-    const current = side === "mine" ? [...myLineup] : [...oppLineup];
-    const setter = side === "mine" ? setMyLineup : setOppLineup;
+    const current = side === "home" ? [...homeLineup] : [...awayLineup];
+    const setter = side === "home" ? setHomeLineup : setAwayLineup;
     const roster =
-      side === "mine" ? (myTeam?.players ?? []) : (oppTeam?.players ?? []);
+      side === "home" ? (homeTeam?.players ?? []) : (awayTeam?.players ?? []);
 
     if (!playerId) {
       current[slotIndex] = null;
@@ -411,8 +416,8 @@ export function HandicapCalculator({
   };
 
   const moveInLineup = (side: LineupSide, from: number, to: number) => {
-    const current = side === "mine" ? [...myLineup] : [...oppLineup];
-    const setter = side === "mine" ? setMyLineup : setOppLineup;
+    const current = side === "home" ? [...homeLineup] : [...awayLineup];
+    const setter = side === "home" ? setHomeLineup : setAwayLineup;
     if (
       from < 0 ||
       to < 0 ||
@@ -427,15 +432,18 @@ export function HandicapCalculator({
     setter(current);
   };
 
-  const applyPreset = (preset: LineupPreset) => {
-    if (!myTeam) return;
-    setMyLineup(lineupFromIds(myTeam, preset.playerIds, slots));
+  const applyPreset = (side: LineupSide, preset: LineupPreset) => {
+    const team = side === "home" ? homeTeam : awayTeam;
+    if (!team) return;
+    const setter = side === "home" ? setHomeLineup : setAwayLineup;
+    setter(lineupFromIds(team, preset.playerIds, slots));
   };
 
-  const teamPresets = presets.filter(
-    (preset) =>
-      preset.divisionId === divisionId && preset.teamId === myTeamId,
-  );
+  const presetsFor = (teamId: string | null) =>
+    presets.filter(
+      (preset) =>
+        preset.divisionId === divisionId && preset.teamId === teamId,
+    );
 
   const sectionHeader = (
     <div>
@@ -446,14 +454,8 @@ export function HandicapCalculator({
         Matchup calculator
       </h3>
       <p className="mt-1 text-sm text-[var(--muted)]">
-        Build lineups and see round handicaps
-        {prefs.teamName ? (
-          <>
-            {" "}
-            for{" "}
-            <span className="font-medium text-[var(--ink)]">{prefs.teamName}</span>
-          </>
-        ) : null}
+        Pick home and away from your division, build lineups, and see round
+        handicaps
         {divisionName ? <> · {divisionName}</> : null}
       </p>
     </div>
@@ -480,218 +482,158 @@ export function HandicapCalculator({
     );
   }
 
-  if (!prefs.teamId || !myTeam) {
-    return (
-      <section className="animate-rise space-y-4">
-        {sectionHeader}
-        <EmptyState
-          title="Set My team to calculate handicaps"
-          body="Handicap uses your team from the context card. Set My team once, then pick an opponent here."
-          action={
-            <button
-              type="button"
-              onClick={onRequestSetTeam}
-              className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
-            >
-              Set my team
-            </button>
-          }
-        />
-      </section>
-    );
-  }
+  const homeOption =
+    homeTeam
+      ? {
+          id: homeTeam.id,
+          label: homeTeam.name,
+          meta: `${homeTeam.players.length} players`,
+          value: homeTeam,
+        }
+      : null;
+  const awayOption =
+    awayTeam
+      ? {
+          id: awayTeam.id,
+          label: awayTeam.name,
+          meta: `${awayTeam.players.length} players`,
+          value: awayTeam,
+        }
+      : null;
+
+  const activeResult =
+    results?.find((item) => item.round === activeRound) ?? results?.[0] ?? null;
+  const roundTotals = results
+    ? results.reduce(
+        (acc, item) => ({
+          home: acc.home + item.teamOne,
+          away: acc.away + item.teamTwo,
+        }),
+        { home: 0, away: 0 },
+      )
+    : null;
 
   return (
     <div className="animate-panel space-y-4">
       {sectionHeader}
 
-      {weekMatchup ? (
-        <section className="rounded-2xl border border-[var(--line)] bg-[var(--felt-soft)] px-4 py-3 text-white shadow-sm">
-          <p className="text-[11px] uppercase tracking-[0.14em] text-white/70">
-            Auto-matched · {weekMatchup.date}
-          </p>
-          <p className="mt-1 font-semibold leading-snug">
-            {weekMatchup.homeTeamName} vs {weekMatchup.awayTeamName}
-          </p>
-          <p className="mt-1 text-xs text-white/75">
-            {data.format.pointSystem || "10"}-point · {slots}/side
-            {weekMatchup.location ? ` · ${weekMatchup.location}` : ""}
-          </p>
-        </section>
-      ) : (
-        <p className="text-xs text-[var(--muted)]">
-          {data.format.pointSystem || "10"}-point · {slots} players/side ·{" "}
-          {data.format.fargoRateHandicapType || "RoundBased"}
-          {divisionName ? ` · ${divisionName}` : ""}
-        </p>
-      )}
+      <p className="text-xs text-[var(--muted)]">
+        {data.format.pointSystem || "10"}-point · {slots} players/side ·{" "}
+        {data.format.fargoRateHandicapType || "RoundBased"}
+        {divisionName ? ` · ${divisionName}` : ""}
+      </p>
 
-      <section className="relative z-40 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] md:items-end">
-        <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                Your team
-              </p>
-              <p className="mt-1 font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
-                {myTeam.name}
-              </p>
-            </div>
-            {oppTeam ? (
-              <div
-                role="group"
-                aria-label="Home or away"
-                className="inline-flex shrink-0 rounded-full border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
-              >
-                <button
-                  type="button"
-                  aria-pressed={iAmHome}
-                  onClick={() => setIAmHome(true)}
-                  className={[
-                    "rounded-full px-3 py-1.5 text-xs font-semibold transition",
-                    iAmHome
-                      ? "bg-[var(--felt)] text-white shadow-sm"
-                      : "text-[var(--muted)]",
-                  ].join(" ")}
-                >
-                  Home
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={!iAmHome}
-                  onClick={() => setIAmHome(false)}
-                  className={[
-                    "rounded-full px-3 py-1.5 text-xs font-semibold transition",
-                    !iAmHome
-                      ? "bg-[var(--felt)] text-white shadow-sm"
-                      : "text-[var(--muted)]",
-                  ].join(" ")}
-                >
-                  Away
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </div>
+      <section className="relative z-40 grid gap-3 sm:grid-cols-2">
         <Typeahead
-          label="Opponent"
-          placeholder="Select opponent"
-          value={
-            oppTeam
-              ? {
-                  id: oppTeam.id,
-                  label: oppTeam.name,
-                  meta: `${oppTeam.players.length} players`,
-                  value: oppTeam,
-                }
-              : null
-          }
-          options={teamOptions.filter((option) => option.id !== myTeamId)}
-          onChange={(option) => {
-            if (option) chooseOpponent(option.value);
-            else clearOpponent();
-          }}
+          label="Home"
+          placeholder="Select home team"
+          value={homeOption}
+          options={teamOptions.filter((option) => option.id !== awayTeamId)}
+          onChange={(option) => chooseHome(option?.value ?? null)}
+        />
+        <Typeahead
+          label="Away"
+          placeholder="Select away team"
+          value={awayOption}
+          options={teamOptions.filter((option) => option.id !== homeTeamId)}
+          onChange={(option) => chooseAway(option?.value ?? null)}
         />
       </section>
 
-      {!myTeam ? (
+      {!homeTeam || !awayTeam ? (
         <EmptyState
-          title="Select your team"
-          body="Handicap starts from your team. We’ll auto-fill this week’s opponent from the schedule."
+          title="Pick home and away"
+          body="Choose any two teams in this division to build lineups and calculate round handicaps."
         />
       ) : (
         <section className="relative z-0 grid gap-4 xl:grid-cols-2">
-          {/* One picker per side — CSS toggles mobile visibility so shared drag state stays unique */}
-          {oppTeam ? (
-            <div
-              role="tablist"
-              aria-label="Handicap teams"
-              className="grid grid-cols-2 gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-1 xl:hidden"
-            >
-              {(
-                [
-                  {
-                    id: "mine" as const,
-                    label: "Your team",
-                    teamName: myTeam.name,
-                    filled: filledCount(
-                      myLineup.length === slots ? myLineup : emptyLineup(slots),
-                    ),
-                  },
-                  {
-                    id: "opp" as const,
-                    label: "Opponent",
-                    teamName: oppTeam.name,
-                    filled: filledCount(
-                      oppLineup.length === slots
-                        ? oppLineup
-                        : emptyLineup(slots),
-                    ),
-                  },
-                ]
-              ).map((side) => {
-                const selected = mobileSide === side.id;
-                return (
-                  <button
-                    key={side.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    onClick={() => setMobileSide(side.id)}
+          <div
+            role="tablist"
+            aria-label="Handicap teams"
+            className="grid grid-cols-2 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5 xl:hidden"
+          >
+            {(
+              [
+                {
+                  id: "home" as const,
+                  label: "Home",
+                  teamName: homeTeam.name,
+                  filled: filledCount(
+                    homeLineup.length === slots
+                      ? homeLineup
+                      : emptyLineup(slots),
+                  ),
+                },
+                {
+                  id: "away" as const,
+                  label: "Away",
+                  teamName: awayTeam.name,
+                  filled: filledCount(
+                    awayLineup.length === slots
+                      ? awayLineup
+                      : emptyLineup(slots),
+                  ),
+                },
+              ]
+            ).map((side) => {
+              const selected = mobileSide === side.id;
+              return (
+                <button
+                  key={side.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => setMobileSide(side.id)}
+                  className={[
+                    "min-w-0 rounded-lg px-2 py-1.5 text-left transition",
+                    selected
+                      ? "bg-[var(--felt)] text-white shadow-sm"
+                      : "text-[var(--ink)] hover:bg-[var(--surface)]",
+                  ].join(" ")}
+                >
+                  <p
                     className={[
-                      "min-w-0 rounded-xl px-2.5 py-2.5 text-left transition",
-                      selected
-                        ? "bg-[var(--felt)] text-white shadow-sm"
-                        : "text-[var(--ink)] hover:bg-[var(--surface)]",
+                      "text-[10px] font-semibold uppercase tracking-[0.12em]",
+                      selected ? "text-white/75" : "text-[var(--muted)]",
                     ].join(" ")}
                   >
-                    <p
-                      className={[
-                        "text-[10px] font-semibold uppercase tracking-[0.12em]",
-                        selected ? "text-white/75" : "text-[var(--muted)]",
-                      ].join(" ")}
-                    >
-                      {side.label}
-                      <span
-                        className={[
-                          "ml-1.5 tabular-nums",
-                          selected ? "text-white/80" : "text-[var(--muted)]",
-                        ].join(" ")}
-                      >
-                        {side.filled}/{slots}
-                      </span>
-                    </p>
-                    <p className="mt-0.5 truncate text-sm font-semibold leading-tight">
-                      {side.teamName}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
+                    {side.label}
+                    <span className="ml-1.5 tabular-nums">
+                      {side.filled}/{slots}
+                    </span>
+                  </p>
+                  <p className="mt-0.5 truncate text-sm font-semibold leading-tight">
+                    {side.teamName}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
 
           <div
-            className={
-              !oppTeam || mobileSide === "mine" ? "min-w-0" : "hidden xl:block"
-            }
+            className={mobileSide === "home" ? "min-w-0" : "hidden xl:block"}
           >
             <LineupPicker
-              side="mine"
-              title={myTeam.name}
-              subtitle={`Pick players · drag ⠿ to reorder · ▲▼ also work`}
-              roster={myTeam.players}
-              lineup={myLineup.length === slots ? myLineup : emptyLineup(slots)}
+              side="home"
+              title={homeTeam.name}
+              subtitle="Home · pick players · drag ⠿ to reorder"
+              roster={homeTeam.players}
+              lineup={
+                homeLineup.length === slots ? homeLineup : emptyLineup(slots)
+              }
               slots={slots}
               actions={
-                <LoadLineupMenu
-                  presets={teamPresets}
-                  onLoad={applyPreset}
-                />
+                homeTeamId === prefs.teamId ? (
+                  <LoadLineupMenu
+                    presets={presetsFor(homeTeamId)}
+                    onLoad={(preset) => applyPreset("home", preset)}
+                  />
+                ) : undefined
               }
               onSelectSlot={(slotIndex, playerId) =>
-                setSlotPlayer("mine", slotIndex, playerId)
+                setSlotPlayer("home", slotIndex, playerId)
               }
-              onMove={(from, to) => moveInLineup("mine", from, to)}
+              onMove={(from, to) => moveInLineup("home", from, to)}
               dragState={dragState}
               dropTarget={dropTarget}
               setDragState={setDragState}
@@ -699,37 +641,36 @@ export function HandicapCalculator({
             />
           </div>
 
-          {oppTeam ? (
-            <div
-              className={
-                mobileSide === "opp" ? "min-w-0" : "hidden xl:block"
+          <div
+            className={mobileSide === "away" ? "min-w-0" : "hidden xl:block"}
+          >
+            <LineupPicker
+              side="away"
+              title={awayTeam.name}
+              subtitle="Away · pick players · drag ⠿ to reorder"
+              roster={awayTeam.players}
+              lineup={
+                awayLineup.length === slots ? awayLineup : emptyLineup(slots)
               }
-            >
-              <LineupPicker
-                side="opp"
-                title={oppTeam.name}
-                subtitle={`Choose ${slots} opponents by slot`}
-                roster={oppTeam.players}
-                lineup={
-                  oppLineup.length === slots ? oppLineup : emptyLineup(slots)
-                }
-                slots={slots}
-                onSelectSlot={(slotIndex, playerId) =>
-                  setSlotPlayer("opp", slotIndex, playerId)
-                }
-                onMove={(from, to) => moveInLineup("opp", from, to)}
-                dragState={dragState}
-                dropTarget={dropTarget}
-                setDragState={setDragState}
-                setDropTarget={setDropTarget}
-              />
-            </div>
-          ) : (
-            <EmptyState
-              title="Select an opponent"
-              body="Or wait for schedule auto-match once your team is set."
+              slots={slots}
+              actions={
+                awayTeamId === prefs.teamId ? (
+                  <LoadLineupMenu
+                    presets={presetsFor(awayTeamId)}
+                    onLoad={(preset) => applyPreset("away", preset)}
+                  />
+                ) : undefined
+              }
+              onSelectSlot={(slotIndex, playerId) =>
+                setSlotPlayer("away", slotIndex, playerId)
+              }
+              onMove={(from, to) => moveInLineup("away", from, to)}
+              dragState={dragState}
+              dropTarget={dropTarget}
+              setDragState={setDragState}
+              setDropTarget={setDropTarget}
             />
-          )}
+          </div>
         </section>
       )}
 
@@ -739,160 +680,202 @@ export function HandicapCalculator({
             Handicap by round
           </h4>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            Games awarded from expected scores · pairings follow your lineups
+            {roundTotals
+              ? `Season games awarded · Home +${roundTotals.home} · Away +${roundTotals.away}`
+              : "Games awarded from expected scores · pairings follow your lineups"}
           </p>
         </div>
-        {!results ? (
+        {!results || !activeResult ? (
           <EmptyState
             title="Finish both lineups"
-            body={`Pick a player in each of the ${slots} slots for both teams. Drag filled slots to reorder.`}
+            body={`Pick home and away, then fill all ${slots} slots on each side.`}
           />
         ) : (
-          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-            {results.map((result, roundIndex) => {
-              const points = Math.max(result.teamOne, result.teamTwo);
-              const homeGets = result.teamOne > 0;
-              const awayGets = result.teamTwo > 0;
-              const recipientName = homeGets
-                ? homeTeam?.name
-                : awayGets
-                  ? awayTeam?.name
-                  : null;
-              const homePlayers = compactPlayers(homeLineup);
-              const awayPlayers = compactPlayers(awayLineup);
-              const homeName = homeTeam?.name ?? "Home";
-              const awayName = awayTeam?.name ?? "Away";
-              return (
-                <article
-                  key={result.round}
-                  className="animate-rise overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] shadow-sm"
-                  style={{ animationDelay: `${Math.min(roundIndex, 4) * 45}ms` }}
-                >
-                  <div className="flex items-center gap-3 px-3.5 py-3 sm:px-4">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
-                        Round {result.round}
-                      </p>
-                      <p className="mt-0.5 truncate font-[family-name:var(--font-display)] text-lg leading-tight text-[var(--felt-deep)]">
-                        {points === 0
-                          ? "Even — no games"
-                          : `${recipientName} gets +${points}`}
-                      </p>
-                    </div>
-                    <div
+          <div className="space-y-3">
+            <div
+              role="tablist"
+              aria-label="Rounds"
+              className="grid gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+              style={{
+                gridTemplateColumns: `repeat(${results.length}, minmax(0, 1fr))`,
+              }}
+            >
+              {results.map((result) => {
+                const points = Math.max(result.teamOne, result.teamTwo);
+                const selected = result.round === activeResult.round;
+                const sideLabel =
+                  result.teamOne > 0 ? "H" : result.teamTwo > 0 ? "A" : "—";
+                return (
+                  <button
+                    key={result.round}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => setActiveRound(result.round)}
+                    className={[
+                      "min-w-0 rounded-lg px-1 py-1.5 text-center transition",
+                      selected
+                        ? "bg-[var(--felt)] text-white shadow-sm"
+                        : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
+                    ].join(" ")}
+                  >
+                    <p className="text-[11px] font-semibold leading-none sm:text-xs">
+                      R{result.round}
+                    </p>
+                    <p
                       className={[
-                        "shrink-0 text-right",
-                        points === 0 ? "opacity-70" : "",
+                        "mt-0.5 text-[10px] font-semibold tabular-nums leading-none",
+                        selected ? "text-white/85" : "text-[var(--muted)]",
                       ].join(" ")}
                     >
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                        Games
-                      </p>
-                      <p
-                        className={[
-                          "tabular-nums text-2xl font-semibold leading-none",
-                          points === 0
-                            ? "text-[var(--muted)]"
-                            : "text-[var(--ink)]",
-                        ].join(" ")}
-                      >
-                        {points === 0 ? "0" : `+${points}`}
-                      </p>
-                    </div>
-                  </div>
+                      {points === 0 ? "even" : `${sideLabel}+${points}`}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
 
-                  <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2 border-y border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-2.5 sm:px-4">
-                    <div className="min-w-0">
-                      <p
-                        className={[
-                          "truncate text-[10px] font-semibold uppercase tracking-[0.12em]",
-                          homeGets
-                            ? "text-[var(--amber)]"
-                            : "text-[var(--muted)]",
-                        ].join(" ")}
-                      >
-                        Home{homeGets ? " · gets" : ""}
-                      </p>
-                      <p className="mt-0.5 truncate text-xs font-medium text-[var(--ink)]">
-                        {homeName}
-                      </p>
-                      <p className="mt-0.5 tabular-nums text-sm font-semibold text-[var(--felt-deep)]">
-                        {result.teamOneExpected.toFixed(1)}
-                      </p>
-                    </div>
-                    <div className="pb-0.5 text-center">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                        Exp
-                      </p>
-                    </div>
-                    <div className="min-w-0 text-right">
-                      <p
-                        className={[
-                          "truncate text-[10px] font-semibold uppercase tracking-[0.12em]",
-                          awayGets
-                            ? "text-[var(--amber)]"
-                            : "text-[var(--muted)]",
-                        ].join(" ")}
-                      >
-                        Away{awayGets ? " · gets" : ""}
-                      </p>
-                      <p className="mt-0.5 truncate text-xs font-medium text-[var(--ink)]">
-                        {awayName}
-                      </p>
-                      <p className="mt-0.5 tabular-nums text-sm font-semibold text-[var(--felt-deep)]">
-                        {result.teamTwoExpected.toFixed(1)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <ul className="divide-y divide-[var(--line)]">
-                    {result.matchups.map((matchup, index) => {
-                      const home =
-                        homePlayers[matchup.homeIndexes[0] - 1] ?? null;
-                      const away =
-                        awayPlayers[matchup.awayIndexes[0] - 1] ?? null;
-                      return (
-                        <li
-                          key={`${result.round}-${index}`}
-                          className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3.5 py-2.5 sm:px-4"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-[var(--ink)]">
-                              {home
-                                ? playerLabel(home)
-                                : `H${matchup.homeIndexes[0]}`}
-                            </p>
-                            <p className="tabular-nums text-xs text-[var(--muted)]">
-                              {Math.round(matchup.homeRating)}
-                            </p>
-                          </div>
-                          <span
-                            aria-hidden
-                            className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]"
-                          >
-                            vs
-                          </span>
-                          <div className="min-w-0 text-right">
-                            <p className="truncate text-sm font-medium text-[var(--ink)]">
-                              {away
-                                ? playerLabel(away)
-                                : `A${matchup.awayIndexes[0]}`}
-                            </p>
-                            <p className="tabular-nums text-xs text-[var(--muted)]">
-                              {Math.round(matchup.awayRating)}
-                            </p>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </article>
-              );
-            })}
+            <RoundHandicapCard
+              result={activeResult}
+              homeName={homeTeam?.name ?? "Home"}
+              awayName={awayTeam?.name ?? "Away"}
+              homePlayers={compactPlayers(homeLineup)}
+              awayPlayers={compactPlayers(awayLineup)}
+            />
           </div>
         )}
       </section>
     </div>
+  );
+}
+
+function RoundHandicapCard({
+  result,
+  homeName,
+  awayName,
+  homePlayers,
+  awayPlayers,
+}: {
+  result: RoundHandicapResult;
+  homeName: string;
+  awayName: string;
+  homePlayers: RosterPlayer[];
+  awayPlayers: RosterPlayer[];
+}) {
+  const points = Math.max(result.teamOne, result.teamTwo);
+  const homeGets = result.teamOne > 0;
+  const awayGets = result.teamTwo > 0;
+  const recipientName = homeGets ? homeName : awayGets ? awayName : null;
+
+  return (
+    <article className="animate-rise overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] shadow-sm">
+      <div className="flex items-center gap-3 px-3.5 py-3 sm:px-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
+            Round {result.round}
+          </p>
+          <p className="mt-0.5 truncate font-[family-name:var(--font-display)] text-lg leading-tight text-[var(--felt-deep)]">
+            {points === 0
+              ? "Even — no games"
+              : `${recipientName} gets +${points}`}
+          </p>
+        </div>
+        <div
+          className={[
+            "shrink-0 text-right",
+            points === 0 ? "opacity-70" : "",
+          ].join(" ")}
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            Games
+          </p>
+          <p
+            className={[
+              "tabular-nums text-2xl font-semibold leading-none",
+              points === 0 ? "text-[var(--muted)]" : "text-[var(--ink)]",
+            ].join(" ")}
+          >
+            {points === 0 ? "0" : `+${points}`}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2 border-y border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-2.5 sm:px-4">
+        <div className="min-w-0">
+          <p
+            className={[
+              "truncate text-[10px] font-semibold uppercase tracking-[0.12em]",
+              homeGets ? "text-[var(--amber)]" : "text-[var(--muted)]",
+            ].join(" ")}
+          >
+            Home{homeGets ? " · gets" : ""}
+          </p>
+          <p className="mt-0.5 truncate text-xs font-medium text-[var(--ink)]">
+            {homeName}
+          </p>
+          <p className="mt-0.5 tabular-nums text-sm font-semibold text-[var(--felt-deep)]">
+            {result.teamOneExpected.toFixed(1)}
+          </p>
+        </div>
+        <div className="pb-0.5 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            Exp
+          </p>
+        </div>
+        <div className="min-w-0 text-right">
+          <p
+            className={[
+              "truncate text-[10px] font-semibold uppercase tracking-[0.12em]",
+              awayGets ? "text-[var(--amber)]" : "text-[var(--muted)]",
+            ].join(" ")}
+          >
+            Away{awayGets ? " · gets" : ""}
+          </p>
+          <p className="mt-0.5 truncate text-xs font-medium text-[var(--ink)]">
+            {awayName}
+          </p>
+          <p className="mt-0.5 tabular-nums text-sm font-semibold text-[var(--felt-deep)]">
+            {result.teamTwoExpected.toFixed(1)}
+          </p>
+        </div>
+      </div>
+
+      <ul className="divide-y divide-[var(--line)]">
+        {result.matchups.map((matchup, index) => {
+          const home = homePlayers[matchup.homeIndexes[0] - 1] ?? null;
+          const away = awayPlayers[matchup.awayIndexes[0] - 1] ?? null;
+          return (
+            <li
+              key={`${result.round}-${index}`}
+              className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3.5 py-2.5 sm:px-4"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-[var(--ink)]">
+                  {home ? playerLabel(home) : `H${matchup.homeIndexes[0]}`}
+                </p>
+                <p className="tabular-nums text-xs text-[var(--muted)]">
+                  {Math.round(matchup.homeRating)}
+                </p>
+              </div>
+              <span
+                aria-hidden
+                className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]"
+              >
+                vs
+              </span>
+              <div className="min-w-0 text-right">
+                <p className="truncate text-sm font-medium text-[var(--ink)]">
+                  {away ? playerLabel(away) : `A${matchup.awayIndexes[0]}`}
+                </p>
+                <p className="tabular-nums text-xs text-[var(--muted)]">
+                  {Math.round(matchup.awayRating)}
+                </p>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </article>
   );
 }
 
