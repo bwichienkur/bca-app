@@ -1427,7 +1427,7 @@ export function LeagueApp() {
                   normalizeTeamName(prefs.teamName ?? "") ===
                   normalizeTeamName(selectedTeamName)
                 }
-                backLabel="Back to standings"
+                backLabel="Back to league"
                 onClose={() => setSelectedTeamName(null)}
                 onSetAsMyTeam={
                   detailTeam ? () => setMyTeam(detailTeam) : undefined
@@ -1437,14 +1437,14 @@ export function LeagueApp() {
               <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-                    Division
+                    League
                   </p>
                   <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
                     Team standings
                   </h3>
                   <p className="mt-1 text-sm text-[var(--muted)]">
                     Tap a team to view player statistics. Use back to return to
-                    the standings grid.
+                    the league grid.
                   </p>
                 </div>
                 <SearchField
