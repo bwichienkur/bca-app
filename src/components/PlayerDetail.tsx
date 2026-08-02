@@ -26,8 +26,19 @@ type MatchesPayload = {
   total: number;
   page: number;
   totalPages: number;
+  buckets: Array<{ bucket: number; count: number }>;
+  ratingsComplete?: boolean;
   error?: string;
 };
+
+type DetailSection = "overview" | "performance" | "leagues" | "matches";
+
+const SECTIONS: Array<{ id: DetailSection; label: string }> = [
+  { id: "overview", label: "Overview" },
+  { id: "performance", label: "By rating" },
+  { id: "leagues", label: "Leagues" },
+  { id: "matches", label: "Matches" },
+];
 
 function statusLabel(status: FargoPlayerProfile["robustnessStatus"]): string {
   if (status === "established") return "Established";
@@ -85,21 +96,11 @@ function winPct(wins: number, loses: number): number {
 function pickOverall(
   stats: FargoStatsOverall[],
   temporalType: number,
-): FargoWinLossView | null {
+): { wins: number; loses: number } | null {
   const row = stats.find((item) => item.temporalType === temporalType);
   if (!row?.winLoss) return null;
-  return {
-    wins: row.winLoss.wins,
-    loses: row.winLoss.loses,
-    label: temporalLabel(temporalType),
-  };
+  return { wins: row.winLoss.wins, loses: row.winLoss.loses };
 }
-
-type FargoWinLossView = {
-  wins: number;
-  loses: number;
-  label: string;
-};
 
 function pickByRating(
   stats: FargoStatsByRating[],
@@ -108,11 +109,23 @@ function pickByRating(
   return stats.find((item) => item.temporalType === temporalType) ?? null;
 }
 
-function RatingSparkline({
-  values,
-}: {
-  values: number[];
-}) {
+function pageNumbers(current: number, total: number): (number | "…")[] {
+  if (total <= 5) {
+    return Array.from({ length: total }, (_, index) => index + 1);
+  }
+  const pages = new Set<number>([1, total, current]);
+  if (current - 1 > 1) pages.add(current - 1);
+  if (current + 1 < total) pages.add(current + 1);
+  const sorted = [...pages].sort((a, b) => a - b);
+  const out: (number | "…")[] = [];
+  for (let i = 0; i < sorted.length; i += 1) {
+    if (i > 0 && sorted[i]! - sorted[i - 1]! > 1) out.push("…");
+    out.push(sorted[i]!);
+  }
+  return out;
+}
+
+function RatingSparkline({ values }: { values: number[] }) {
   if (values.length < 2) return null;
   const min = Math.min(...values);
   const max = Math.max(...values);
@@ -170,18 +183,26 @@ export function PlayerDetail({
   fallbackName,
   onBack,
 }: PlayerDetailProps) {
+  const [section, setSection] = useState<DetailSection>("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [player, setPlayer] = useState<FargoPlayerProfile | null>(null);
   const [teams, setTeams] = useState<FargoLeagueTeam[]>([]);
+  const [statsWindow, setStatsWindow] = useState<0 | 1>(0);
 
-  const [matchesLoading, setMatchesLoading] = useState(true);
+  const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesError, setMatchesError] = useState<string | null>(null);
   const [matches, setMatches] = useState<FargoPlayerMatch[]>([]);
   const [matchesTotal, setMatchesTotal] = useState(0);
   const [matchesPage, setMatchesPage] = useState(1);
   const [matchesTotalPages, setMatchesTotalPages] = useState(1);
-  const [statsWindow, setStatsWindow] = useState<0 | 1>(0);
+  const [matchQuery, setMatchQuery] = useState("");
+  const [debouncedMatchQuery, setDebouncedMatchQuery] = useState("");
+  const [matchBucket, setMatchBucket] = useState<number | null>(null);
+  const [bucketCounts, setBucketCounts] = useState<
+    Array<{ bucket: number; count: number }>
+  >([]);
+  const [ratingsWarming, setRatingsWarming] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,6 +210,11 @@ export function PlayerDetail({
     setError(null);
     setPlayer(null);
     setTeams([]);
+    setSection("overview");
+    setMatchQuery("");
+    setDebouncedMatchQuery("");
+    setMatchBucket(null);
+    setMatchesPage(1);
 
     void fetch(`/api/players/${encodeURIComponent(playerId)}`)
       .then(async (response) => {
@@ -214,12 +240,46 @@ export function PlayerDetail({
   }, [playerId]);
 
   useEffect(() => {
+    if (section !== "matches") return;
+    let cancelled = false;
+    // Warm opponent-rating cache when Matches is opened so bucket filters stay usable.
+    setRatingsWarming(true);
+    void fetch(
+      `/api/players/${encodeURIComponent(playerId)}/matches?prefetch=1`,
+    )
+      .catch(() => null)
+      .finally(() => {
+        if (!cancelled) setRatingsWarming(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [section, playerId]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedMatchQuery(matchQuery.trim());
+      setMatchesPage(1);
+    }, 280);
+    return () => window.clearTimeout(timer);
+  }, [matchQuery]);
+
+  useEffect(() => {
+    if (section !== "matches") return;
+
     let cancelled = false;
     setMatchesLoading(true);
     setMatchesError(null);
 
+    const params = new URLSearchParams({
+      page: String(matchesPage),
+      limit: "20",
+    });
+    if (debouncedMatchQuery) params.set("q", debouncedMatchQuery);
+    if (matchBucket != null) params.set("bucket", String(matchBucket));
+
     void fetch(
-      `/api/players/${encodeURIComponent(playerId)}/matches?page=${matchesPage}&limit=25`,
+      `/api/players/${encodeURIComponent(playerId)}/matches?${params.toString()}`,
     )
       .then(async (response) => {
         const payload = (await response.json()) as MatchesPayload;
@@ -230,6 +290,7 @@ export function PlayerDetail({
         setMatches(payload.matches ?? []);
         setMatchesTotal(payload.total ?? 0);
         setMatchesTotalPages(payload.totalPages ?? 1);
+        setBucketCounts(payload.buckets ?? []);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -245,7 +306,7 @@ export function PlayerDetail({
     return () => {
       cancelled = true;
     };
-  }, [playerId, matchesPage]);
+  }, [section, playerId, matchesPage, debouncedMatchQuery, matchBucket]);
 
   const overall = useMemo(
     () => (player ? pickOverall(player.statsOverall, statsWindow) : null),
@@ -260,15 +321,9 @@ export function PlayerDetail({
     [player],
   );
 
-  const uniqueTeams = useMemo(() => {
-    const seen = new Set<string>();
-    return teams.filter((team) => {
-      const key = `${team.leagueId}:${team.divisionId}:${team.teamId}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  }, [teams]);
+  const goToMatchesPage = (next: number) => {
+    setMatchesPage(Math.min(Math.max(1, next), matchesTotalPages));
+  };
 
   return (
     <section className="space-y-4 md:space-y-5">
@@ -276,9 +331,10 @@ export function PlayerDetail({
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--felt-deep)] underline-offset-2 hover:underline"
+          className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
         >
-          <span aria-hidden>←</span> Back to search
+          <span aria-hidden>←</span>
+          Back to search
         </button>
 
         <div className="flex items-start justify-between gap-4">
@@ -300,6 +356,24 @@ export function PlayerDetail({
                   .join(" · ")}
               </p>
             ) : null}
+            {player ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                <span
+                  className={[
+                    "inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]",
+                    statusClass(player.robustnessStatus),
+                  ].join(" ")}
+                >
+                  {statusLabel(player.robustnessStatus)}
+                  {player.robustness != null ? ` · ${player.robustness}` : ""}
+                </span>
+                {player.provisionalRating != null ? (
+                  <span className="inline-flex rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                    Provisional · {player.provisionalRating}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           {player ? (
             <div className="shrink-0 text-right">
@@ -311,6 +385,33 @@ export function PlayerDetail({
               </p>
             </div>
           ) : null}
+        </div>
+
+        <div
+          role="tablist"
+          aria-label="Player detail sections"
+          className="flex gap-1 overflow-x-auto pb-0.5"
+        >
+          {SECTIONS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={section === item.id}
+              onClick={() => setSection(item.id)}
+              className={[
+                "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                section === item.id
+                  ? "bg-[var(--felt)] text-white"
+                  : "bg-[var(--surface-2)] text-[var(--muted)] hover:text-[var(--ink)]",
+              ].join(" ")}
+            >
+              {item.label}
+              {item.id === "leagues" && teams.length
+                ? ` · ${teams.length}`
+                : ""}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -326,35 +427,8 @@ export function PlayerDetail({
         </div>
       ) : null}
 
-      {player ? (
+      {player && section === "overview" ? (
         <div className="space-y-5">
-          <div className="flex flex-wrap gap-2">
-            <span
-              className={[
-                "inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]",
-                statusClass(player.robustnessStatus),
-              ].join(" ")}
-            >
-              {statusLabel(player.robustnessStatus)}
-              {player.robustness != null ? ` · ${player.robustness}` : ""}
-            </span>
-            {player.provisionalRating != null ? (
-              <span className="inline-flex rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                Provisional · {player.provisionalRating}
-              </span>
-            ) : null}
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <StatPill label="Effective" value={player.effectiveRating ?? "—"} />
-            <StatPill label="Rating" value={player.rating ?? "—"} />
-            <StatPill label="Robustness" value={player.robustness ?? "—"} />
-            <StatPill
-              label="Provisional"
-              value={player.provisionalRating ?? "—"}
-            />
-          </div>
-
           <div className="space-y-3">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
@@ -408,52 +482,6 @@ export function PlayerDetail({
           <div className="space-y-3">
             <div>
               <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
-                Stats by opponent rating
-              </h4>
-              <p className="text-sm text-[var(--muted)]">
-                {temporalLabel(statsWindow)} results by rating band.
-              </p>
-            </div>
-
-            {byRating?.buckets?.length ? (
-              <ul className="space-y-2">
-                {byRating.buckets.map((bucket) => {
-                  const total = bucket.winLoss.wins + bucket.winLoss.loses;
-                  const pct = winPct(bucket.winLoss.wins, bucket.winLoss.loses);
-                  return (
-                    <li
-                      key={`${statsWindow}-${bucket.bucket}`}
-                      className="rounded-2xl border border-[var(--line)] bg-[var(--surface)]/80 px-3 py-2.5"
-                    >
-                      <div className="flex items-center justify-between gap-3 text-sm">
-                        <span className="font-semibold tabular-nums text-[var(--ink)]">
-                          {bucket.bucket}s
-                        </span>
-                        <span className="tabular-nums text-[var(--muted)]">
-                          {bucket.winLoss.wins}–{bucket.winLoss.loses}
-                          {total > 0 ? ` · ${pct}%` : ""}
-                        </span>
-                      </div>
-                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)]">
-                        <div
-                          className="h-full rounded-full bg-[var(--felt)] transition-[width] duration-300"
-                          style={{ width: `${total > 0 ? pct : 0}%` }}
-                        />
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className="text-sm text-[var(--muted)]">
-                No rating-band stats available.
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
                 Rating history
               </h4>
               <p className="text-sm text-[var(--muted)]">
@@ -467,9 +495,9 @@ export function PlayerDetail({
                   <RatingSparkline values={historyValues} />
                   <div className="shrink-0 text-right text-xs text-[var(--muted)]">
                     <p>
-                      {formatMonth(player.ratingHistory[0])} →{" "}
+                      {formatMonth(player.ratingHistory[0]!)} →{" "}
                       {formatMonth(
-                        player.ratingHistory[player.ratingHistory.length - 1],
+                        player.ratingHistory[player.ratingHistory.length - 1]!,
                       )}
                     </p>
                     <p className="mt-1 tabular-nums">
@@ -503,152 +531,335 @@ export function PlayerDetail({
               </p>
             )}
           </div>
+        </div>
+      ) : null}
 
-          {uniqueTeams.length ? (
-            <div className="space-y-3">
-              <div>
-                <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
-                  League teams
-                </h4>
-                <p className="text-sm text-[var(--muted)]">
-                  Active LMS memberships linked to this player.
-                </p>
-              </div>
-              <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)]/90">
-                {uniqueTeams.map((team) => (
+      {player && section === "performance" ? (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
+                Stats by opponent rating
+              </h4>
+              <p className="text-sm text-[var(--muted)]">
+                {temporalLabel(statsWindow)} results by rating band.
+              </p>
+            </div>
+            <div className="inline-flex rounded-full border border-[var(--line)] bg-[var(--surface)] p-0.5">
+              {(
+                [
+                  [0, "All-time"],
+                  [1, "Recent"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setStatsWindow(value)}
+                  className={[
+                    "rounded-full px-3 py-1 text-xs font-semibold transition",
+                    statsWindow === value
+                      ? "bg-[var(--felt)] text-white"
+                      : "text-[var(--muted)] hover:text-[var(--ink)]",
+                  ].join(" ")}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {byRating?.buckets?.length ? (
+            <ul className="space-y-2">
+              {byRating.buckets.map((bucket) => {
+                const total = bucket.winLoss.wins + bucket.winLoss.loses;
+                const pct = winPct(bucket.winLoss.wins, bucket.winLoss.loses);
+                return (
                   <li
-                    key={`${team.leagueId}-${team.divisionId}-${team.teamId}`}
-                    className="px-4 py-3"
+                    key={`${statsWindow}-${bucket.bucket}`}
+                    className="rounded-2xl border border-[var(--line)] bg-[var(--surface)]/80 px-3 py-2.5"
                   >
-                    <p className="font-medium text-[var(--ink)]">
-                      {team.teamName}
-                    </p>
-                    <p className="mt-0.5 text-sm text-[var(--muted)]">
-                      {team.leagueName} · {team.divisionName}
-                    </p>
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="font-semibold tabular-nums text-[var(--ink)]">
+                        {bucket.bucket}s
+                      </span>
+                      <span className="tabular-nums text-[var(--muted)]">
+                        {bucket.winLoss.wins}–{bucket.winLoss.loses}
+                        {total > 0 ? ` · ${pct}%` : ""}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)]">
+                      <div
+                        className="h-full rounded-full bg-[var(--felt)] transition-[width] duration-300"
+                        style={{ width: `${total > 0 ? pct : 0}%` }}
+                      />
+                    </div>
                   </li>
-                ))}
-              </ul>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="text-sm text-[var(--muted)]">
+              No rating-band stats available.
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      {player && section === "leagues" ? (
+        <div className="space-y-3">
+          <div>
+            <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
+              Active leagues
+            </h4>
+            <p className="text-sm text-[var(--muted)]">
+              Divisions with upcoming matches for this player.
+            </p>
+          </div>
+
+          {teams.length ? (
+            <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)]/90">
+              {teams.map((team) => (
+                <li
+                  key={`${team.leagueId}-${team.divisionId}-${team.teamId}`}
+                  className="px-4 py-3"
+                >
+                  <p className="font-medium text-[var(--ink)]">
+                    {team.teamName}
+                  </p>
+                  <p className="mt-0.5 text-sm text-[var(--muted)]">
+                    {team.leagueName}
+                  </p>
+                  <p className="mt-0.5 text-sm text-[var(--felt-deep)]">
+                    {team.divisionName}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-[var(--muted)]">
+              No active league divisions found.
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      {player && section === "matches" ? (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
+                Match history
+              </h4>
+              <p className="text-sm text-[var(--muted)]">
+                {matchesTotal
+                  ? `${matchesTotal.toLocaleString()} match${matchesTotal === 1 ? "" : "es"}`
+                  : "Search and filter results"}
+                {ratingsWarming ? (
+                  <span className="ml-2 text-[var(--amber)]">
+                    Loading opponent ratings…
+                  </span>
+                ) : null}
+              </p>
+            </div>
+            {matchesTotalPages > 1 ? (
+              <p className="text-xs tabular-nums text-[var(--muted)]">
+                Page {matchesPage} of {matchesTotalPages}
+              </p>
+            ) : null}
+          </div>
+
+          <label className="relative block">
+            <span className="sr-only">Search matches</span>
+            <input
+              value={matchQuery}
+              onChange={(event) => setMatchQuery(event.target.value)}
+              placeholder="Search opponent or event…"
+              autoComplete="off"
+              spellCheck={false}
+              className="w-full rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2"
+            />
+          </label>
+
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                setMatchBucket(null);
+                setMatchesPage(1);
+              }}
+              className={[
+                "rounded-full px-3 py-1 text-xs font-semibold transition",
+                matchBucket == null
+                  ? "bg-[var(--felt)] text-white"
+                  : "bg-[var(--surface-2)] text-[var(--muted)] hover:text-[var(--ink)]",
+              ].join(" ")}
+            >
+              All ratings
+            </button>
+            {(bucketCounts.length
+              ? bucketCounts
+              : [300, 400, 500, 600, 700, 800].map((bucket) => ({
+                  bucket,
+                  count: -1,
+                }))
+            ).map(({ bucket, count }) => (
+              <button
+                key={bucket}
+                type="button"
+                onClick={() => {
+                  setMatchBucket(bucket);
+                  setMatchesPage(1);
+                }}
+                className={[
+                  "rounded-full px-3 py-1 text-xs font-semibold tabular-nums transition",
+                  matchBucket === bucket
+                    ? "bg-[var(--felt)] text-white"
+                    : "bg-[var(--surface-2)] text-[var(--muted)] hover:text-[var(--ink)]",
+                ].join(" ")}
+              >
+                {bucket}s
+                {count >= 0 ? ` · ${count}` : ""}
+              </button>
+            ))}
+          </div>
+
+          {matchesError ? (
+            <div className="rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
+              {matchesError}
             </div>
           ) : null}
 
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
-                  Match history
-                </h4>
-                <p className="text-sm text-[var(--muted)]">
-                  {matchesTotal
-                    ? `${matchesTotal.toLocaleString()} matches on record`
-                    : "Recent results against opponents"}
-                </p>
-              </div>
-              {matchesTotalPages > 1 ? (
-                <p className="text-xs tabular-nums text-[var(--muted)]">
-                  Page {matchesPage} of {matchesTotalPages}
-                </p>
-              ) : null}
-            </div>
+          {matchesLoading && !matches.length ? (
+            <p className="py-4 text-center text-sm text-[var(--muted)]">
+              {matchBucket != null
+                ? "Filtering by opponent rating…"
+                : "Loading matches…"}
+            </p>
+          ) : null}
 
-            {matchesError ? (
-              <div className="rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
-                {matchesError}
-              </div>
-            ) : null}
+          {!matchesLoading && !matchesError && !matches.length ? (
+            <p className="text-sm text-[var(--muted)]">No matches found.</p>
+          ) : null}
 
-            {matchesLoading && !matches.length ? (
-              <p className="py-4 text-center text-sm text-[var(--muted)]">
-                Loading matches…
-              </p>
-            ) : null}
+          {matches.length ? (
+            <ul
+              className={[
+                "divide-y divide-[var(--line)] overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)]/90 transition-opacity",
+                matchesLoading ? "opacity-60" : "opacity-100",
+              ].join(" ")}
+            >
+              {matches.map((match) => (
+                <li
+                  key={match.id}
+                  className="flex items-start justify-between gap-3 px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-[var(--ink)]">
+                      vs {match.opponentName}
+                      {match.opponentRating != null ? (
+                        <span className="ml-2 tabular-nums text-[var(--felt-deep)]">
+                          {Math.round(match.opponentRating)}
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="mt-0.5 text-sm text-[var(--muted)]">
+                      {[
+                        formatDate(match.datePlayed),
+                        match.event,
+                        match.opponentReadableId
+                          ? `#${match.opponentReadableId}`
+                          : null,
+                        match.isLeague
+                          ? "League"
+                          : match.isTournament
+                            ? "Tournament"
+                            : match.isThirdParty
+                              ? "Third-party"
+                              : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p
+                      className={[
+                        "font-[family-name:var(--font-display)] text-xl tabular-nums leading-none",
+                        match.result === "win"
+                          ? "text-[var(--felt-deep)]"
+                          : match.result === "loss"
+                            ? "text-[var(--danger)]"
+                            : "text-[var(--muted)]",
+                      ].join(" ")}
+                    >
+                      {match.playerScore}–{match.opponentScore}
+                    </p>
+                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                      {match.result}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
-            {!matchesLoading && !matchesError && !matches.length ? (
-              <p className="text-sm text-[var(--muted)]">No matches found.</p>
-            ) : null}
-
-            {matches.length ? (
-              <ul
-                className={[
-                  "divide-y divide-[var(--line)] overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)]/90 transition-opacity",
-                  matchesLoading ? "opacity-60" : "opacity-100",
-                ].join(" ")}
+          {matchesTotalPages > 1 ? (
+            <nav
+              aria-label="Match history pages"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface)]/80 px-2.5 py-2 sm:px-3"
+            >
+              <button
+                type="button"
+                onClick={() => goToMatchesPage(matchesPage - 1)}
+                disabled={matchesPage <= 1 || matchesLoading}
+                className="rounded-full bg-[var(--surface-2)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
               >
-                {matches.map((match) => (
-                  <li
-                    key={match.id}
-                    className="flex items-start justify-between gap-3 px-4 py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium text-[var(--ink)]">
-                        vs {match.opponentName}
-                        {match.opponentReadableId
-                          ? ` (#${match.opponentReadableId})`
-                          : ""}
-                      </p>
-                      <p className="mt-0.5 text-sm text-[var(--muted)]">
-                        {[
-                          formatDate(match.datePlayed),
-                          match.event,
-                          match.isLeague
-                            ? "League"
-                            : match.isTournament
-                              ? "Tournament"
-                              : match.isThirdParty
-                                ? "Third-party"
-                                : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p
+                Previous
+              </button>
+
+              <div className="flex flex-wrap items-center justify-center gap-1">
+                {pageNumbers(matchesPage, matchesTotalPages).map(
+                  (item, index) =>
+                    item === "…" ? (
+                      <span
+                        key={`ellipsis-${index}`}
+                        className="px-1 text-sm text-[var(--muted)]"
+                        aria-hidden
+                      >
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={item}
+                        type="button"
+                        aria-label={`Page ${item}`}
+                        aria-current={item === matchesPage ? "page" : undefined}
+                        onClick={() => goToMatchesPage(item)}
+                        disabled={matchesLoading}
                         className={[
-                          "font-[family-name:var(--font-display)] text-xl tabular-nums leading-none",
-                          match.result === "win"
-                            ? "text-[var(--felt-deep)]"
-                            : match.result === "loss"
-                              ? "text-[var(--danger)]"
-                              : "text-[var(--muted)]",
+                          "min-w-9 rounded-full px-2.5 py-1.5 text-sm font-semibold tabular-nums transition",
+                          item === matchesPage
+                            ? "bg-[var(--felt)] text-white shadow-sm"
+                            : "bg-[var(--surface-2)] text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--ink)]",
                         ].join(" ")}
                       >
-                        {match.playerScore}–{match.opponentScore}
-                      </p>
-                      <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                        {match.result}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-
-            {matchesTotalPages > 1 ? (
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  disabled={matchesPage <= 1 || matchesLoading}
-                  onClick={() => setMatchesPage((page) => Math.max(1, page - 1))}
-                  className="rounded-full bg-[var(--surface-2)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
-                >
-                  Previous
-                </button>
-                <button
-                  type="button"
-                  disabled={matchesPage >= matchesTotalPages || matchesLoading}
-                  onClick={() =>
-                    setMatchesPage((page) =>
-                      Math.min(matchesTotalPages, page + 1),
-                    )
-                  }
-                  className="rounded-full bg-[var(--surface-2)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
-                >
-                  Next
-                </button>
+                        {item}
+                      </button>
+                    ),
+                )}
               </div>
-            ) : null}
-          </div>
+
+              <button
+                type="button"
+                onClick={() => goToMatchesPage(matchesPage + 1)}
+                disabled={matchesPage >= matchesTotalPages || matchesLoading}
+                className="rounded-full bg-[var(--surface-2)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                Next
+              </button>
+            </nav>
+          ) : null}
         </div>
       ) : null}
     </section>

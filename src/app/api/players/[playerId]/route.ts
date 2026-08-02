@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  fetchActiveLeagueTeams,
   fetchFargoPlayerProfile,
-  fetchFargoPlayerTeams,
 } from "@/lib/fargo-player";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   try {
     const player = await fetchFargoPlayerProfile(playerId);
     const teams = player.lmsId
-      ? await fetchFargoPlayerTeams(player.lmsId)
+      ? await fetchActiveLeagueTeams(player.lmsId)
       : [];
     return NextResponse.json({ player, teams });
   } catch (error) {

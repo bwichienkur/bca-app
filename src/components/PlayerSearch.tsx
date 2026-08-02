@@ -175,8 +175,8 @@ export function PlayerSearch() {
             Player search
           </h3>
           <p className="mt-1 max-w-xl text-sm text-[var(--muted)]">
-            Look up any FargoRate rating by name or membership ID, then open a
-            player for match history and stats.
+            Look up any FargoRate rating by name or membership ID, then open
+            stats, active leagues, and match history.
           </p>
         </div>
 
