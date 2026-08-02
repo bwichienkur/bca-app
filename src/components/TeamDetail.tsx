@@ -2,6 +2,8 @@
 
 import { normalizeTeamName } from "@/lib/matchups";
 import type { DivisionTeam, PlayersByTeamReport, RosterPlayer } from "@/lib/types";
+import { Button } from "@/components/ui/Button";
+import { StatBadge } from "@/components/ui/StatBadge";
 import { TeamPlayerStats } from "./TeamPlayerStats";
 
 type TeamDetailProps = {
@@ -34,24 +36,25 @@ export function TeamDetail({
   );
 
   return (
-    <aside className="animate-panel flex h-full flex-col overflow-hidden rounded-[1.45rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
-      <div className="border-b border-[var(--line)] bg-[linear-gradient(135deg,rgba(29,110,158,0.18),transparent_55%)] px-4 py-4 md:px-5">
+    <aside className="animate-panel ui-glass flex h-full flex-col overflow-hidden rounded-[var(--radius)] shadow-[var(--shadow)]">
+      <div className="border-b border-[var(--line)] bg-[linear-gradient(135deg,rgba(91,140,255,0.1),transparent_55%)] px-4 py-5 md:px-6">
         {onClose ? (
-          <button
+          <Button
             type="button"
+            variant="secondary"
             onClick={onClose}
-            className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
+            className="mb-4 !rounded-full !px-3 !py-1.5 !text-xs"
           >
             <span aria-hidden>←</span>
             {backLabel}
-          </button>
+          </Button>
         ) : null}
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--muted)]">
               {isMyTeam ? "My team" : "Team detail"}
             </p>
-            <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)] md:text-3xl">
+            <h3 className="mt-2 font-[family-name:var(--font-display)] text-2xl tracking-tight text-[var(--ink)] md:text-3xl">
               {teamName}
             </h3>
             {team ? (
@@ -68,26 +71,26 @@ export function TeamDetail({
           </div>
         </div>
         {onSetAsMyTeam && !isMyTeam ? (
-          <button
+          <Button
             type="button"
             onClick={onSetAsMyTeam}
-            className="mt-3 rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white"
+            className="mt-4 !rounded-full !px-3.5 !py-1.5 !text-xs"
           >
             Set as my team
-          </button>
+          </Button>
         ) : null}
         {isMyTeam ? (
-          <p className="mt-3 inline-flex rounded-full bg-[var(--felt)]/20 px-3 py-1.5 text-xs font-semibold text-[var(--felt-deep)]">
-            My team ✓
-          </p>
+          <div className="mt-4">
+            <StatBadge tone="primary">My team ✓</StatBadge>
+          </div>
         ) : null}
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto px-3 py-4 md:px-5">
+      <div className="flex-1 space-y-6 overflow-y-auto px-4 py-5 md:px-6">
         {statsTeam && playersByTeam ? (
           <section>
             <div className="mb-3 px-1">
-              <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
+              <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--ink)]">
                 Player statistics
               </h4>
             </div>
@@ -108,7 +111,7 @@ export function TeamDetail({
             <h4 className="mb-2 text-sm font-semibold text-[var(--ink)]">
               Roster & ratings
             </h4>
-            <ul className="divide-y divide-[var(--line)] rounded-2xl border border-[var(--line)] bg-[var(--surface-2)]">
+            <ul className="ui-card divide-y divide-[var(--line)] overflow-hidden">
               {team.players.map((player) => (
                 <li
                   key={player.id}
@@ -125,7 +128,7 @@ export function TeamDetail({
                         : ""}
                     </p>
                   </div>
-                  <span className="tabular-nums font-semibold text-[var(--felt)]">
+                  <span className="tabular-nums font-semibold text-[var(--chalk)]">
                     {player.fargoRating}
                   </span>
                 </li>

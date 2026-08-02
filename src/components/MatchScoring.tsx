@@ -49,6 +49,8 @@ import {
 import { EmptyState } from "./EmptyState";
 import { LoadingState } from "./LoadingState";
 import type { AuthUser } from "./LoginScreen";
+import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { DraggableLineupList } from "./DraggableLineupList";
 import { MatchListCard } from "./MatchListCard";
 import {
@@ -602,13 +604,9 @@ export function MatchScoring({
         title="Sign in to score"
         body="Use Login at the top of the page with your BCA / FargoRate account. Scoring submits to LMS and only lists matches for your selected team."
         action={
-          <button
-            type="button"
-            onClick={onRequestLogin}
-            className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
-          >
+          <Button type="button" onClick={onRequestLogin}>
             Go to login
-          </button>
+          </Button>
         }
       />
     );
@@ -620,13 +618,9 @@ export function MatchScoring({
         title="Choose a division to score"
         body="Pick your division from the context card (from the teams you belong to), then open Score."
         action={
-          <button
-            type="button"
-            onClick={onRequestContext}
-            className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
-          >
+          <Button type="button" onClick={onRequestContext}>
             Choose division
-          </button>
+          </Button>
         }
       />
     );
@@ -638,13 +632,9 @@ export function MatchScoring({
         title="Set My team to score"
         body="Score only lists matches for your selected team."
         action={
-          <button
-            type="button"
-            onClick={onRequestContext}
-            className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
-          >
+          <Button type="button" onClick={onRequestContext}>
             Set my team
-          </button>
+          </Button>
         }
       />
     );
@@ -659,7 +649,7 @@ export function MatchScoring({
     const sheetLocked = Boolean(match.hasBeenPlayed || remoteSubmittedAt);
     sheetLockedRef.current = sheetLocked;
     const actionBtnClass =
-      "rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]";
+      "ui-focus rounded-full border border-[var(--line-strong)] bg-[var(--surface-2)] px-3.5 py-1.5 text-xs font-semibold text-[var(--muted)] transition hover:border-white/20 hover:text-[var(--ink)]";
     return (
       <section className="animate-panel w-full min-w-0 space-y-2.5 overflow-x-hidden">
         <div className="flex items-center justify-between gap-3">
@@ -704,10 +694,10 @@ export function MatchScoring({
             className={[
               "text-xs font-semibold",
               saveStatus === "saving"
-                ? "text-[var(--amber)]"
+                ? "text-[var(--chalk)]"
                 : saveStatus === "local"
                   ? "text-[var(--muted)]"
-                  : "text-[var(--felt-deep)]",
+                  : "text-[var(--chalk)]",
             ].join(" ")}
             aria-live="polite"
           >
@@ -1127,25 +1117,24 @@ export function MatchScoring({
                   </p>
                 ) : (
                   <>
-                    <button
+                    <Button
                       type="button"
                       onClick={() =>
                         setView({ mode: "review", matchId: match.id })
                       }
-                      className="rounded-xl bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white"
                     >
                       Review & submit
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
+                      variant="danger"
                       onClick={() => {
                         if (!match || sheetLocked) return;
                         setConfirmDialog("reset");
                       }}
-                      className="rounded-xl border border-[var(--danger-strong)]/55 bg-[var(--danger-strong)] px-4 py-3 text-sm font-semibold text-white shadow-[0_0_0_1px_rgba(214,69,61,0.25)] transition hover:brightness-110"
                     >
                       Reset sheet
-                    </button>
+                    </Button>
                   </>
                 )}
               </div>
@@ -1200,16 +1189,12 @@ export function MatchScoring({
   }
 
   return (
-    <section className="animate-rise space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-            Score
-          </p>
-          <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-            Scoresheets
-          </h3>
-          <p className="mt-1 text-sm text-[var(--muted)]">
+    <section className="animate-rise space-y-6">
+      <PageHeader
+        eyebrow="Score"
+        title="Scoresheets"
+        description={
+          <>
             {teamName ? (
               <>
                 Open a match to score for{" "}
@@ -1225,9 +1210,9 @@ export function MatchScoring({
               </>
             ) : null}
             {sharedDrafts ? " · multi-device draft sync on" : null}
-          </p>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {listError ? (
         <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
@@ -1252,7 +1237,7 @@ export function MatchScoring({
           body="When this team is scheduled in the selected division, those matches will show up here ready to score."
         />
       ) : (
-        <div className="space-y-2.5">
+        <div className="space-y-3">
           {matches.map((item, index) => {
             const draftExists = draftMatchIds.has(item.id);
             const myTeamKey = teamName ? normalizeTeamName(teamName) : null;
@@ -1349,7 +1334,7 @@ const MatchScoreboard = memo(function MatchScoreboard({
         <p
           className={[
             "mt-0.5 text-[10px] font-semibold uppercase tracking-[0.14em]",
-            mine ? "text-[var(--amber)]" : "text-white/50",
+            mine ? "text-[var(--chalk)]" : "text-white/50",
           ].join(" ")}
         >
           {mine ? "Your team" : side === 1 ? "Home" : "Away"}
@@ -1384,7 +1369,7 @@ const MatchScoreboard = memo(function MatchScoreboard({
       emphasis === "hero" ? "text-white/70" : "text-white/55";
     const labelClass =
       emphasis === "hero"
-        ? "text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--amber)]"
+        ? "text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]"
         : emphasis === "secondary"
           ? "text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55"
           : "text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40";
@@ -1481,7 +1466,7 @@ const MatchScoreboard = memo(function MatchScoreboard({
       <div className="mt-2.5 space-y-1.5">
         <div className="h-1 overflow-hidden rounded-full bg-black/35">
           <div
-            className="h-full rounded-full bg-[color-mix(in_srgb,var(--amber)_75%,white)] transition-[width] duration-300"
+            className="h-full rounded-full bg-[color-mix(in_srgb,var(--felt)_75%,white)] transition-[width] duration-300"
             style={{ width: `${progress * 100}%` }}
           />
         </div>
@@ -1650,7 +1635,7 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
             {matchPointsRound
               ? "Match points (R6)"
               : `Round ${tally.roundNumber} points`}
@@ -1852,7 +1837,7 @@ function LineupEditor({
         className="flex w-full min-w-0 items-center justify-between gap-3 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-3 text-left sm:px-4"
       >
         <div className="min-w-0 flex-1 overflow-hidden">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
             Lineups
           </p>
           <p className="mt-0.5 text-xs text-[var(--muted)] sm:text-sm">
@@ -1871,7 +1856,7 @@ function LineupEditor({
         <div className="space-y-4">
           {mySide && myTeamId && !readOnly ? (
             <div className="rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-3 sm:p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
                 Your lineup presets
               </p>
               <p className="mt-1 text-xs text-[var(--muted)]">
@@ -2044,14 +2029,16 @@ function RaceScoreSelect({
           }
         }}
         className={[
-          "relative w-full rounded-xl border border-white/20 bg-[var(--felt)] px-3 py-3 pr-8 text-center font-[family-name:var(--font-display)] text-4xl tabular-nums text-white outline-none ring-white/35 [background-color:var(--felt)] focus:ring-2",
-          emphasized ? "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.28)]" : "",
+          "relative w-full rounded-[var(--radius-sm)] border border-[var(--line-strong)] bg-[var(--surface-2)] px-3 py-3 pr-8 text-center font-[family-name:var(--font-display)] text-4xl tabular-nums text-[var(--ink)] outline-none ui-focus",
+          emphasized
+            ? "border-[color-mix(in_srgb,var(--felt)_45%,transparent)] ring-2 ring-[color-mix(in_srgb,var(--felt)_25%,transparent)]"
+            : "",
         ].join(" ")}
       >
-        {value}
+        <span className="text-[var(--chalk)]">{value}</span>
         <span
           aria-hidden
-          className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-white/70"
+          className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-[var(--muted)]"
         >
           {open ? "▴" : "▾"}
         </span>
@@ -2062,7 +2049,7 @@ function RaceScoreSelect({
           id={listId}
           role="listbox"
           aria-label={label}
-          className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-white/20 bg-[var(--felt)] py-1 shadow-[var(--shadow)] [background-color:var(--felt)]"
+          className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-[var(--radius-sm)] border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow)] backdrop-blur-md"
         >
           {options.map((option, index) => {
             const selected = option === value;
@@ -2077,13 +2064,17 @@ function RaceScoreSelect({
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => choose(option)}
                   className={[
-                    "flex w-full items-center justify-center gap-2 px-3 py-2.5 font-[family-name:var(--font-display)] text-2xl tabular-nums text-white",
-                    active ? "bg-black/25" : "bg-[var(--felt)]",
-                    selected ? "font-semibold" : "font-normal",
+                    "flex w-full items-center justify-center gap-2 px-3 py-2.5 font-[family-name:var(--font-display)] text-2xl tabular-nums",
+                    active
+                      ? "bg-[var(--surface-3)] text-[var(--ink)]"
+                      : "bg-transparent text-[var(--ink-secondary)]",
+                    selected ? "font-semibold text-[var(--chalk)]" : "font-normal",
                   ].join(" ")}
                 >
                   <span>{option}</span>
-                  {selected ? <span className="text-sm text-white/80">✓</span> : null}
+                  {selected ? (
+                    <span className="text-sm text-[var(--chalk)]">✓</span>
+                  ) : null}
                 </button>
               </li>
             );
@@ -2235,7 +2226,7 @@ function ScorePad({
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-[1.25rem] border-t border-[var(--line)] bg-[var(--paper-2)] shadow-[var(--shadow)]">
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--line)] px-4 py-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
+            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted)]">
               Round {roundNumber} · Game {gameIndex}
             </p>
             <p className="mt-1 text-sm text-[var(--muted)]">
@@ -2578,7 +2569,7 @@ function ReviewPanel({
   return (
     <div className="space-y-4 rounded-[1.4rem] border border-[var(--line)] bg-[var(--surface)] p-4 md:p-5">
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
           Review
         </p>
         <h4 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--felt-deep)]">
@@ -2664,22 +2655,17 @@ function ReviewPanel({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={onEdit}
-          className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 text-sm font-semibold"
-        >
+        <Button type="button" variant="secondary" onClick={onEdit}>
           {locked ? "Back to sheet" : "Keep editing"}
-        </button>
+        </Button>
         {!locked ? (
-          <button
+          <Button
             type="button"
             disabled={submitting || incomplete}
             onClick={onSubmit}
-            className="rounded-xl bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
           >
             {submitting ? "Submitting…" : "Submit to LMS"}
-          </button>
+          </Button>
         ) : null}
       </div>
       {locked ? (

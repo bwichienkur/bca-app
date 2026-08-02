@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { LogIn } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export type AuthUser = {
   lmsId: string;
@@ -13,6 +16,9 @@ type LoginScreenProps = {
   onSuccess: (user: AuthUser) => void;
   onCancel: () => void;
 };
+
+const inputClass =
+  "ui-focus w-full rounded-[var(--radius-sm)] border border-[var(--line)] bg-[color-mix(in_srgb,var(--surface-2)_90%,transparent)] px-4 py-3.5 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--muted)]";
 
 export function LoginScreen({ onSuccess, onCancel }: LoginScreenProps) {
   const [email, setEmail] = useState("");
@@ -46,27 +52,19 @@ export function LoginScreen({ onSuccess, onCancel }: LoginScreenProps) {
   };
 
   return (
-    <section className="animate-rise mx-auto max-w-lg space-y-5">
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-          BCA / FargoRate
-        </p>
-        <h2 className="mt-1 font-[family-name:var(--font-display)] text-3xl text-[var(--felt-deep)]">
-          Sign in
-        </h2>
-        <p className="mt-2 text-sm text-[var(--muted)]">
-          Use the same email and password as the official BCAPL scoring app.
-          Signing in unlocks Score and filters League · Division · My team to
-          the teams you belong to.
-        </p>
-      </div>
+    <section className="animate-rise mx-auto max-w-lg">
+      <PageHeader
+        eyebrow="BCA / FargoRate"
+        title="Sign in"
+        description="Use the same email and password as the official BCAPL scoring app. Signing in unlocks Score and filters League · Division · My team to the teams you belong to."
+      />
 
       <form
         onSubmit={onSubmit}
-        className="space-y-4 rounded-[1.4rem] border border-[var(--line)] bg-[var(--surface)] p-5 shadow-sm"
+        className="ui-glass space-y-6 rounded-[var(--radius)] p-6 md:p-8"
       >
-        <label className="block space-y-1.5">
-          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+        <label className="block space-y-2">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
             Email
           </span>
           <input
@@ -75,11 +73,15 @@ export function LoginScreen({ onSuccess, onCancel }: LoginScreenProps) {
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-3 outline-none ring-[var(--felt)] focus:ring-2"
+            className={inputClass}
           />
+          <p className="text-xs text-[var(--muted)]">
+            The address tied to your LMS player account.
+          </p>
         </label>
-        <label className="block space-y-1.5">
-          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+
+        <label className="block space-y-2">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
             Password
           </span>
           <input
@@ -88,28 +90,30 @@ export function LoginScreen({ onSuccess, onCancel }: LoginScreenProps) {
             required
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-3 outline-none ring-[var(--felt)] focus:ring-2"
+            className={inputClass}
           />
         </label>
+
         {error ? (
-          <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
+          <p className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
             {error}
           </p>
         ) : null}
-        <button
-          type="submit"
-          disabled={loggingIn}
-          className="w-full rounded-xl bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--felt-soft)] disabled:opacity-60"
-        >
-          {loggingIn ? "Signing in…" : "Sign in"}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 text-sm font-semibold text-[var(--muted)]"
-        >
-          Cancel
-        </button>
+
+        <div className="space-y-3 pt-1">
+          <Button type="submit" disabled={loggingIn} className="w-full">
+            <LogIn className="h-4 w-4" aria-hidden />
+            {loggingIn ? "Signing in…" : "Sign in"}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={onCancel}
+            className="w-full"
+          >
+            Cancel
+          </Button>
+        </div>
       </form>
     </section>
   );

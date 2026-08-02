@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Inbox } from "lucide-react";
 
 export function EmptyState({
   title,
@@ -10,12 +11,19 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-[var(--radius)] border border-dashed border-[var(--line)] bg-[var(--surface)]/60 px-5 py-10 text-center">
-      <h3 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+    <div className="ui-card animate-panel px-6 py-14 text-center md:px-10">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] text-[var(--muted)]">
+        <Inbox className="h-5 w-5" aria-hidden />
+      </div>
+      <h3 className="mt-5 text-xl font-semibold tracking-tight text-[var(--ink)]">
         {title}
       </h3>
-      {body ? <p className="mt-2 text-sm text-[var(--muted)]">{body}</p> : null}
-      {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
+      {body ? (
+        <p className="mx-auto mt-3 max-w-md text-[15px] leading-relaxed text-[var(--muted)]">
+          {body}
+        </p>
+      ) : null}
+      {action ? <div className="mt-6 flex justify-center">{action}</div> : null}
     </div>
   );
 }

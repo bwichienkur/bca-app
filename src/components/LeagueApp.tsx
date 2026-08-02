@@ -1,6 +1,30 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type ComponentType,
+  type CSSProperties,
+} from "react";
+import {
+  Calculator,
+  CalendarDays,
+  ChevronDown,
+  ClipboardList,
+  Command,
+  LogIn,
+  PanelLeft,
+  PanelLeftClose,
+  RefreshCw,
+  Search,
+  Settings,
+  Trophy,
+  UserRound,
+  Users,
+} from "lucide-react";
 import { DEFAULT_LEAGUE_ID, REPORT_TABS } from "@/lib/constants";
 import { normalizeTeamName } from "@/lib/matchups";
 import { enrichPlayersWithRatings } from "@/lib/players";
@@ -28,6 +52,7 @@ import type {
   TableReport,
   UserPreferences,
 } from "@/lib/types";
+import { CommandPalette } from "./CommandPalette";
 import { DataTable } from "./DataTable";
 import { EmptyState } from "./EmptyState";
 import { HandicapCalculator } from "./HandicapCalculator";
@@ -42,46 +67,20 @@ import { SettingsScreen } from "./SettingsScreen";
 import { TeamDetail } from "./TeamDetail";
 import { TeamStandingSummary } from "./TeamStandingSummary";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
+import { Button } from "./ui/Button";
+import { PageHeader } from "./ui/PageHeader";
 
 type AppScreen = "main" | "login" | "settings";
 
-function ResyncIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M21 12a9 9 0 0 0-15.5-6.36" />
-      <path d="M3 4v5h5" />
-      <path d="M3 12a9 9 0 0 0 15.5 6.36" />
-      <path d="M21 20v-5h-5" />
-    </svg>
-  );
-}
-
-function GearIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
-    </svg>
-  );
-}
+const TAB_ICONS: Record<ReportTab, ComponentType<{ className?: string }>> = {
+  "my-team": Users,
+  standings: Trophy,
+  players: UserRound,
+  schedule: CalendarDays,
+  handicap: Calculator,
+  score: ClipboardList,
+  search: Search,
+};
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
@@ -164,9 +163,22 @@ export function LeagueApp() {
   const [contextOpen, setContextOpen] = useState(true);
   const [refreshToken, setRefreshToken] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const didAutoCollapseContext = useRef(false);
   const [, startTransition] = useTransition();
-  const filterAnchor = useViewportAnchor<HTMLDivElement>();
+  const filterAnchor = useViewportAnchor<HTMLLabelElement>();
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const persist = (next: UserPreferences) => {
     setPrefs(next);
@@ -828,14 +840,32 @@ export function LeagueApp() {
     );
   }
 
+  const activeTabMeta = REPORT_TABS.find((item) => item.id === tab);
+
+  const goTab = (id: ReportTab) => {
+    setTab(id);
+    if (
+      (id === "schedule" || id === "my-team" || id === "score") &&
+      !prefs.teamName
+    ) {
+      setContextOpen(true);
+    }
+  };
+
   if (screen === "login") {
     return (
-      <main className="relative mx-auto min-h-dvh w-full max-w-7xl px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-4 md:px-6 lg:px-8">
-        <header className="mb-6">
-          <h1 className="font-[family-name:var(--font-display)] text-2xl leading-none tracking-tight text-[var(--felt-deep)] md:text-3xl">
+      <main className="relative mx-auto flex min-h-dvh w-full max-w-lg flex-col justify-center px-5 py-10">
+        <div className="mb-10 text-center">
+          <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--muted)]">
             Tableside
+          </p>
+          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-[var(--ink)]">
+            Sign in
           </h1>
-        </header>
+          <p className="mt-3 text-[15px] text-[var(--muted)]">
+            Connect your BCAPL account to sync teams and score matches.
+          </p>
+        </div>
         <LoginScreen
           onCancel={() => setScreen("main")}
           onSuccess={(nextUser) => {
@@ -843,7 +873,6 @@ export function LeagueApp() {
             setScreen("main");
             const basePrefs = prefs ?? loadPreferences();
             void (async () => {
-              // Prefer Redis/local cache; only scan the preferred league.
               const nextMembership = await loadMembership({
                 fresh: false,
                 prefsOverride: basePrefs,
@@ -866,10 +895,13 @@ export function LeagueApp() {
 
   if (screen === "settings" && user && prefs) {
     return (
-      <main className="relative mx-auto min-h-dvh w-full max-w-7xl px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-4 md:px-6 lg:px-8">
-        <header className="mb-6">
-          <h1 className="font-[family-name:var(--font-display)] text-2xl leading-none tracking-tight text-[var(--felt-deep)] md:text-3xl">
+      <main className="relative mx-auto min-h-dvh w-full max-w-3xl px-5 py-8 md:px-8">
+        <header className="mb-8">
+          <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--muted)]">
             Tableside
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--ink)]">
+            Settings
           </h1>
         </header>
         <SettingsScreen
@@ -920,483 +952,674 @@ export function LeagueApp() {
   }
 
   return (
-    <main className="relative mx-auto min-h-dvh w-full max-w-7xl px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-4 md:px-6 lg:px-8">
-      <header className="animate-rise mb-3 flex items-center justify-between gap-3 md:mb-4">
-        <h1 className="font-[family-name:var(--font-display)] text-2xl leading-none tracking-tight text-[var(--felt-deep)] md:text-3xl">
-          Tableside
-        </h1>
-        <div className="flex min-w-0 shrink-0 items-center justify-end gap-1.5 sm:gap-2">
-          {user ? (
-            <div
-              title={`Signed in as ${user.name ?? user.email ?? "player"}`}
-              className="flex min-w-0 max-w-[11rem] items-center gap-2 rounded-full border border-[var(--felt)]/25 bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))] px-2.5 py-1.5 sm:max-w-[14rem]"
-            >
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--felt)] text-[10px] font-bold uppercase text-white">
-                {(user.name ?? user.email ?? "?").trim().charAt(0) || "?"}
-              </span>
-              <span className="min-w-0 truncate text-xs font-semibold text-[var(--felt-deep)]">
-                {user.name ?? user.email ?? "Signed in"}
-              </span>
-            </div>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => void refreshCachedData()}
-            disabled={refreshing}
-            title="Resync league data from FargoRate"
-            aria-label={refreshing ? "Resyncing league data" : "Resync league data"}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)] disabled:opacity-60"
+    <div className="relative min-h-dvh lg:flex">
+      <aside
+        className="fixed bottom-4 left-4 top-4 z-40 hidden flex-col lg:flex"
+        style={{
+          width: sidebarCollapsed ? "5.25rem" : "var(--sidebar-width)",
+        }}
+      >
+        <div className="ui-glass flex h-full flex-col overflow-hidden rounded-[24px] border border-[var(--line-strong)] p-3 shadow-[var(--shadow)]">
+          <div
+            className={[
+              "flex items-center gap-3 px-2 pb-4 pt-2",
+              sidebarCollapsed ? "flex-col" : "",
+            ].join(" ")}
           >
-            <ResyncIcon
-              className={["h-4 w-4", refreshing ? "animate-spin" : ""].join(
-                " ",
-              )}
-            />
-          </button>
-          {user ? (
-            <button
-              type="button"
-              onClick={() => setScreen("settings")}
-              title="Settings"
-              aria-label="Settings"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
-            >
-              <GearIcon className="h-4 w-4" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setScreen("login")}
-              className="rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--felt-soft)]"
-            >
-              Login
-            </button>
-          )}
-        </div>
-      </header>
-
-      {error ? (
-        <div className="mb-4 rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
-          {error}
-        </div>
-      ) : null}
-
-      {user && loadingMembership ? (
-        <p className="mb-3 text-xs text-[var(--muted)]">
-          Loading your active BCAPL sessions…
-        </p>
-      ) : user && membership && !membership.teams.length ? (
-        <p className="mb-3 text-xs text-[var(--muted)]">
-          No team memberships found in this league yet. Open Settings to scan
-          another league or find all your teams.
-        </p>
-      ) : user && membershipReady ? (
-        <p className="mb-3 text-xs text-[var(--muted)]">
-          Showing {membership!.teams.length} team
-          {membership!.teams.length === 1 ? "" : "s"} across{" "}
-          {membership!.leagues.length} league
-          {membership!.leagues.length === 1 ? "" : "s"} from your roster.
-        </p>
-      ) : null}
-
-      <section className="animate-rise animate-delay-1 relative z-40 mb-2 overflow-visible rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] text-white shadow-[var(--shadow)]">
-        <button
-          type="button"
-          onClick={() => setContextOpen((open) => !open)}
-          aria-expanded={contextOpen}
-          className="flex w-full items-start justify-between gap-3 px-4 py-4 text-left md:px-6 md:py-5"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/65">
-              {selectedLeague?.name ??
-                selectedDivision?.leagueName ??
-                "League · Division · My team"}
-            </p>
-            <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl leading-tight md:text-3xl">
-              {selectedDivision?.name ?? "Choose your division"}
-            </h2>
-            {contextOpen ? (
-              <p className="mt-2 text-sm text-white/70">
-                {user
-                  ? "Pick from your active sessions. Standings and players still include the whole division."
-                  : "Set league, division, and my team for schedule & handicap."}
-              </p>
-            ) : prefs.teamName ? (
-              <p className="mt-2 text-sm text-white/80">
-                Following <span className="font-semibold">{prefs.teamName}</span>
-              </p>
-            ) : (
-              <p className="mt-2 text-sm text-white/70">
-                Set my team to personalize schedule & handicap.
-              </p>
-            )}
-          </div>
-          <span className="mt-0.5 shrink-0 rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/85">
-            {contextOpen ? "Collapse ▴" : "Change ▾"}
-          </span>
-        </button>
-
-        {contextOpen ? (
-          <div className="border-t border-white/15 px-4 pb-4 pt-3 md:px-6 md:pb-5">
-            <div className="grid gap-4 md:grid-cols-3">
-              <Typeahead
-                tone="felt"
-                label="League"
-                placeholder={
-                  user
-                    ? loadingMembership
-                      ? "Loading your leagues…"
-                      : "Your leagues"
-                    : loadingLeagues
-                      ? "Searching leagues…"
-                      : "Search leagues"
-                }
-                value={
-                  selectedLeague
-                    ? {
-                        id: selectedLeague.id,
-                        label: selectedLeague.name,
-                        meta: `${selectedLeague.state} · ${selectedLeague.divisionCount} divisions`,
-                        value: selectedLeague,
-                      }
-                    : null
-                }
-                options={leagueOptions}
-                onQueryChange={user ? undefined : setLeagueQuery}
-                onChange={(option) => {
-                  if (option) void chooseLeague(option.value);
-                  else clearLeague();
-                }}
-              />
-              <Typeahead
-                tone="felt"
-                label="Division"
-                placeholder={
-                  !selectedLeague
-                    ? "Pick a league first"
-                    : loadingDivisions
-                      ? "Loading divisions…"
-                      : user
-                        ? "Your divisions"
-                        : "Type to find your division"
-                }
-                value={
-                  selectedDivision
-                    ? {
-                        id: selectedDivision.id,
-                        label: selectedDivision.name,
-                        meta: `${selectedDivision.year}`,
-                        value: selectedDivision,
-                      }
-                    : null
-                }
-                options={divisionOptions}
-                disabled={!selectedLeague || loadingDivisions}
-                onChange={(option) => {
-                  if (option) chooseDivision(option.value);
-                  else clearDivision();
-                }}
-                emptyText="No divisions match"
-              />
-              <Typeahead
-                tone="felt"
-                label="My team"
-                placeholder={
-                  !selectedDivision
-                    ? "Pick a division first"
-                    : loadingContext
-                      ? "Loading teams…"
-                      : user
-                        ? "Your teams in this division"
-                        : "Set your team for schedule & handicap"
-                }
-                value={
-                  myTeam
-                    ? {
-                        id: myTeam.id,
-                        label: myTeam.name,
-                        meta: `${myTeam.players.length} players`,
-                        value: myTeam,
-                      }
-                    : null
-                }
-                options={teamOptions}
-                disabled={!selectedDivision || loadingContext}
-                onChange={(option) => {
-                  if (option) {
-                    setMyTeam(option.value);
-                    setContextOpen(false);
-                  } else {
-                    clearMyTeam();
-                  }
-                }}
-                emptyText="No teams loaded yet"
-              />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--felt)_22%,transparent)] text-sm font-bold text-[var(--chalk)]">
+              TS
             </div>
+            {!sidebarCollapsed ? (
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-base font-semibold tracking-tight text-[var(--ink)]">
+                  Tableside
+                </p>
+                <p className="truncate text-[11px] text-[var(--muted)]">
+                  League companion
+                </p>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed((v) => !v)}
+              className="ui-focus inline-flex h-9 w-9 items-center justify-center rounded-xl text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
+              aria-label={
+                sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+              }
+              title={sidebarCollapsed ? "Expand" : "Collapse"}
+            >
+              {sidebarCollapsed ? (
+                <PanelLeft className="h-4 w-4" />
+              ) : (
+                <PanelLeftClose className="h-4 w-4" />
+              )}
+            </button>
           </div>
-        ) : null}
-      </section>
 
-      <section className="animate-rise animate-delay-2 space-y-1.5">
-        <div
-          data-report-tabs
-          className="sticky top-0 z-20 -mx-1 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 py-1 backdrop-blur"
-        >
           <nav
-            aria-label="Reports"
-            className="grid grid-cols-4 gap-1.5 sm:flex sm:flex-wrap sm:gap-2"
+            aria-label="Primary"
+            className="flex flex-1 flex-col gap-1 overflow-y-auto px-1"
           >
             {REPORT_TABS.map((item) => {
+              const Icon = TAB_ICONS[item.id];
               const active = tab === item.id;
               return (
                 <button
                   key={item.id}
                   type="button"
                   aria-current={active ? "page" : undefined}
-                  onClick={() => {
-                    setTab(item.id);
-                    if (
-                      (item.id === "schedule" ||
-                        item.id === "my-team" ||
-                        item.id === "score") &&
-                      !prefs.teamName
-                    ) {
-                      setContextOpen(true);
-                    }
-                  }}
+                  title={item.label}
+                  onClick={() => goTab(item.id)}
                   className={[
-                    "rounded-xl px-2 py-2 text-center text-[12px] font-semibold leading-tight transition sm:rounded-full sm:px-3.5 sm:py-2 sm:text-sm sm:font-medium",
+                    "ui-focus group relative flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-medium transition",
+                    sidebarCollapsed ? "justify-center px-0" : "",
                     active
-                      ? "bg-[var(--felt)] text-white shadow-sm"
-                      : "bg-[var(--surface)]/80 text-[var(--muted)] hover:bg-[var(--surface-2)]",
+                      ? "bg-[color-mix(in_srgb,var(--felt)_18%,transparent)] text-[var(--ink)]"
+                      : "text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
                   ].join(" ")}
                 >
-                  {item.label}
+                  {active ? (
+                    <span className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-full bg-[var(--felt)]" />
+                  ) : null}
+                  <Icon
+                    className={[
+                      "h-[18px] w-[18px] shrink-0",
+                      active
+                        ? "text-[var(--chalk)]"
+                        : "text-[var(--muted)] group-hover:text-[var(--ink)]",
+                    ].join(" ")}
+                  />
+                  {!sidebarCollapsed ? (
+                    <span className="min-w-0">
+                      <span className="block truncate">{item.label}</span>
+                      <span className="block truncate text-[11px] font-normal text-[var(--muted)]">
+                        {item.hint}
+                      </span>
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
           </nav>
-        </div>
 
+          <div className="mt-3 space-y-1 border-t border-[var(--line)] px-1 pt-3">
+            <button
+              type="button"
+              onClick={() => setCommandOpen(true)}
+              className={[
+                "ui-focus flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
+                sidebarCollapsed ? "justify-center px-0" : "",
+              ].join(" ")}
+              title="Command palette"
+            >
+              <Command className="h-[18px] w-[18px]" />
+              {!sidebarCollapsed ? (
+                <span className="flex flex-1 items-center justify-between">
+                  <span>Command</span>
+                  <kbd className="rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-1.5 py-0.5 text-[10px] font-semibold">
+                    ⌘K
+                  </kbd>
+                </span>
+              ) : null}
+            </button>
+            {user ? (
+              <button
+                type="button"
+                onClick={() => setScreen("settings")}
+                className={[
+                  "ui-focus flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
+                  sidebarCollapsed ? "justify-center px-0" : "",
+                ].join(" ")}
+                title="Settings"
+              >
+                <Settings className="h-[18px] w-[18px]" />
+                {!sidebarCollapsed ? <span>Settings</span> : null}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setScreen("login")}
+                className={[
+                  "ui-focus flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
+                  sidebarCollapsed ? "justify-center px-0" : "",
+                ].join(" ")}
+                title="Login"
+              >
+                <LogIn className="h-[18px] w-[18px]" />
+                {!sidebarCollapsed ? <span>Login</span> : null}
+              </button>
+            )}
+          </div>
+        </div>
+      </aside>
+
+      <main className="relative min-h-dvh w-full flex-1 px-4 pb-[calc(5.5rem+var(--safe-bottom))] pt-4 md:px-6 lg:pb-8 lg:pr-8 lg:pt-6">
         <div
-          className={[
-            "animate-panel min-w-0 [overflow-anchor:none]",
-            tab === "score" || tab === "players" ? "mt-0 space-y-0" : "space-y-6",
-          ].join(" ")}
+          className="mx-auto w-full max-w-6xl lg:pl-[calc(var(--sidebar-offset)+1.5rem)]"
+          style={
+            {
+              "--sidebar-offset": `calc(${sidebarCollapsed ? "5.25rem" : "var(--sidebar-width)"} + 1rem)`,
+            } as CSSProperties
+          }
         >
-          {tab === "search" ? (
-            <PlayerSearch />
-          ) : tab === "score" ? (
-            <MatchScoring
-              divisionId={selectedDivision?.id ?? null}
-              divisionName={selectedDivision?.name ?? null}
-              teamId={prefs.teamId}
-              teamName={prefs.teamName}
-              user={user}
-              authLoading={authLoading}
-              onRequestLogin={() => setScreen("login")}
-              onRequestContext={() => setContextOpen(true)}
-            />
-          ) : !selectedDivision ? (
-            <EmptyState
-              title="Choose a division to continue"
-              body="Search works without a division. Score and reports need one from your context card."
-              action={
+          <header className="animate-rise mb-4 flex items-center justify-between gap-3 lg:mb-6">
+            <div className="min-w-0 lg:hidden">
+              <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--muted)]">
+                Tableside
+              </p>
+              <h1 className="truncate text-2xl font-semibold tracking-tight text-[var(--ink)]">
+                {activeTabMeta?.label ?? "League"}
+              </h1>
+            </div>
+            <div className="hidden min-w-0 lg:block">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--muted)]">
+                {selectedLeague?.name ?? "Palm Beach County BCA"}
+              </p>
+              <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[var(--ink)]">
+                {activeTabMeta?.label ?? "Dashboard"}
+              </h1>
+              {activeTabMeta?.hint ? (
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  {activeTabMeta.hint}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCommandOpen(true)}
+                className="ui-focus inline-flex h-10 items-center gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--line-strong)] hover:text-[var(--ink)] lg:hidden"
+                aria-label="Open command palette"
+              >
+                <Command className="h-4 w-4" />
+                <span className="hidden sm:inline">Search</span>
+              </button>
+              {user ? (
+                <div
+                  title={`Signed in as ${user.name ?? user.email ?? "player"}`}
+                  className="flex min-w-0 max-w-[10rem] items-center gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 sm:max-w-[14rem]"
+                >
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--felt)_28%,transparent)] text-[11px] font-bold uppercase text-[var(--chalk)]">
+                    {(user.name ?? user.email ?? "?").trim().charAt(0) || "?"}
+                  </span>
+                  <span className="hidden min-w-0 truncate text-xs font-semibold text-[var(--ink)] sm:inline">
+                    {user.name ?? user.email ?? "Signed in"}
+                  </span>
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void refreshCachedData()}
+                disabled={refreshing}
+                title="Resync league data from FargoRate"
+                aria-label={
+                  refreshing ? "Resyncing league data" : "Resync league data"
+                }
+                className="ui-focus inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] transition hover:text-[var(--ink)] disabled:opacity-60"
+              >
+                <RefreshCw
+                  className={[
+                    "h-4 w-4",
+                    refreshing ? "animate-spin" : "",
+                  ].join(" ")}
+                />
+              </button>
+              {user ? (
                 <button
                   type="button"
-                  onClick={() => setContextOpen(true)}
-                  className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+                  onClick={() => setScreen("settings")}
+                  title="Settings"
+                  aria-label="Settings"
+                  className="ui-focus inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] transition hover:text-[var(--ink)] lg:hidden"
                 >
-                  Choose division
+                  <Settings className="h-4 w-4" />
                 </button>
-              }
-            />
-          ) : tab === "handicap" ? (
-            <HandicapCalculator
-              divisionId={selectedDivision.id}
-              divisionName={selectedDivision.name}
-              prefs={prefs}
-              refreshToken={refreshToken}
-              onRequestSetTeam={() => setContextOpen(true)}
-            />
-          ) : loadingReport ? (
-            <LoadingState label="Pulling report from LMS…" />
-          ) : tab === "my-team" ? (
-            prefs.teamName ? (
-              <section className="space-y-4">
-                {myStandingCells ? (
-                  <TeamStandingSummary
-                    cells={myStandingCells}
-                    teamName={prefs.teamName}
-                  />
-                ) : null}
-                <TeamDetail
-                  teamName={prefs.teamName}
-                  team={myTeam}
-                  playersByTeam={playersByTeam}
-                  isMyTeam
-                />
-              </section>
-            ) : (
-              <EmptyState
-                title="Set your team"
-                body="Pick My team on the context card to see roster and player stats here."
-                action={
-                  <button
-                    type="button"
-                    onClick={() => setContextOpen(true)}
-                    className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
-                  >
-                    Set my team
-                  </button>
-                }
-              />
-            )
-          ) : tab === "standings" && teamReport ? (
-            selectedTeamName ? (
-              <TeamDetail
-                teamName={selectedTeamName}
-                team={detailTeam}
-                playersByTeam={playersByTeam}
-                isMyTeam={
-                  normalizeTeamName(prefs.teamName ?? "") ===
-                  normalizeTeamName(selectedTeamName)
-                }
-                backLabel="Back to standings"
-                onClose={() => setSelectedTeamName(null)}
-                onSetAsMyTeam={
-                  detailTeam ? () => setMyTeam(detailTeam) : undefined
-                }
-              />
-            ) : (
-              <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-                    Division
-                  </p>
-                  <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-                    Team standings
-                  </h3>
-                  <p className="mt-1 text-sm text-[var(--muted)]">
-                    Tap a team to view player statistics. Use back to return to
-                    the standings grid.
-                  </p>
-                </div>
-                <SearchField
-                  value={filterQuery}
-                  anchorRef={filterAnchor.ref}
-                  onBeforeChange={filterAnchor.mark}
-                  onChange={setFilterQuery}
-                  placeholder="Filter teams…"
-                />
-                <DataTable
-                  headers={teamReport.headers}
-                  rows={filteredTeamRows}
-                  stickyFirst
-                  compact
-                  isRowSelected={(row) =>
-                    Boolean(
-                      prefs.teamName &&
-                        normalizeTeamName(
-                          row[teamNameIndex(teamReport.headers)] ?? "",
-                        ) === normalizeTeamName(prefs.teamName),
-                    )
-                  }
-                  onRowClick={(row) => {
-                    const name =
-                      row[teamNameIndex(teamReport.headers)]?.trim() ?? "";
-                    const matched = divisionTeams.find(
-                      (team) =>
-                        normalizeTeamName(team.name) ===
-                        normalizeTeamName(name),
-                    );
-                    setSelectedTeamName(matched?.name ?? name);
-                  }}
-                  emptyText="No teams match your filter."
-                />
-              </section>
-            )
-          ) : tab === "players" && playersWithRatings ? (
-            <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-                  Players
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => setScreen("login")}
+                  className="h-10 px-4"
+                >
+                  Login
+                </Button>
+              )}
+            </div>
+          </header>
+
+          {error ? (
+            <div className="mb-5 rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
+              {error}
+            </div>
+          ) : null}
+
+          {user && loadingMembership ? (
+            <p className="mb-4 text-xs text-[var(--muted)]">
+              Loading your active BCAPL sessions…
+            </p>
+          ) : user && membership && !membership.teams.length ? (
+            <p className="mb-4 text-xs text-[var(--muted)]">
+              No team memberships found in this league yet. Open Settings to scan
+              another league or find all your teams.
+            </p>
+          ) : user && membershipReady ? (
+            <p className="mb-4 text-xs text-[var(--muted)]">
+              Showing {membership!.teams.length} team
+              {membership!.teams.length === 1 ? "" : "s"} across{" "}
+              {membership!.leagues.length} league
+              {membership!.leagues.length === 1 ? "" : "s"} from your roster.
+            </p>
+          ) : null}
+
+          <section className="animate-rise animate-delay-1 relative z-40 mb-6 overflow-visible rounded-[24px] border border-[var(--line-strong)] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent_40%),color-mix(in_srgb,var(--surface)_92%,transparent)] shadow-[var(--shadow-sm)] backdrop-blur-xl">
+            <button
+              type="button"
+              onClick={() => setContextOpen((open) => !open)}
+              aria-expanded={contextOpen}
+              className="flex w-full items-start justify-between gap-3 px-5 py-5 text-left md:px-6"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted)]">
+                  {selectedLeague?.name ??
+                    selectedDivision?.leagueName ??
+                    "League · Division · My team"}
                 </p>
-                <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-                  Division players
-                </h3>
-                <p className="mt-1 text-sm text-[var(--muted)]">
-                  Standings and Fargo ratings for everyone in{" "}
-                  <span className="font-medium text-[var(--ink)]">
-                    {selectedDivision.name}
-                  </span>
-                  . Filter below to find someone quickly.
-                </p>
+                <h2 className="mt-1.5 text-2xl font-semibold tracking-tight text-[var(--ink)] md:text-3xl">
+                  {selectedDivision?.name ?? "Choose your division"}
+                </h2>
+                {contextOpen ? (
+                  <p className="mt-2 text-sm text-[var(--muted)]">
+                    {user
+                      ? "Pick from your active sessions. Standings and players still include the whole division."
+                      : "Set league, division, and my team for schedule & handicap."}
+                  </p>
+                ) : prefs.teamName ? (
+                  <p className="mt-2 text-sm text-[var(--ink-secondary)]">
+                    Following{" "}
+                    <span className="font-semibold text-[var(--ink)]">
+                      {prefs.teamName}
+                    </span>
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm text-[var(--muted)]">
+                    Set my team to personalize schedule & handicap.
+                  </p>
+                )}
               </div>
-              <SearchField
-                value={filterQuery}
-                anchorRef={filterAnchor.ref}
-                onBeforeChange={filterAnchor.mark}
-                onChange={setFilterQuery}
-                placeholder="Filter players…"
-              />
-              <DataTable
-                headers={playersWithRatings.headers}
-                rows={filteredPlayerRows}
-                stickyFirst
-                compact
-                emptyText="No players match your filter."
-              />
-            </section>
-          ) : tab === "schedule" && schedule ? (
-            !prefs.teamName ? (
-              <EmptyState
-                title="Set My team for schedule"
-                body="Schedule always uses your selected team from the context card."
-                action={
+              <span className="mt-1 inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                {contextOpen ? "Collapse" : "Change"}
+                <ChevronDown
+                  className={[
+                    "h-3.5 w-3.5 transition",
+                    contextOpen ? "rotate-180" : "",
+                  ].join(" ")}
+                />
+              </span>
+            </button>
+
+            {contextOpen ? (
+              <div className="border-t border-[var(--line)] px-5 pb-5 pt-4 md:px-6 md:pb-6">
+                <div className="grid gap-5 md:grid-cols-3">
+                  <Typeahead
+                    tone="felt"
+                    label="League"
+                    placeholder={
+                      user
+                        ? loadingMembership
+                          ? "Loading your leagues…"
+                          : "Your leagues"
+                        : loadingLeagues
+                          ? "Searching leagues…"
+                          : "Search leagues"
+                    }
+                    value={
+                      selectedLeague
+                        ? {
+                            id: selectedLeague.id,
+                            label: selectedLeague.name,
+                            meta: `${selectedLeague.state} · ${selectedLeague.divisionCount} divisions`,
+                            value: selectedLeague,
+                          }
+                        : null
+                    }
+                    options={leagueOptions}
+                    onQueryChange={user ? undefined : setLeagueQuery}
+                    onChange={(option) => {
+                      if (option) void chooseLeague(option.value);
+                      else clearLeague();
+                    }}
+                  />
+                  <Typeahead
+                    tone="felt"
+                    label="Division"
+                    placeholder={
+                      !selectedLeague
+                        ? "Pick a league first"
+                        : loadingDivisions
+                          ? "Loading divisions…"
+                          : user
+                            ? "Your divisions"
+                            : "Type to find your division"
+                    }
+                    value={
+                      selectedDivision
+                        ? {
+                            id: selectedDivision.id,
+                            label: selectedDivision.name,
+                            meta: `${selectedDivision.year}`,
+                            value: selectedDivision,
+                          }
+                        : null
+                    }
+                    options={divisionOptions}
+                    disabled={!selectedLeague || loadingDivisions}
+                    onChange={(option) => {
+                      if (option) chooseDivision(option.value);
+                      else clearDivision();
+                    }}
+                    emptyText="No divisions match"
+                  />
+                  <Typeahead
+                    tone="felt"
+                    label="My team"
+                    placeholder={
+                      !selectedDivision
+                        ? "Pick a division first"
+                        : loadingContext
+                          ? "Loading teams…"
+                          : user
+                            ? "Your teams in this division"
+                            : "Set your team for schedule & handicap"
+                    }
+                    value={
+                      myTeam
+                        ? {
+                            id: myTeam.id,
+                            label: myTeam.name,
+                            meta: `${myTeam.players.length} players`,
+                            value: myTeam,
+                          }
+                        : null
+                    }
+                    options={teamOptions}
+                    disabled={!selectedDivision || loadingContext}
+                    onChange={(option) => {
+                      if (option) {
+                        setMyTeam(option.value);
+                        setContextOpen(false);
+                      } else {
+                        clearMyTeam();
+                      }
+                    }}
+                    emptyText="No teams loaded yet"
+                  />
+                </div>
+              </div>
+            ) : null}
+          </section>
+
+          <div
+            data-report-tabs
+            className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--line)] bg-[color-mix(in_srgb,var(--paper)_92%,transparent)] px-2 py-2 backdrop-blur-xl lg:hidden"
+            style={{ paddingBottom: "max(0.5rem, var(--safe-bottom))" }}
+          >
+            <nav
+              aria-label="Reports"
+              className="grid grid-cols-4 gap-1 sm:grid-cols-7"
+            >
+              {REPORT_TABS.map((item) => {
+                const Icon = TAB_ICONS[item.id];
+                const active = tab === item.id;
+                return (
                   <button
+                    key={item.id}
                     type="button"
-                    onClick={() => setContextOpen(true)}
-                    className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => goTab(item.id)}
+                    className={[
+                      "ui-focus flex flex-col items-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-semibold transition",
+                      active
+                        ? "bg-[color-mix(in_srgb,var(--felt)_18%,transparent)] text-[var(--ink)]"
+                        : "text-[var(--muted)]",
+                    ].join(" ")}
                   >
-                    Set my team
+                    <Icon
+                      className={[
+                        "h-4 w-4",
+                        active ? "text-[var(--chalk)]" : "",
+                      ].join(" ")}
+                    />
+                    <span className="truncate">{item.label}</span>
                   </button>
-                }
-              />
-            ) : selectedScheduleMatch ? (
-              <ScheduleMatchDetail
-                key={`${selectedScheduleMatch.date}-${selectedScheduleMatch.match.matchId ?? selectedScheduleMatch.match.home}-${selectedScheduleMatch.match.away}`}
-                date={selectedScheduleMatch.date}
-                match={selectedScheduleMatch.match}
-                homeTeam={findDivisionTeam(selectedScheduleMatch.match.home)}
-                awayTeam={findDivisionTeam(selectedScheduleMatch.match.away)}
-                playersByTeam={playersByTeam}
-                homeStandingCells={standingCellsForTeam(
-                  teamReport,
-                  selectedScheduleMatch.match.home,
-                )}
-                awayStandingCells={standingCellsForTeam(
-                  teamReport,
-                  selectedScheduleMatch.match.away,
-                )}
-                myTeamName={prefs.teamName}
-                onClose={() => setSelectedScheduleMatch(null)}
-              />
-            ) : (
-              <ScheduleList
-                days={schedule}
-                teamName={prefs.teamName}
-                divisionName={selectedDivision?.name ?? prefs.divisionName}
-                onMatchClick={(match, day) =>
-                  setSelectedScheduleMatch({ match, date: day.date })
-                }
-              />
-            )
-          ) : (
-            <EmptyState title="Nothing to show yet" />
-          )}
+                );
+              })}
+            </nav>
+          </div>
+
+          <section className="animate-rise animate-delay-2">
+            <div
+              className={[
+                "animate-panel min-w-0 [overflow-anchor:none]",
+                tab === "score" || tab === "players"
+                  ? "mt-0 space-y-0"
+                  : "space-y-6",
+              ].join(" ")}
+            >
+              {tab === "search" ? (
+                <PlayerSearch />
+              ) : tab === "score" ? (
+                <MatchScoring
+                  divisionId={selectedDivision?.id ?? null}
+                  divisionName={selectedDivision?.name ?? null}
+                  teamId={prefs.teamId}
+                  teamName={prefs.teamName}
+                  user={user}
+                  authLoading={authLoading}
+                  onRequestLogin={() => setScreen("login")}
+                  onRequestContext={() => setContextOpen(true)}
+                />
+              ) : !selectedDivision ? (
+                <EmptyState
+                  title="Choose a division to continue"
+                  body="Search works without a division. Score and reports need one from your context card."
+                  action={
+                    <Button type="button" onClick={() => setContextOpen(true)}>
+                      Choose division
+                    </Button>
+                  }
+                />
+              ) : tab === "handicap" ? (
+                <HandicapCalculator
+                  divisionId={selectedDivision.id}
+                  divisionName={selectedDivision.name}
+                  prefs={prefs}
+                  refreshToken={refreshToken}
+                  onRequestSetTeam={() => setContextOpen(true)}
+                />
+              ) : loadingReport ? (
+                <LoadingState label="Pulling report from LMS…" />
+              ) : tab === "my-team" ? (
+                prefs.teamName ? (
+                  <section className="space-y-6">
+                    {myStandingCells ? (
+                      <TeamStandingSummary
+                        cells={myStandingCells}
+                        teamName={prefs.teamName}
+                      />
+                    ) : null}
+                    <TeamDetail
+                      teamName={prefs.teamName}
+                      team={myTeam}
+                      playersByTeam={playersByTeam}
+                      isMyTeam
+                    />
+                  </section>
+                ) : (
+                  <EmptyState
+                    title="Set your team"
+                    body="Pick My team on the context card to see roster and player stats here."
+                    action={
+                      <Button
+                        type="button"
+                        onClick={() => setContextOpen(true)}
+                      >
+                        Set my team
+                      </Button>
+                    }
+                  />
+                )
+              ) : tab === "standings" && teamReport ? (
+                selectedTeamName ? (
+                  <TeamDetail
+                    teamName={selectedTeamName}
+                    team={detailTeam}
+                    playersByTeam={playersByTeam}
+                    isMyTeam={
+                      normalizeTeamName(prefs.teamName ?? "") ===
+                      normalizeTeamName(selectedTeamName)
+                    }
+                    backLabel="Back to standings"
+                    onClose={() => setSelectedTeamName(null)}
+                    onSetAsMyTeam={
+                      detailTeam ? () => setMyTeam(detailTeam) : undefined
+                    }
+                  />
+                ) : (
+                  <section className="min-h-[min(50dvh,24rem)] space-y-5 [overflow-anchor:none]">
+                    <PageHeader
+                      eyebrow="Division"
+                      title="Team standings"
+                      description="Tap a team to view player statistics. Use back to return to the standings grid."
+                    />
+                    <SearchField
+                      value={filterQuery}
+                      anchorRef={filterAnchor.ref}
+                      onBeforeChange={filterAnchor.mark}
+                      onChange={setFilterQuery}
+                      placeholder="Filter teams…"
+                    />
+                    <DataTable
+                      headers={teamReport.headers}
+                      rows={filteredTeamRows}
+                      stickyFirst
+                      compact
+                      isRowSelected={(row) =>
+                        Boolean(
+                          prefs.teamName &&
+                            normalizeTeamName(
+                              row[teamNameIndex(teamReport.headers)] ?? "",
+                            ) === normalizeTeamName(prefs.teamName),
+                        )
+                      }
+                      onRowClick={(row) => {
+                        const name =
+                          row[teamNameIndex(teamReport.headers)]?.trim() ?? "";
+                        const matched = divisionTeams.find(
+                          (team) =>
+                            normalizeTeamName(team.name) ===
+                            normalizeTeamName(name),
+                        );
+                        setSelectedTeamName(matched?.name ?? name);
+                      }}
+                      emptyText="No teams match your filter."
+                    />
+                  </section>
+                )
+              ) : tab === "players" && playersWithRatings ? (
+                <section className="min-h-[min(50dvh,24rem)] space-y-5 [overflow-anchor:none]">
+                  <PageHeader
+                    eyebrow="Players"
+                    title="Division players"
+                    description={
+                      <>
+                        Standings and Fargo ratings for everyone in{" "}
+                        <span className="font-medium text-[var(--ink)]">
+                          {selectedDivision.name}
+                        </span>
+                        . Filter below to find someone quickly.
+                      </>
+                    }
+                  />
+                  <SearchField
+                    value={filterQuery}
+                    anchorRef={filterAnchor.ref}
+                    onBeforeChange={filterAnchor.mark}
+                    onChange={setFilterQuery}
+                    placeholder="Filter players…"
+                  />
+                  <DataTable
+                    headers={playersWithRatings.headers}
+                    rows={filteredPlayerRows}
+                    stickyFirst
+                    compact
+                    emptyText="No players match your filter."
+                  />
+                </section>
+              ) : tab === "schedule" && schedule ? (
+                !prefs.teamName ? (
+                  <EmptyState
+                    title="Set My team for schedule"
+                    body="Schedule always uses your selected team from the context card."
+                    action={
+                      <Button
+                        type="button"
+                        onClick={() => setContextOpen(true)}
+                      >
+                        Set my team
+                      </Button>
+                    }
+                  />
+                ) : selectedScheduleMatch ? (
+                  <ScheduleMatchDetail
+                    key={`${selectedScheduleMatch.date}-${selectedScheduleMatch.match.matchId ?? selectedScheduleMatch.match.home}-${selectedScheduleMatch.match.away}`}
+                    date={selectedScheduleMatch.date}
+                    match={selectedScheduleMatch.match}
+                    homeTeam={findDivisionTeam(
+                      selectedScheduleMatch.match.home,
+                    )}
+                    awayTeam={findDivisionTeam(
+                      selectedScheduleMatch.match.away,
+                    )}
+                    playersByTeam={playersByTeam}
+                    homeStandingCells={standingCellsForTeam(
+                      teamReport,
+                      selectedScheduleMatch.match.home,
+                    )}
+                    awayStandingCells={standingCellsForTeam(
+                      teamReport,
+                      selectedScheduleMatch.match.away,
+                    )}
+                    myTeamName={prefs.teamName}
+                    onClose={() => setSelectedScheduleMatch(null)}
+                  />
+                ) : (
+                  <ScheduleList
+                    days={schedule}
+                    teamName={prefs.teamName}
+                    divisionName={
+                      selectedDivision?.name ?? prefs.divisionName
+                    }
+                    onMatchClick={(match, day) =>
+                      setSelectedScheduleMatch({ match, date: day.date })
+                    }
+                  />
+                )
+              ) : (
+                <EmptyState title="Nothing to show yet" />
+              )}
+            </div>
+          </section>
         </div>
-      </section>
-    </main>
+      </main>
+
+      <CommandPalette
+        open={commandOpen}
+        onClose={() => setCommandOpen(false)}
+        onNavigate={(next) => goTab(next)}
+        onOpenSettings={() => setScreen("settings")}
+        onOpenLogin={() => setScreen("login")}
+        signedIn={Boolean(user)}
+      />
+    </div>
   );
 }

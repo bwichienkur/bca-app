@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { normalizeTeamName } from "@/lib/matchups";
 import { isUpcomingScheduleDate, parseScheduleDate } from "@/lib/schedule";
 import type { ScheduleDay, ScheduleMatch } from "@/lib/types";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "./EmptyState";
 import { MatchListCard } from "./MatchListCard";
 
@@ -82,43 +83,48 @@ export function ScheduleList({
     view === "upcoming" ? upcomingMatches : pastMatches;
   const myTeam = teamName ? normalizeTeamName(teamName) : null;
 
+  const description = (
+    <>
+      {teamName ? (
+        <>
+          Upcoming and past matchups for{" "}
+          <span className="font-medium text-[var(--ink)]">{teamName}</span>
+        </>
+      ) : (
+        "Division schedule"
+      )}
+      {divisionName ? <> · {divisionName}</> : null}
+      . Use Score to open a scoresheet.
+    </>
+  );
+
   if (!teamDays.length) {
     return (
-      <EmptyState
-        title={teamName ? "No matches for this team" : "No scheduled matches"}
-        body={
-          teamName
-            ? "Pick another team or clear the team filter."
-            : "Schedule data wasn’t available for this division."
-        }
-      />
+      <section className="animate-rise space-y-6">
+        <PageHeader
+          eyebrow="Schedule"
+          title="Your schedule"
+          description={description}
+        />
+        <EmptyState
+          title={teamName ? "No matches for this team" : "No scheduled matches"}
+          body={
+            teamName
+              ? "Pick another team or clear the team filter."
+              : "Schedule data wasn’t available for this division."
+          }
+        />
+      </section>
     );
   }
 
   return (
-    <section className="animate-rise space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-            Schedule
-          </p>
-          <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-            Your schedule
-          </h3>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            {teamName ? (
-              <>
-                Upcoming and past matchups for{" "}
-                <span className="font-medium text-[var(--ink)]">{teamName}</span>
-              </>
-            ) : (
-              "Division schedule"
-            )}
-            {divisionName ? <> · {divisionName}</> : null}
-            . Use Score to open a scoresheet.
-          </p>
-        </div>
-      </div>
+    <section className="animate-rise space-y-6">
+      <PageHeader
+        eyebrow="Schedule"
+        title="Your schedule"
+        description={description}
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         {(
@@ -138,17 +144,17 @@ export function ScheduleList({
               type="button"
               onClick={() => setView(item.id)}
               className={[
-                "rounded-full px-3.5 py-1.5 text-sm font-semibold transition",
+                "ui-focus rounded-full border px-4 py-2 text-sm font-semibold transition",
                 active
-                  ? "bg-[var(--felt)] text-white shadow-sm"
-                  : "bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface-2)]",
+                  ? "border-[color-mix(in_srgb,var(--felt)_40%,transparent)] bg-[color-mix(in_srgb,var(--felt)_18%,transparent)] text-[var(--chalk)]"
+                  : "border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--line-strong)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
               ].join(" ")}
             >
               {item.label}
               <span
                 className={[
                   "ml-1.5 tabular-nums",
-                  active ? "text-white/80" : "text-[var(--muted)]",
+                  active ? "text-[var(--ink-secondary)]" : "text-[var(--muted)]",
                 ].join(" ")}
               >
                 {item.count}
@@ -168,7 +174,7 @@ export function ScheduleList({
           }
         />
       ) : (
-        <div className="space-y-2.5">
+        <div className="space-y-3">
           {visibleMatches.map((item, index) => {
             const { match, day } = item;
             const status = [

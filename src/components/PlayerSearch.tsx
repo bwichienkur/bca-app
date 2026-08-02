@@ -1,28 +1,39 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Search,
+  User,
+  X,
+} from "lucide-react";
 import type { PlayerSearchResult } from "@/lib/types";
 import { useViewportAnchor } from "@/lib/use-viewport-anchor";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatBadge } from "@/components/ui/StatBadge";
 import { EmptyState } from "./EmptyState";
+import { LoadingState } from "./LoadingState";
 
 const MIN_QUERY = 2;
 const DEBOUNCE_MS = 320;
 const PAGE_SIZE = 8;
 
+function statusTone(
+  status: PlayerSearchResult["robustnessStatus"],
+): "primary" | "warning" | "neutral" {
+  if (status === "established") return "primary";
+  if (status === "preliminary") return "warning";
+  return "neutral";
+}
+
 function statusLabel(status: PlayerSearchResult["robustnessStatus"]): string {
   if (status === "established") return "Established";
   if (status === "preliminary") return "Preliminary";
   return "Starter";
-}
-
-function statusClass(status: PlayerSearchResult["robustnessStatus"]): string {
-  if (status === "established") {
-    return "bg-[var(--felt)]/20 text-[var(--felt-deep)]";
-  }
-  if (status === "preliminary") {
-    return "bg-[var(--amber)]/15 text-[var(--amber)]";
-  }
-  return "bg-[var(--surface-2)] text-[var(--muted)]";
 }
 
 function pageNumbers(current: number, total: number): (number | "…")[] {
@@ -119,7 +130,6 @@ export function PlayerSearch() {
     const clamped = Math.min(Math.max(1, next), totalPages);
     searchAnchor.mark();
     setPage(clamped);
-    // Keep the sticky search chrome in view after paging.
     requestAnimationFrame(() => {
       searchAnchor.ref.current?.scrollIntoView({
         block: "nearest",
@@ -140,26 +150,23 @@ export function PlayerSearch() {
   const hasQuery = query.trim().length > 0;
 
   return (
-    <section className="space-y-3 md:space-y-4">
-      {/* Sticky under report tabs so typing never loses the search box */}
+    <section className="space-y-6">
       <div
         ref={searchAnchor.ref}
-        className="sticky top-[5.75rem] z-10 -mx-1 space-y-3 bg-[color-mix(in_srgb,var(--paper)_94%,transparent)] px-1 py-2 backdrop-blur sm:top-[3.75rem]"
+        className="sticky top-[5.75rem] z-10 -mx-1 space-y-5 bg-[color-mix(in_srgb,var(--paper)_94%,transparent)] px-1 py-2 backdrop-blur sm:top-[3.75rem]"
       >
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-            Search
-          </p>
-          <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-            Player search
-          </h3>
-          <p className="mt-1 max-w-xl text-sm text-[var(--muted)]">
-            Look up any FargoRate rating by name or membership ID.
-          </p>
-        </div>
+        <PageHeader
+          eyebrow="Search"
+          title="Player search"
+          description="Look up any FargoRate rating by name or membership ID."
+        />
 
         <label className="relative block max-w-xl">
           <span className="sr-only">Search players</span>
+          <Search
+            className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]"
+            aria-hidden
+          />
           <input
             ref={inputRef}
             value={query}
@@ -169,22 +176,23 @@ export function PlayerSearch() {
             autoCorrect="off"
             spellCheck={false}
             className={[
-              "w-full rounded-2xl border border-[var(--line)] bg-[var(--surface)] py-3 text-base text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2",
-              hasQuery ? "pl-4 pr-24" : "px-4 pr-12",
+              "ui-focus w-full rounded-[var(--radius-sm)] border border-[var(--line)] bg-[color-mix(in_srgb,var(--surface-2)_85%,transparent)] py-3.5 text-base text-[var(--ink)] outline-none backdrop-blur-sm transition placeholder:text-[var(--muted)]",
+              hasQuery ? "pl-11 pr-24" : "pl-11 pr-12",
             ].join(" ")}
           />
           {hasQuery && !loading ? (
             <button
               type="button"
               onClick={clearQuery}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)]"
+              className="ui-focus absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--surface-3)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--line-strong)] hover:text-[var(--ink)]"
             >
+              <X className="h-3 w-3" aria-hidden />
               Clear
             </button>
           ) : null}
           {loading ? (
-            <span
-              className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-[var(--line-strong)] border-t-[var(--felt)]"
+            <Loader2
+              className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-[var(--chalk)]"
               aria-label="Searching"
             />
           ) : null}
@@ -193,7 +201,7 @@ export function PlayerSearch() {
 
       <div className="min-h-[min(48dvh,22rem)] [overflow-anchor:none]">
         {error ? (
-          <div className="rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
+          <div className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
             {error}
           </div>
         ) : null}
@@ -212,13 +220,11 @@ export function PlayerSearch() {
         ) : null}
 
         {loading && !showResults && !showEmpty && !error && !showHint ? (
-          <p className="py-6 text-center text-sm text-[var(--muted)]">
-            Searching FairMatch…
-          </p>
+          <LoadingState label="Searching FairMatch…" />
         ) : null}
 
         {showResults ? (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="flex items-baseline justify-between gap-3 px-0.5">
               <p className="text-sm text-[var(--muted)]">
                 <span className="tabular-nums font-semibold text-[var(--ink)]">
@@ -226,7 +232,7 @@ export function PlayerSearch() {
                 </span>{" "}
                 result{players.length === 1 ? "" : "s"}
                 {loading ? (
-                  <span className="ml-2 text-[var(--amber)]">Updating…</span>
+                  <span className="ml-2 text-[var(--chalk)]">Updating…</span>
                 ) : null}
               </p>
               <div className="flex items-center gap-3">
@@ -236,7 +242,7 @@ export function PlayerSearch() {
                 <button
                   type="button"
                   onClick={clearQuery}
-                  className="text-xs font-semibold text-[var(--felt-deep)] underline-offset-2 hover:underline"
+                  className="text-xs font-semibold text-[var(--chalk)] underline-offset-2 hover:underline"
                 >
                   Clear search
                 </button>
@@ -245,46 +251,48 @@ export function PlayerSearch() {
 
             <ul
               className={[
-                "divide-y divide-[var(--line)] overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)]/90 transition-opacity",
+                "grid gap-3 transition-opacity sm:grid-cols-2",
                 loading ? "opacity-60" : "opacity-100",
               ].join(" ")}
             >
               {pagePlayers.map((player) => (
-                <li
-                  key={player.id}
-                  className="flex items-start justify-between gap-4 px-4 py-3.5 md:px-5"
-                >
-                  <div className="min-w-0">
-                    <p className="font-medium text-[var(--ink)]">{player.name}</p>
-                    <p className="mt-0.5 text-sm text-[var(--muted)]">
-                      {[
-                        player.readableId ? `#${player.readableId}` : null,
-                        player.membershipId,
-                        player.location,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                    <span
-                      className={[
-                        "mt-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]",
-                        statusClass(player.robustnessStatus),
-                      ].join(" ")}
-                    >
-                      {statusLabel(player.robustnessStatus)}
-                      {player.robustness != null
-                        ? ` · ${player.robustness}`
-                        : ""}
-                    </span>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="font-[family-name:var(--font-display)] text-2xl tabular-nums leading-none text-[var(--felt-deep)]">
-                      {player.effectiveRating ?? "—"}
-                    </p>
-                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                      Rating
-                    </p>
-                  </div>
+                <li key={player.id}>
+                  <Card className="flex h-full items-start justify-between gap-4 p-4 md:p-5">
+                    <div className="min-w-0">
+                      <div className="flex items-start gap-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-[var(--muted)]">
+                          <User className="h-4 w-4" aria-hidden />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-medium text-[var(--ink)]">
+                            {player.name}
+                          </p>
+                          <p className="mt-0.5 text-sm text-[var(--muted)]">
+                            {[
+                              player.readableId ? `#${player.readableId}` : null,
+                              player.membershipId,
+                              player.location,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <StatBadge tone={statusTone(player.robustnessStatus)}>
+                          {`${statusLabel(player.robustnessStatus)}${player.robustness != null ? ` · ${player.robustness}` : ""}`}
+                        </StatBadge>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="font-[family-name:var(--font-display)] text-2xl tabular-nums leading-none text-[var(--chalk)]">
+                        {player.effectiveRating ?? "—"}
+                      </p>
+                      <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                        Rating
+                      </p>
+                    </div>
+                  </Card>
                 </li>
               ))}
             </ul>
@@ -292,16 +300,18 @@ export function PlayerSearch() {
             {totalPages > 1 ? (
               <nav
                 aria-label="Search results pages"
-                className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface)]/80 px-2.5 py-2 sm:px-3"
+                className="ui-glass flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-sm)] px-2.5 py-2 sm:px-3"
               >
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
                   onClick={() => goToPage(safePage - 1)}
                   disabled={safePage <= 1}
-                  className="rounded-full bg-[var(--surface-2)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
+                  className="!rounded-full !px-3.5 !py-1.5 !text-sm"
                 >
+                  <ChevronLeft className="h-4 w-4" aria-hidden />
                   Previous
-                </button>
+                </Button>
 
                 <div className="flex flex-wrap items-center justify-center gap-1">
                   {pageNumbers(safePage, totalPages).map((item, index) =>
@@ -321,7 +331,7 @@ export function PlayerSearch() {
                         aria-current={item === safePage ? "page" : undefined}
                         onClick={() => goToPage(item)}
                         className={[
-                          "min-w-9 rounded-full px-2.5 py-1.5 text-sm font-semibold tabular-nums transition",
+                          "ui-focus min-w-9 rounded-full px-2.5 py-1.5 text-sm font-semibold tabular-nums transition",
                           item === safePage
                             ? "bg-[var(--felt)] text-white shadow-sm"
                             : "bg-[var(--surface-2)] text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--ink)]",
@@ -333,14 +343,16 @@ export function PlayerSearch() {
                   )}
                 </div>
 
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
                   onClick={() => goToPage(safePage + 1)}
                   disabled={safePage >= totalPages}
-                  className="rounded-full bg-[var(--surface-2)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
+                  className="!rounded-full !px-3.5 !py-1.5 !text-sm"
                 >
                   Next
-                </button>
+                  <ChevronRight className="h-4 w-4" aria-hidden />
+                </Button>
               </nav>
             ) : null}
           </div>

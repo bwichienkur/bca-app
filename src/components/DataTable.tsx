@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { useMemo, useState } from "react";
 
 type SortDirection = "asc" | "desc";
@@ -141,6 +142,31 @@ function stickyColumnIndex(headers: string[], stickyEnabled: boolean): number {
   return 0;
 }
 
+function SortIndicator({
+  active,
+  direction,
+}: {
+  active: boolean;
+  direction: SortDirection;
+}) {
+  if (!active) {
+    return (
+      <ChevronsUpDown
+        className="h-3 w-3 shrink-0 text-[var(--muted)] opacity-50"
+        aria-hidden
+      />
+    );
+  }
+  if (direction === "asc") {
+    return (
+      <ArrowUp className="h-3 w-3 shrink-0 text-[var(--felt)]" aria-hidden />
+    );
+  }
+  return (
+    <ArrowDown className="h-3 w-3 shrink-0 text-[var(--felt)]" aria-hidden />
+  );
+}
+
 export function DataTable({
   headers,
   rows,
@@ -228,8 +254,10 @@ export function DataTable({
     ? "text-xs md:text-[13px]"
     : "text-[13px] md:text-sm";
 
+  const headerBg = "bg-[var(--surface-2)]";
+
   return (
-    <div className="overflow-x-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+    <div className="overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)]">
       <table
         className={[
           "w-full table-fixed border-separate border-spacing-0 text-left",
@@ -242,7 +270,7 @@ export function DataTable({
             <col key={`col-${index}`} style={{ width: column.width }} />
           ))}
         </colgroup>
-        <thead className="bg-[var(--felt-soft)] text-white">
+        <thead className="sticky top-0 z-20">
           <tr>
             {headers.map((header, index) => {
               const active = sortColumn === index;
@@ -260,13 +288,14 @@ export function DataTable({
                       : "none"
                   }
                   className={[
-                    "border-b border-[var(--felt-soft)] font-semibold tracking-wide text-white",
+                    "border-b border-[var(--line-strong)]",
                     cellPad,
+                    headerBg,
                     isSticky
-                      ? "sticky left-0 z-10 bg-[var(--felt-soft)] shadow-[4px_0_10px_rgba(0,0,0,0.28)]"
-                      : "bg-[var(--felt-soft)]",
-                    isFirst ? "rounded-tl-[calc(var(--radius)-1px)]" : "",
-                    isLast ? "rounded-tr-[calc(var(--radius)-1px)]" : "",
+                      ? "sticky left-0 z-30 shadow-[4px_0_12px_rgba(0,0,0,0.35)]"
+                      : "",
+                    isFirst ? "rounded-tl-[calc(var(--radius-sm)-1px)]" : "",
+                    isLast ? "rounded-tr-[calc(var(--radius-sm)-1px)]" : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
@@ -281,18 +310,14 @@ export function DataTable({
                           : "Sorted descending — click to clear sort"
                         : "Sort column"
                     }
-                    className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-0.5 py-0.5 transition hover:text-[var(--amber)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                    className={[
+                      "ui-focus inline-flex w-full items-center gap-1 whitespace-nowrap rounded-md text-left transition",
+                      "text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]",
+                      active ? "text-[var(--ink-secondary)]" : "hover:text-[var(--ink)]",
+                    ].join(" ")}
                   >
                     <span>{header}</span>
-                    <span
-                      className={[
-                        "shrink-0 text-[10px] leading-none",
-                        active ? "opacity-100" : "opacity-45",
-                      ].join(" ")}
-                      aria-hidden
-                    >
-                      {active ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}
-                    </span>
+                    <SortIndicator active={active} direction={sortDirection} />
                   </button>
                 </th>
               );
@@ -305,11 +330,13 @@ export function DataTable({
               ? isRowSelected(row)
               : selectedRowIndex === originalIndex;
             const clickable = Boolean(onRowClick);
-            const rowBg = selected
-              ? "bg-[color-mix(in_srgb,var(--felt)_22%,var(--surface))]"
-              : displayIndex % 2 === 0
+            const zebra =
+              displayIndex % 2 === 0
                 ? "bg-[var(--surface)]"
-                : "bg-[var(--surface-2)]";
+                : "bg-[color-mix(in_srgb,var(--surface-2)_55%,var(--surface))]";
+            const rowBg = selected
+              ? "bg-[color-mix(in_srgb,var(--felt)_18%,var(--surface))]"
+              : zebra;
             return (
               <tr
                 key={`${originalIndex}-${displayIndex}`}
@@ -318,8 +345,9 @@ export function DataTable({
                 }
                 className={[
                   clickable
-                    ? "cursor-pointer transition hover:bg-[color-mix(in_srgb,var(--amber)_16%,var(--surface))]"
+                    ? "cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]"
                     : "",
+                  selected ? "ring-1 ring-inset ring-[color-mix(in_srgb,var(--felt)_35%,transparent)]" : "",
                 ].join(" ")}
               >
                 {headers.map((_, cellIndex) => {
@@ -328,6 +356,11 @@ export function DataTable({
                   const isFirst = cellIndex === 0;
                   const isLastRow = displayIndex === sortedRows.length - 1;
                   const value = row[cellIndex] ?? "";
+                  const stickyBg = selected
+                    ? "bg-[color-mix(in_srgb,var(--felt)_18%,var(--surface))]"
+                    : displayIndex % 2 === 0
+                      ? "bg-[var(--surface)]"
+                      : "bg-[color-mix(in_srgb,var(--surface-2)_55%,var(--surface))]";
                   return (
                     <td
                       key={cellIndex}
@@ -335,9 +368,9 @@ export function DataTable({
                       className={[
                         "border-b border-[var(--line)]",
                         cellPad,
-                        rowBg,
+                        isSticky ? stickyBg : rowBg,
                         isSticky
-                          ? "sticky left-0 z-[1] font-semibold text-[var(--ink)] shadow-[4px_0_10px_rgba(0,0,0,0.22)]"
+                          ? "sticky left-0 z-[1] font-semibold text-[var(--ink)] shadow-[4px_0_10px_rgba(0,0,0,0.28)]"
                           : kind === "rank"
                             ? "tabular-nums font-medium text-[var(--muted)]"
                             : "tabular-nums font-semibold text-[var(--ink)]",
@@ -345,10 +378,10 @@ export function DataTable({
                           ? "truncate whitespace-nowrap font-semibold text-[var(--ink)]"
                           : "whitespace-nowrap",
                         isLastRow && isFirst
-                          ? "rounded-bl-[calc(var(--radius)-1px)]"
+                          ? "rounded-bl-[calc(var(--radius-sm)-1px)]"
                           : "",
                         isLastRow && cellIndex === headers.length - 1
-                          ? "rounded-br-[calc(var(--radius)-1px)]"
+                          ? "rounded-br-[calc(var(--radius-sm)-1px)]"
                           : "",
                       ]
                         .filter(Boolean)

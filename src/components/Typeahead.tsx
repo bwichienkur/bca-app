@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, ChevronDown, ChevronUp, X } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 export type TypeaheadOption<T = string> = {
@@ -101,6 +102,20 @@ export function Typeahead<T>({
 
   const showClear = clearable && Boolean(value) && !disabled;
 
+  const inputClasses = felt
+    ? [
+        "border-[var(--line-strong)] bg-[color-mix(in_srgb,var(--surface-2)_70%,transparent)] text-[var(--ink)]",
+        "placeholder:text-[var(--muted)] backdrop-blur-md",
+      ].join(" ")
+    : [
+        "border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)]",
+        "placeholder:text-[var(--muted)]",
+      ].join(" ");
+
+  const controlBtnClasses = felt
+    ? "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--felt)_12%,transparent)] hover:text-[var(--ink)]"
+    : "text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--ink)]";
+
   return (
     <div
       ref={rootRef}
@@ -109,7 +124,7 @@ export function Typeahead<T>({
       <label
         className={[
           "mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em]",
-          felt ? "text-white/65" : "text-[var(--muted)]",
+          felt ? "text-[var(--ink-secondary)]" : "text-[var(--muted)]",
         ].join(" ")}
       >
         {label}
@@ -157,12 +172,9 @@ export function Typeahead<T>({
               setQuery(value?.label ?? "");
             }
           }}
-          style={felt ? { backgroundColor: "var(--felt)" } : undefined}
           className={[
-            "w-full rounded-2xl border px-4 py-3 outline-none transition focus:ring-2 disabled:opacity-50",
-            felt
-              ? "border-white/20 text-white ring-white/35 placeholder:text-white/45"
-              : "border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)] ring-[var(--felt-soft)] placeholder:text-[var(--muted)]",
+            "ui-focus w-full rounded-[var(--radius-sm)] border px-4 py-3 outline-none transition disabled:opacity-50",
+            inputClasses,
             showClear ? "pr-16" : "pr-10",
           ].join(" ")}
         />
@@ -174,13 +186,11 @@ export function Typeahead<T>({
               onMouseDown={(event) => event.preventDefault()}
               onClick={clear}
               className={[
-                "flex h-8 w-8 items-center justify-center rounded-full text-lg leading-none transition",
-                felt
-                  ? "text-white/70 hover:bg-black/20 hover:text-white"
-                  : "text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--ink)]",
+                "flex h-8 w-8 items-center justify-center rounded-full transition",
+                controlBtnClasses,
               ].join(" ")}
             >
-              ×
+              <X className="h-4 w-4" aria-hidden />
             </button>
           ) : null}
           <button
@@ -199,13 +209,15 @@ export function Typeahead<T>({
               }
             }}
             className={[
-              "flex h-8 w-8 items-center justify-center rounded-full text-sm transition disabled:opacity-50",
-              felt
-                ? "text-white/70 hover:bg-black/20 hover:text-white"
-                : "text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--ink)]",
+              "flex h-8 w-8 items-center justify-center rounded-full transition disabled:opacity-50",
+              controlBtnClasses,
             ].join(" ")}
           >
-            {open ? "▴" : "▾"}
+            {open ? (
+              <ChevronUp className="h-4 w-4" aria-hidden />
+            ) : (
+              <ChevronDown className="h-4 w-4" aria-hidden />
+            )}
           </button>
         </div>
       </div>
@@ -214,25 +226,15 @@ export function Typeahead<T>({
         <ul
           id={listId}
           role="listbox"
-          style={
-            felt
-              ? { backgroundColor: "var(--felt)" }
-              : { backgroundColor: "var(--surface-2)" }
-          }
           className={[
-            "absolute z-[90] mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border py-1 shadow-[var(--shadow)]",
+            "absolute z-[90] mt-1.5 max-h-72 w-full overflow-y-auto rounded-[var(--radius-sm)] border py-1 shadow-[var(--shadow-sm)]",
             felt
-              ? "border-white/20 text-white"
-              : "border-[var(--line-strong)] text-[var(--ink)]",
+              ? "ui-glass border-[var(--line-strong)] text-[var(--ink)]"
+              : "border-[var(--line-strong)] bg-[var(--surface)] text-[var(--ink)]",
           ].join(" ")}
         >
           {filtered.length === 0 ? (
-            <li
-              className={[
-                "px-4 py-3 text-sm",
-                felt ? "text-white/70" : "text-[var(--muted)]",
-              ].join(" ")}
-            >
+            <li className="px-4 py-3 text-sm text-[var(--muted)]">
               {emptyText}
             </li>
           ) : (
@@ -248,46 +250,26 @@ export function Typeahead<T>({
                     onMouseEnter={() => setHighlight(index)}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => choose(option)}
-                    style={
-                      felt
-                        ? {
-                            backgroundColor: active
-                              ? "color-mix(in srgb, var(--felt) 82%, white)"
-                              : "var(--felt)",
-                          }
-                        : undefined
-                    }
                     className={[
-                      "flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm",
-                      felt
-                        ? selected
-                          ? "font-semibold text-white"
-                          : "text-white/95"
-                        : [
-                            active ? "bg-[var(--surface-3)]" : "bg-[var(--surface-2)]",
-                            selected
-                              ? "font-semibold text-[var(--felt-deep)]"
-                              : "text-[var(--ink)]",
-                          ].join(" "),
+                      "flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors",
+                      active
+                        ? "bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface-2))]"
+                        : "bg-transparent",
+                      selected
+                        ? "font-semibold text-[var(--chalk)]"
+                        : "text-[var(--ink-secondary)]",
                     ].join(" ")}
                   >
                     <span>
                       <span className="block">{option.label}</span>
                       {option.meta ? (
-                        <span
-                          className={[
-                            "mt-0.5 block text-[11px] uppercase tracking-[0.12em]",
-                            felt ? "text-white/60" : "text-[var(--muted)]",
-                          ].join(" ")}
-                        >
+                        <span className="mt-0.5 block text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">
                           {option.meta}
                         </span>
                       ) : null}
                     </span>
                     {selected ? (
-                      <span className={felt ? "text-white" : "text-[var(--felt)]"}>
-                        ✓
-                      </span>
+                      <Check className="h-4 w-4 shrink-0 text-[var(--felt)]" aria-hidden />
                     ) : null}
                   </button>
                 </li>

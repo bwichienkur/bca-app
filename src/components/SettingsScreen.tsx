@@ -8,6 +8,10 @@ import type {
   MembershipTeam,
   UserPreferences,
 } from "@/lib/types";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import type { AuthUser } from "./LoginScreen";
 import { LoadingState } from "./LoadingState";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
@@ -147,167 +151,169 @@ export function SettingsScreen({
   };
 
   return (
-    <section className="animate-rise mx-auto max-w-2xl space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-            Settings
-          </p>
-          <h2 className="mt-1 font-[family-name:var(--font-display)] text-3xl text-[var(--felt-deep)]">
-            Your defaults
-          </h2>
-          <p className="mt-2 text-sm text-[var(--muted)]">
+    <section className="animate-rise mx-auto max-w-2xl space-y-8">
+      <PageHeader
+        eyebrow="Settings"
+        title="Your defaults"
+        description={
+          <>
             Signed in as{" "}
             <span className="font-medium text-[var(--ink)]">
               {user.name ?? user.email ?? "Player"}
             </span>
             . Defaults apply when you open Tableside and limit Score to your
             team.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]"
-        >
-          Done
-        </button>
-      </div>
+          </>
+        }
+        actions={
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Done
+          </Button>
+        }
+      />
 
       {loadingMembership ? (
         <LoadingState label="Finding your leagues, divisions, and teams…" />
       ) : membershipError ? (
-        <div className="space-y-3 rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
-          <p>{membershipError}</p>
-          <button
-            type="button"
-            onClick={onRefreshMembership}
-            className="rounded-full bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)]"
-          >
+        <Card className="space-y-3 border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[var(--danger-bg)] p-5">
+          <p className="text-sm text-[var(--danger)]">{membershipError}</p>
+          <Button type="button" variant="secondary" onClick={onRefreshMembership}>
             Try again
-          </button>
-        </div>
+          </Button>
+        </Card>
       ) : (
-        <div className="space-y-4 rounded-[1.4rem] border border-[var(--line)] bg-[var(--surface)] p-4 md:p-5">
-          <Typeahead
-            label="Default league"
-            placeholder={
-              loadingLeagues ? "Searching leagues…" : "Your leagues"
-            }
-            value={
-              selectedLeague
-                ? {
-                    id: selectedLeague.id,
-                    label: selectedLeague.name,
-                    meta: `${selectedLeague.state}`,
-                    value: selectedLeague,
-                  }
-                : null
-            }
-            options={leagueOptions}
-            onQueryChange={
-              membership?.leagues.length ? undefined : setLeagueQuery
-            }
-            onChange={(option) => {
-              setLeagueId(option?.value.id ?? "");
-              setDivisionId(null);
-              setTeamId(null);
-              setStatus(null);
-            }}
+        <Card className="space-y-6 p-5 md:p-6">
+          <SectionHeader
+            eyebrow="Context"
+            title="League & team"
+            description="These defaults filter reports and unlock scoring for your team."
           />
 
-          {!membership?.teams.length ? (
-            <p className="text-sm text-[var(--muted)]">
-              No active-session teams were found for your LMS player id. Tap
-              Refresh my teams, or browse public reports without Score
-              filters.
-            </p>
-          ) : (
-            <>
-              <Typeahead
-                label="Default division"
-                placeholder={
-                  selectedLeague ? "Your divisions" : "Pick a league first"
-                }
-                disabled={!selectedLeague}
-                value={
-                  selectedDivision
-                    ? {
-                        id: selectedDivision.id,
-                        label: selectedDivision.name,
-                        meta: selectedDivision.year,
-                        value: selectedDivision,
-                      }
-                    : null
-                }
-                options={divisionOptions}
-                onChange={(option) => {
-                  const nextDivisionId = option?.value.id ?? null;
-                  setDivisionId(nextDivisionId);
-                  const soleTeam =
-                    (membership?.teams ?? []).find(
-                      (team) => team.divisionId === nextDivisionId,
-                    ) ?? null;
-                  setTeamId(soleTeam?.teamId ?? null);
-                  setStatus(null);
-                }}
-              />
-              <Typeahead
-                label="Default team"
-                placeholder={
-                  selectedDivision ? "Your teams" : "Pick a division first"
-                }
-                disabled={!selectedDivision}
-                value={
-                  selectedTeam
-                    ? {
-                        id: selectedTeam.teamId,
-                        label: selectedTeam.teamName,
-                        meta: selectedTeam.divisionName,
-                        value: selectedTeam,
-                      }
-                    : null
-                }
-                options={teamOptions}
-                onChange={(option) => {
-                  setTeamId(option?.value.teamId ?? null);
-                  setStatus(null);
-                }}
-              />
-            </>
-          )}
+          <div className="space-y-4">
+            <Typeahead
+              label="Default league"
+              placeholder={
+                loadingLeagues ? "Searching leagues…" : "Your leagues"
+              }
+              value={
+                selectedLeague
+                  ? {
+                      id: selectedLeague.id,
+                      label: selectedLeague.name,
+                      meta: `${selectedLeague.state}`,
+                      value: selectedLeague,
+                    }
+                  : null
+              }
+              options={leagueOptions}
+              onQueryChange={
+                membership?.leagues.length ? undefined : setLeagueQuery
+              }
+              onChange={(option) => {
+                setLeagueId(option?.value.id ?? "");
+                setDivisionId(null);
+                setTeamId(null);
+                setStatus(null);
+              }}
+            />
+
+            {!membership?.teams.length ? (
+              <p className="text-sm leading-relaxed text-[var(--muted)]">
+                No active-session teams were found for your LMS player id. Tap
+                Refresh my teams, or browse public reports without Score
+                filters.
+              </p>
+            ) : (
+              <>
+                <Typeahead
+                  label="Default division"
+                  placeholder={
+                    selectedLeague ? "Your divisions" : "Pick a league first"
+                  }
+                  disabled={!selectedLeague}
+                  value={
+                    selectedDivision
+                      ? {
+                          id: selectedDivision.id,
+                          label: selectedDivision.name,
+                          meta: selectedDivision.year,
+                          value: selectedDivision,
+                        }
+                      : null
+                  }
+                  options={divisionOptions}
+                  onChange={(option) => {
+                    const nextDivisionId = option?.value.id ?? null;
+                    setDivisionId(nextDivisionId);
+                    const soleTeam =
+                      (membership?.teams ?? []).find(
+                        (team) => team.divisionId === nextDivisionId,
+                      ) ?? null;
+                    setTeamId(soleTeam?.teamId ?? null);
+                    setStatus(null);
+                  }}
+                />
+                <Typeahead
+                  label="Default team"
+                  placeholder={
+                    selectedDivision ? "Your teams" : "Pick a division first"
+                  }
+                  disabled={!selectedDivision}
+                  value={
+                    selectedTeam
+                      ? {
+                          id: selectedTeam.teamId,
+                          label: selectedTeam.teamName,
+                          meta: selectedTeam.divisionName,
+                          value: selectedTeam,
+                        }
+                      : null
+                  }
+                  options={teamOptions}
+                  onChange={(option) => {
+                    setTeamId(option?.value.teamId ?? null);
+                    setStatus(null);
+                  }}
+                />
+              </>
+            )}
+          </div>
 
           {status ? (
-            <p className="text-sm text-[var(--felt-deep)]">{status}</p>
+            <p className="text-sm text-[var(--chalk)]">{status}</p>
           ) : null}
 
-          <div className="flex flex-wrap gap-2 pt-1">
-            <button
+          <div className="flex flex-wrap gap-2 border-t border-[var(--line)] pt-5">
+            <Button
               type="button"
               onClick={save}
               disabled={!membership?.teams.length}
-              className="rounded-xl bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
             >
               Save defaults
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="secondary"
               onClick={onRefreshMembership}
-              className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 text-sm font-semibold text-[var(--muted)]"
             >
               Refresh my teams
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
-      <button
-        type="button"
-        onClick={onSignOut}
-        className="rounded-xl border border-[var(--danger)]/35 bg-[var(--danger-bg)] px-4 py-3 text-sm font-semibold text-[var(--danger)]"
-      >
-        Sign out
-      </button>
+      <Card className="p-5 md:p-6">
+        <SectionHeader
+          eyebrow="Account"
+          title="Session"
+          description="Sign out to clear scoring access on this device."
+        />
+        <div className="mt-5">
+          <Button type="button" variant="danger" onClick={onSignOut}>
+            Sign out
+          </Button>
+        </div>
+      </Card>
     </section>
   );
 }

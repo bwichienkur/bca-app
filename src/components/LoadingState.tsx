@@ -1,17 +1,19 @@
 export function LoadingState({ label = "Loading…" }: { label?: string }) {
   return (
     <div
-      className="flex flex-col items-center justify-center gap-3 py-16 text-center"
+      className="animate-panel space-y-4 py-4"
       role="status"
       aria-live="polite"
       aria-busy="true"
     >
-      <div className="flex items-center gap-2" aria-hidden>
-        <span className="loading-dot h-2.5 w-2.5 rounded-full bg-[var(--felt)]" />
-        <span className="loading-dot h-2.5 w-2.5 rounded-full bg-[var(--chalk)]" />
-        <span className="loading-dot h-2.5 w-2.5 rounded-full bg-[var(--amber)]" />
+      <p className="sr-only">{label}</p>
+      <div className="ui-skeleton h-8 w-40" />
+      <div className="ui-skeleton h-4 w-72 max-w-full" />
+      <div className="mt-6 space-y-3">
+        <div className="ui-skeleton h-20 w-full" />
+        <div className="ui-skeleton h-20 w-full" />
+        <div className="ui-skeleton h-20 w-full opacity-70" />
       </div>
-      <p className="text-sm text-[var(--muted)]">{label}</p>
     </div>
   );
 }

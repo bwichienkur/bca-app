@@ -24,12 +24,16 @@ export const PREFERENCES_STORAGE_KEY = "tableside.preferences.v1";
 export const LINEUP_PRESETS_STORAGE_KEY = "tableside.lineups.v1";
 export const MEMBERSHIP_STORAGE_KEY = "tableside.membership.v1";
 
-export const REPORT_TABS: { id: ReportTab; label: string }[] = [
-  { id: "my-team", label: "My Team" },
-  { id: "standings", label: "Standings" },
-  { id: "players", label: "Players" },
-  { id: "schedule", label: "Schedule" },
-  { id: "handicap", label: "Handicap" },
-  { id: "score", label: "Score" },
-  { id: "search", label: "Search" },
+export const REPORT_TABS: {
+  id: ReportTab;
+  label: string;
+  hint: string;
+}[] = [
+  { id: "my-team", label: "My Team", hint: "Roster & standing" },
+  { id: "standings", label: "Standings", hint: "Division table" },
+  { id: "players", label: "Players", hint: "Ratings & stats" },
+  { id: "schedule", label: "Schedule", hint: "Upcoming matches" },
+  { id: "handicap", label: "Handicap", hint: "Matchup calculator" },
+  { id: "score", label: "Score", hint: "Live scoresheets" },
+  { id: "search", label: "Search", hint: "Find any player" },
 ];

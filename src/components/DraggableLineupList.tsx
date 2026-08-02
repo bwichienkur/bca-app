@@ -283,10 +283,10 @@ export function DraggableLineupList({
   };
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm sm:p-4">
+    <div className="ui-card min-w-0 overflow-hidden p-3 sm:p-5">
       <div className="mb-3 flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1 overflow-hidden">
-          <h4 className="truncate font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
+          <h4 className="truncate font-[family-name:var(--font-display)] text-lg tracking-tight text-[var(--ink)]">
             {title}
           </h4>
           <p className="truncate text-xs text-[var(--muted)]">{subtitle}</p>
@@ -343,7 +343,7 @@ export function DraggableLineupList({
                             ) as HTMLElement | null;
                             onGripPointerDown(event, index, card);
                           }}
-                          className="touch-none inline-flex h-8 w-8 cursor-grab items-center justify-center rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--felt-deep)] active:cursor-grabbing active:bg-[var(--surface-3)]"
+                          className="touch-none ui-focus inline-flex h-8 w-8 cursor-grab items-center justify-center rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] p-0 text-[var(--chalk)] active:cursor-grabbing active:bg-[var(--surface-3)]"
                         >
                           <GripIcon />
                         </button>
@@ -385,7 +385,7 @@ export function DraggableLineupList({
                               </button>
                             </>
                           ) : null}
-                          <span className="ml-0.5 min-w-[2rem] text-right tabular-nums text-xs font-semibold text-[var(--felt)]">
+                          <span className="ml-0.5 min-w-[2rem] text-right tabular-nums text-xs font-semibold text-[var(--chalk)]">
                             {player.rating ?? "—"}
                           </span>
                         </>

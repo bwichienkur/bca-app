@@ -1,23 +1,13 @@
+import type { CSSProperties } from "react";
 import type { Metadata, Viewport } from "next";
-import { Figtree, Syne } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import "./globals.css";
-
-const display = Syne({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["600", "700", "800"],
-});
-
-const body = Figtree({
-  variable: "--font-body",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
 
 export const metadata: Metadata = {
   title: "Tableside | Palm Beach County BCA Pool League",
   description:
-    "Mobile-friendly companion for FargoRate LMS league standings, schedules, handicaps, and match scoring. Defaults to Palm Beach County BCA Pool League.",
+    "Premium companion for FargoRate LMS league standings, schedules, handicaps, and match scoring.",
   applicationName: "Tableside",
   appleWebApp: {
     capable: true,
@@ -27,7 +17,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0d1216",
+  themeColor: "#0B0D12",
   width: "device-width",
   initialScale: 1,
   colorScheme: "dark",
@@ -40,7 +30,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${display.variable} ${body.variable} antialiased`}>
+      <body
+        className={`${GeistSans.variable} ${GeistMono.variable} ${GeistSans.className} antialiased`}
+        style={
+          {
+            "--font-body": "var(--font-geist-sans)",
+            "--font-display": "var(--font-geist-sans)",
+          } as CSSProperties
+        }
+      >
         {children}
       </body>
     </html>

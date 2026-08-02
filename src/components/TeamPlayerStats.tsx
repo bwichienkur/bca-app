@@ -91,7 +91,7 @@ export function TeamPlayerStats({
 
   if (!enriched.rows.length) {
     return (
-      <p className="py-6 text-center text-sm text-[var(--muted)]">
+      <p className="rounded-[var(--radius-sm)] border border-dashed border-[var(--line)] py-8 text-center text-sm text-[var(--muted)]">
         No player stats for this team.
       </p>
     );

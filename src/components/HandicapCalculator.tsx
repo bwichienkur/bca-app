@@ -33,6 +33,9 @@ import type {
   RosterPlayer,
   UserPreferences,
 } from "@/lib/types";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "./EmptyState";
 import { LoadingState } from "./LoadingState";
 import { PlayerSelect } from "./PlayerSelect";
@@ -496,32 +499,32 @@ export function HandicapCalculator({
       preset.divisionId === divisionId && preset.teamId === myTeamId,
   );
 
-  const sectionHeader = (
-    <div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-        Handicap
-      </p>
-      <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-        Matchup calculator
-      </h3>
-      <p className="mt-1 text-sm text-[var(--muted)]">
-        Build lineups and see round handicaps
-        {prefs.teamName ? (
-          <>
-            {" "}
-            for{" "}
-            <span className="font-medium text-[var(--ink)]">{prefs.teamName}</span>
-          </>
-        ) : null}
-        {divisionName ? <> · {divisionName}</> : null}
-      </p>
-    </div>
+  const pageHeader = (
+    <PageHeader
+      eyebrow="Handicap"
+      title="Matchup calculator"
+      description={
+        <>
+          Build lineups and see round handicaps
+          {prefs.teamName ? (
+            <>
+              {" "}
+              for{" "}
+              <span className="font-medium text-[var(--ink)]">
+                {prefs.teamName}
+              </span>
+            </>
+          ) : null}
+          {divisionName ? <> · {divisionName}</> : null}
+        </>
+      }
+    />
   );
 
   if (loading) {
     return (
-      <section className="animate-rise space-y-4">
-        {sectionHeader}
+      <section className="animate-rise space-y-6">
+        {pageHeader}
         <LoadingState label="Loading teams, ratings, and format…" />
       </section>
     );
@@ -529,8 +532,8 @@ export function HandicapCalculator({
 
   if (error || !data) {
     return (
-      <section className="animate-rise space-y-4">
-        {sectionHeader}
+      <section className="animate-rise space-y-6">
+        {pageHeader}
         <EmptyState
           title="Couldn't load calculator"
           body={error ?? "Try again in a moment."}
@@ -541,19 +544,15 @@ export function HandicapCalculator({
 
   if (!prefs.teamId || !myTeam) {
     return (
-      <section className="animate-rise space-y-4">
-        {sectionHeader}
+      <section className="animate-rise space-y-6">
+        {pageHeader}
         <EmptyState
           title="Set My team to calculate handicaps"
           body="Handicap uses your team from the context card. Set My team once, then pick an opponent here."
           action={
-            <button
-              type="button"
-              onClick={onRequestSetTeam}
-              className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
-            >
+            <Button type="button" onClick={onRequestSetTeam}>
               Set my team
-            </button>
+            </Button>
           }
         />
       </section>
@@ -561,22 +560,22 @@ export function HandicapCalculator({
   }
 
   return (
-    <div className="animate-panel space-y-4">
-      {sectionHeader}
+    <div className="animate-panel space-y-6">
+      {pageHeader}
 
       {weekMatchup ? (
-        <section className="rounded-2xl border border-[var(--line)] bg-[var(--felt-soft)] px-4 py-3 text-white shadow-sm">
-          <p className="text-[11px] uppercase tracking-[0.14em] text-white/70">
+        <Card className="border-[color-mix(in_srgb,var(--felt)_35%,transparent)] bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))] px-5 py-4">
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted)]">
             Auto-matched · {weekMatchup.date}
           </p>
-          <p className="mt-1 font-semibold leading-snug">
+          <p className="mt-2 font-semibold leading-snug text-[var(--ink)]">
             {weekMatchup.homeTeamName} vs {weekMatchup.awayTeamName}
           </p>
-          <p className="mt-1 text-xs text-white/75">
+          <p className="mt-1 text-xs text-[var(--muted)]">
             {data.format.pointSystem || "10"}-point · {slots}/side
             {weekMatchup.location ? ` · ${weekMatchup.location}` : ""}
           </p>
-        </section>
+        </Card>
       ) : (
         <p className="text-xs text-[var(--muted)]">
           {data.format.pointSystem || "10"}-point · {slots} players/side ·{" "}
@@ -585,8 +584,8 @@ export function HandicapCalculator({
         </p>
       )}
 
-      <section className="relative z-40 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] md:items-end">
-        <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3">
+      <section className="relative z-40 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] md:items-end">
+        <Card className="px-4 py-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
             Your team
           </p>
@@ -596,11 +595,11 @@ export function HandicapCalculator({
           <button
             type="button"
             onClick={onRequestSetTeam}
-            className="mt-2 text-xs font-semibold text-[var(--chalk)] underline-offset-2 hover:underline"
+            className="ui-focus mt-2 text-xs font-semibold text-[var(--chalk)] underline-offset-2 hover:underline"
           >
             Change in context card
           </button>
-        </div>
+        </Card>
         <Typeahead
           label="Opponent"
           placeholder="Select opponent"
@@ -624,30 +623,22 @@ export function HandicapCalculator({
 
       {myTeam && oppTeam ? (
         <div className="flex flex-wrap items-center gap-2">
-          <button
+          <Button
             type="button"
+            variant={iAmHome ? "primary" : "secondary"}
             onClick={() => setIAmHome(true)}
-            className={[
-              "rounded-full px-3 py-1.5 text-xs font-semibold",
-              iAmHome
-                ? "bg-[var(--felt)] text-white"
-                : "border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]",
-            ].join(" ")}
+            className="!rounded-full !px-3.5 !py-1.5 !text-xs"
           >
             We’re home (Team One)
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant={!iAmHome ? "primary" : "secondary"}
             onClick={() => setIAmHome(false)}
-            className={[
-              "rounded-full px-3 py-1.5 text-xs font-semibold",
-              !iAmHome
-                ? "bg-[var(--felt)] text-white"
-                : "border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]",
-            ].join(" ")}
+            className="!rounded-full !px-3.5 !py-1.5 !text-xs"
           >
             We’re away (Team Two)
-          </button>
+          </Button>
         </div>
       ) : null}
 
@@ -700,8 +691,8 @@ export function HandicapCalculator({
             />
           )}
 
-          <div className="relative z-0 space-y-3 rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
-            <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
+          <Card className="relative z-0 space-y-3 p-5">
+            <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--ink)]">
               Saved lineups
             </h4>
             <p className="text-sm text-[var(--muted)]">
@@ -715,13 +706,13 @@ export function HandicapCalculator({
                 setPresetStatus(null);
               }}
               placeholder="Preset name"
-              className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]"
+              className="ui-focus w-full rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)]"
             />
-            <button
+            <Button
               type="button"
               disabled={!isComplete(myLineup, slots)}
               onClick={savePreset}
-              className="w-full rounded-full bg-[var(--felt)] px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--felt-soft)] disabled:cursor-not-allowed disabled:opacity-40"
+              className="w-full"
             >
               {teamPresets.some(
                 (preset) =>
@@ -730,7 +721,7 @@ export function HandicapCalculator({
               )
                 ? "Update saved lineup"
                 : "Save current lineup"}
-            </button>
+            </Button>
             {presetStatus ? (
               <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
                 {presetStatus}
@@ -788,11 +779,11 @@ export function HandicapCalculator({
                 })
               )}
             </ul>
-          </div>
+          </Card>
         </section>
       )}
 
-      <section className="space-y-3">
+      <section className="space-y-4">
         <h4 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
           Handicap by round
         </h4>
@@ -814,13 +805,13 @@ export function HandicapCalculator({
               const homePlayers = compactPlayers(homeLineup);
               const awayPlayers = compactPlayers(awayLineup);
               return (
-                <article
+                <Card
                   key={result.round}
-                  className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3 shadow-sm"
+                  className="px-4 py-4"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
                         Round {result.round}
                       </p>
                       <p className="mt-1 font-medium text-[var(--ink)]">
@@ -859,7 +850,7 @@ export function HandicapCalculator({
                       );
                     })}
                   </ul>
-                </article>
+                </Card>
               );
             })}
           </div>
@@ -1076,7 +1067,7 @@ function LineupPicker({
   };
 
   return (
-    <div className="rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
+    <Card className="p-4 md:p-5">
       <div className="mb-3 flex items-baseline justify-between gap-2">
         <div>
           <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
@@ -1224,6 +1215,6 @@ function LineupPicker({
             document.body,
           )
         : null}
-    </div>
+    </Card>
   );
 }

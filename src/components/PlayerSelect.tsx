@@ -117,7 +117,7 @@ export function PlayerSelect({
             id={listId}
             role="listbox"
             style={menuStyle}
-            className="overflow-y-auto rounded-xl border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow)] [background-color:var(--surface-2)]"
+            className="overflow-y-auto rounded-[var(--radius-sm)] border border-[var(--line-strong)] bg-[var(--surface)] py-1 shadow-[var(--shadow)] backdrop-blur-md [background-color:var(--surface)]"
           >
             {menuOptions.map((option, index) => {
               const active = index === highlight;
@@ -136,15 +136,15 @@ export function PlayerSelect({
                       onChange(option.id);
                       setOpen(false);
                     }}
-                    className={[
-                      "flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm",
-                      active
-                        ? "bg-[var(--surface-3)]"
-                        : "bg-[var(--surface-2)]",
-                      isSelected
-                        ? "font-semibold text-[var(--felt-deep)]"
-                        : "text-[var(--ink)]",
-                    ].join(" ")}
+                  className={[
+                    "flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition",
+                    active
+                      ? "bg-[var(--surface-3)]"
+                      : "bg-transparent",
+                    isSelected
+                      ? "font-semibold text-[var(--chalk)]"
+                      : "text-[var(--ink-secondary)]",
+                  ].join(" ")}
                   >
                     <span>{option.label}</span>
                     {option.rating != null ? (
@@ -174,7 +174,7 @@ export function PlayerSelect({
           if (disabled) return;
           setOpen((current) => !current);
         }}
-        className="flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-left text-sm text-[var(--ink)] outline-none transition hover:border-[var(--line-strong)] focus:ring-2 focus:ring-[var(--felt-soft)] disabled:opacity-50"
+        className="ui-focus flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-[var(--line)] bg-[color-mix(in_srgb,var(--surface-2)_85%,transparent)] px-3 py-2.5 text-left text-sm text-[var(--ink)] outline-none transition hover:border-[var(--line-strong)] disabled:opacity-50"
       >
         <span
           className={[
