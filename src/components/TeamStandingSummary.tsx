@@ -61,8 +61,7 @@ function isGamesStat(label: string): boolean {
 
 function StatIcon({ kind }: { kind: string }) {
   const h = kind.trim().toLowerCase();
-  const common =
-    "h-3.5 w-3.5 shrink-0 text-[var(--felt-deep)]";
+  const common = "h-3.5 w-3.5 shrink-0 text-[var(--chalk)]";
   if (h.includes("round") || h === "rds") {
     return (
       <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -147,20 +146,15 @@ function GamesMeter({
   const pct = total > 0 ? Math.round((forNum / total) * 100) : 0;
 
   return (
-    <div
-      className={[
-        "border-t border-[var(--line)] bg-[var(--surface-2)]",
-        compact ? "px-3 py-3" : "px-4 py-3.5 sm:px-5",
-      ].join(" ")}
-    >
+    <div className={compact ? "px-3 py-3.5" : "px-4 py-4 sm:px-5"}>
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
             Games
           </p>
           <p
             className={[
-              "mt-1 font-semibold tabular-nums leading-none",
+              "mt-1.5 font-semibold tabular-nums leading-none",
               compact ? "text-xl" : "text-2xl",
             ].join(" ")}
           >
@@ -168,15 +162,15 @@ function GamesMeter({
             <span className="mx-1.5 text-[var(--muted)]">–</span>
             <span className="text-[var(--muted)]">{againstValue}</span>
           </p>
-          <p className="mt-1 text-[10px] text-[var(--muted)]">for · against</p>
+          <p className="mt-1.5 text-[10px] text-[var(--muted)]">for · against</p>
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
             Win rate
           </p>
           <p
             className={[
-              "mt-1 font-[family-name:var(--font-display)] font-semibold tabular-nums leading-none text-[var(--felt-deep)]",
+              "mt-1.5 font-[family-name:var(--font-display)] font-semibold tabular-nums leading-none text-[var(--felt-deep)]",
               compact ? "text-xl" : "text-2xl",
             ].join(" ")}
           >
@@ -185,7 +179,7 @@ function GamesMeter({
         </div>
       </div>
       <div
-        className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--surface-3)]"
+        className="mt-3.5 h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)]"
         role="meter"
         aria-label="Games win rate"
         aria-valuemin={0}
@@ -193,7 +187,7 @@ function GamesMeter({
         aria-valuenow={total > 0 ? pct : 0}
       >
         <div
-          className="h-full rounded-full bg-[linear-gradient(90deg,var(--felt-soft),var(--felt))] transition-[width] duration-500 ease-out"
+          className="h-full rounded-full bg-[linear-gradient(90deg,var(--felt-soft),var(--chalk))] transition-[width] duration-500 ease-out"
           style={{ width: `${total > 0 ? pct : 0}%` }}
         />
       </div>
@@ -211,13 +205,8 @@ function StatChip({
   compact: boolean;
 }) {
   return (
-    <div
-      className={[
-        "min-w-0 rounded-xl border border-[var(--line)] bg-[var(--surface)]",
-        compact ? "px-2.5 py-2" : "px-3 py-2.5",
-      ].join(" ")}
-    >
-      <div className="flex items-center gap-1.5 text-[var(--muted)]">
+    <div className={["min-w-0", compact ? "px-2.5 py-2.5" : "px-3 py-3"].join(" ")}>
+      <div className="flex items-center justify-center gap-1.5 text-[var(--muted)]">
         <StatIcon kind={label} />
         <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em]">
           {label}
@@ -225,7 +214,7 @@ function StatChip({
       </div>
       <p
         className={[
-          "mt-1.5 font-semibold tabular-nums leading-none text-[var(--ink)]",
+          "mt-2 text-center font-[family-name:var(--font-display)] font-semibold tabular-nums leading-none text-[var(--ink)]",
           compact ? "text-lg" : "text-xl",
         ].join(" ")}
       >
@@ -260,10 +249,12 @@ export function TeamStandingSummary({
     chips = (
       <div
         className={[
-          "grid gap-2 border-t border-[var(--line)]",
-          compact ? "grid-cols-2 p-2.5" : "grid-cols-3 p-3 sm:px-4",
-          otherStats.length === 1 ? "grid-cols-1" : "",
-          otherStats.length === 2 ? "grid-cols-2" : "",
+          "grid divide-x divide-[var(--line)] border-t border-[var(--line)] bg-[var(--surface-2)]/55",
+          otherStats.length === 1
+            ? "grid-cols-1"
+            : otherStats.length === 2
+              ? "grid-cols-2"
+              : "grid-cols-3",
         ].join(" ")}
       >
         {otherStats.map((cell) => (
@@ -280,7 +271,7 @@ export function TeamStandingSummary({
     chips = (
       <div
         className={[
-          "grid gap-2 border-t border-[var(--line)] p-3",
+          "grid divide-x divide-[var(--line)] border-t border-[var(--line)] bg-[var(--surface-2)]/55",
           compact ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4",
         ].join(" ")}
       >
@@ -297,60 +288,70 @@ export function TeamStandingSummary({
   }
 
   return (
-    <section className="overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] shadow-sm">
+    <section className="overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
       {teamName || rankCell ? (
         <div
           className={[
-            "flex items-start justify-between gap-3",
-            compact ? "px-3 pt-3 pb-2.5" : "px-4 pt-4 pb-3 sm:px-5",
+            "relative overflow-hidden bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] text-white",
+            compact ? "px-3 py-3.5" : "px-4 py-4 sm:px-5 sm:py-5",
           ].join(" ")}
         >
-          <div className="min-w-0 flex-1">
-            {teamName ? (
-              <>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
-                  Team standing
-                </p>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-40"
+            style={{
+              background:
+                "radial-gradient(120% 80% at 100% 0%, rgba(224,163,90,0.28), transparent 55%)",
+            }}
+          />
+          <div className="relative flex items-end justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/65">
+                {teamName ? "Team standing" : "Division rank"}
+              </p>
+              {teamName ? (
                 <h3
                   className={[
-                    "mt-1 break-words font-[family-name:var(--font-display)] leading-tight text-[var(--felt-deep)]",
+                    "mt-1 break-words font-[family-name:var(--font-display)] leading-tight",
                     compact ? "text-lg" : "text-xl sm:text-2xl",
                   ].join(" ")}
                 >
                   {teamName}
                 </h3>
-              </>
-            ) : (
-              <>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
-                  Division rank
-                </p>
+              ) : (
                 <p
                   className={[
-                    "mt-1 font-[family-name:var(--font-display)] font-semibold tabular-nums leading-none text-[var(--ink)]",
-                    compact ? "text-2xl" : "text-3xl",
+                    "mt-1 font-[family-name:var(--font-display)] font-semibold tabular-nums leading-none tracking-tight",
+                    compact ? "text-4xl" : "text-5xl",
                   ].join(" ")}
                 >
                   #{rankCell?.value || "—"}
                 </p>
-              </>
-            )}
-          </div>
-          {teamName && rankCell ? (
-            <div className="shrink-0 text-right">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                Rank
-              </p>
-              <p
-                className={[
-                  "mt-0.5 font-[family-name:var(--font-display)] font-semibold tabular-nums leading-none text-[var(--ink)]",
-                  compact ? "text-2xl" : "text-3xl",
-                ].join(" ")}
-              >
-                #{rankCell.value || "—"}
-              </p>
+              )}
+              {!teamName ? (
+                <p className="mt-2 text-xs text-white/70">
+                  Current place in the division
+                </p>
+              ) : null}
             </div>
-          ) : null}
+            {teamName && rankCell ? (
+              <div className="shrink-0 rounded-2xl bg-black/25 px-3 py-2 text-right ring-1 ring-white/15">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/65">
+                  Rank
+                </p>
+                <p
+                  className={[
+                    "mt-0.5 font-[family-name:var(--font-display)] font-semibold tabular-nums leading-none",
+                    compact ? "text-3xl" : "text-4xl",
+                  ].join(" ")}
+                >
+                  #{rankCell.value || "—"}
+                </p>
+              </div>
+            ) : !teamName && rankCell ? (
+              <div className="hidden shrink-0 sm:block" aria-hidden />
+            ) : null}
+          </div>
         </div>
       ) : null}
 
