@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type {
   FargoLeagueTeam,
+  FargoMatchType,
   FargoPlayerMatch,
   FargoPlayerProfile,
   FargoStatsByRating,
@@ -27,6 +28,7 @@ type MatchesPayload = {
   page: number;
   totalPages: number;
   buckets: Array<{ bucket: number; count: number }>;
+  matchTypes?: Array<{ type: FargoMatchType; count: number }>;
   ratingsComplete?: boolean;
   error?: string;
 };
@@ -178,22 +180,26 @@ function StatPill({
   );
 }
 
-type BucketOption = {
+type FilterOption<T extends string | number | null> = {
   id: string;
   label: string;
   meta?: string;
-  value: number | null;
+  value: T;
 };
 
 /** Themed listbox — native <select> menus cannot use app surface/felt colors. */
-function MatchBucketSelect({
+function ThemedFilterSelect<T extends string | number | null>({
   value,
   options,
   onChange,
+  ariaLabel,
+  emptyLabel,
 }: {
-  value: number | null;
-  options: BucketOption[];
-  onChange: (value: number | null) => void;
+  value: T;
+  options: FilterOption<T>[];
+  onChange: (value: T) => void;
+  ariaLabel: string;
+  emptyLabel: string;
 }) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -239,7 +245,7 @@ function MatchBucketSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listId}
-        aria-label="Opponent Fargo range"
+        aria-label={ariaLabel}
         onClick={() => setOpen((next) => !next)}
         onKeyDown={(event) => {
           if (
@@ -256,7 +262,7 @@ function MatchBucketSelect({
         className="flex w-full items-center justify-between gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-2.5 text-left text-sm text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition focus:ring-2"
       >
         <span className="min-w-0 truncate font-medium">
-          {selected?.label ?? "All ratings"}
+          {selected?.label ?? emptyLabel}
           {selected?.meta ? (
             <span className="ml-1.5 font-normal text-[var(--muted)]">
               {selected.meta}
@@ -272,7 +278,7 @@ function MatchBucketSelect({
         <ul
           id={listId}
           role="listbox"
-          aria-label="Opponent Fargo range"
+          aria-label={ariaLabel}
           className="absolute mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 text-[var(--ink)] shadow-[var(--shadow)] [background-color:var(--surface-2)]"
         >
           {options.map((option, index) => {
@@ -319,6 +325,13 @@ function MatchBucketSelect({
   );
 }
 
+const MATCH_TYPE_LABELS: Record<FargoMatchType, string> = {
+  league: "League",
+  tournament: "Tournament",
+  thirdparty: "Third-party",
+  other: "Other",
+};
+
 export function PlayerDetail({
   playerId,
   fallbackName,
@@ -340,8 +353,12 @@ export function PlayerDetail({
   const [matchQuery, setMatchQuery] = useState("");
   const [debouncedMatchQuery, setDebouncedMatchQuery] = useState("");
   const [matchBucket, setMatchBucket] = useState<number | null>(null);
+  const [matchType, setMatchType] = useState<FargoMatchType | null>(null);
   const [bucketCounts, setBucketCounts] = useState<
     Array<{ bucket: number; count: number }>
+  >([]);
+  const [matchTypeCounts, setMatchTypeCounts] = useState<
+    Array<{ type: FargoMatchType; count: number }>
   >([]);
   const [ratingsWarming, setRatingsWarming] = useState(false);
 
@@ -355,6 +372,7 @@ export function PlayerDetail({
     setMatchQuery("");
     setDebouncedMatchQuery("");
     setMatchBucket(null);
+    setMatchType(null);
     setMatchesPage(1);
 
     void fetch(`/api/players/${encodeURIComponent(playerId)}`)
@@ -418,6 +436,7 @@ export function PlayerDetail({
     });
     if (debouncedMatchQuery) params.set("q", debouncedMatchQuery);
     if (matchBucket != null) params.set("bucket", String(matchBucket));
+    if (matchType) params.set("matchType", matchType);
 
     void fetch(
       `/api/players/${encodeURIComponent(playerId)}/matches?${params.toString()}`,
@@ -432,6 +451,7 @@ export function PlayerDetail({
         setMatchesTotal(payload.total ?? 0);
         setMatchesTotalPages(payload.totalPages ?? 1);
         setBucketCounts(payload.buckets ?? []);
+        setMatchTypeCounts(payload.matchTypes ?? []);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -447,7 +467,14 @@ export function PlayerDetail({
     return () => {
       cancelled = true;
     };
-  }, [section, playerId, matchesPage, debouncedMatchQuery, matchBucket]);
+  }, [
+    section,
+    playerId,
+    matchesPage,
+    debouncedMatchQuery,
+    matchBucket,
+    matchType,
+  ]);
 
   const overall = useMemo(
     () => (player ? pickOverall(player.statsOverall, statsWindow) : null),
@@ -466,7 +493,7 @@ export function PlayerDetail({
     setMatchesPage(Math.min(Math.max(1, next), matchesTotalPages));
   };
 
-  const bucketOptions = useMemo<BucketOption[]>(() => {
+  const bucketOptions = useMemo<FilterOption<number | null>[]>(() => {
     const rows = bucketCounts.length
       ? bucketCounts.filter(({ count }) => count !== 0)
       : [200, 300, 400, 500, 600, 700, 800, 900].map((bucket) => ({
@@ -484,6 +511,29 @@ export function PlayerDetail({
       })),
     ];
   }, [bucketCounts]);
+
+  const matchTypeOptions = useMemo<FilterOption<FargoMatchType | null>[]>(
+    () => [
+      { id: "all", label: "All types", value: null },
+      ...(matchTypeCounts.length
+        ? matchTypeCounts.filter(({ count }) => count > 0)
+        : (
+            [
+              "league",
+              "tournament",
+              "thirdparty",
+              "other",
+            ] as FargoMatchType[]
+          ).map((type) => ({ type, count: -1 }))
+      ).map(({ type, count }) => ({
+        id: type,
+        label: MATCH_TYPE_LABELS[type],
+        meta: count >= 0 ? `${count} matches` : undefined,
+        value: type,
+      })),
+    ],
+    [matchTypeCounts],
+  );
 
   return (
     <section className="space-y-4 md:space-y-5">
@@ -551,7 +601,7 @@ export function PlayerDetail({
         <div
           role="tablist"
           aria-label="Player detail sections"
-          className="flex gap-1 overflow-x-auto pb-0.5"
+          className="grid w-full grid-cols-4 gap-1"
         >
           {SECTIONS.map((item) => (
             <button
@@ -561,7 +611,7 @@ export function PlayerDetail({
               aria-selected={section === item.id}
               onClick={() => setSection(item.id)}
               className={[
-                "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                "min-w-0 rounded-full px-0.5 py-1.5 text-center text-[11px] font-semibold leading-tight transition sm:px-2 sm:text-xs",
                 section === item.id
                   ? "bg-[var(--felt)] text-white"
                   : "bg-[var(--surface-2)] text-[var(--muted)] hover:text-[var(--ink)]",
@@ -827,7 +877,7 @@ export function PlayerDetail({
             ) : null}
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_13.5rem]">
+          <div className="space-y-2">
             <label className="relative block min-w-0">
               <span className="sr-only">Search matches</span>
               <input
@@ -840,14 +890,28 @@ export function PlayerDetail({
               />
             </label>
 
-            <MatchBucketSelect
-              value={matchBucket}
-              options={bucketOptions}
-              onChange={(next) => {
-                setMatchBucket(next);
-                setMatchesPage(1);
-              }}
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <ThemedFilterSelect
+                ariaLabel="Match type"
+                emptyLabel="All types"
+                value={matchType}
+                options={matchTypeOptions}
+                onChange={(next) => {
+                  setMatchType(next);
+                  setMatchesPage(1);
+                }}
+              />
+              <ThemedFilterSelect
+                ariaLabel="Opponent Fargo range"
+                emptyLabel="All ratings"
+                value={matchBucket}
+                options={bucketOptions}
+                onChange={(next) => {
+                  setMatchBucket(next);
+                  setMatchesPage(1);
+                }}
+              />
+            </div>
           </div>
 
           {matchesError ? (

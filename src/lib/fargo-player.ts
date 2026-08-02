@@ -551,13 +551,54 @@ async function loadAllMatches(playerId: string): Promise<FargoPlayerMatch[]> {
     });
 }
 
+export type FargoMatchType =
+  | "league"
+  | "tournament"
+  | "thirdparty"
+  | "other";
+
 export type FargoMatchQuery = {
   page?: number;
   limit?: number;
   q?: string;
   /** Fargo bucket floor, e.g. 500 for 500–599. */
   bucket?: number | null;
+  matchType?: FargoMatchType | null;
 };
+
+export function classifyMatchType(match: {
+  isLeague: boolean;
+  isTournament: boolean;
+  isThirdParty: boolean;
+}): FargoMatchType {
+  if (match.isLeague) return "league";
+  if (match.isTournament) return "tournament";
+  if (match.isThirdParty) return "thirdparty";
+  return "other";
+}
+
+const MATCH_TYPE_ORDER: FargoMatchType[] = [
+  "league",
+  "tournament",
+  "thirdparty",
+  "other",
+];
+
+function countMatchTypes(
+  matches: FargoPlayerMatch[],
+): Array<{ type: FargoMatchType; count: number }> {
+  const counts = new Map<FargoMatchType, number>(
+    MATCH_TYPE_ORDER.map((type) => [type, 0]),
+  );
+  for (const match of matches) {
+    const type = classifyMatchType(match);
+    counts.set(type, (counts.get(type) ?? 0) + 1);
+  }
+  return MATCH_TYPE_ORDER.map((type) => ({
+    type,
+    count: counts.get(type) ?? 0,
+  }));
+}
 
 const DEFAULT_BUCKETS = [200, 300, 400, 500, 600, 700, 800, 900];
 
@@ -613,8 +654,10 @@ export async function fetchFargoPlayerMatches(
   limit: number;
   totalPages: number;
   buckets: Array<{ bucket: number; count: number }>;
+  matchTypes: Array<{ type: FargoMatchType; count: number }>;
   query: string;
   bucket: number | null;
+  matchType: FargoMatchType | null;
   ratingsComplete: boolean;
 }> {
   const id = playerId.trim();
@@ -627,6 +670,7 @@ export async function fetchFargoPlayerMatches(
     options?.bucket != null && Number.isFinite(options.bucket)
       ? Number(options.bucket)
       : null;
+  const matchType = options?.matchType ?? null;
 
   const all = await loadAllMatches(id);
 
@@ -644,6 +688,14 @@ export async function fetchFargoPlayerMatches(
         .toLowerCase();
       return haystack.includes(query);
     });
+  }
+
+  // Type counts before applying the type filter so the dropdown stays useful.
+  const matchTypes = countMatchTypes(working);
+  if (matchType) {
+    working = working.filter(
+      (match) => classifyMatchType(match) === matchType,
+    );
   }
 
   // Bucket filters need ratings for every remaining match. Otherwise enrich
@@ -685,8 +737,10 @@ export async function fetchFargoPlayerMatches(
     limit,
     totalPages,
     buckets,
+    matchTypes,
     query: (options?.q ?? "").trim(),
     bucket,
+    matchType,
     ratingsComplete,
   };
 }
