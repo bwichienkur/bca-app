@@ -13,6 +13,11 @@ type TeamDetailProps = {
   backLabel?: string;
   onSetAsMyTeam?: () => void;
   isMyTeam?: boolean;
+  /**
+   * My Team tab context: omit the branded team header (name already lives
+   * on the page context card). Standings drill-in keeps the full header.
+   */
+  embedded?: boolean;
 };
 
 function playerLabel(player: RosterPlayer): string {
@@ -27,11 +32,77 @@ export function TeamDetail({
   backLabel = "Back",
   onSetAsMyTeam,
   isMyTeam,
+  embedded = false,
 }: TeamDetailProps) {
   const statsTeam = playersByTeam?.teams.find(
     (item) =>
       normalizeTeamName(item.team) === normalizeTeamName(teamName),
   );
+
+  const body = (
+    <div
+      className={[
+        "flex-1 space-y-5 overflow-y-auto",
+        embedded ? "pt-1" : "px-3 py-4 md:px-5",
+      ].join(" ")}
+    >
+      {statsTeam && playersByTeam ? (
+        <section>
+          {!embedded ? (
+            <div className="mb-3 px-1">
+              <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
+                Player statistics
+              </h4>
+            </div>
+          ) : null}
+          <TeamPlayerStats
+            headers={playersByTeam.headers}
+            rows={statsTeam.rows}
+            roster={team?.players}
+          />
+        </section>
+      ) : (
+        <p className="px-1 text-sm text-[var(--muted)]">
+          Player standings for this team aren’t loaded yet.
+        </p>
+      )}
+
+      {team && !statsTeam ? (
+        <section className={embedded ? undefined : "px-1"}>
+          <h4 className="mb-2 text-sm font-semibold text-[var(--ink)]">
+            Roster & ratings
+          </h4>
+          <ul className="divide-y divide-[var(--line)] rounded-2xl border border-[var(--line)] bg-[var(--surface-2)]">
+            {team.players.map((player) => (
+              <li
+                key={player.id}
+                className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
+              >
+                <div>
+                  <p className="font-medium text-[var(--ink)]">
+                    {playerLabel(player)}
+                  </p>
+                  <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                    {player.teamName}
+                    {player.robustness
+                      ? ` · robust ${player.robustness}`
+                      : ""}
+                  </p>
+                </div>
+                <span className="tabular-nums font-semibold text-[var(--felt)]">
+                  {player.fargoRating}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </div>
+  );
+
+  if (embedded) {
+    return <div className="min-w-0">{body}</div>;
+  }
 
   return (
     <aside className="flex h-full flex-col overflow-hidden rounded-[1.45rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
@@ -82,58 +153,7 @@ export function TeamDetail({
           </p>
         ) : null}
       </div>
-
-      <div className="flex-1 space-y-5 overflow-y-auto px-3 py-4 md:px-5">
-        {statsTeam && playersByTeam ? (
-          <section>
-            <div className="mb-3 px-1">
-              <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
-                Player statistics
-              </h4>
-            </div>
-            <TeamPlayerStats
-              headers={playersByTeam.headers}
-              rows={statsTeam.rows}
-              roster={team?.players}
-            />
-          </section>
-        ) : (
-          <p className="px-1 text-sm text-[var(--muted)]">
-            Player standings for this team aren’t loaded yet.
-          </p>
-        )}
-
-        {team && !statsTeam ? (
-          <section className="px-1">
-            <h4 className="mb-2 text-sm font-semibold text-[var(--ink)]">
-              Roster & ratings
-            </h4>
-            <ul className="divide-y divide-[var(--line)] rounded-2xl border border-[var(--line)] bg-[var(--surface-2)]">
-              {team.players.map((player) => (
-                <li
-                  key={player.id}
-                  className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
-                >
-                  <div>
-                    <p className="font-medium text-[var(--ink)]">
-                      {playerLabel(player)}
-                    </p>
-                    <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                      {player.teamName}
-                      {player.robustness
-                        ? ` · robust ${player.robustness}`
-                        : ""}
-                    </p>
-                  </div>
-                  <span className="tabular-nums font-semibold text-[var(--felt)]">
-                    {player.fargoRating}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-      </div>
+      {body}
     </aside>
   );
 }
