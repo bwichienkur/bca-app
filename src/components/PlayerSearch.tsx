@@ -251,18 +251,9 @@ export function PlayerSearch() {
                   <span className="ml-2 text-[var(--amber)]">Updating…</span>
                 ) : null}
               </p>
-              <div className="flex items-center gap-3">
-                <p className="text-xs tabular-nums text-[var(--muted)]">
-                  Page {safePage} of {totalPages}
-                </p>
-                <button
-                  type="button"
-                  onClick={clearQuery}
-                  className="text-xs font-semibold text-[var(--felt-deep)] underline-offset-2 hover:underline"
-                >
-                  Clear search
-                </button>
-              </div>
+              <p className="text-xs tabular-nums text-[var(--muted)]">
+                Page {safePage} of {totalPages}
+              </p>
             </div>
 
             <ul
