@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { DEFAULT_LEAGUE_ID, REPORT_TABS } from "@/lib/constants";
+import { DEFAULT_LEAGUE_ID, PRIMARY_NAV_TABS } from "@/lib/constants";
 import { normalizeTeamName } from "@/lib/matchups";
 import { enrichPlayersWithRatings } from "@/lib/players";
 import {
@@ -34,6 +34,7 @@ import { HandicapCalculator } from "./HandicapCalculator";
 import { LoadingState } from "./LoadingState";
 import { LoginScreen, type AuthUser } from "./LoginScreen";
 import { MatchScoring } from "./MatchScoring";
+import { NavTabIcon, SearchIcon } from "./NavIcons";
 import { PlayerSearch } from "./PlayerSearch";
 import { ScheduleList } from "./ScheduleList";
 import { ScheduleMatchDetail } from "./ScheduleMatchDetail";
@@ -944,6 +945,21 @@ export function LeagueApp() {
           ) : null}
           <button
             type="button"
+            onClick={() => setTab("search")}
+            title="Search players"
+            aria-label="Search players"
+            aria-current={tab === "search" ? "page" : undefined}
+            className={[
+              "inline-flex h-9 w-9 items-center justify-center rounded-full border transition",
+              tab === "search"
+                ? "border-[var(--felt)] bg-[var(--felt)] text-white"
+                : "border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
+            ].join(" ")}
+          >
+            <SearchIcon className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
             onClick={() => void refreshCachedData()}
             disabled={refreshing}
             title="Resync league data from FargoRate"
@@ -1147,9 +1163,9 @@ export function LeagueApp() {
         >
           <nav
             aria-label="Reports"
-            className="grid grid-cols-4 gap-1.5 sm:flex sm:flex-wrap sm:gap-2"
+            className="grid grid-cols-3 gap-1.5 sm:gap-2"
           >
-            {REPORT_TABS.map((item) => {
+            {PRIMARY_NAV_TABS.map((item) => {
               const active = tab === item.id;
               return (
                 <button
@@ -1168,13 +1184,16 @@ export function LeagueApp() {
                     }
                   }}
                   className={[
-                    "rounded-xl px-2 py-2 text-center text-[12px] font-semibold leading-tight transition sm:rounded-full sm:px-3.5 sm:py-2 sm:text-sm sm:font-medium",
+                    "flex flex-col items-center justify-center gap-1 rounded-xl px-1.5 py-2 transition sm:py-2.5",
                     active
                       ? "bg-[var(--felt)] text-white shadow-sm"
-                      : "bg-[var(--surface)]/80 text-[var(--muted)] hover:bg-[var(--surface-2)]",
+                      : "bg-[var(--surface)]/80 text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
                   ].join(" ")}
                 >
-                  {item.label}
+                  <NavTabIcon id={item.id} className="h-[18px] w-[18px]" />
+                  <span className="text-[11px] font-semibold leading-none tracking-tight sm:text-xs">
+                    {item.label}
+                  </span>
                 </button>
               );
             })}
@@ -1230,7 +1249,7 @@ export function LeagueApp() {
                 <div
                   role="tablist"
                   aria-label="My team sections"
-                  className="grid grid-cols-3 gap-1 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-1"
+                  className="grid grid-cols-3 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
                 >
                   {(
                     [
@@ -1248,7 +1267,7 @@ export function LeagueApp() {
                         aria-selected={selected}
                         onClick={() => setMyTeamSubTab(item.id)}
                         className={[
-                          "rounded-xl px-2 py-2 text-center text-sm font-semibold transition",
+                          "rounded-lg px-2 py-1.5 text-center text-xs font-semibold transition sm:text-sm",
                           selected
                             ? "bg-[var(--felt)] text-white shadow-sm"
                             : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
