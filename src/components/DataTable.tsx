@@ -10,11 +10,6 @@ type DataTableProps = {
   stickyFirst?: boolean;
   /** Denser rows for team player grids */
   compact?: boolean;
-  /**
-   * `brand` — felt header (league tables).
-   * `quiet` — surface header that matches standing/lineup cards (roster).
-   */
-  tone?: "brand" | "quiet";
   onRowClick?: (row: string[], rowIndex: number) => void;
   /** Prefer content-based selection so sorting doesn't break highlights */
   isRowSelected?: (row: string[]) => boolean;
@@ -151,7 +146,6 @@ export function DataTable({
   rows,
   stickyFirst = true,
   compact = false,
-  tone = "brand",
   onRowClick,
   isRowSelected,
   selectedRowIndex = null,
@@ -159,7 +153,6 @@ export function DataTable({
 }: DataTableProps) {
   const [sortColumn, setSortColumn] = useState<number | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-  const quiet = tone === "quiet";
 
   const columnMeta = useMemo(
     () =>
@@ -235,41 +228,8 @@ export function DataTable({
     ? "text-xs md:text-[13px]"
     : "text-[13px] md:text-sm";
 
-  const headBg = quiet ? "bg-[var(--surface-2)]" : "bg-[var(--felt-soft)]";
-  const headText = quiet
-    ? "border-b border-[var(--line)] text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]"
-    : "border-b border-[var(--felt-soft)] font-semibold tracking-wide text-white";
-  const sortButtonClass = quiet
-    ? "inline-flex items-center gap-1 whitespace-nowrap rounded-md px-0.5 py-0.5 text-[inherit] transition hover:text-[var(--ink)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--felt-soft)]"
-    : "inline-flex items-center gap-1 whitespace-nowrap rounded-md px-0.5 py-0.5 transition hover:text-[var(--amber)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70";
-  const stickyHeadShadow = quiet
-    ? "shadow-[4px_0_12px_rgba(0,0,0,0.18)]"
-    : "shadow-[4px_0_10px_rgba(0,0,0,0.28)]";
-  const stickyBodyShadow = quiet
-    ? "shadow-[4px_0_12px_rgba(0,0,0,0.16)]"
-    : "shadow-[4px_0_10px_rgba(0,0,0,0.22)]";
-  const cornerTl = quiet
-    ? "rounded-tl-[calc(1.3rem-1px)]"
-    : "rounded-tl-[calc(var(--radius)-1px)]";
-  const cornerTr = quiet
-    ? "rounded-tr-[calc(1.3rem-1px)]"
-    : "rounded-tr-[calc(var(--radius)-1px)]";
-  const cornerBl = quiet
-    ? "rounded-bl-[calc(1.3rem-1px)]"
-    : "rounded-bl-[calc(var(--radius)-1px)]";
-  const cornerBr = quiet
-    ? "rounded-br-[calc(1.3rem-1px)]"
-    : "rounded-br-[calc(var(--radius)-1px)]";
-
   return (
-    <div
-      className={[
-        "overflow-x-auto border border-[var(--line)] bg-[var(--surface)]",
-        quiet
-          ? "rounded-[1.3rem] shadow-sm"
-          : "rounded-[var(--radius)] shadow-[var(--shadow)]",
-      ].join(" ")}
-    >
+    <div className="overflow-x-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
       <table
         className={[
           "w-full table-fixed border-separate border-spacing-0 text-left",
@@ -282,7 +242,7 @@ export function DataTable({
             <col key={`col-${index}`} style={{ width: column.width }} />
           ))}
         </colgroup>
-        <thead className={headBg}>
+        <thead className="bg-[var(--felt-soft)] text-white">
           <tr>
             {headers.map((header, index) => {
               const active = sortColumn === index;
@@ -300,14 +260,13 @@ export function DataTable({
                       : "none"
                   }
                   className={[
-                    headText,
+                    "border-b border-[var(--felt-soft)] font-semibold tracking-wide text-white",
                     cellPad,
                     isSticky
-                      ? `sticky left-0 z-10 ${headBg} ${stickyHeadShadow}`
-                      : headBg,
-                    isFirst ? cornerTl : "",
-                    isLast ? cornerTr : "",
-                    quiet && active ? "text-[var(--felt-deep)]" : "",
+                      ? "sticky left-0 z-10 bg-[var(--felt-soft)] shadow-[4px_0_10px_rgba(0,0,0,0.28)]"
+                      : "bg-[var(--felt-soft)]",
+                    isFirst ? "rounded-tl-[calc(var(--radius)-1px)]" : "",
+                    isLast ? "rounded-tr-[calc(var(--radius)-1px)]" : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
@@ -322,17 +281,13 @@ export function DataTable({
                           : "Sorted descending — click to clear sort"
                         : "Sort column"
                     }
-                    className={sortButtonClass}
+                    className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-0.5 py-0.5 transition hover:text-[var(--amber)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
                   >
                     <span>{header}</span>
                     <span
                       className={[
                         "shrink-0 text-[10px] leading-none",
-                        active
-                          ? quiet
-                            ? "text-[var(--felt-deep)] opacity-100"
-                            : "opacity-100"
-                          : "opacity-45",
+                        active ? "opacity-100" : "opacity-45",
                       ].join(" ")}
                       aria-hidden
                     >
@@ -363,21 +318,16 @@ export function DataTable({
                 }
                 className={[
                   clickable
-                    ? quiet
-                      ? "cursor-pointer transition hover:bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))]"
-                      : "cursor-pointer transition hover:bg-[color-mix(in_srgb,var(--amber)_16%,var(--surface))]"
+                    ? "cursor-pointer transition hover:bg-[color-mix(in_srgb,var(--amber)_16%,var(--surface))]"
                     : "",
                 ].join(" ")}
               >
-                {headers.map((header, cellIndex) => {
+                {headers.map((_, cellIndex) => {
                   const kind = columnMeta[cellIndex]?.kind ?? "stat";
                   const isSticky = cellIndex === stickyIndex;
                   const isFirst = cellIndex === 0;
                   const isLastRow = displayIndex === sortedRows.length - 1;
                   const value = row[cellIndex] ?? "";
-                  const isFargo =
-                    header.trim().toLowerCase() === "fargo" ||
-                    header.trim().toLowerCase() === "rating";
                   return (
                     <td
                       key={cellIndex}
@@ -387,18 +337,18 @@ export function DataTable({
                         cellPad,
                         rowBg,
                         isSticky
-                          ? `sticky left-0 z-[1] font-semibold text-[var(--ink)] ${stickyBodyShadow}`
+                          ? "sticky left-0 z-[1] font-semibold text-[var(--ink)] shadow-[4px_0_10px_rgba(0,0,0,0.22)]"
                           : kind === "rank"
                             ? "tabular-nums font-medium text-[var(--muted)]"
-                            : isFargo && quiet
-                              ? "tabular-nums font-semibold text-[var(--felt-deep)]"
-                              : "tabular-nums font-semibold text-[var(--ink)]",
+                            : "tabular-nums font-semibold text-[var(--ink)]",
                         kind === "name"
                           ? "truncate whitespace-nowrap font-semibold text-[var(--ink)]"
                           : "whitespace-nowrap",
-                        isLastRow && isFirst ? cornerBl : "",
+                        isLastRow && isFirst
+                          ? "rounded-bl-[calc(var(--radius)-1px)]"
+                          : "",
                         isLastRow && cellIndex === headers.length - 1
-                          ? cornerBr
+                          ? "rounded-br-[calc(var(--radius)-1px)]"
                           : "",
                       ]
                         .filter(Boolean)
