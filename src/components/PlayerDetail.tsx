@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  startTransition,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type {
   FargoLeagueTeam,
   FargoMatchType,
@@ -601,25 +608,30 @@ export function PlayerDetail({
         <div
           role="tablist"
           aria-label="Player detail sections"
-          className="grid w-full grid-cols-4 gap-1"
+          className="grid w-full grid-cols-4 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
         >
-          {SECTIONS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={section === item.id}
-              onClick={() => setSection(item.id)}
-              className={[
-                "min-w-0 rounded-full px-0.5 py-1.5 text-center text-[11px] font-semibold leading-tight transition sm:px-2 sm:text-xs",
-                section === item.id
-                  ? "bg-[var(--felt)] text-white"
-                  : "bg-[var(--surface-2)] text-[var(--muted)] hover:text-[var(--ink)]",
-              ].join(" ")}
-            >
-              {item.label}
-            </button>
-          ))}
+          {SECTIONS.map((item) => {
+            const selected = section === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() =>
+                  startTransition(() => setSection(item.id))
+                }
+                className={[
+                  "min-w-0 rounded-lg px-1 py-1.5 text-center text-[11px] font-semibold leading-tight transition sm:px-2 sm:text-sm",
+                  selected
+                    ? "bg-[var(--felt)] text-white shadow-sm"
+                    : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
+                ].join(" ")}
+              >
+                {item.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
