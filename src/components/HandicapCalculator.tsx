@@ -883,9 +883,14 @@ export function HandicapCalculator({
       )}
 
       <section className="space-y-3">
-        <h4 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
-          Handicap by round
-        </h4>
+        <div>
+          <h4 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
+            Handicap by round
+          </h4>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Games awarded from expected scores · pairings follow your lineups
+          </p>
+        </div>
         {!results ? (
           <EmptyState
             title="Finish both lineups"
@@ -893,58 +898,139 @@ export function HandicapCalculator({
           />
         ) : (
           <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-            {results.map((result) => {
+            {results.map((result, roundIndex) => {
               const points = Math.max(result.teamOne, result.teamTwo);
-              const gets =
-                result.teamOne > 0
-                  ? homeTeam?.name
-                  : result.teamTwo > 0
-                    ? awayTeam?.name
-                    : "Even";
+              const homeGets = result.teamOne > 0;
+              const awayGets = result.teamTwo > 0;
+              const recipientName = homeGets
+                ? homeTeam?.name
+                : awayGets
+                  ? awayTeam?.name
+                  : null;
               const homePlayers = compactPlayers(homeLineup);
               const awayPlayers = compactPlayers(awayLineup);
+              const homeName = homeTeam?.name ?? "Home";
+              const awayName = awayTeam?.name ?? "Away";
               return (
                 <article
                   key={result.round}
-                  className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3 shadow-sm"
+                  className="animate-rise overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] shadow-sm"
+                  style={{ animationDelay: `${Math.min(roundIndex, 4) * 45}ms` }}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
+                  <div className="flex items-center gap-3 px-3.5 py-3 sm:px-4">
+                    <div className="min-w-0 flex-1">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
                         Round {result.round}
                       </p>
-                      <p className="mt-1 font-medium text-[var(--ink)]">
+                      <p className="mt-0.5 truncate font-[family-name:var(--font-display)] text-lg leading-tight text-[var(--felt-deep)]">
                         {points === 0
-                          ? "No handicap"
-                          : `${gets} +${points}`}
+                          ? "Even — no games"
+                          : `${recipientName} gets +${points}`}
                       </p>
-                      <p className="mt-1 text-xs text-[var(--muted)]">
-                        Exp {result.teamOneExpected.toFixed(1)}–
+                    </div>
+                    <div
+                      className={[
+                        "shrink-0 text-right",
+                        points === 0 ? "opacity-70" : "",
+                      ].join(" ")}
+                    >
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                        Games
+                      </p>
+                      <p
+                        className={[
+                          "tabular-nums text-2xl font-semibold leading-none",
+                          points === 0
+                            ? "text-[var(--muted)]"
+                            : "text-[var(--ink)]",
+                        ].join(" ")}
+                      >
+                        {points === 0 ? "0" : `+${points}`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2 border-y border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-2.5 sm:px-4">
+                    <div className="min-w-0">
+                      <p
+                        className={[
+                          "truncate text-[10px] font-semibold uppercase tracking-[0.12em]",
+                          homeGets
+                            ? "text-[var(--amber)]"
+                            : "text-[var(--muted)]",
+                        ].join(" ")}
+                      >
+                        Home{homeGets ? " · gets" : ""}
+                      </p>
+                      <p className="mt-0.5 truncate text-xs font-medium text-[var(--ink)]">
+                        {homeName}
+                      </p>
+                      <p className="mt-0.5 tabular-nums text-sm font-semibold text-[var(--felt-deep)]">
+                        {result.teamOneExpected.toFixed(1)}
+                      </p>
+                    </div>
+                    <div className="pb-0.5 text-center">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                        Exp
+                      </p>
+                    </div>
+                    <div className="min-w-0 text-right">
+                      <p
+                        className={[
+                          "truncate text-[10px] font-semibold uppercase tracking-[0.12em]",
+                          awayGets
+                            ? "text-[var(--amber)]"
+                            : "text-[var(--muted)]",
+                        ].join(" ")}
+                      >
+                        Away{awayGets ? " · gets" : ""}
+                      </p>
+                      <p className="mt-0.5 truncate text-xs font-medium text-[var(--ink)]">
+                        {awayName}
+                      </p>
+                      <p className="mt-0.5 tabular-nums text-sm font-semibold text-[var(--felt-deep)]">
                         {result.teamTwoExpected.toFixed(1)}
                       </p>
                     </div>
-                    <div className="rounded-full bg-[var(--felt)] px-3 py-1 text-sm font-semibold text-white">
-                      {points}
-                    </div>
                   </div>
-                  <ul className="mt-3 space-y-1 border-t border-[var(--line)] pt-3">
+
+                  <ul className="divide-y divide-[var(--line)]">
                     {result.matchups.map((matchup, index) => {
-                      const home = homePlayers[matchup.homeIndexes[0] - 1];
-                      const away = awayPlayers[matchup.awayIndexes[0] - 1];
+                      const home =
+                        homePlayers[matchup.homeIndexes[0] - 1] ?? null;
+                      const away =
+                        awayPlayers[matchup.awayIndexes[0] - 1] ?? null;
                       return (
                         <li
                           key={`${result.round}-${index}`}
-                          className="flex justify-between gap-2 text-sm"
+                          className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3.5 py-2.5 sm:px-4"
                         >
-                          <span>
-                            {home ? playerLabel(home) : `H${matchup.homeIndexes[0]}`}{" "}
-                            <span className="text-[var(--muted)]">vs</span>{" "}
-                            {away ? playerLabel(away) : `A${matchup.awayIndexes[0]}`}
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-[var(--ink)]">
+                              {home
+                                ? playerLabel(home)
+                                : `H${matchup.homeIndexes[0]}`}
+                            </p>
+                            <p className="tabular-nums text-xs text-[var(--muted)]">
+                              {Math.round(matchup.homeRating)}
+                            </p>
+                          </div>
+                          <span
+                            aria-hidden
+                            className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]"
+                          >
+                            vs
                           </span>
-                          <span className="tabular-nums text-xs text-[var(--muted)]">
-                            {Math.round(matchup.homeRating)}–
-                            {Math.round(matchup.awayRating)}
-                          </span>
+                          <div className="min-w-0 text-right">
+                            <p className="truncate text-sm font-medium text-[var(--ink)]">
+                              {away
+                                ? playerLabel(away)
+                                : `A${matchup.awayIndexes[0]}`}
+                            </p>
+                            <p className="tabular-nums text-xs text-[var(--muted)]">
+                              {Math.round(matchup.awayRating)}
+                            </p>
+                          </div>
                         </li>
                       );
                     })}
