@@ -35,7 +35,7 @@ type DetailSection = "overview" | "performance" | "leagues" | "matches";
 
 const SECTIONS: Array<{ id: DetailSection; label: string }> = [
   { id: "overview", label: "Overview" },
-  { id: "performance", label: "By rating" },
+  { id: "performance", label: "By Rating" },
   { id: "leagues", label: "Leagues" },
   { id: "matches", label: "Matches" },
 ];
@@ -207,11 +207,16 @@ function MatchBucketSelect({
     function onDoc(event: MouseEvent | TouchEvent) {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     }
+    function onScroll() {
+      setOpen(false);
+    }
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("touchstart", onDoc);
+    window.addEventListener("scroll", onScroll, true);
     return () => {
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("touchstart", onDoc);
+      window.removeEventListener("scroll", onScroll, true);
     };
   }, [open]);
 
@@ -227,7 +232,7 @@ function MatchBucketSelect({
   return (
     <div
       ref={rootRef}
-      className={["relative min-w-0", open ? "z-[80]" : "z-10"].join(" ")}
+      className={["relative min-w-0", open ? "z-30" : ""].join(" ")}
     >
       <button
         type="button"
@@ -268,7 +273,7 @@ function MatchBucketSelect({
           id={listId}
           role="listbox"
           aria-label="Opponent Fargo range"
-          className="absolute z-[90] mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 text-[var(--ink)] shadow-[var(--shadow)] [background-color:var(--surface-2)]"
+          className="absolute mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 text-[var(--ink)] shadow-[var(--shadow)] [background-color:var(--surface-2)]"
         >
           {options.map((option, index) => {
             const isSelected = option.value === value;
@@ -482,7 +487,7 @@ export function PlayerDetail({
 
   return (
     <section className="space-y-4 md:space-y-5">
-      <div className="sticky top-[5.75rem] z-10 -mx-1 space-y-3 bg-[color-mix(in_srgb,var(--paper)_94%,transparent)] px-1 py-2 backdrop-blur sm:top-[3.75rem]">
+      <div className="sticky top-[5.75rem] z-40 -mx-1 space-y-3 bg-[color-mix(in_srgb,var(--paper)_94%,transparent)] px-1 py-2 backdrop-blur sm:top-[3.75rem]">
         <button
           type="button"
           onClick={onBack}
@@ -511,24 +516,6 @@ export function PlayerDetail({
                   .join(" · ")}
               </p>
             ) : null}
-            {player ? (
-              <div className="mt-2 flex flex-wrap gap-2">
-                <span
-                  className={[
-                    "inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]",
-                    statusClass(player.robustnessStatus),
-                  ].join(" ")}
-                >
-                  {statusLabel(player.robustnessStatus)}
-                  {player.robustness != null ? ` · ${player.robustness}` : ""}
-                </span>
-                {player.provisionalRating != null ? (
-                  <span className="inline-flex rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                    Provisional · {player.provisionalRating}
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
           </div>
           {player ? (
             <div className="shrink-0 text-right">
@@ -541,6 +528,25 @@ export function PlayerDetail({
             </div>
           ) : null}
         </div>
+
+        {player ? (
+          <div className="flex flex-nowrap items-center gap-2">
+            <span
+              className={[
+                "inline-flex shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]",
+                statusClass(player.robustnessStatus),
+              ].join(" ")}
+            >
+              {statusLabel(player.robustnessStatus)}
+              {player.robustness != null ? ` · ${player.robustness}` : ""}
+            </span>
+            {player.provisionalRating != null ? (
+              <span className="inline-flex shrink-0 rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                Provisional · {player.provisionalRating}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
 
         <div
           role="tablist"
@@ -562,9 +568,6 @@ export function PlayerDetail({
               ].join(" ")}
             >
               {item.label}
-              {item.id === "leagues" && teams.length
-                ? ` · ${teams.length}`
-                : ""}
             </button>
           ))}
         </div>
