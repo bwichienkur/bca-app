@@ -219,6 +219,11 @@ export function HandicapCalculator({
   const [presetStatus, setPresetStatus] = useState<string | null>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [dropTarget, setDropTarget] = useState<DragState | null>(null);
+  const [mobileSide, setMobileSide] = useState<LineupSide>("mine");
+
+  useEffect(() => {
+    if (!opponentTeamId) setMobileSide("mine");
+  }, [opponentTeamId]);
 
   useEffect(() => {
     if (!myTeamId) {
@@ -656,48 +661,170 @@ export function HandicapCalculator({
         />
       ) : (
         <section className="relative z-0 grid gap-4 xl:grid-cols-[1.1fr_1.1fr_0.9fr]">
-          <LineupPicker
-            side="mine"
-            title={myTeam.name}
-            subtitle={`Pick players · drag ⠿ to reorder · ▲▼ also work`}
-            roster={myTeam.players}
-            lineup={myLineup.length === slots ? myLineup : emptyLineup(slots)}
-            slots={slots}
-            onSelectSlot={(slotIndex, playerId) =>
-              setSlotPlayer("mine", slotIndex, playerId)
-            }
-            onMove={(from, to) => moveInLineup("mine", from, to)}
-            dragState={dragState}
-            dropTarget={dropTarget}
-            setDragState={setDragState}
-            setDropTarget={setDropTarget}
-          />
-          {oppTeam ? (
+          {/* Mobile: one team at a time, same toggle pattern as schedule match detail */}
+          <div className="space-y-3 xl:hidden">
+            {oppTeam ? (
+              <div
+                role="tablist"
+                aria-label="Handicap teams"
+                className="grid grid-cols-2 gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-1"
+              >
+                {(
+                  [
+                    {
+                      id: "mine" as const,
+                      label: "Your team",
+                      teamName: myTeam.name,
+                      filled: filledCount(
+                        myLineup.length === slots
+                          ? myLineup
+                          : emptyLineup(slots),
+                      ),
+                    },
+                    {
+                      id: "opp" as const,
+                      label: "Opponent",
+                      teamName: oppTeam.name,
+                      filled: filledCount(
+                        oppLineup.length === slots
+                          ? oppLineup
+                          : emptyLineup(slots),
+                      ),
+                    },
+                  ]
+                ).map((side) => {
+                  const selected = mobileSide === side.id;
+                  return (
+                    <button
+                      key={side.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      onClick={() => setMobileSide(side.id)}
+                      className={[
+                        "min-w-0 rounded-xl px-2.5 py-2.5 text-left transition",
+                        selected
+                          ? "bg-[var(--felt)] text-white shadow-sm"
+                          : "text-[var(--ink)] hover:bg-[var(--surface)]",
+                      ].join(" ")}
+                    >
+                      <p
+                        className={[
+                          "text-[10px] font-semibold uppercase tracking-[0.12em]",
+                          selected ? "text-white/75" : "text-[var(--muted)]",
+                        ].join(" ")}
+                      >
+                        {side.label}
+                        <span
+                          className={[
+                            "ml-1.5 tabular-nums",
+                            selected ? "text-white/80" : "text-[var(--muted)]",
+                          ].join(" ")}
+                        >
+                          {side.filled}/{slots}
+                        </span>
+                      </p>
+                      <p className="mt-0.5 truncate text-sm font-semibold leading-tight">
+                        {side.teamName}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {mobileSide === "opp" && oppTeam ? (
+              <LineupPicker
+                side="opp"
+                title={oppTeam.name}
+                subtitle={`Choose ${slots} opponents by slot`}
+                roster={oppTeam.players}
+                lineup={
+                  oppLineup.length === slots ? oppLineup : emptyLineup(slots)
+                }
+                slots={slots}
+                onSelectSlot={(slotIndex, playerId) =>
+                  setSlotPlayer("opp", slotIndex, playerId)
+                }
+                onMove={(from, to) => moveInLineup("opp", from, to)}
+                dragState={dragState}
+                dropTarget={dropTarget}
+                setDragState={setDragState}
+                setDropTarget={setDropTarget}
+              />
+            ) : (
+              <LineupPicker
+                side="mine"
+                title={myTeam.name}
+                subtitle={`Pick players · drag ⠿ to reorder · ▲▼ also work`}
+                roster={myTeam.players}
+                lineup={
+                  myLineup.length === slots ? myLineup : emptyLineup(slots)
+                }
+                slots={slots}
+                onSelectSlot={(slotIndex, playerId) =>
+                  setSlotPlayer("mine", slotIndex, playerId)
+                }
+                onMove={(from, to) => moveInLineup("mine", from, to)}
+                dragState={dragState}
+                dropTarget={dropTarget}
+                setDragState={setDragState}
+                setDropTarget={setDropTarget}
+              />
+            )}
+
+            {!oppTeam ? (
+              <EmptyState
+                title="Select an opponent"
+                body="Or wait for schedule auto-match once your team is set."
+              />
+            ) : null}
+          </div>
+
+          {/* Desktop / xl: both teams side by side */}
+          <div className="hidden xl:contents">
             <LineupPicker
-              side="opp"
-              title={oppTeam.name}
-              subtitle={`Choose ${slots} opponents by slot`}
-              roster={oppTeam.players}
-              lineup={
-                oppLineup.length === slots ? oppLineup : emptyLineup(slots)
-              }
+              side="mine"
+              title={myTeam.name}
+              subtitle={`Pick players · drag ⠿ to reorder · ▲▼ also work`}
+              roster={myTeam.players}
+              lineup={myLineup.length === slots ? myLineup : emptyLineup(slots)}
               slots={slots}
-              defaultCollapsed
               onSelectSlot={(slotIndex, playerId) =>
-                setSlotPlayer("opp", slotIndex, playerId)
+                setSlotPlayer("mine", slotIndex, playerId)
               }
-              onMove={(from, to) => moveInLineup("opp", from, to)}
+              onMove={(from, to) => moveInLineup("mine", from, to)}
               dragState={dragState}
               dropTarget={dropTarget}
               setDragState={setDragState}
               setDropTarget={setDropTarget}
             />
-          ) : (
-            <EmptyState
-              title="Select an opponent"
-              body="Or wait for schedule auto-match once your team is set."
-            />
-          )}
+            {oppTeam ? (
+              <LineupPicker
+                side="opp"
+                title={oppTeam.name}
+                subtitle={`Choose ${slots} opponents by slot`}
+                roster={oppTeam.players}
+                lineup={
+                  oppLineup.length === slots ? oppLineup : emptyLineup(slots)
+                }
+                slots={slots}
+                onSelectSlot={(slotIndex, playerId) =>
+                  setSlotPlayer("opp", slotIndex, playerId)
+                }
+                onMove={(from, to) => moveInLineup("opp", from, to)}
+                dragState={dragState}
+                dropTarget={dropTarget}
+                setDragState={setDragState}
+                setDropTarget={setDropTarget}
+              />
+            ) : (
+              <EmptyState
+                title="Select an opponent"
+                body="Or wait for schedule auto-match once your team is set."
+              />
+            )}
+          </div>
 
           <div className="relative z-0 space-y-3 rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
             <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
@@ -881,7 +1008,6 @@ function LineupPicker({
   dropTarget,
   setDragState,
   setDropTarget,
-  defaultCollapsed = false,
 }: {
   side: LineupSide;
   title: string;
@@ -895,7 +1021,6 @@ function LineupPicker({
   dropTarget: DragState | null;
   setDragState: (state: DragState | null) => void;
   setDropTarget: (state: DragState | null) => void;
-  defaultCollapsed?: boolean;
 }) {
   // Only the top-left ⠿ grip starts a drag — the rest of the card stays interactive.
   const filled = filledCount(lineup);
@@ -905,7 +1030,6 @@ function LineupPicker({
   const setDragStateRef = useRef(setDragState);
   const setDropTargetRef = useRef(setDropTarget);
   const [mounted, setMounted] = useState(false);
-  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [ghost, setGhost] = useState<{
     x: number;
     y: number;
@@ -1079,18 +1203,7 @@ function LineupPicker({
 
   return (
     <div className="min-w-0 overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm sm:p-3.5">
-      <button
-        type="button"
-        aria-expanded={!collapsed}
-        onClick={() => {
-          setCollapsed((current) => !current);
-          if (draggingHere) clearDrag();
-        }}
-        className={[
-          "flex w-full items-center justify-between gap-2 text-left",
-          collapsed ? "" : "mb-2",
-        ].join(" ")}
-      >
+      <div className="mb-2 flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1 overflow-hidden">
           <h4 className="truncate font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
             {title}
@@ -1107,19 +1220,8 @@ function LineupPicker({
         >
           {filled}/{slots}
         </span>
-        <span
-          aria-hidden
-          className={[
-            "shrink-0 text-sm text-[var(--muted)] transition-transform duration-150",
-            collapsed ? "-rotate-90" : "rotate-0",
-          ].join(" ")}
-        >
-          ▾
-        </span>
-      </button>
+      </div>
 
-      {collapsed ? null : (
-      <>
       <ol
         ref={listRef}
         className="min-w-0 divide-y divide-[var(--line)] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface-2)]"
@@ -1228,11 +1330,8 @@ function LineupPicker({
       <p className="mt-2 text-[11px] text-[var(--muted)]">
         Drag ⠿ to reorder, or use ▲ ▼ · handicaps follow Fargo
       </p>
-      </>
-      )}
 
       {mounted &&
-      !collapsed &&
       draggingHere &&
       draggedPlayer &&
       ghost &&
