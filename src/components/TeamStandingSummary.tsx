@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 type StandingCell = {
   label: string;
   value: string;
@@ -47,7 +49,159 @@ function friendlyLabel(label: string): string {
   return label;
 }
 
-function StatCell({
+function isGamesStat(label: string): boolean {
+  const h = label.trim().toLowerCase();
+  return (
+    h === "gms" ||
+    h === "games" ||
+    (h.includes("gms") && h.includes("for")) ||
+    (h.includes("games") && h.includes("for"))
+  );
+}
+
+function StatIcon({ kind }: { kind: string }) {
+  const h = kind.trim().toLowerCase();
+  const common =
+    "h-3.5 w-3.5 shrink-0 text-[var(--felt-deep)]";
+  if (h.includes("round") || h === "rds") {
+    return (
+      <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden>
+        <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.85" />
+        <path
+          d="M12 8v4l2.5 1.5"
+          stroke="currentColor"
+          strokeWidth="1.85"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  if (h.includes("point") || h === "pts") {
+    return (
+      <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M12 3l2.2 6.6H21l-5.4 4 2.1 6.5L12 16.8 6.3 20l2.1-6.5L3 9.6h6.8L12 3z"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+  if (h.includes("week") || h === "wks") {
+    return (
+      <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden>
+        <rect
+          x="3"
+          y="5"
+          width="18"
+          height="16"
+          rx="2"
+          stroke="currentColor"
+          strokeWidth="1.85"
+        />
+        <path d="M3 10h18" stroke="currentColor" strokeWidth="1.85" />
+        <path
+          d="M8 3v4M16 3v4"
+          stroke="currentColor"
+          strokeWidth="1.85"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  if (h.includes("win")) {
+    return (
+      <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M8 20V10M12 20V4M16 20v-6"
+          stroke="currentColor"
+          strokeWidth="1.85"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  return (
+    <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="3" fill="currentColor" />
+    </svg>
+  );
+}
+
+function GamesMeter({
+  forValue,
+  againstValue,
+  compact,
+}: {
+  forValue: string;
+  againstValue: string;
+  compact: boolean;
+}) {
+  const forNum = Number(forValue);
+  const againstNum = Number(againstValue);
+  const total =
+    Number.isFinite(forNum) && Number.isFinite(againstNum)
+      ? Math.max(forNum + againstNum, 0)
+      : 0;
+  const pct = total > 0 ? Math.round((forNum / total) * 100) : 0;
+
+  return (
+    <div
+      className={[
+        "border-t border-[var(--line)] bg-[var(--surface-2)]",
+        compact ? "px-3 py-3" : "px-4 py-3.5 sm:px-5",
+      ].join(" ")}
+    >
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            Games
+          </p>
+          <p
+            className={[
+              "mt-1 font-semibold tabular-nums leading-none",
+              compact ? "text-xl" : "text-2xl",
+            ].join(" ")}
+          >
+            <span className="text-[var(--ink)]">{forValue}</span>
+            <span className="mx-1.5 text-[var(--muted)]">–</span>
+            <span className="text-[var(--muted)]">{againstValue}</span>
+          </p>
+          <p className="mt-1 text-[10px] text-[var(--muted)]">for · against</p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            Win rate
+          </p>
+          <p
+            className={[
+              "mt-1 font-[family-name:var(--font-display)] font-semibold tabular-nums leading-none text-[var(--felt-deep)]",
+              compact ? "text-xl" : "text-2xl",
+            ].join(" ")}
+          >
+            {total > 0 ? `${pct}%` : "—"}
+          </p>
+        </div>
+      </div>
+      <div
+        className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--surface-3)]"
+        role="meter"
+        aria-label="Games win rate"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={total > 0 ? pct : 0}
+      >
+        <div
+          className="h-full rounded-full bg-[linear-gradient(90deg,var(--felt-soft),var(--felt))] transition-[width] duration-500 ease-out"
+          style={{ width: `${total > 0 ? pct : 0}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function StatChip({
   label,
   value,
   compact,
@@ -56,37 +210,27 @@ function StatCell({
   value: string;
   compact: boolean;
 }) {
-  const ratio = parseRatio(value);
-
   return (
-    <div className={compact ? "px-3 py-2.5" : "px-4 py-3"}>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-        {label}
-      </p>
-      {ratio ? (
-        <div className="mt-1.5">
-          <p
-            className={[
-              "font-semibold tabular-nums leading-none",
-              compact ? "text-lg" : "text-xl",
-            ].join(" ")}
-          >
-            <span className="text-[var(--ink)]">{ratio.forValue}</span>
-            <span className="mx-1 text-[var(--muted)]">–</span>
-            <span className="text-[var(--muted)]">{ratio.againstValue}</span>
-          </p>
-          <p className="mt-1 text-[10px] text-[var(--muted)]">for · against</p>
-        </div>
-      ) : (
-        <p
-          className={[
-            "mt-1.5 font-semibold tabular-nums leading-none text-[var(--ink)]",
-            compact ? "text-xl" : "text-2xl",
-          ].join(" ")}
-        >
-          {value || "—"}
+    <div
+      className={[
+        "min-w-0 rounded-xl border border-[var(--line)] bg-[var(--surface)]",
+        compact ? "px-2.5 py-2" : "px-3 py-2.5",
+      ].join(" ")}
+    >
+      <div className="flex items-center gap-1.5 text-[var(--muted)]">
+        <StatIcon kind={label} />
+        <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em]">
+          {label}
         </p>
-      )}
+      </div>
+      <p
+        className={[
+          "mt-1.5 font-semibold tabular-nums leading-none text-[var(--ink)]",
+          compact ? "text-lg" : "text-xl",
+        ].join(" ")}
+      >
+        {value || "—"}
+      </p>
     </div>
   );
 }
@@ -100,6 +244,57 @@ export function TeamStandingSummary({
   const stats = cells.filter(
     (cell) => !isNameLabel(cell.label) && !isRankLabel(cell.label),
   );
+
+  const gamesStat =
+    stats.find((cell) => {
+      const ratio = parseRatio(cell.value);
+      return ratio && isGamesStat(cell.label);
+    }) ??
+    stats.find((cell) => parseRatio(cell.value) != null);
+
+  const gamesRatio = gamesStat ? parseRatio(gamesStat.value) : null;
+  const otherStats = stats.filter((cell) => cell !== gamesStat);
+
+  let chips: ReactNode = null;
+  if (otherStats.length) {
+    chips = (
+      <div
+        className={[
+          "grid gap-2 border-t border-[var(--line)]",
+          compact ? "grid-cols-2 p-2.5" : "grid-cols-3 p-3 sm:px-4",
+          otherStats.length === 1 ? "grid-cols-1" : "",
+          otherStats.length === 2 ? "grid-cols-2" : "",
+        ].join(" ")}
+      >
+        {otherStats.map((cell) => (
+          <StatChip
+            key={cell.label}
+            label={friendlyLabel(cell.label)}
+            value={cell.value}
+            compact={compact}
+          />
+        ))}
+      </div>
+    );
+  } else if (!gamesRatio && stats.length) {
+    chips = (
+      <div
+        className={[
+          "grid gap-2 border-t border-[var(--line)] p-3",
+          compact ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4",
+        ].join(" ")}
+      >
+        {stats.map((cell) => (
+          <StatChip
+            key={cell.label}
+            label={friendlyLabel(cell.label)}
+            value={cell.value}
+            compact={compact}
+          />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <section className="overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] shadow-sm">
@@ -141,41 +336,15 @@ export function TeamStandingSummary({
         ) : null}
       </div>
 
-      {stats.length ? (
-        <div
-          className={[
-            "grid border-t border-[var(--line)] bg-[var(--surface-2)]",
-            compact ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4",
-          ].join(" ")}
-        >
-          {stats.map((cell, index) => {
-            const label = friendlyLabel(cell.label);
-            const mobileRightEdge = index % 2 === 0;
-            const mobileNeedsBottom =
-              index < stats.length - (stats.length % 2 || 2);
-
-            return (
-              <div
-                key={cell.label}
-                className={[
-                  mobileRightEdge ? "border-r border-[var(--line)]" : "",
-                  mobileNeedsBottom ? "border-b border-[var(--line)]" : "",
-                  !compact
-                    ? [
-                        "sm:border-b-0",
-                        index < stats.length - 1
-                          ? "sm:border-r sm:border-[var(--line)]"
-                          : "sm:border-r-0",
-                      ].join(" ")
-                    : "",
-                ].join(" ")}
-              >
-                <StatCell label={label} value={cell.value} compact={compact} />
-              </div>
-            );
-          })}
-        </div>
+      {gamesRatio ? (
+        <GamesMeter
+          forValue={gamesRatio.forValue}
+          againstValue={gamesRatio.againstValue}
+          compact={compact}
+        />
       ) : null}
+
+      {chips}
     </section>
   );
 }
