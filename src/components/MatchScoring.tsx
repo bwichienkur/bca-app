@@ -1160,14 +1160,50 @@ export function MatchScoring({
               gameIndex={activeGame?.gameIndex ?? 1}
               onClose={() => setActiveGame(null)}
               onSave={(next) => {
-                if (!activeGame || sheetLocked) return;
-                setGameScore(
-                  activeGame.roundNumber,
-                  activeGame.gameIndex,
-                  next,
-                  { immediate: true },
-                );
-                setActiveGame(null);
+                if (!activeGame || sheetLocked || !match) return;
+                const savedRound = activeGame.roundNumber;
+                const savedIndex = activeGame.gameIndex;
+                setGameScore(savedRound, savedIndex, next, {
+                  immediate: true,
+                });
+
+                const finished =
+                  gameWinner(next, {
+                    maxScore: match.maxScore > 0 ? match.maxScore : 10,
+                    maxLosingScore:
+                      match.maxLosingScore >= 0 ? match.maxLosingScore : 7,
+                  }) != null;
+                if (!finished) {
+                  setActiveGame(null);
+                  return;
+                }
+
+                const round =
+                  match.matchFormat?.rounds.find(
+                    (item) => item.roundNumber === savedRound,
+                  ) ?? null;
+                const unfinished =
+                  round?.games.filter((game) => {
+                    if (game.index === savedIndex) return false;
+                    return (
+                      gameWinner(
+                        draft?.games[gameKey(savedRound, game.index)],
+                      ) == null
+                    );
+                  }) ?? [];
+                const nextGame =
+                  unfinished.find((game) => game.index > savedIndex) ??
+                  unfinished[0] ??
+                  null;
+
+                if (nextGame) {
+                  setActiveGame({
+                    roundNumber: savedRound,
+                    gameIndex: nextGame.index,
+                  });
+                } else {
+                  setActiveGame(null);
+                }
               }}
             />
           </div>
@@ -1999,7 +2035,7 @@ function RaceScoreSelect({
   return (
     <div
       ref={rootRef}
-      className={["relative mt-3 block", open ? "z-20" : "z-10"].join(" ")}
+      className={["relative block", open ? "z-30" : "z-10"].join(" ")}
     >
       <span className="sr-only">{label}</span>
       <button
@@ -2010,7 +2046,11 @@ function RaceScoreSelect({
         aria-label={label}
         onClick={() => setOpen((next) => !next)}
         onKeyDown={(event) => {
-          if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+          if (
+            event.key === "ArrowDown" ||
+            event.key === "Enter" ||
+            event.key === " "
+          ) {
             event.preventDefault();
             setOpen(true);
           } else if (event.key === "Escape") {
@@ -2018,14 +2058,23 @@ function RaceScoreSelect({
           }
         }}
         className={[
-          "relative w-full rounded-xl border border-white/20 bg-[var(--felt)] px-3 py-3 pr-8 text-center font-[family-name:var(--font-display)] text-4xl tabular-nums text-white outline-none ring-white/35 [background-color:var(--felt)] focus:ring-2",
-          emphasized ? "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.28)]" : "",
+          "relative w-full rounded-xl px-2 py-1 text-center outline-none ring-[var(--felt-soft)] transition focus-visible:ring-2",
+          emphasized
+            ? "bg-[color-mix(in_srgb,var(--felt)_18%,transparent)]"
+            : "hover:bg-[var(--surface-3)]/60",
         ].join(" ")}
       >
-        {value}
+        <span
+          className={[
+            "font-[family-name:var(--font-display)] text-5xl leading-none tabular-nums tracking-tight sm:text-6xl",
+            emphasized ? "text-[var(--felt-deep)]" : "text-[var(--ink)]",
+          ].join(" ")}
+        >
+          {value}
+        </span>
         <span
           aria-hidden
-          className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-white/70"
+          className="ml-1 align-super text-[11px] text-[var(--muted)]"
         >
           {open ? "▴" : "▾"}
         </span>
@@ -2036,7 +2085,7 @@ function RaceScoreSelect({
           id={listId}
           role="listbox"
           aria-label={label}
-          className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-white/20 bg-[var(--felt)] py-1 shadow-[var(--shadow)] [background-color:var(--felt)]"
+          className="absolute left-1/2 z-40 mt-1 max-h-56 w-[min(100%,7.5rem)] -translate-x-1/2 overflow-y-auto rounded-xl border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow)]"
         >
           {options.map((option, index) => {
             const selected = option === value;
@@ -2051,13 +2100,17 @@ function RaceScoreSelect({
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => choose(option)}
                   className={[
-                    "flex w-full items-center justify-center gap-2 px-3 py-2.5 font-[family-name:var(--font-display)] text-2xl tabular-nums text-white",
-                    active ? "bg-black/25" : "bg-[var(--felt)]",
-                    selected ? "font-semibold" : "font-normal",
+                    "flex w-full items-center justify-center gap-2 px-3 py-2 font-[family-name:var(--font-display)] text-2xl tabular-nums",
+                    active ? "bg-[var(--surface-3)]" : "",
+                    selected
+                      ? "font-semibold text-[var(--felt-deep)]"
+                      : "font-normal text-[var(--ink)]",
                   ].join(" ")}
                 >
                   <span>{option}</span>
-                  {selected ? <span className="text-sm text-white/80">✓</span> : null}
+                  {selected ? (
+                    <span className="text-sm text-[var(--felt)]">✓</span>
+                  ) : null}
                 </button>
               </li>
             );
@@ -2222,6 +2275,58 @@ function ScorePad({
     );
   };
 
+  const sideMeta = (side: 1 | 2) => {
+    const score =
+      side === 1 ? (local.teamOneScore ?? 0) : (local.teamTwoScore ?? 0);
+    const player = side === 1 ? p1 : p2;
+    const name = player
+      ? playerDisplayName(player)
+      : side === 1
+        ? match.teamOneName
+        : match.teamTwoName;
+    const options = scoreOptionsFor(side);
+    const selectValue = options.includes(
+      score as (typeof RACE_SCORE_OPTIONS)[number],
+    )
+      ? score
+      : 0;
+    return {
+      score,
+      name,
+      rating: player?.fargoRating ?? null,
+      breaking: local.breakingTeam === side,
+      isWinner: winner === side,
+      options,
+      selectValue,
+      progress: Math.min(1, score / Math.max(maxWin, 1)),
+    };
+  };
+
+  const left = sideMeta(1);
+  const right = sideMeta(2);
+
+  const setAdornment = (code: WinAdornment) => {
+    const currentWinner = gameWinner(local, {
+      maxScore: maxWin,
+      maxLosingScore: maxLoss,
+    });
+    if (!currentWinner) {
+      commit({
+        ...local,
+        winAdornment: "",
+        isWinZip: false,
+      });
+      return;
+    }
+    commit(
+      applyQuickWin(local, currentWinner, {
+        maxScore: maxWin,
+        maxLosingScore: maxLoss,
+        adornment: code,
+      }),
+    );
+  };
+
   const sheet = (
     <div
       className="fixed inset-0 z-[100] flex flex-col"
@@ -2232,192 +2337,249 @@ function ScorePad({
       <button
         type="button"
         aria-label="Dismiss score pad"
-        className="shrink-0 bg-black/50"
+        className="shrink-0 bg-black/55"
         style={{ height: spacerPx }}
         onClick={requestClose}
       />
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-[1.25rem] border-t border-[var(--line)] bg-[var(--paper-2)] shadow-[var(--shadow)]">
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--line)] px-4 py-3">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-[1.35rem] border-t border-[var(--line)] bg-[var(--paper-2)] shadow-[var(--shadow)]">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--line)] px-4 py-3.5">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
-              Round {roundNumber} · Game {gameIndex}
-              {dirty ? " · Unsaved" : ""}
-            </p>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              {p1 ? playerDisplayName(p1) : "Home"}
-              {p1?.fargoRating != null ? ` (${p1.fargoRating})` : ""} vs{" "}
-              {p2 ? playerDisplayName(p2) : "Away"}
-              {p2?.fargoRating != null ? ` (${p2.fargoRating})` : ""}
-            </p>
-            {!winner ? (
-              <p className="mt-1 text-xs text-[var(--amber)]">
-                In progress — first to {maxWin} wins (loser ≤{maxLoss})
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
+                Round {roundNumber} · Game {gameIndex}
               </p>
-            ) : (
-              <p className="mt-1 text-xs text-[var(--felt-deep)]">
-                Game complete — tap Save game
-              </p>
-            )}
+              {dirty ? (
+                <span className="rounded-md bg-[color-mix(in_srgb,var(--amber)_18%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--amber)]">
+                  Unsaved
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-1.5 font-[family-name:var(--font-display)] text-lg leading-tight text-[var(--felt-deep)]">
+              {left.name}
+              <span className="mx-1.5 text-[var(--muted)]">vs</span>
+              {right.name}
+            </p>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Race to {maxWin}
+              <span className="text-[var(--line-strong)]"> · </span>
+              max loss {maxLoss}
+              {winner ? (
+                <>
+                  <span className="text-[var(--line-strong)]"> · </span>
+                  <span className="font-medium text-[var(--felt-deep)]">
+                    Complete
+                  </span>
+                </>
+              ) : null}
+            </p>
           </div>
           <button
             type="button"
             onClick={requestClose}
-            className="shrink-0 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]"
+            aria-label="Close score pad"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-lg leading-none text-[var(--muted)] transition hover:border-[var(--line-strong)] hover:text-[var(--ink)]"
           >
-            Close
+            ×
           </button>
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain [overflow-anchor:none] px-4 py-4">
-          <div ref={scoresRef} className="grid grid-cols-2 gap-3">
-            {[1, 2].map((side) => {
-              const score =
-                side === 1
-                  ? (local.teamOneScore ?? 0)
-                  : (local.teamTwoScore ?? 0);
-              const name =
-                side === 1
-                  ? p1
-                    ? playerDisplayName(p1)
-                    : match.teamOneName
-                  : p2
-                    ? playerDisplayName(p2)
-                    : match.teamTwoName;
-              const breaking = local.breakingTeam === side;
-              const isWinner = winner === side;
-              const options = scoreOptionsFor(side as 1 | 2);
-              const selectValue = options.includes(
-                score as (typeof RACE_SCORE_OPTIONS)[number],
-              )
-                ? score
-                : 0;
-              return (
+          <div
+            ref={scoresRef}
+            className={[
+              "overflow-hidden rounded-[1.35rem] border bg-[var(--surface)] shadow-sm",
+              winner
+                ? "border-[var(--felt)]/40"
+                : "border-[var(--line)]",
+            ].join(" ")}
+          >
+            <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2 border-b border-[var(--line)] px-3 py-3 sm:px-4">
+              {([left, right] as const).map((side, index) => (
                 <div
-                  key={side}
+                  key={index === 0 ? "home" : "away"}
                   className={[
-                    "rounded-2xl border p-3",
-                    isWinner
-                      ? "border-[var(--felt)]/50 bg-[color-mix(in_srgb,var(--felt)_16%,var(--surface-2))]"
-                      : "border-[var(--line)] bg-[var(--surface-2)]",
+                    "min-w-0",
+                    index === 1 ? "text-right" : "",
+                    index === 0 ? "" : "col-start-3",
                   ].join(" ")}
                 >
-                  <p className="truncate text-xs font-semibold text-[var(--muted)]">
-                    {name}
-                    {breaking ? " · break" : ""}
+                  <p className="truncate text-sm font-semibold text-[var(--ink)]">
+                    {side.name}
                   </p>
-                  {side === 1 && p1?.fargoRating != null ? (
-                    <p className="mt-1 text-[11px] font-semibold text-[var(--felt)]">
-                      Fargo {p1.fargoRating}
-                    </p>
-                  ) : null}
-                  {side === 2 && p2?.fargoRating != null ? (
-                    <p className="mt-1 text-[11px] font-semibold text-[var(--felt)]">
-                      Fargo {p2.fargoRating}
-                    </p>
-                  ) : null}
+                  <div
+                    className={[
+                      "mt-1 flex flex-wrap items-center gap-1.5",
+                      index === 1 ? "justify-end" : "",
+                    ].join(" ")}
+                  >
+                    {side.rating != null ? (
+                      <span className="text-[11px] font-semibold tabular-nums text-[var(--felt)]">
+                        Fargo {side.rating}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-[var(--muted)]">—</span>
+                    )}
+                    {side.breaking ? (
+                      <span className="rounded-md bg-[color-mix(in_srgb,var(--amber)_20%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--amber)]">
+                        Break
+                      </span>
+                    ) : null}
+                    {side.isWinner ? (
+                      <span className="rounded-md bg-[color-mix(in_srgb,var(--felt)_22%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--felt-deep)]">
+                        Winner
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+              <div className="col-start-2 row-start-1 self-center px-1 pt-1 text-center text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
+                vs
+              </div>
+            </div>
 
-                  <RaceScoreSelect
-                    label={`Score for ${name}`}
-                    value={selectValue}
-                    options={options}
-                    emphasized={isWinner}
-                    onChange={(next) => setScore(side as 1 | 2, next)}
-                  />
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1 px-2 py-4 sm:px-3">
+              {([1, 2] as const).map((side) => {
+                const meta = side === 1 ? left : right;
+                return (
+                  <div
+                    key={side}
+                    className={[
+                      "min-w-0",
+                      side === 2 ? "col-start-3" : "",
+                      meta.isWinner
+                        ? "rounded-2xl bg-[color-mix(in_srgb,var(--felt)_12%,transparent)]"
+                        : "",
+                    ].join(" ")}
+                  >
+                    <RaceScoreSelect
+                      label={`Score for ${meta.name}`}
+                      value={meta.selectValue}
+                      options={meta.options}
+                      emphasized={meta.isWinner}
+                      onChange={(next) => setScore(side, next)}
+                    />
+                    <div className="mx-auto mt-2 h-1 w-[72%] overflow-hidden rounded-full bg-[var(--surface-3)]">
+                      <div
+                        className={[
+                          "h-full rounded-full transition-[width] duration-300",
+                          meta.isWinner
+                            ? "bg-[var(--felt-deep)]"
+                            : "bg-[var(--felt)]",
+                        ].join(" ")}
+                        style={{ width: `${meta.progress * 100}%` }}
+                      />
+                    </div>
+                    <p className="mt-1 text-center text-[10px] tabular-nums text-[var(--muted)]">
+                      {meta.score}/{maxWin}
+                    </p>
+                  </div>
+                );
+              })}
+              <div className="col-start-2 row-start-1 self-center pb-6 text-center font-[family-name:var(--font-display)] text-2xl text-[var(--muted)]">
+                –
+              </div>
+            </div>
 
-                  <div className="mt-2 grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 border-t border-[var(--line)] bg-[var(--surface-2)]/70 px-3 py-3 sm:px-4">
+              {([1, 2] as const).map((side) => {
+                const meta = side === 1 ? left : right;
+                return (
+                  <div key={side} className="min-w-0 space-y-2">
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        aria-label={`Decrease ${meta.name} score`}
+                        onClick={() => bump(side, -1)}
+                        className="rounded-lg border border-[var(--line)] bg-[var(--surface)] py-2.5 text-lg font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] active:scale-[0.98]"
+                      >
+                        −
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Increase ${meta.name} score`}
+                        onClick={() => bump(side, 1)}
+                        className="rounded-lg border border-[var(--line)] bg-[var(--surface)] py-2.5 text-lg font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] active:scale-[0.98]"
+                      >
+                        +
+                      </button>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => bump(side as 1 | 2, -1)}
-                      className="rounded-xl border border-white/15 bg-[color-mix(in_srgb,var(--felt)_72%,black)] py-2 text-lg font-semibold text-white active:scale-[0.98]"
+                      onClick={() => quickWin(side)}
+                      className={[
+                        "w-full rounded-lg py-2 text-xs font-semibold transition active:scale-[0.98]",
+                        meta.isWinner
+                          ? "bg-[var(--felt)] text-white"
+                          : "border border-[var(--line)] bg-transparent text-[var(--muted)] hover:border-[var(--felt)]/45 hover:text-[var(--ink)]",
+                      ].join(" ")}
                     >
-                      −
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => bump(side as 1 | 2, 1)}
-                      className="rounded-xl border border-white/15 bg-[color-mix(in_srgb,var(--felt)_72%,black)] py-2 text-lg font-semibold text-white active:scale-[0.98]"
-                    >
-                      +
+                      {meta.isWinner ? "Winner ✓" : "Mark winner"}
                     </button>
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() => quickWin(side as 1 | 2)}
-                    className={[
-                      "mt-2 w-full rounded-xl py-2.5 text-sm font-semibold text-white active:scale-[0.98]",
-                      isWinner
-                        ? "bg-[var(--felt-soft)]"
-                        : "bg-[var(--felt)]",
-                    ].join(" ")}
-                  >
-                    WIN
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-              Win adornment
-            </p>
-            <div className="grid grid-cols-4 gap-2">
-              {(
-                [
-                  { code: "" as WinAdornment, label: "CLR", hint: "Clear" },
-                  { code: "BR" as WinAdornment, label: "BR", hint: "Break & run" },
-                  { code: "TR" as WinAdornment, label: "TR", hint: "Table run" },
-                  { code: "WZ" as WinAdornment, label: "WZ", hint: "Win zip (10–0)" },
-                ] as const
-              ).map((item) => {
-                const active = local.winAdornment === item.code;
-                return (
-                  <button
-                    key={item.label}
-                    type="button"
-                    title={item.hint}
-                    aria-label={item.hint}
-                    disabled={!winner && item.code !== ""}
-                    onClick={() => {
-                      const currentWinner = gameWinner(local, {
-                        maxScore: maxWin,
-                        maxLosingScore: maxLoss,
-                      });
-                      if (!currentWinner) {
-                        commit({
-                          ...local,
-                          winAdornment: "",
-                          isWinZip: false,
-                        });
-                        return;
-                      }
-                      commit(
-                        applyQuickWin(local, currentWinner, {
-                          maxScore: maxWin,
-                          maxLosingScore: maxLoss,
-                          adornment: item.code,
-                        }),
-                      );
-                    }}
-                    className={[
-                      "rounded-xl py-2.5 text-sm font-semibold disabled:opacity-35",
-                      active
-                        ? "bg-[var(--amber)] text-[#1a1208]"
-                        : "bg-[var(--surface-2)] text-[var(--ink)]",
-                    ].join(" ")}
-                  >
-                    {item.label}
-                  </button>
                 );
               })}
             </div>
-            <p className="mt-2 text-[11px] leading-snug text-[var(--muted)]">
-              CLR clear · BR break &amp; run · TR table run · WZ win zip (10–0)
-            </p>
           </div>
 
-          <div className="flex gap-2">
+          {winner ? (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                How they won
+              </p>
+              <div
+                role="group"
+                aria-label="Win adornment"
+                className="grid grid-cols-4 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+              >
+                {(
+                  [
+                    {
+                      code: "" as WinAdornment,
+                      label: "Clear",
+                      hint: "No adornment",
+                    },
+                    {
+                      code: "BR" as WinAdornment,
+                      label: "B&R",
+                      hint: "Break and run",
+                    },
+                    {
+                      code: "TR" as WinAdornment,
+                      label: "Table",
+                      hint: "Table run",
+                    },
+                    {
+                      code: "WZ" as WinAdornment,
+                      label: "Zip",
+                      hint: "Win zip (10–0)",
+                    },
+                  ] as const
+                ).map((item) => {
+                  const active = local.winAdornment === item.code;
+                  return (
+                    <button
+                      key={item.label}
+                      type="button"
+                      title={item.hint}
+                      aria-label={item.hint}
+                      aria-pressed={active}
+                      onClick={() => setAdornment(item.code)}
+                      className={[
+                        "rounded-lg px-1 py-2 text-center text-[11px] font-semibold transition sm:text-xs",
+                        active
+                          ? "bg-[var(--felt)] text-white shadow-sm"
+                          : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
+                      ].join(" ")}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="flex items-center justify-center gap-4 text-sm">
             <button
               type="button"
               onClick={() =>
@@ -2426,10 +2588,13 @@ function ScorePad({
                   breakingTeam: local.breakingTeam === 1 ? 2 : 1,
                 })
               }
-              className="flex-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] py-2.5 text-sm font-semibold"
+              className="font-semibold text-[var(--muted)] transition hover:text-[var(--ink)]"
             >
               Swap break
             </button>
+            <span aria-hidden className="text-[var(--line-strong)]">
+              ·
+            </span>
             <button
               type="button"
               onClick={() =>
@@ -2441,7 +2606,7 @@ function ScorePad({
                   isWinZip: false,
                 })
               }
-              className="flex-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] py-2.5 text-sm font-semibold text-[var(--muted)]"
+              className="font-semibold text-[var(--muted)] transition hover:text-[var(--ink)]"
             >
               Reset 0–0
             </button>
@@ -2453,13 +2618,15 @@ function ScorePad({
             type="button"
             onClick={saveGame}
             disabled={!dirty}
-            className="w-full rounded-xl bg-[var(--felt)] px-4 py-3.5 text-sm font-semibold text-white shadow-sm transition enabled:active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
+            className={[
+              "w-full rounded-xl px-4 py-3.5 text-sm font-semibold transition enabled:active:scale-[0.99]",
+              dirty
+                ? "bg-[var(--felt)] text-white shadow-sm"
+                : "cursor-default border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]",
+            ].join(" ")}
           >
-            {dirty ? "Save game" : "Saved"}
+            {dirty ? "Save game" : "Saved ✓"}
           </button>
-          <p className="mt-2 text-center text-[11px] text-[var(--muted)]">
-            Scores stay on this pad until you save.
-          </p>
         </div>
       </div>
     </div>
