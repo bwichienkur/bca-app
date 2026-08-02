@@ -501,16 +501,20 @@ export function MatchScoring({
     roundNumber: number,
     gameIndex: number,
     next: GameScoreState,
+    options?: { immediate?: boolean },
   ) => {
     // Keep the score pad snappy; heavy sheet recalcs can land in a transition.
     startTransition(() => {
-      updateDraft((prev) => ({
-        ...prev,
-        games: {
-          ...prev.games,
-          [gameKey(roundNumber, gameIndex)]: next,
-        },
-      }));
+      updateDraft(
+        (prev) => ({
+          ...prev,
+          games: {
+            ...prev.games,
+            [gameKey(roundNumber, gameIndex)]: next,
+          },
+        }),
+        { immediate: options?.immediate ?? true },
+      );
     });
   };
 
@@ -721,7 +725,7 @@ export function MatchScoring({
                   ? "Saved on this device only"
                   : sharedDrafts
                     ? "Draft sync ready"
-                    : "Edits save automatically"}
+                    : "Save each game from the score pad"}
           </p>
         ) : null}
 
@@ -1158,13 +1162,15 @@ export function MatchScoring({
               roundNumber={activeGame?.roundNumber ?? activeRound}
               gameIndex={activeGame?.gameIndex ?? 1}
               onClose={() => setActiveGame(null)}
-              onChange={(next) => {
+              onSave={(next) => {
                 if (!activeGame || sheetLocked) return;
                 setGameScore(
                   activeGame.roundNumber,
                   activeGame.gameIndex,
                   next,
+                  { immediate: true },
                 );
+                setActiveGame(null);
               }}
             />
           </div>
@@ -2094,6 +2100,20 @@ function RaceScoreSelect({
   );
 }
 
+function gameScoreEqual(a: GameScoreState, b: GameScoreState): boolean {
+  return (
+    a.teamOneScore === b.teamOneScore &&
+    a.teamTwoScore === b.teamTwoScore &&
+    a.winAdornment === b.winAdornment &&
+    a.isWinZip === b.isWinZip &&
+    a.breakingTeam === b.breakingTeam &&
+    a.teamOnePlayerId === b.teamOnePlayerId &&
+    a.teamTwoPlayerId === b.teamTwoPlayerId &&
+    a.teamOneHandicap === b.teamOneHandicap &&
+    a.teamTwoHandicap === b.teamTwoHandicap
+  );
+}
+
 function ScorePad({
   open,
   match,
@@ -2101,7 +2121,7 @@ function ScorePad({
   roundNumber,
   gameIndex,
   onClose,
-  onChange,
+  onSave,
 }: {
   open: boolean;
   match: ScoringMatchDetail;
@@ -2109,13 +2129,13 @@ function ScorePad({
   roundNumber: number;
   gameIndex: number;
   onClose: () => void;
-  onChange: (next: GameScoreState) => void;
+  onSave: (next: GameScoreState) => void;
 }) {
   const [local, setLocal] = useState<GameScoreState | null>(game ?? null);
+  const [baseline, setBaseline] = useState<GameScoreState | null>(game ?? null);
   const [mounted, setMounted] = useState(false);
   const [spacerPx, setSpacerPx] = useState(104);
   const scoresRef = useRef<HTMLDivElement | null>(null);
-  const [, startPadTransition] = useTransition();
   const maxWin = match.maxScore > 0 ? match.maxScore : 10;
   const maxLoss = match.maxLosingScore >= 0 ? match.maxLosingScore : 7;
 
@@ -2123,11 +2143,12 @@ function ScorePad({
     setMounted(true);
   }, []);
 
-  // Resync when opening/switching games — not on every parent score echo.
+  // Resync when opening/switching games — edits stay local until Save.
   useEffect(() => {
     if (!open) return;
     setLocal(game ?? null);
-    // Intentionally omit `game` so parent transitions don't clobber local taps.
+    setBaseline(game ?? null);
+    // Intentionally omit `game` so parent draft echoes don't clobber local taps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, roundNumber, gameIndex]);
 
@@ -2163,7 +2184,7 @@ function ScorePad({
     };
   }, [open, roundNumber, gameIndex]);
 
-  if (!open || !game || !local) {
+  if (!open || !game || !local || !baseline) {
     return (
       <aside className="hidden rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)]/50 p-5 text-sm text-[var(--muted)] lg:block">
         Tap a game to open the score pad.
@@ -2171,6 +2192,7 @@ function ScorePad({
     );
   }
 
+  const dirty = !gameScoreEqual(local, baseline);
   const p1 = findPlayer(match.teamOnePlayers, local.teamOnePlayerId);
   const p2 = findPlayer(match.teamTwoPlayers, local.teamTwoPlayerId);
   const winner = gameWinner(local, {
@@ -2180,7 +2202,21 @@ function ScorePad({
 
   const commit = (next: GameScoreState) => {
     setLocal(next);
-    startPadTransition(() => onChange(next));
+  };
+
+  const requestClose = () => {
+    if (
+      dirty &&
+      typeof window !== "undefined" &&
+      !window.confirm("Discard unsaved score changes for this game?")
+    ) {
+      return;
+    }
+    onClose();
+  };
+
+  const saveGame = () => {
+    onSave(local);
   };
 
   const scoreOptionsFor = (side: 1 | 2) => {
@@ -2230,13 +2266,14 @@ function ScorePad({
         aria-label="Dismiss score pad"
         className="shrink-0 bg-black/50"
         style={{ height: spacerPx }}
-        onClick={onClose}
+        onClick={requestClose}
       />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-[1.25rem] border-t border-[var(--line)] bg-[var(--paper-2)] shadow-[var(--shadow)]">
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--line)] px-4 py-3">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
               Round {roundNumber} · Game {gameIndex}
+              {dirty ? " · Unsaved" : ""}
             </p>
             <p className="mt-1 text-sm text-[var(--muted)]">
               {p1 ? playerDisplayName(p1) : "Home"}
@@ -2250,20 +2287,20 @@ function ScorePad({
               </p>
             ) : (
               <p className="mt-1 text-xs text-[var(--felt-deep)]">
-                Game complete
+                Game complete — tap Save game
               </p>
             )}
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="shrink-0 rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]"
           >
             Close
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain [overflow-anchor:none] px-4 py-4 pb-[calc(1rem+var(--safe-bottom))]">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain [overflow-anchor:none] px-4 py-4">
           <div ref={scoresRef} className="grid grid-cols-2 gap-3">
             {[1, 2].map((side) => {
               const score =
@@ -2441,6 +2478,20 @@ function ScorePad({
               Reset 0–0
             </button>
           </div>
+        </div>
+
+        <div className="shrink-0 border-t border-[var(--line)] bg-[var(--paper-2)] px-4 py-3 pb-[calc(0.75rem+var(--safe-bottom))]">
+          <button
+            type="button"
+            onClick={saveGame}
+            disabled={!dirty}
+            className="w-full rounded-xl bg-[var(--felt)] px-4 py-3.5 text-sm font-semibold text-white shadow-sm transition enabled:active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {dirty ? "Save game" : "Saved"}
+          </button>
+          <p className="mt-2 text-center text-[11px] text-[var(--muted)]">
+            Scores stay on this pad until you save.
+          </p>
         </div>
       </div>
     </div>
