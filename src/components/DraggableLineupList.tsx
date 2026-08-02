@@ -107,6 +107,7 @@ export function DraggableLineupList({
   onChange,
   onMove,
   footer,
+  actions,
   disabled = false,
 }: {
   title: string;
@@ -117,6 +118,8 @@ export function DraggableLineupList({
   onChange: (index: number, playerId: string | null) => void;
   onMove: (from: number, to: number) => void;
   footer?: ReactNode;
+  /** Compact controls shown beside the filled badge (e.g. Load menu). */
+  actions?: ReactNode;
   disabled?: boolean;
 }) {
   const slots = lineupIds.length;
@@ -289,16 +292,19 @@ export function DraggableLineupList({
           </h4>
           <p className="truncate text-xs text-[var(--muted)]">{subtitle}</p>
         </div>
-        <span
-          className={[
-            "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
-            filled === slots
-              ? "bg-[var(--felt)] text-white"
-              : "bg-[var(--surface-2)] text-[var(--muted)]",
-          ].join(" ")}
-        >
-          {filled}/{slots}
-        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {actions}
+          <span
+            className={[
+              "rounded-full px-2.5 py-1 text-xs font-semibold",
+              filled === slots
+                ? "bg-[var(--felt)] text-white"
+                : "bg-[var(--surface-2)] text-[var(--muted)]",
+            ].join(" ")}
+          >
+            {filled}/{slots}
+          </span>
+        </div>
       </div>
 
       <ol

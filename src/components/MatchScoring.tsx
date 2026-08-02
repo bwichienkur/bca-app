@@ -50,12 +50,9 @@ import { EmptyState } from "./EmptyState";
 import { LoadingState } from "./LoadingState";
 import type { AuthUser } from "./LoginScreen";
 import { DraggableLineupList } from "./DraggableLineupList";
+import { LoadLineupMenu } from "./LoadLineupMenu";
 import { MatchListCard } from "./MatchListCard";
-import {
-  loadTeamLineupPresets,
-  removeTeamLineupPreset,
-  saveTeamLineupPreset,
-} from "@/lib/lineup-sync";
+import { loadTeamLineupPresets } from "@/lib/lineup-sync";
 import type { LineupPreset } from "@/lib/types";
 import { normalizeTeamName } from "@/lib/matchups";
 
@@ -1701,15 +1698,6 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
   );
 });
 
-function presetId(teamId: string, name: string): string {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-  return `${teamId}:${slug || "lineup"}`;
-}
-
 function LineupEditor({
   match,
   draft,
@@ -1733,8 +1721,6 @@ function LineupEditor({
 }) {
   const [open, setOpen] = useState(false);
   const [presets, setPresets] = useState<LineupPreset[]>([]);
-  const [presetName, setPresetName] = useState("Default lineup");
-  const [presetStatus, setPresetStatus] = useState<string | null>(null);
   const [mobileSide, setMobileSide] = useState<1 | 2>(
     match.mySide === 2 ? 2 : 1,
   );
@@ -1754,12 +1740,6 @@ function LineupEditor({
   }, [match.id, mySide]);
   const myTeamId =
     mySide === 1 ? match.teamOneId : mySide === 2 ? match.teamTwoId : null;
-  const myLineup =
-    mySide === 1
-      ? draft.teamOneLineup
-      : mySide === 2
-        ? draft.teamTwoLineup
-        : null;
   const myPlayers =
     mySide === 1
       ? match.teamOnePlayers
@@ -1800,39 +1780,6 @@ function LineupEditor({
         rating: player.fargoRating,
       }));
 
-  const savePreset = () => {
-    if (!mySide || !myTeamId || !myLineup) {
-      setPresetStatus("Sign in on your team’s match to save a lineup.");
-      return;
-    }
-    if (myLineup.some((id) => !id)) {
-      setPresetStatus(`Fill all ${slots} of your slots before saving.`);
-      return;
-    }
-    const name = presetName.trim() || "Default lineup";
-    const preset: LineupPreset = {
-      id: presetId(myTeamId, name),
-      name,
-      divisionId,
-      teamId: myTeamId,
-      playerIds: myLineup.filter((id): id is string => Boolean(id)),
-      updatedAt: new Date().toISOString(),
-    };
-    void saveTeamLineupPreset(preset)
-      .then((result) => {
-        setPresets(result.presets);
-        setPresetName(name);
-        setPresetStatus(
-          result.shared
-            ? `Saved “${name}” for the team.`
-            : `Saved “${name}” on this device.`,
-        );
-      })
-      .catch(() => {
-        setPresetStatus("Couldn't save lineup.");
-      });
-  };
-
   const applyPreset = (preset: LineupPreset) => {
     if (!mySide) return;
     const ids = Array.from({ length: slots }, (_, index) => {
@@ -1840,21 +1787,12 @@ function LineupEditor({
       return id && myPlayers.some((player) => player.id === id) ? id : null;
     });
     onReplaceLineup(mySide, ids);
-    setPresetName(preset.name);
-    setPresetStatus(`Loaded “${preset.name}”.`);
   };
 
-  const removePreset = (preset: LineupPreset) => {
-    if (!myTeamId) return;
-    void removeTeamLineupPreset({
-      teamId: myTeamId,
-      divisionId,
-      presetId: preset.id,
-    }).then((result) => {
-      setPresets(result.presets);
-      setPresetStatus(`Deleted “${preset.name}”.`);
-    });
-  };
+  const loadActionsFor = (side: 1 | 2) =>
+    mySide === side && myTeamId && !readOnly ? (
+      <LoadLineupMenu presets={teamPresets} onLoad={applyPreset} />
+    ) : null;
 
   return (
     <div className="min-w-0 space-y-3">
@@ -1872,7 +1810,7 @@ function LineupEditor({
             {filledOne + filledTwo}/{slots * 2} filled
             {readOnly
               ? " · view only"
-              : " · drag ⠿ or ▲▼ · presets"}
+              : " · drag ⠿ or ▲▼ · Load from My Team"}
           </p>
         </div>
         <span className="shrink-0 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
@@ -1882,78 +1820,6 @@ function LineupEditor({
 
       {open ? (
         <div className="space-y-4">
-          {mySide && myTeamId && !readOnly ? (
-            <div className="rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-3 sm:p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
-                Your lineup presets
-              </p>
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                Team presets sync via Redis when configured — shared with
-                Handicap for{" "}
-                {mySide === 1 ? match.teamOneName : match.teamTwoName}.
-              </p>
-              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                <input
-                  value={presetName}
-                  onChange={(event) => setPresetName(event.target.value)}
-                  placeholder="Preset name"
-                  className="w-full flex-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]"
-                />
-                <button
-                  type="button"
-                  onClick={savePreset}
-                  className="rounded-full bg-[var(--felt)] px-4 py-2 text-sm font-semibold text-white"
-                >
-                  Save lineup
-                </button>
-              </div>
-              {presetStatus ? (
-                <p className="mt-2 text-xs text-[var(--felt-deep)]">
-                  {presetStatus}
-                </p>
-              ) : null}
-              {teamPresets.length > 0 ? (
-                <ul className="mt-3 space-y-2">
-                  {teamPresets.map((preset) => (
-                    <li
-                      key={preset.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--surface-2)] px-3 py-2"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-[var(--ink)]">
-                          {preset.name}
-                        </p>
-                        <p className="text-[11px] text-[var(--muted)]">
-                          {preset.playerIds.length} players
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => applyPreset(preset)}
-                          className="rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white"
-                        >
-                          Load
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removePreset(preset)}
-                          className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-3 text-xs text-[var(--muted)]">
-                  No saved lineups yet for this team.
-                </p>
-              )}
-            </div>
-          ) : null}
-
           {/* Mobile: one team at a time, same toggle pattern as schedule match detail */}
           <div className="space-y-3 md:hidden">
             <div
@@ -2027,6 +1893,7 @@ function LineupEditor({
                 lineupIds={draft.teamOneLineup}
                 roster={rosterFor(match.teamOnePlayers)}
                 disabled={readOnly}
+                actions={loadActionsFor(1)}
                 onChange={(index, id) => onChangeLineup(1, index, id)}
                 onMove={(from, to) => onMoveLineup(1, from, to)}
               />
@@ -2038,6 +1905,7 @@ function LineupEditor({
                 lineupIds={draft.teamTwoLineup}
                 roster={rosterFor(match.teamTwoPlayers)}
                 disabled={readOnly}
+                actions={loadActionsFor(2)}
                 onChange={(index, id) => onChangeLineup(2, index, id)}
                 onMove={(from, to) => onMoveLineup(2, from, to)}
               />
@@ -2053,6 +1921,7 @@ function LineupEditor({
               lineupIds={draft.teamOneLineup}
               roster={rosterFor(match.teamOnePlayers)}
               disabled={readOnly}
+              actions={loadActionsFor(1)}
               onChange={(index, id) => onChangeLineup(1, index, id)}
               onMove={(from, to) => onMoveLineup(1, from, to)}
             />
@@ -2063,6 +1932,7 @@ function LineupEditor({
               lineupIds={draft.teamTwoLineup}
               roster={rosterFor(match.teamTwoPlayers)}
               disabled={readOnly}
+              actions={loadActionsFor(2)}
               onChange={(index, id) => onChangeLineup(2, index, id)}
               onMove={(from, to) => onMoveLineup(2, from, to)}
             />

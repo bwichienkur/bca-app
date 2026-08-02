@@ -40,10 +40,12 @@ import { ScheduleMatchDetail } from "./ScheduleMatchDetail";
 import { SearchField } from "./SearchField";
 import { SettingsScreen } from "./SettingsScreen";
 import { TeamDetail } from "./TeamDetail";
+import { TeamLineupTemplates } from "./TeamLineupTemplates";
 import { TeamStandingSummary } from "./TeamStandingSummary";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
 type AppScreen = "main" | "login" | "settings";
+type MyTeamSubTab = "standing" | "roster" | "lineups";
 
 function ResyncIcon({ className }: { className?: string }) {
   return (
@@ -162,6 +164,7 @@ export function LeagueApp() {
     date: string;
   } | null>(null);
   const [contextOpen, setContextOpen] = useState(true);
+  const [myTeamSubTab, setMyTeamSubTab] = useState<MyTeamSubTab>("standing");
   const [refreshToken, setRefreshToken] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const didAutoCollapseContext = useRef(false);
@@ -1224,23 +1227,80 @@ export function LeagueApp() {
           ) : tab === "my-team" ? (
             prefs.teamName ? (
               <section className="space-y-4">
-                {myStandingCells ? (
-                  <TeamStandingSummary
-                    cells={myStandingCells}
+                <div
+                  role="tablist"
+                  aria-label="My team sections"
+                  className="grid grid-cols-3 gap-1 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-1"
+                >
+                  {(
+                    [
+                      { id: "standing" as const, label: "Standing" },
+                      { id: "roster" as const, label: "Roster" },
+                      { id: "lineups" as const, label: "Lineups" },
+                    ]
+                  ).map((item) => {
+                    const selected = myTeamSubTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={selected}
+                        onClick={() => setMyTeamSubTab(item.id)}
+                        className={[
+                          "rounded-xl px-2 py-2 text-center text-sm font-semibold transition",
+                          selected
+                            ? "bg-[var(--felt)] text-white shadow-sm"
+                            : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
+                        ].join(" ")}
+                      >
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {myTeamSubTab === "standing" ? (
+                  myStandingCells ? (
+                    <TeamStandingSummary
+                      cells={myStandingCells}
+                      teamName={prefs.teamName}
+                    />
+                  ) : (
+                    <EmptyState
+                      title="Standing unavailable"
+                      body="Team standings will show here once the division report loads."
+                    />
+                  )
+                ) : null}
+
+                {myTeamSubTab === "roster" ? (
+                  <TeamDetail
                     teamName={prefs.teamName}
+                    team={myTeam}
+                    playersByTeam={playersByTeam}
+                    isMyTeam
                   />
                 ) : null}
-                <TeamDetail
-                  teamName={prefs.teamName}
-                  team={myTeam}
-                  playersByTeam={playersByTeam}
-                  isMyTeam
-                />
+
+                {myTeamSubTab === "lineups" ? (
+                  myTeam && selectedDivision ? (
+                    <TeamLineupTemplates
+                      divisionId={selectedDivision.id}
+                      team={myTeam}
+                    />
+                  ) : (
+                    <EmptyState
+                      title="Team roster needed"
+                      body="Lineup templates need your team’s roster from this division."
+                    />
+                  )
+                ) : null}
               </section>
             ) : (
               <EmptyState
                 title="Set your team"
-                body="Pick My team on the context card to see roster and player stats here."
+                body="Pick My team on the context card to see roster, standing, and lineup templates."
                 action={
                   <button
                     type="button"
