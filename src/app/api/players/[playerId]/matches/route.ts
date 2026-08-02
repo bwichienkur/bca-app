@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   fetchFargoPlayerMatches,
   prefetchOpponentRatings,
+  type FargoMatchType,
 } from "@/lib/fargo-player";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +10,13 @@ export const dynamic = "force-dynamic";
 type RouteContext = {
   params: Promise<{ playerId: string }>;
 };
+
+const MATCH_TYPES = new Set<FargoMatchType>([
+  "league",
+  "tournament",
+  "thirdparty",
+  "other",
+]);
 
 export async function GET(request: NextRequest, context: RouteContext) {
   const { playerId: rawId } = await context.params;
@@ -38,6 +46,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const bucketRaw = params.get("bucket");
   const bucket =
     bucketRaw != null && bucketRaw !== "" ? Number(bucketRaw) : null;
+  const matchTypeRaw = params.get("matchType")?.trim() ?? "";
+  const matchType =
+    matchTypeRaw && MATCH_TYPES.has(matchTypeRaw as FargoMatchType)
+      ? (matchTypeRaw as FargoMatchType)
+      : null;
 
   try {
     const result = await fetchFargoPlayerMatches(playerId, {
@@ -45,6 +58,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       limit: Number.isFinite(limit) ? limit : 20,
       q,
       bucket: bucket != null && Number.isFinite(bucket) ? bucket : null,
+      matchType,
     });
     return NextResponse.json(result);
   } catch (error) {
