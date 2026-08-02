@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
   useTransition,
+  type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -2025,16 +2026,61 @@ function RaceScoreSelect({
   onChange: (value: number) => void;
 }) {
   const listId = useId();
-  const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   const [highlight, setHighlight] = useState(() =>
     Math.max(0, options.indexOf(value)),
   );
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open || !buttonRef.current) return;
+
+    const updatePosition = () => {
+      const rect = buttonRef.current!.getBoundingClientRect();
+      const menuWidth = 120;
+      const menuHeight = Math.min(224, window.innerHeight * 0.4);
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUpward = spaceBelow < menuHeight + 12 && rect.top > spaceBelow;
+      const left = Math.max(
+        8,
+        Math.min(rect.left + rect.width / 2 - menuWidth / 2, window.innerWidth - menuWidth - 8),
+      );
+      setMenuStyle({
+        position: "fixed",
+        left,
+        width: menuWidth,
+        top: openUpward ? undefined : rect.bottom + 6,
+        bottom: openUpward
+          ? Math.max(8, window.innerHeight - rect.top + 6)
+          : undefined,
+        maxHeight: menuHeight,
+        zIndex: 200,
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open, options.length]);
+
+  useEffect(() => {
     if (!open) return;
     function onDoc(event: MouseEvent | TouchEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (buttonRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setOpen(false);
     }
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("touchstart", onDoc);
@@ -2054,13 +2100,55 @@ function RaceScoreSelect({
     setOpen(false);
   };
 
+  const menu =
+    open && mounted
+      ? createPortal(
+          <ul
+            ref={menuRef}
+            id={listId}
+            role="listbox"
+            aria-label={label}
+            style={menuStyle}
+            className="overflow-y-auto rounded-xl border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow)]"
+          >
+            {options.map((option, index) => {
+              const selected = option === value;
+              const active = index === highlight;
+              return (
+                <li key={option}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    onMouseEnter={() => setHighlight(index)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => choose(option)}
+                    className={[
+                      "flex w-full items-center justify-center gap-2 px-3 py-2 font-[family-name:var(--font-display)] text-2xl tabular-nums",
+                      active ? "bg-[var(--surface-3)]" : "",
+                      selected
+                        ? "font-semibold text-[var(--felt-deep)]"
+                        : "font-normal text-[var(--ink)]",
+                    ].join(" ")}
+                  >
+                    <span>{option}</span>
+                    {selected ? (
+                      <span className="text-sm text-[var(--felt)]">✓</span>
+                    ) : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>,
+          document.body,
+        )
+      : null;
+
   return (
-    <div
-      ref={rootRef}
-      className={["relative block", open ? "z-30" : "z-10"].join(" ")}
-    >
+    <div className="relative block">
       <span className="sr-only">{label}</span>
       <button
+        ref={buttonRef}
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -2101,44 +2189,7 @@ function RaceScoreSelect({
           {open ? "▴" : "▾"}
         </span>
       </button>
-
-      {open ? (
-        <ul
-          id={listId}
-          role="listbox"
-          aria-label={label}
-          className="absolute left-1/2 z-40 mt-1 max-h-56 w-[min(100%,7.5rem)] -translate-x-1/2 overflow-y-auto rounded-xl border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow)]"
-        >
-          {options.map((option, index) => {
-            const selected = option === value;
-            const active = index === highlight;
-            return (
-              <li key={option}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={selected}
-                  onMouseEnter={() => setHighlight(index)}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => choose(option)}
-                  className={[
-                    "flex w-full items-center justify-center gap-2 px-3 py-2 font-[family-name:var(--font-display)] text-2xl tabular-nums",
-                    active ? "bg-[var(--surface-3)]" : "",
-                    selected
-                      ? "font-semibold text-[var(--felt-deep)]"
-                      : "font-normal text-[var(--ink)]",
-                  ].join(" ")}
-                >
-                  <span>{option}</span>
-                  {selected ? (
-                    <span className="text-sm text-[var(--felt)]">✓</span>
-                  ) : null}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
+      {menu}
     </div>
   );
 }
@@ -2177,6 +2228,7 @@ function ScorePad({
   const [local, setLocal] = useState<GameScoreState | null>(game ?? null);
   const [baseline, setBaseline] = useState<GameScoreState | null>(game ?? null);
   const [mounted, setMounted] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
   const [spacerPx, setSpacerPx] = useState(104);
   const scoresRef = useRef<HTMLDivElement | null>(null);
   const maxWin = match.maxScore > 0 ? match.maxScore : 10;
@@ -2191,6 +2243,7 @@ function ScorePad({
     if (!open) return;
     setLocal(game ?? null);
     setBaseline(game ?? null);
+    setDiscardOpen(false);
     // Intentionally omit `game` so parent draft echoes don't clobber local taps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, roundNumber, gameIndex]);
@@ -2248,11 +2301,8 @@ function ScorePad({
   };
 
   const requestClose = () => {
-    if (
-      dirty &&
-      typeof window !== "undefined" &&
-      !window.confirm("Discard unsaved score changes for this game?")
-    ) {
+    if (dirty) {
+      setDiscardOpen(true);
       return;
     }
     onClose();
@@ -2601,7 +2651,7 @@ function ScorePad({
             </div>
           ) : null}
 
-          <div className="flex items-center justify-center gap-4 text-sm">
+          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() =>
@@ -2610,13 +2660,10 @@ function ScorePad({
                   breakingTeam: local.breakingTeam === 1 ? 2 : 1,
                 })
               }
-              className="font-semibold text-[var(--muted)] transition hover:text-[var(--ink)]"
+              className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)] hover:bg-[var(--surface-2)]"
             >
               Swap break
             </button>
-            <span aria-hidden className="text-[var(--line-strong)]">
-              ·
-            </span>
             <button
               type="button"
               onClick={() =>
@@ -2628,7 +2675,7 @@ function ScorePad({
                   isWinZip: false,
                 })
               }
-              className="font-semibold text-[var(--muted)] transition hover:text-[var(--ink)]"
+              className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm font-semibold text-[var(--muted)] transition hover:border-[var(--line-strong)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
             >
               Reset 0–0
             </button>
@@ -2651,6 +2698,20 @@ function ScorePad({
           </button>
         </div>
       </div>
+
+      {discardOpen ? (
+        <ConfirmDialog
+          title="Discard unsaved changes?"
+          body="Score edits for this game haven’t been saved. Leave without saving?"
+          confirmLabel="Discard"
+          confirmTone="danger"
+          onCancel={() => setDiscardOpen(false)}
+          onConfirm={() => {
+            setDiscardOpen(false);
+            onClose();
+          }}
+        />
+      ) : null}
     </div>
   );
 
