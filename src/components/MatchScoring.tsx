@@ -2562,7 +2562,7 @@ function ScorePad({
                         type="button"
                         aria-label={`Decrease ${meta.name} score`}
                         onClick={() => bump(side, -1)}
-                        className="rounded-lg border border-[var(--line)] bg-[var(--surface)] py-2.5 text-lg font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] active:scale-[0.98]"
+                        className="rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] py-2.5 text-lg font-semibold text-[var(--muted)] transition hover:border-[var(--ink)]/30 hover:bg-[var(--surface-3)] hover:text-[var(--ink)] active:scale-[0.98]"
                       >
                         −
                       </button>
@@ -2570,7 +2570,7 @@ function ScorePad({
                         type="button"
                         aria-label={`Increase ${meta.name} score`}
                         onClick={() => bump(side, 1)}
-                        className="rounded-lg border border-[var(--line)] bg-[var(--surface)] py-2.5 text-lg font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] active:scale-[0.98]"
+                        className="rounded-lg border border-[var(--felt)]/45 bg-[color-mix(in_srgb,var(--felt)_28%,var(--surface))] py-2.5 text-lg font-semibold text-[var(--felt-deep)] transition hover:border-[var(--felt)]/70 hover:bg-[color-mix(in_srgb,var(--felt)_40%,var(--surface))] active:scale-[0.98]"
                       >
                         +
                       </button>
@@ -2581,8 +2581,8 @@ function ScorePad({
                       className={[
                         "w-full rounded-lg py-2 text-xs font-semibold transition active:scale-[0.98]",
                         meta.isWinner
-                          ? "bg-[var(--felt)] text-white"
-                          : "border border-[var(--line)] bg-transparent text-[var(--muted)] hover:border-[var(--felt)]/45 hover:text-[var(--ink)]",
+                          ? "bg-[var(--felt)] text-white shadow-sm"
+                          : "border border-[var(--felt)]/50 bg-[color-mix(in_srgb,var(--felt)_16%,transparent)] text-[var(--felt-deep)] hover:border-[var(--felt)] hover:bg-[color-mix(in_srgb,var(--felt)_28%,transparent)]",
                       ].join(" ")}
                     >
                       {meta.isWinner ? "Winner ✓" : "Mark winner"}
@@ -2639,7 +2639,9 @@ function ScorePad({
                       className={[
                         "rounded-lg px-1 py-2 text-center text-[11px] font-semibold transition sm:text-xs",
                         active
-                          ? "bg-[var(--felt)] text-white shadow-sm"
+                          ? item.code === ""
+                            ? "bg-[var(--surface-3)] text-[var(--ink)] shadow-sm"
+                            : "bg-[var(--amber)] text-[#1a1208] shadow-sm"
                           : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
                       ].join(" ")}
                     >
@@ -2660,7 +2662,7 @@ function ScorePad({
                   breakingTeam: local.breakingTeam === 1 ? 2 : 1,
                 })
               }
-              className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)] hover:bg-[var(--surface-2)]"
+              className="rounded-xl border border-[var(--amber)]/40 bg-[color-mix(in_srgb,var(--amber)_12%,var(--surface))] px-3 py-2.5 text-sm font-semibold text-[var(--amber)] transition hover:border-[var(--amber)]/65 hover:bg-[color-mix(in_srgb,var(--amber)_20%,var(--surface))]"
             >
               Swap break
             </button>
@@ -2675,7 +2677,7 @@ function ScorePad({
                   isWinZip: false,
                 })
               }
-              className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm font-semibold text-[var(--muted)] transition hover:border-[var(--line-strong)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
+              className="rounded-xl border border-[var(--danger)]/35 bg-[color-mix(in_srgb,var(--danger)_10%,var(--surface))] px-3 py-2.5 text-sm font-semibold text-[var(--danger)] transition hover:border-[var(--danger)]/55 hover:bg-[color-mix(in_srgb,var(--danger)_16%,var(--surface))]"
             >
               Reset 0–0
             </button>
