@@ -111,6 +111,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       registrationId?: string;
       status?: "pending" | "approved" | "rejected" | "withdrawn" | "waitlisted";
       paid?: boolean;
+      checkedIn?: boolean;
       noteToOrganizer?: string;
     };
     if (!body.registrationId) {
@@ -123,6 +124,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const result = await updateRegistration(id, body.registrationId, {
       status: body.status,
       paid: body.paid,
+      checkedIn: body.checkedIn,
       noteToOrganizer: body.noteToOrganizer,
     });
 

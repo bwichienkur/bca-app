@@ -47,7 +47,8 @@ import { SectionCard } from "./SectionCard";
 import { SelectField } from "./SelectField";
 
 type View = "browse" | "create" | "edit" | "detail";
-type DetailSubTab = "overview" | "signups" | "manage";
+type DetailSubTab = "overview" | "signups" | "field" | "manage";
+type FieldBoardFilter = "all" | "not-checked-in" | "unpaid";
 
 type EventFormState = Omit<CreateTournamentInput, "status"> & {
   status: TournamentStatus;
@@ -308,6 +309,8 @@ export function Tournaments({
   const [messageName, setMessageName] = useState("");
   const [detailSubTab, setDetailSubTab] = useState<DetailSubTab>("overview");
   const [houseRulesOpen, setHouseRulesOpen] = useState(false);
+  const [fieldFilter, setFieldFilter] = useState<FieldBoardFilter>("all");
+  const [fieldQuery, setFieldQuery] = useState("");
   const [, startDetailTransition] = useTransition();
 
   useEffect(() => {
@@ -383,6 +386,8 @@ export function Tournaments({
     setTeamName("");
     setDetailSubTab("overview");
     setHouseRulesOpen(false);
+    setFieldFilter("all");
+    setFieldQuery("");
     try {
       const res = await fetch(`/api/tournaments/${id}`);
       const data = (await res.json()) as DetailPayload & { error?: string };
@@ -559,7 +564,11 @@ export function Tournaments({
 
   const onUpdateRegistration = async (
     registrationId: string,
-    patch: { status?: TournamentRegistration["status"]; paid?: boolean },
+    patch: {
+      status?: TournamentRegistration["status"];
+      paid?: boolean;
+      checkedIn?: boolean;
+    },
   ) => {
     if (!selectedId) return;
     setSaving(true);
@@ -657,6 +666,43 @@ export function Tournaments({
       if (byStatus !== 0) return byStatus;
       return a.createdAt.localeCompare(b.createdAt);
     });
+  }, [detail?.registrations]);
+
+  const fieldEntries = useMemo(() => {
+    const approved = (detail?.registrations ?? []).filter(
+      (r) => r.status === "approved",
+    );
+    const q = fieldQuery.trim().toLowerCase();
+    return approved
+      .filter((r) => {
+        if (fieldFilter === "not-checked-in" && r.checkedIn) return false;
+        if (fieldFilter === "unpaid" && r.paid) return false;
+        if (!q) return true;
+        const hay = [
+          r.displayName,
+          r.teamName ?? "",
+          ...(r.teammates ?? []).map((m) => m.displayName),
+        ]
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(q);
+      })
+      .sort((a, b) => {
+        const aKey = (a.teamName || a.displayName).toLowerCase();
+        const bKey = (b.teamName || b.displayName).toLowerCase();
+        return aKey.localeCompare(bKey);
+      });
+  }, [detail?.registrations, fieldFilter, fieldQuery]);
+
+  const fieldStats = useMemo(() => {
+    const approved = (detail?.registrations ?? []).filter(
+      (r) => r.status === "approved",
+    );
+    return {
+      approved: approved.length,
+      checkedIn: approved.filter((r) => r.checkedIn).length,
+      paid: approved.filter((r) => r.paid).length,
+    };
   }, [detail?.registrations]);
 
   if (view === "create" || view === "edit") {
@@ -1151,6 +1197,11 @@ export function Tournaments({
                 <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
                   {myRegistration.paid ? "Paid" : "Unpaid"}
                 </span>
+                {myRegistration.checkedIn ? (
+                  <span className="rounded-full bg-[var(--felt)] px-2.5 py-1 text-[11px] font-semibold text-white">
+                    Checked in
+                  </span>
+                ) : null}
                 <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
                   {myRegistration.ratingAtSignup != null
                     ? `Fargo ${myRegistration.ratingAtSignup}`
@@ -1435,7 +1486,7 @@ export function Tournaments({
               <div
                 role="tablist"
                 aria-label="Event organizer sections"
-                className="grid grid-cols-3 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+                className="grid grid-cols-4 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
               >
                 {(
                   [
@@ -1447,6 +1498,7 @@ export function Tournaments({
                           ? `Signups (${t.pendingCount})`
                           : "Signups",
                     },
+                    { id: "field" as const, label: "Field" },
                     { id: "manage" as const, label: "Manage" },
                   ] as const
                 ).map((item) => {
@@ -1461,7 +1513,7 @@ export function Tournaments({
                         startDetailTransition(() => setDetailSubTab(item.id))
                       }
                       className={[
-                        "rounded-lg px-2 py-1.5 text-center text-xs font-semibold transition sm:text-sm",
+                        "rounded-lg px-1.5 py-1.5 text-center text-[11px] font-semibold transition sm:px-2 sm:text-sm",
                         selected
                           ? "bg-[var(--felt)] text-white shadow-sm"
                           : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
@@ -1734,6 +1786,168 @@ export function Tournaments({
                                 </button>
                               ) : null}
                             </div>
+                          </div>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                </SurfaceCard>
+              </div>
+            ) : null}
+
+            {isOrganizer && activeTab === "field" ? (
+              <div className="space-y-4">
+                <SectionCard
+                  eyebrow="Organizer"
+                  title="Field board"
+                  description="Night-of check-in and door/Venmo paid tracking for approved entries."
+                  badge={{
+                    label: "In",
+                    value: `${fieldStats.checkedIn}/${fieldStats.approved || 0}`,
+                  }}
+                />
+
+                <div className="grid grid-cols-3 gap-2">
+                  <StatTile label="Approved" value={String(fieldStats.approved)} />
+                  <StatTile
+                    label="Checked in"
+                    value={String(fieldStats.checkedIn)}
+                    delayClass="animate-delay-1"
+                  />
+                  <StatTile
+                    label="Paid"
+                    value={String(fieldStats.paid)}
+                    delayClass="animate-delay-2"
+                  />
+                </div>
+
+                <SurfaceCard>
+                  <div className="space-y-3 border-b border-[var(--line)] px-3 py-3 sm:px-4">
+                    <SearchField
+                      embedded
+                      value={fieldQuery}
+                      onChange={setFieldQuery}
+                      placeholder="Find entry or player…"
+                      label="Search field board"
+                    />
+                    <div
+                      role="group"
+                      aria-label="Field board filters"
+                      className="grid grid-cols-3 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+                    >
+                      {(
+                        [
+                          { id: "all" as const, label: "All" },
+                          {
+                            id: "not-checked-in" as const,
+                            label: "Not in",
+                          },
+                          { id: "unpaid" as const, label: "Unpaid" },
+                        ] as const
+                      ).map((item) => {
+                        const selected = fieldFilter === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => setFieldFilter(item.id)}
+                            className={[
+                              "rounded-lg px-2 py-1.5 text-center text-xs font-semibold transition",
+                              selected
+                                ? "bg-[var(--felt)] text-white shadow-sm"
+                                : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
+                            ].join(" ")}
+                          >
+                            {item.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {actionMsg ? (
+                    <p className="mx-3 mt-3 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)] sm:mx-4">
+                      {actionMsg}
+                    </p>
+                  ) : null}
+
+                  <ul className="divide-y divide-[var(--line)]">
+                    {fieldEntries.length === 0 ? (
+                      <li className="px-4 py-6 text-center text-sm text-[var(--muted)]">
+                        {fieldStats.approved === 0
+                          ? "No approved entries yet — approve signups first."
+                          : "No entries match this filter."}
+                      </li>
+                    ) : (
+                      fieldEntries.map((reg) => (
+                        <li
+                          key={reg.id}
+                          className="space-y-3 px-3 py-3.5 sm:px-4"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)]">
+                              {reg.teamName || reg.displayName}
+                            </p>
+                            <p className="mt-0.5 text-xs text-[var(--muted)]">
+                              {reg.displayName}
+                              {reg.ratingAtSignup != null
+                                ? ` · ${reg.ratingAtSignup}`
+                                : ""}
+                              {reg.checkedInAt
+                                ? ` · In ${formatStartsAt(reg.checkedInAt)}`
+                                : ""}
+                            </p>
+                            {reg.teammates?.length ? (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {reg.teammates.map((mate) => (
+                                  <span
+                                    key={`${reg.id}-field-${mate.displayName}`}
+                                    className="rounded-full border border-[var(--line)] bg-[var(--surface-2)]/70 px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]"
+                                  >
+                                    {mate.displayName}
+                                    {mate.ratingAtSignup != null
+                                      ? ` · ${mate.ratingAtSignup}`
+                                      : ""}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() =>
+                                void onUpdateRegistration(reg.id, {
+                                  checkedIn: !reg.checkedIn,
+                                })
+                              }
+                              className={[
+                                "rounded-xl px-3 py-2.5 text-sm font-semibold transition disabled:opacity-50",
+                                reg.checkedIn
+                                  ? "bg-[var(--felt)] text-white"
+                                  : "border border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)]",
+                              ].join(" ")}
+                            >
+                              {reg.checkedIn ? "Checked in" : "Check in"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() =>
+                                void onUpdateRegistration(reg.id, {
+                                  paid: !reg.paid,
+                                })
+                              }
+                              className={[
+                                "rounded-xl px-3 py-2.5 text-sm font-semibold transition disabled:opacity-50",
+                                reg.paid
+                                  ? "bg-[var(--amber)] text-[#1a140c]"
+                                  : "border border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)]",
+                              ].join(" ")}
+                            >
+                              {reg.paid ? "Paid" : "Mark paid"}
+                            </button>
                           </div>
                         </li>
                       ))

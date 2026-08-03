@@ -221,6 +221,12 @@ function normalizeRegistration(
           }))
           .filter((t) => t.displayName)
       : [],
+    paid: Boolean(raw.paid),
+    checkedIn: Boolean(raw.checkedIn),
+    checkedInAt:
+      typeof raw.checkedInAt === "string" && raw.checkedInAt
+        ? raw.checkedInAt
+        : null,
   };
 }
 
@@ -463,6 +469,8 @@ export async function createRegistration(input: {
     teammates,
     status,
     paid: false,
+    checkedIn: false,
+    checkedInAt: null,
     noteToOrganizer: (input.noteToOrganizer ?? "").trim(),
     createdAt: now,
     updatedAt: now,
@@ -482,7 +490,10 @@ export async function updateRegistration(
   tournamentId: string,
   registrationId: string,
   patch: Partial<
-    Pick<TournamentRegistration, "status" | "paid" | "noteToOrganizer">
+    Pick<
+      TournamentRegistration,
+      "status" | "paid" | "checkedIn" | "noteToOrganizer"
+    >
   >,
 ): Promise<{
   registration: TournamentRegistration;
@@ -503,9 +514,18 @@ export async function updateRegistration(
     }
   }
 
+  const existing = regs[idx]!;
+  let checkedInAt = existing.checkedInAt;
+  if (patch.checkedIn === true) {
+    checkedInAt = existing.checkedInAt ?? new Date().toISOString();
+  } else if (patch.checkedIn === false) {
+    checkedInAt = null;
+  }
+
   const nextReg: TournamentRegistration = {
-    ...regs[idx]!,
+    ...existing,
     ...patch,
+    checkedInAt,
     updatedAt: new Date().toISOString(),
   };
   const next = [...regs];
