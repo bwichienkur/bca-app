@@ -103,6 +103,28 @@ export function formatEntryFee(cents: number): string {
   return `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
 }
 
+export function entryNoun(eventType: EventType, count = 0): string {
+  if (eventType === "scotch-doubles") {
+    return count === 1 ? "pair" : "pairs";
+  }
+  if (eventType === "teams") {
+    return count === 1 ? "team" : "teams";
+  }
+  return count === 1 ? "player" : "players";
+}
+
+export function defaultTeamSize(eventType: EventType): number {
+  if (eventType === "scotch-doubles") return 2;
+  if (eventType === "teams") return 5;
+  return 1;
+}
+
+export function maxEntriesLabel(eventType: EventType): string {
+  if (eventType === "scotch-doubles") return "Max pairs";
+  if (eventType === "teams") return "Max teams";
+  return "Max players";
+}
+
 export function formatStartsAt(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;

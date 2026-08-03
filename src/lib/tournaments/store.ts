@@ -1,7 +1,9 @@
 import { getRedis, isRedisConfigured } from "@/lib/redis";
+import { defaultTeamSize } from "@/lib/tournaments/options";
 import type {
   CreateTournamentInput,
   RegistrationStatus,
+  RegistrationTeammate,
   Tournament,
   TournamentListItem,
   TournamentMessage,
@@ -88,12 +90,14 @@ async function getAllTournaments(): Promise<Tournament[]> {
       const rows = await Promise.all(
         ids.map((id) => redis.get<Tournament>(tournamentKey(id))),
       );
-      return rows.filter((row): row is Tournament => Boolean(row?.id));
+      return rows
+        .filter((row): row is Tournament => Boolean(row?.id))
+        .map(normalizeTournament);
     } catch {
-      return [...memory().tournaments.values()];
+      return [...memory().tournaments.values()].map(normalizeTournament);
     }
   }
-  return [...memory().tournaments.values()];
+  return [...memory().tournaments.values()].map(normalizeTournament);
 }
 
 export async function getTournament(id: string): Promise<Tournament | null> {
@@ -101,12 +105,14 @@ export async function getTournament(id: string): Promise<Tournament | null> {
   if (redis) {
     try {
       const row = await redis.get<Tournament>(tournamentKey(id));
-      return row?.id ? row : null;
+      return row?.id ? normalizeTournament(row) : null;
     } catch {
-      return memory().tournaments.get(id) ?? null;
+      const mem = memory().tournaments.get(id);
+      return mem ? normalizeTournament(mem) : null;
     }
   }
-  return memory().tournaments.get(id) ?? null;
+  const mem = memory().tournaments.get(id);
+  return mem ? normalizeTournament(mem) : null;
 }
 
 export async function saveTournament(tournament: Tournament): Promise<Tournament> {
@@ -152,6 +158,10 @@ export async function createTournament(
     maxFargo: input.maxFargo ?? null,
     unratedPolicy: input.unratedPolicy ?? "message-organizer",
     maxPlayers: Math.max(2, Math.floor(input.maxPlayers)),
+    teamSize: Math.max(
+      1,
+      Math.floor(input.teamSize ?? defaultTeamSize(input.eventType)),
+    ),
     entryFeeCents: Math.max(0, Math.floor(input.entryFeeCents ?? 0)),
     payMethod: input.payMethod ?? "door",
     payoutNotes: (input.payoutNotes ?? "").trim(),
@@ -192,6 +202,38 @@ export async function updateTournament(
   return saveTournament(next);
 }
 
+function normalizeRegistration(
+  raw: TournamentRegistration,
+): TournamentRegistration {
+  return {
+    ...raw,
+    teamName: raw.teamName ?? null,
+    teammates: Array.isArray(raw.teammates)
+      ? raw.teammates
+          .filter((t) => t && typeof t.displayName === "string")
+          .map((t) => ({
+            displayName: t.displayName.trim(),
+            ratingAtSignup:
+              typeof t.ratingAtSignup === "number" &&
+              Number.isFinite(t.ratingAtSignup)
+                ? t.ratingAtSignup
+                : null,
+          }))
+          .filter((t) => t.displayName)
+      : [],
+  };
+}
+
+function normalizeTournament(raw: Tournament): Tournament {
+  return {
+    ...raw,
+    teamSize:
+      typeof raw.teamSize === "number" && raw.teamSize >= 1
+        ? raw.teamSize
+        : defaultTeamSize(raw.eventType),
+  };
+}
+
 async function getRegistrationsRaw(
   tournamentId: string,
 ): Promise<TournamentRegistration[]> {
@@ -199,12 +241,16 @@ async function getRegistrationsRaw(
   if (redis) {
     try {
       const row = await redis.get<TournamentRegistration[]>(regsKey(tournamentId));
-      return Array.isArray(row) ? row : [];
+      return Array.isArray(row) ? row.map(normalizeRegistration) : [];
     } catch {
-      return memory().registrations.get(tournamentId) ?? [];
+      return (memory().registrations.get(tournamentId) ?? []).map(
+        normalizeRegistration,
+      );
     }
   }
-  return memory().registrations.get(tournamentId) ?? [];
+  return (memory().registrations.get(tournamentId) ?? []).map(
+    normalizeRegistration,
+  );
 }
 
 async function saveRegistrations(
@@ -287,6 +333,39 @@ export async function listRegistrations(
   return getRegistrationsRaw(tournamentId);
 }
 
+function assertFargoInBand(
+  rating: number | null,
+  tournament: Tournament,
+  who: string,
+): void {
+  if (rating == null || Number.isNaN(rating)) return;
+  if (tournament.minFargo != null && rating < tournament.minFargo) {
+    throw new Error(
+      `${who} needs a Fargo of at least ${tournament.minFargo}.`,
+    );
+  }
+  if (tournament.maxFargo != null && rating > tournament.maxFargo) {
+    throw new Error(
+      `${who} needs a Fargo of at most ${tournament.maxFargo}.`,
+    );
+  }
+}
+
+function normalizeTeammates(
+  raw: RegistrationTeammate[] | undefined,
+): RegistrationTeammate[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((t) => ({
+      displayName: (t.displayName ?? "").trim(),
+      ratingAtSignup:
+        typeof t.ratingAtSignup === "number" && Number.isFinite(t.ratingAtSignup)
+          ? t.ratingAtSignup
+          : null,
+    }))
+    .filter((t) => t.displayName);
+}
+
 export async function createRegistration(input: {
   tournamentId: string;
   userId: string | null;
@@ -296,6 +375,8 @@ export async function createRegistration(input: {
   phone: string | null;
   ratingAtSignup: number | null;
   isGuest: boolean;
+  teamName?: string | null;
+  teammates?: RegistrationTeammate[];
   noteToOrganizer?: string;
 }): Promise<{
   registration: TournamentRegistration;
@@ -326,28 +407,38 @@ export async function createRegistration(input: {
     throw new Error("This event is full.");
   }
 
-  const unrated =
-    input.ratingAtSignup == null || Number.isNaN(input.ratingAtSignup);
-  if (unrated && tournament.unratedPolicy === "message-organizer" && !input.isGuest) {
-    // Guests / unrated players should message; still allow pending signup with note.
+  const teammates = normalizeTeammates(input.teammates);
+  const teamName = (input.teamName ?? "").trim() || null;
+  const neededTeammates = Math.max(0, tournament.teamSize - 1);
+
+  if (tournament.eventType === "scotch-doubles") {
+    if (teammates.length < 1) {
+      throw new Error("Scotch doubles requires a partner name.");
+    }
   }
-  if (
-    !unrated &&
-    tournament.minFargo != null &&
-    (input.ratingAtSignup as number) < tournament.minFargo
-  ) {
-    throw new Error(
-      `This event requires a Fargo of at least ${tournament.minFargo}.`,
-    );
+  if (tournament.eventType === "teams") {
+    if (!teamName) {
+      throw new Error("Team name is required.");
+    }
+    if (teammates.length < neededTeammates) {
+      throw new Error(
+        `This event needs ${tournament.teamSize} players per team (including you). Add ${neededTeammates} teammate${neededTeammates === 1 ? "" : "s"}.`,
+      );
+    }
   }
-  if (
-    !unrated &&
-    tournament.maxFargo != null &&
-    (input.ratingAtSignup as number) > tournament.maxFargo
-  ) {
-    throw new Error(
-      `This event requires a Fargo of at most ${tournament.maxFargo}.`,
-    );
+  if (teammates.length > neededTeammates && tournament.eventType !== "singles") {
+    // Allow a few extras for flexible team nights, but cap hard.
+    if (teammates.length > Math.max(neededTeammates, 12)) {
+      throw new Error("Too many teammates listed.");
+    }
+  }
+  if (tournament.eventType === "singles" && teammates.length > 0) {
+    throw new Error("Singles events do not accept teammates.");
+  }
+
+  assertFargoInBand(input.ratingAtSignup, tournament, "You");
+  for (const mate of teammates) {
+    assertFargoInBand(mate.ratingAtSignup, tournament, mate.displayName);
   }
 
   const now = new Date().toISOString();
@@ -364,6 +455,12 @@ export async function createRegistration(input: {
     phone: input.phone,
     ratingAtSignup: input.ratingAtSignup,
     isGuest: input.isGuest,
+    teamName:
+      tournament.eventType === "scotch-doubles"
+        ? teamName ||
+          `${input.displayName.trim()} / ${teammates[0]?.displayName ?? "Partner"}`
+        : teamName,
+    teammates,
     status,
     paid: false,
     noteToOrganizer: (input.noteToOrganizer ?? "").trim(),

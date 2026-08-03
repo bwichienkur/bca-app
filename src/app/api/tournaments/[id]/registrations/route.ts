@@ -1,15 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireScoringSession } from "@/lib/scoring-auth";
+import { resolveSessionFargo } from "@/lib/tournaments/resolve-fargo";
 import {
   createRegistration,
   getTournamentDetail,
   tournamentStoreMode,
   updateRegistration,
 } from "@/lib/tournaments/store";
+import type { RegistrationTeammate } from "@/lib/tournaments/types";
 
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+function parseTeammates(raw: unknown): RegistrationTeammate[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => {
+    const row = item as Partial<RegistrationTeammate>;
+    const rating =
+      typeof row.ratingAtSignup === "number" && Number.isFinite(row.ratingAtSignup)
+        ? row.ratingAtSignup
+        : null;
+    return {
+      displayName: typeof row.displayName === "string" ? row.displayName : "",
+      ratingAtSignup: rating,
+    };
+  });
+}
 
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
@@ -18,9 +35,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const body = (await request.json()) as {
       displayName?: string;
       phone?: string | null;
+      noteToOrganizer?: string;
+      teamName?: string | null;
+      teammates?: unknown;
+      /** Ignored for signed-in users — rating is resolved server-side. */
       ratingAtSignup?: number | null;
       isGuest?: boolean;
-      noteToOrganizer?: string;
       fargoPlayerId?: string | null;
     };
 
@@ -30,16 +50,20 @@ export async function POST(request: NextRequest, context: RouteContext) {
       session.email ||
       "Player";
 
+    // Never trust a client-supplied Fargo for the signed-in captain.
+    const ratingAtSignup = await resolveSessionFargo(session);
+
     const result = await createRegistration({
       tournamentId: id,
       userId: session.lmsId,
-      fargoPlayerId: body.fargoPlayerId ?? session.fargoRateId,
+      fargoPlayerId: session.fargoRateId,
       displayName,
       email: session.email,
       phone: body.phone ?? null,
-      ratingAtSignup:
-        body.ratingAtSignup === undefined ? null : body.ratingAtSignup,
-      isGuest: Boolean(body.isGuest),
+      ratingAtSignup,
+      isGuest: ratingAtSignup == null,
+      teamName: body.teamName ?? null,
+      teammates: parseTeammates(body.teammates),
       noteToOrganizer: body.noteToOrganizer,
     });
 
@@ -58,7 +82,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
             message.includes("already") ||
             message.includes("closed") ||
             message.includes("invite") ||
-            message.includes("requires")
+            message.includes("requires") ||
+            message.includes("needs") ||
+            message.includes("Team name") ||
+            message.includes("teammate") ||
+            message.includes("partner") ||
+            message.includes("Singles") ||
+            message.includes("Too many")
           ? 400
           : 502;
     return NextResponse.json({ error: message }, { status });
