@@ -48,6 +48,7 @@ import { TeamDetail } from "./TeamDetail";
 import { TeamLineupTemplates } from "./TeamLineupTemplates";
 import { SectionCard } from "./SectionCard";
 import { TeamStandingSummary } from "./TeamStandingSummary";
+import { Tournaments } from "./Tournaments";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
 type AppScreen = "main" | "login" | "settings";
@@ -501,7 +502,12 @@ export function LeagueApp() {
 
   useEffect(() => {
     if (!selectedDivision) return;
-    if (tab === "handicap" || tab === "search" || tab === "score") {
+    if (
+      tab === "handicap" ||
+      tab === "search" ||
+      tab === "score" ||
+      tab === "events"
+    ) {
       setLoadingReport(false);
       return;
     }
@@ -1245,11 +1251,25 @@ export function LeagueApp() {
         <div
           className={[
             "animate-panel min-w-0 [overflow-anchor:none]",
-            tab === "score" || tab === "players" ? "mt-0 space-y-0" : "space-y-6",
+            tab === "score" || tab === "players" || tab === "events"
+              ? "mt-0 space-y-0"
+              : "space-y-6",
           ].join(" ")}
         >
           {tab === "search" ? (
             <PlayerSearch />
+          ) : tab === "events" ? (
+            <Tournaments
+              user={user}
+              authLoading={authLoading}
+              playerFargo={
+                prefs.playerId
+                  ? (myTeam?.players.find((p) => p.id === prefs.playerId)
+                      ?.fargoRating ?? null)
+                  : null
+              }
+              onRequestLogin={() => setScreen("login")}
+            />
           ) : tab === "score" ? (
             <MatchScoring
               divisionId={selectedDivision?.id ?? null}
