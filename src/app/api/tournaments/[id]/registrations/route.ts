@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireScoringSession } from "@/lib/scoring-auth";
-import { resolveSessionFargo } from "@/lib/tournaments/resolve-fargo";
+import { resolveSessionPlayer } from "@/lib/tournaments/resolve-fargo";
 import {
   createRegistration,
   getTournamentDetail,
@@ -51,17 +51,19 @@ export async function POST(request: NextRequest, context: RouteContext) {
       "Player";
 
     // Never trust a client-supplied Fargo for the signed-in captain.
-    const ratingAtSignup = await resolveSessionFargo(session);
+    const snapshot = await resolveSessionPlayer(session);
 
     const result = await createRegistration({
       tournamentId: id,
       userId: session.lmsId,
-      fargoPlayerId: session.fargoRateId,
+      fargoPlayerId: snapshot.fargoPlayerId ?? session.fargoRateId,
       displayName,
       email: session.email,
       phone: body.phone ?? null,
-      ratingAtSignup,
-      isGuest: ratingAtSignup == null,
+      ratingAtSignup: snapshot.rating,
+      robustnessAtSignup: snapshot.robustness,
+      robustnessStatusAtSignup: snapshot.robustnessStatus,
+      isGuest: snapshot.rating == null,
       teamName: body.teamName ?? null,
       teammates: parseTeammates(body.teammates),
       noteToOrganizer: body.noteToOrganizer,

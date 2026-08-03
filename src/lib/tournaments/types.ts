@@ -75,6 +75,8 @@ export type RegistrationTeammate = {
   ratingAtSignup: number | null;
 };
 
+export type RobustnessStatus = "starter" | "preliminary" | "established";
+
 export type TournamentRegistration = {
   id: string;
   tournamentId: string;
@@ -84,6 +86,8 @@ export type TournamentRegistration = {
   email: string | null;
   phone: string | null;
   ratingAtSignup: number | null;
+  robustnessAtSignup: number | null;
+  robustnessStatusAtSignup: RobustnessStatus | null;
   isGuest: boolean;
   /** Required for team events; optional label for scotch doubles. */
   teamName: string | null;

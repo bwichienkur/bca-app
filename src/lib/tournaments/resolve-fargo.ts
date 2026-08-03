@@ -1,13 +1,30 @@
 import {
   fetchFargoPlayerProfile,
   lookupRatingsByReadableIds,
+  type FargoPlayerProfile,
 } from "@/lib/fargo-player";
 import type { ScoringSession } from "@/lib/scoring-auth";
 
-/** Resolve the signed-in player's effective Fargo; never trust client-supplied ratings. */
-export async function resolveSessionFargo(
+export type SessionPlayerSnapshot = {
+  rating: number | null;
+  robustness: number | null;
+  robustnessStatus: FargoPlayerProfile["robustnessStatus"];
+  fargoPlayerId: string | null;
+};
+
+function emptySnapshot(): SessionPlayerSnapshot {
+  return {
+    rating: null,
+    robustness: null,
+    robustnessStatus: "starter",
+    fargoPlayerId: null,
+  };
+}
+
+/** Resolve signed-in player Fargo + robustness; never trust client-supplied ratings. */
+export async function resolveSessionPlayer(
   session: ScoringSession,
-): Promise<number | null> {
+): Promise<SessionPlayerSnapshot> {
   const candidates = [session.fargoRateId, session.readableId]
     .map((id) => (id ?? "").trim())
     .filter(Boolean);
@@ -15,8 +32,14 @@ export async function resolveSessionFargo(
   for (const id of candidates) {
     try {
       const profile = await fetchFargoPlayerProfile(id);
-      if (profile.effectiveRating != null) return profile.effectiveRating;
-      if (profile.provisionalRating != null) return profile.provisionalRating;
+      const rating =
+        profile.effectiveRating ?? profile.provisionalRating ?? profile.rating;
+      return {
+        rating,
+        robustness: profile.robustness,
+        robustnessStatus: profile.robustnessStatus,
+        fargoPlayerId: profile.id || id,
+      };
     } catch {
       /* try next id */
     }
@@ -25,11 +48,30 @@ export async function resolveSessionFargo(
   if (session.readableId) {
     try {
       const map = await lookupRatingsByReadableIds([session.readableId]);
-      return map.get(String(session.readableId).trim()) ?? null;
+      const rating = map.get(String(session.readableId).trim()) ?? null;
+      return {
+        ...emptySnapshot(),
+        rating,
+        fargoPlayerId: session.fargoRateId,
+      };
     } catch {
-      return null;
+      return {
+        ...emptySnapshot(),
+        fargoPlayerId: session.fargoRateId,
+      };
     }
   }
 
-  return null;
+  return {
+    ...emptySnapshot(),
+    fargoPlayerId: session.fargoRateId,
+  };
+}
+
+/** @deprecated Prefer resolveSessionPlayer for rating + robustness. */
+export async function resolveSessionFargo(
+  session: ScoringSession,
+): Promise<number | null> {
+  const snap = await resolveSessionPlayer(session);
+  return snap.rating;
 }
