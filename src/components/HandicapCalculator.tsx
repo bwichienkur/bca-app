@@ -1,9 +1,7 @@
 "use client";
 
 import {
-  startTransition,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -62,7 +60,6 @@ type HandicapCalculatorProps = {
 
 type LineupSlot = RosterPlayer | null;
 type LineupSide = "home" | "away";
-type HandicapSubTab = "lineups" | "results";
 
 type DragState = {
   side: LineupSide;
@@ -205,51 +202,6 @@ export function HandicapCalculator({
   const [dropTarget, setDropTarget] = useState<DragState | null>(null);
   const [mobileSide, setMobileSide] = useState<LineupSide>("home");
   const [activeRound, setActiveRound] = useState(1);
-  const [subTab, setSubTab] = useState<HandicapSubTab>("lineups");
-  /** Sit just under the sticky report-tab nav (2×3 grid on mobile). */
-  const [matchupStickyTop, setMatchupStickyTop] = useState(104);
-  const [matchupStuck, setMatchupStuck] = useState(false);
-  const matchupSentinelRef = useRef<HTMLDivElement | null>(null);
-
-  useLayoutEffect(() => {
-    const tabs = document.querySelector<HTMLElement>("[data-report-tabs]");
-    const measure = () => {
-      const height = tabs
-        ? Math.ceil(tabs.getBoundingClientRect().height)
-        : 104;
-      setMatchupStickyTop(Math.max(height, 72));
-    };
-    measure();
-    const observer =
-      tabs && typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(measure)
-        : null;
-    if (tabs && observer) observer.observe(tabs);
-    window.addEventListener("resize", measure);
-    window.visualViewport?.addEventListener("resize", measure);
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener("resize", measure);
-      window.visualViewport?.removeEventListener("resize", measure);
-    };
-  }, []);
-
-  useEffect(() => {
-    const sentinel = matchupSentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setMatchupStuck(!entry?.isIntersecting);
-      },
-      {
-        root: null,
-        threshold: 0,
-        rootMargin: `-${matchupStickyTop + 1}px 0px 0px 0px`,
-      },
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [matchupStickyTop]);
 
   useEffect(() => {
     if (!awayTeamId) setMobileSide("home");
@@ -259,10 +211,6 @@ export function HandicapCalculator({
     setDragState(null);
     setDropTarget(null);
   }, [mobileSide]);
-
-  useEffect(() => {
-    setSubTab("lineups");
-  }, [homeTeamId, awayTeamId]);
 
   useEffect(() => {
     if (!prefs.teamId) {
@@ -366,12 +314,6 @@ export function HandicapCalculator({
         : results[0]!.round,
     );
   }, [results]);
-
-  useEffect(() => {
-    if (!results && subTab === "results") {
-      setSubTab("lineups");
-    }
-  }, [results, subTab]);
 
   function lineupForTeam(
     team: DivisionTeam | null,
@@ -578,107 +520,52 @@ export function HandicapCalculator({
     <div className="animate-panel space-y-4">
       {sectionHeader}
 
-      <div ref={matchupSentinelRef} className="h-px w-full" aria-hidden />
-      <section
-        className={[
-          "sticky z-10 -mx-1 space-y-2.5 rounded-[1.35rem] border bg-[var(--surface)]/95 px-3 py-3 shadow-[var(--shadow)] backdrop-blur sm:px-3.5",
-          matchupStuck
-            ? "border-[var(--line)] border-t-[var(--felt)] shadow-[0_12px_28px_rgba(0,0,0,0.35)]"
-            : "border-[var(--line)]",
-        ].join(" ")}
-        style={{ top: matchupStickyTop }}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-            Matchup
-          </p>
-          <p className="text-[11px] tabular-nums text-[var(--muted)]">
-            {formatMeta}
-          </p>
-        </div>
-        <div className="relative z-10 grid gap-2.5 sm:grid-cols-2">
-          <Typeahead
-            label="Home"
-            placeholder="Select home team"
-            value={homeOption}
-            options={teamOptions.filter((option) => option.id !== awayTeamId)}
-            onChange={(option) => chooseHome(option?.value ?? null)}
-          />
-          <Typeahead
-            label="Away"
-            placeholder="Select away team"
-            value={awayOption}
-            options={teamOptions.filter((option) => option.id !== homeTeamId)}
-            onChange={(option) => chooseAway(option?.value ?? null)}
-          />
-        </div>
-      </section>
-
-      {!homeTeam || !awayTeam ? (
-        <EmptyState
-          title="Pick home and away"
-          body="Choose any two teams in this division to build lineups and calculate round handicaps."
-        />
-      ) : (
-        <section className="overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)]/80 shadow-sm">
-          <div
-            role="tablist"
-            aria-label="Handicap sections"
-            className="grid grid-cols-2 gap-0.5 border-b border-[var(--line)] bg-[var(--surface-2)]/90 p-1"
-          >
-            {(
-              [
-                { id: "lineups" as const, label: "Lineups" },
-                { id: "results" as const, label: "Results" },
-              ]
-            ).map((item) => {
-              const selected = subTab === item.id;
-              const disabled = item.id === "results" && !lineupsReady;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  disabled={disabled}
-                  title={
-                    disabled
-                      ? `Fill all ${slots} slots on both sides first`
-                      : undefined
-                  }
-                  onClick={() =>
-                    startTransition(() => setSubTab(item.id))
-                  }
-                  className={[
-                    "rounded-lg px-2 py-2 text-center text-xs font-semibold transition sm:text-sm",
-                    selected
-                      ? "bg-[var(--felt)] text-white shadow-sm"
-                      : disabled
-                        ? "cursor-not-allowed text-[var(--muted)] opacity-45"
-                        : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
-                  ].join(" ")}
-                >
-                  {item.label}
-                  {item.id === "results" && lineupsReady && roundTotals ? (
-                    <span
-                      className={[
-                        "ml-1.5 tabular-nums",
-                        selected ? "text-white/80" : "text-[var(--muted)]",
-                      ].join(" ")}
-                    >
-                      H+{roundTotals.home} · A+{roundTotals.away}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
+      <section className="overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        <div className="space-y-2.5 border-b border-[var(--line)] px-3 py-3 sm:px-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+              Matchup
+            </p>
+            <p className="text-[11px] tabular-nums text-[var(--muted)]">
+              {formatMeta}
+            </p>
           </div>
+          <div className="relative z-20 grid gap-2.5 sm:grid-cols-2">
+            <Typeahead
+              label="Home"
+              placeholder="Select home team"
+              value={homeOption}
+              options={teamOptions.filter((option) => option.id !== awayTeamId)}
+              onChange={(option) => chooseHome(option?.value ?? null)}
+            />
+            <Typeahead
+              label="Away"
+              placeholder="Select away team"
+              value={awayOption}
+              options={teamOptions.filter((option) => option.id !== homeTeamId)}
+              onChange={(option) => chooseAway(option?.value ?? null)}
+            />
+          </div>
+        </div>
 
-          {subTab === "lineups" ? (
-            <div className="relative z-0 space-y-3 px-3 py-3.5 sm:px-4">
-              <p className="text-sm text-[var(--muted)]">
-                Pick {slots} players per side · drag ⠿ to reorder
-              </p>
+        {!homeTeam || !awayTeam ? (
+          <div className="px-3 py-4 sm:px-4">
+            <EmptyState
+              title="Pick home and away"
+              body="Choose any two teams in this division to build lineups and calculate round handicaps."
+            />
+          </div>
+        ) : (
+          <>
+            <div className="relative z-0 space-y-3 border-b border-[var(--line)] px-3 py-3.5 sm:px-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                  Lineups
+                </p>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  Pick {slots} players per side · drag ⠿ to reorder
+                </p>
+              </div>
 
               <div className="grid gap-4 xl:grid-cols-2">
                 <div
@@ -814,48 +701,26 @@ export function HandicapCalculator({
                   />
                 </div>
               </div>
-
-              {lineupsReady ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    startTransition(() => setSubTab("results"))
-                  }
-                  className="w-full rounded-xl bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white shadow-sm transition active:scale-[0.99] sm:w-auto"
-                >
-                  View round handicaps
-                </button>
-              ) : (
-                <p className="text-sm text-[var(--muted)]">
-                  Fill all {slots} slots on both sides to unlock Results.
-                </p>
-              )}
             </div>
-          ) : (
-            <div className="space-y-3 px-3 py-3.5 sm:px-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm text-[var(--muted)]">
-                  {roundTotals
-                    ? `Games awarded across rounds`
-                    : "Round handicaps from your lineups"}
+
+            <div className="space-y-3 bg-[var(--surface-2)]/35 px-3 py-3.5 sm:px-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                  Round handicaps
                 </p>
-                <button
-                  type="button"
-                  onClick={() =>
-                    startTransition(() => setSubTab("lineups"))
-                  }
-                  className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)] hover:bg-[var(--surface-3)]"
-                >
-                  Edit lineups
-                </button>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  {lineupsReady && roundTotals
+                    ? `Games awarded · Home +${roundTotals.home} · Away +${roundTotals.away}`
+                    : `Finish both ${slots}-player lineups to see round results`}
+                </p>
               </div>
 
-              {activeResult && results ? (
+              {lineupsReady && activeResult && results ? (
                 <div className="space-y-3">
                   <div
                     role="tablist"
                     aria-label="Rounds"
-                    className="grid gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+                    className="grid gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0.5"
                     style={{
                       gridTemplateColumns: `repeat(${results.length}, minmax(0, 1fr))`,
                     }}
@@ -880,7 +745,7 @@ export function HandicapCalculator({
                             "min-w-0 rounded-lg px-1 py-1.5 text-center transition",
                             selected
                               ? "bg-[var(--felt)] text-white shadow-sm"
-                              : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
+                              : "text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
                           ].join(" ")}
                         >
                           <p className="text-[11px] font-semibold leading-none sm:text-xs">
@@ -910,15 +775,14 @@ export function HandicapCalculator({
                   />
                 </div>
               ) : (
-                <EmptyState
-                  title="Finish both lineups"
-                  body={`Fill all ${slots} slots on each side, then open Results.`}
-                />
+                <p className="rounded-xl border border-dashed border-[var(--line)] bg-[var(--surface)]/60 px-3 py-3 text-sm text-[var(--muted)]">
+                  Round results appear here once both lineups are complete.
+                </p>
               )}
             </div>
-          )}
-        </section>
-      )}
+          </>
+        )}
+      </section>
     </div>
   );
 }
