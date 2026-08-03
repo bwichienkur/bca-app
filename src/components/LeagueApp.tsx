@@ -33,7 +33,6 @@ import type {
   UserPreferences,
 } from "@/lib/types";
 import { DataTable } from "./DataTable";
-import { DivisionPlayersList } from "./DivisionPlayersList";
 import { EmptyState } from "./EmptyState";
 import { HandicapCalculator } from "./HandicapCalculator";
 import { LoadingState } from "./LoadingState";
@@ -1494,21 +1493,19 @@ export function LeagueApp() {
                   . Filter below to find someone quickly.
                 </p>
               </div>
-              <DivisionPlayersList
+              <SearchField
+                value={filterQuery}
+                anchorRef={filterAnchor.ref}
+                onBeforeChange={filterAnchor.mark}
+                onChange={setFilterQuery}
+                placeholder="Filter players…"
+              />
+              <DataTable
                 headers={playersWithRatings.headers}
                 rows={filteredPlayerRows}
+                stickyFirst
+                compact
                 emptyText="No players match your filter."
-                toolbar={
-                  <div className="[&_label]:max-w-none">
-                    <SearchField
-                      value={filterQuery}
-                      anchorRef={filterAnchor.ref}
-                      onBeforeChange={filterAnchor.mark}
-                      onChange={setFilterQuery}
-                      placeholder="Filter players…"
-                    />
-                  </div>
-                }
               />
             </section>
           ) : tab === "schedule" && schedule ? (
