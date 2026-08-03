@@ -91,6 +91,8 @@ export type TournamentRegistration = {
   teammates: RegistrationTeammate[];
   status: RegistrationStatus;
   paid: boolean;
+  checkedIn: boolean;
+  checkedInAt: string | null;
   noteToOrganizer: string;
   createdAt: string;
   updatedAt: string;
