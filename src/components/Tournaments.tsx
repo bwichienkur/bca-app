@@ -102,6 +102,35 @@ function fargoBandText(t: TournamentListItem): string {
   return `${t.minFargo ?? "—"} – ${t.maxFargo ?? "—"}`;
 }
 
+/** Max Fargo cap for headers — "Open" when uncapped. */
+function fargoCapText(t: Pick<TournamentListItem, "maxFargo">): string {
+  return t.maxFargo != null ? String(t.maxFargo) : "Open";
+}
+
+function gameTypeLabel(gameType: GameType): string {
+  return GAME_TYPE_OPTIONS.find((o) => o.value === gameType)?.label ?? gameType;
+}
+
+function isHandicapped(handicapSystem: string): boolean {
+  return handicapSystem !== "none";
+}
+
+function handicapShort(handicapSystem: string): string {
+  return isHandicapped(handicapSystem) ? "Handicapped" : "Scratch";
+}
+
+/** Key facts for the blue event header / list cards. */
+function eventKeyFacts(t: Pick<
+  TournamentListItem,
+  "gameType" | "handicapSystem" | "maxFargo" | "startsAt"
+>): string {
+  return [
+    gameTypeLabel(t.gameType),
+    handicapShort(t.handicapSystem),
+    t.maxFargo != null ? `Cap ${t.maxFargo}` : "Open Fargo",
+  ].join(" · ");
+}
+
 function entryShapeText(t: TournamentListItem): string {
   if (t.eventType === "scotch-doubles") return "2-player pairs";
   if (t.eventType === "teams") return `${t.teamSize}-player teams`;
@@ -1160,11 +1189,7 @@ export function Tournaments({
     const t = detail?.tournament;
     const isOrganizer = Boolean(detail?.isOrganizer);
     const activeTab: DetailSubTab = isOrganizer ? detailSubTab : "overview";
-    const gameLabel =
-      t
-        ? (GAME_TYPE_OPTIONS.find((o) => o.value === t.gameType)?.label ??
-          t.gameType)
-        : "";
+    const gameLabel = t ? gameTypeLabel(t.gameType) : "";
     const formatLabel =
       t
         ? (BRACKET_FORMAT_OPTIONS.find((o) => o.value === t.bracketFormat)
@@ -1475,10 +1500,25 @@ export function Tournaments({
             <SectionCard
               eyebrow="Events"
               title={t.title}
-              description={`${formatStartsAt(t.startsAt)} · ${t.venueName}, ${t.city}`}
+              description={
+                <div className="space-y-1.5">
+                  <p className="text-sm font-medium text-white/90">
+                    {formatStartsAt(t.startsAt)}
+                  </p>
+                  <p>
+                    {gameTypeLabel(t.gameType)}
+                    {" · "}
+                    {handicapShort(t.handicapSystem)}
+                    {" · "}
+                    {t.maxFargo != null
+                      ? `Fargo cap ${t.maxFargo}`
+                      : "Open Fargo"}
+                  </p>
+                </div>
+              }
               badge={{
-                label: entryNoun(t.eventType),
-                value: String(t.spotsLeft),
+                label: "Fargo",
+                value: fargoCapText(t),
               }}
             />
 
@@ -2194,20 +2234,18 @@ export function Tournaments({
                           {STATUS_LABELS[event.status]}
                         </span>
                       </div>
-                      <p className="mt-0.5 text-xs text-[var(--muted)]">
-                        {formatStartsAt(event.startsAt)} · {event.venueName},{" "}
-                        {event.city}
+                      <p className="mt-0.5 text-xs font-medium text-[var(--ink)]">
+                        {formatStartsAt(event.startsAt)}
                       </p>
                       <p className="mt-1 text-[11px] text-[var(--muted)]">
-                        {GAME_TYPE_OPTIONS.find((o) => o.value === event.gameType)
-                          ?.label ?? event.gameType}
-                        {" · "}
-                        {handicapLabel(event.handicapSystem)}
+                        {eventKeyFacts(event)}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                        {event.venueName}, {event.city}
                         {" · "}
                         {formatEntryFee(event.entryFeeCents)}
                         {" · "}
-                        {event.spotsLeft}{" "}
-                        {entryNoun(event.eventType)} left
+                        {event.spotsLeft} {entryNoun(event.eventType)} left
                       </p>
                     </div>
                   </button>
