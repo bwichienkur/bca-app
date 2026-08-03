@@ -1379,7 +1379,9 @@ export function LeagueApp() {
                 </div>
 
                 <div
-                  className={myTeamSubTab === "lineups" ? "min-w-0" : "hidden"}
+                  className={
+                    myTeamSubTab === "lineups" ? "min-w-0 space-y-3" : "hidden"
+                  }
                   aria-hidden={myTeamSubTab !== "lineups"}
                 >
                   <SectionCard
@@ -1390,20 +1392,19 @@ export function LeagueApp() {
                       label: "Slots",
                       value: String(DEFAULT_PLAYERS_PER_TEAM),
                     }}
-                  >
-                    {myTeam && selectedDivision ? (
-                      <TeamLineupTemplates
-                        divisionId={selectedDivision.id}
-                        team={myTeam}
-                        embedded
-                      />
-                    ) : (
-                      <EmptyState
-                        title="Team roster needed"
-                        body="Lineup templates need your team’s roster from this division."
-                      />
-                    )}
-                  </SectionCard>
+                  />
+                  {myTeam && selectedDivision ? (
+                    <TeamLineupTemplates
+                      divisionId={selectedDivision.id}
+                      team={myTeam}
+                      embedded
+                    />
+                  ) : (
+                    <EmptyState
+                      title="Team roster needed"
+                      body="Lineup templates need your team’s roster from this division."
+                    />
+                  )}
                 </div>
               </section>
             ) : (

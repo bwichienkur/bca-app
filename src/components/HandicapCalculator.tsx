@@ -448,31 +448,29 @@ export function HandicapCalculator({
 
   if (loading) {
     return (
-      <section className="animate-rise">
+      <section className="animate-rise space-y-3">
         <SectionCard
           eyebrow="Handicap"
           title="Matchup calculator"
           description="Build lineups, then review round handicaps"
-        >
-          <LoadingState label="Loading teams, ratings, and format…" />
-        </SectionCard>
+        />
+        <LoadingState label="Loading teams, ratings, and format…" />
       </section>
     );
   }
 
   if (error || !data) {
     return (
-      <section className="animate-rise">
+      <section className="animate-rise space-y-3">
         <SectionCard
           eyebrow="Handicap"
           title="Matchup calculator"
           description="Build lineups, then review round handicaps"
-        >
-          <EmptyState
-            title="Couldn't load calculator"
-            body={error ?? "Try again in a moment."}
-          />
-        </SectionCard>
+        />
+        <EmptyState
+          title="Couldn't load calculator"
+          body={error ?? "Try again in a moment."}
+        />
       </section>
     );
   }
@@ -514,14 +512,15 @@ export function HandicapCalculator({
   }`;
 
   return (
-    <div className="animate-panel">
+    <div className="animate-panel space-y-3">
       <SectionCard
         eyebrow="Handicap"
         title="Matchup calculator"
         description="Build lineups, then review round handicaps"
         badge={{ label: "Sides", value: String(slots) }}
-        flush
-      >
+      />
+
+      <section className="overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="space-y-2.5 border-b border-[var(--line)] px-3 py-3 sm:px-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
@@ -783,7 +782,7 @@ export function HandicapCalculator({
             </div>
           </>
         )}
-      </SectionCard>
+      </section>
     </div>
   );
 }
