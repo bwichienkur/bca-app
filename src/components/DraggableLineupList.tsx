@@ -109,9 +109,11 @@ export function DraggableLineupList({
   footer,
   actions,
   disabled = false,
+  /** Skip outer card chrome + title — parent supplies the shell. */
+  bare = false,
 }: {
-  title: string;
-  subtitle: string;
+  title?: string;
+  subtitle?: string;
   slotPrefix: string;
   lineupIds: (string | null)[];
   roster: LineupListPlayer[];
@@ -121,6 +123,7 @@ export function DraggableLineupList({
   /** Compact controls shown beside the filled badge (e.g. Load menu). */
   actions?: ReactNode;
   disabled?: boolean;
+  bare?: boolean;
 }) {
   const slots = lineupIds.length;
   const filled = lineupIds.filter(Boolean).length;
@@ -283,30 +286,7 @@ export function DraggableLineupList({
     }
   };
 
-  return (
-    <div className="min-w-0 overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm sm:p-3.5">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="min-w-0 flex-1 overflow-hidden">
-          <h4 className="truncate font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
-            {title}
-          </h4>
-          <p className="truncate text-xs text-[var(--muted)]">{subtitle}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {actions}
-          <span
-            className={[
-              "rounded-full px-2.5 py-1 text-xs font-semibold",
-              filled === slots
-                ? "bg-[var(--felt)] text-white"
-                : "bg-[var(--surface-2)] text-[var(--muted)]",
-            ].join(" ")}
-          >
-            {filled}/{slots}
-          </span>
-        </div>
-      </div>
-
+  const list = (
       <ol
         ref={listRef}
         className="min-w-0 divide-y divide-[var(--line)] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface-2)]"
@@ -379,7 +359,7 @@ export function DraggableLineupList({
                     />
                   </div>
 
-                  {player && !disabled ? (
+                  {!bare && player && !disabled ? (
                     <div className="flex shrink-0 items-center">
                       <button
                         type="button"
@@ -400,24 +380,29 @@ export function DraggableLineupList({
                         ▼
                       </button>
                     </div>
-                  ) : (
+                  ) : !bare ? (
                     <span className="w-12 shrink-0" aria-hidden />
-                  )}
+                  ) : null}
                 </div>
               )}
             </li>
           );
         })}
       </ol>
+  );
 
+  const hint = (
       <p className="mt-2 text-[11px] text-[var(--muted)]">
         {disabled
           ? "Lineup is locked for this scoresheet."
-          : "Drag ⠿ to reorder, or use ▲ ▼ · handicaps follow Fargo"}
+          : bare
+            ? "Drag ⠿ to reorder · handicaps follow Fargo"
+            : "Drag ⠿ to reorder, or use ▲ ▼ · handicaps follow Fargo"}
       </p>
-      {footer}
+  );
 
-      {mounted &&
+  const portal =
+      mounted &&
       drag &&
       draggedPlayer &&
       ghost &&
@@ -439,7 +424,49 @@ export function DraggableLineupList({
             />,
             document.body,
           )
-        : null}
+        : null;
+
+  if (bare) {
+    return (
+      <div className="min-w-0">
+        {list}
+        {hint}
+        {footer}
+        {portal}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-w-0 overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm sm:p-3.5">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <h4 className="truncate font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
+            {title}
+          </h4>
+          {subtitle ? (
+            <p className="truncate text-xs text-[var(--muted)]">{subtitle}</p>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {actions}
+          <span
+            className={[
+              "rounded-full px-2.5 py-1 text-xs font-semibold",
+              filled === slots
+                ? "bg-[var(--felt)] text-white"
+                : "bg-[var(--surface-2)] text-[var(--muted)]",
+            ].join(" ")}
+          >
+            {filled}/{slots}
+          </span>
+        </div>
+      </div>
+
+      {list}
+      {hint}
+      {footer}
+      {portal}
     </div>
   );
 }
