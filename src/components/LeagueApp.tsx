@@ -1348,7 +1348,7 @@ export function LeagueApp() {
                   aria-hidden={myTeamSubTab !== "roster"}
                 >
                   <SectionCard
-                    eyebrow="My team"
+                    eyebrow="Team"
                     title="Roster"
                     description={
                       myTeam?.players.length
@@ -1391,7 +1391,7 @@ export function LeagueApp() {
                   ) : (
                     <div className="space-y-3">
                       <SectionCard
-                        eyebrow="My team"
+                        eyebrow="Team"
                         title="Lineups"
                         description={`Save ${DEFAULT_PLAYERS_PER_TEAM}-player orders for league night. Load them from Handicap or Score.`}
                       />

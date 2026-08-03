@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { SectionCard } from "./SectionCard";
 
 type StandingCell = {
   label: string;
@@ -12,6 +13,11 @@ type TeamStandingSummaryProps = {
   teamName?: string;
   /** Denser layout for narrow / side-by-side contexts. */
   compact?: boolean;
+  /**
+   * When true (default outside compact), blue header is its own card and
+   * stats sit in a separate card below — matching other Team sections.
+   */
+  splitHeader?: boolean;
 };
 
 function isNameLabel(label: string): boolean {
@@ -228,6 +234,7 @@ export function TeamStandingSummary({
   cells,
   teamName,
   compact = false,
+  splitHeader = !compact,
 }: TeamStandingSummaryProps) {
   const rankCell = cells.find((cell) => isRankLabel(cell.label));
   const stats = cells.filter(
@@ -244,18 +251,27 @@ export function TeamStandingSummary({
   const gamesRatio = gamesStat ? parseRatio(gamesStat.value) : null;
   const otherStats = stats.filter((cell) => cell !== gamesStat);
 
+  const chipTopBorder = gamesRatio
+    ? "border-t border-[var(--line)]"
+    : splitHeader
+      ? ""
+      : "border-t border-[var(--line)]";
+
   let chips: ReactNode = null;
   if (otherStats.length) {
     chips = (
       <div
         className={[
-          "grid divide-x divide-[var(--line)] border-t border-[var(--line)] bg-[var(--surface-2)]/55",
+          "grid divide-x divide-[var(--line)] bg-[var(--surface-2)]/55",
+          chipTopBorder,
           otherStats.length === 1
             ? "grid-cols-1"
             : otherStats.length === 2
               ? "grid-cols-2"
               : "grid-cols-3",
-        ].join(" ")}
+        ]
+          .filter(Boolean)
+          .join(" ")}
       >
         {otherStats.map((cell) => (
           <StatChip
@@ -271,9 +287,12 @@ export function TeamStandingSummary({
     chips = (
       <div
         className={[
-          "grid divide-x divide-[var(--line)] border-t border-[var(--line)] bg-[var(--surface-2)]/55",
+          "grid divide-x divide-[var(--line)] bg-[var(--surface-2)]/55",
+          chipTopBorder,
           compact ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4",
-        ].join(" ")}
+        ]
+          .filter(Boolean)
+          .join(" ")}
       >
         {stats.map((cell) => (
           <StatChip
@@ -289,10 +308,52 @@ export function TeamStandingSummary({
 
   const nameFromCells = cells.find((cell) => isNameLabel(cell.label))?.value;
   const resolvedTeamName = teamName?.trim() || nameFromCells?.trim() || "";
+  const hasHeader = Boolean(resolvedTeamName || rankCell);
+  const hasBody = Boolean(gamesRatio || chips);
+
+  const statsBody = (
+    <>
+      {gamesRatio ? (
+        <GamesMeter
+          forValue={gamesRatio.forValue}
+          againstValue={gamesRatio.againstValue}
+          compact={compact}
+        />
+      ) : null}
+      {chips}
+    </>
+  );
+
+  if (splitHeader) {
+    return (
+      <div className="space-y-3">
+        {hasHeader ? (
+          <SectionCard
+            eyebrow="Team"
+            title={
+              resolvedTeamName ||
+              (rankCell ? `#${rankCell.value || "—"}` : "Standing")
+            }
+            description="Current place in the division"
+            badge={
+              resolvedTeamName && rankCell
+                ? { label: "Rank", value: `#${rankCell.value || "—"}` }
+                : undefined
+            }
+          />
+        ) : null}
+        {hasBody ? (
+          <section className="overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+            {statsBody}
+          </section>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <section className="overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
-      {resolvedTeamName || rankCell ? (
+      {hasHeader ? (
         <div
           className={[
             "relative overflow-hidden bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] text-white",
@@ -310,7 +371,7 @@ export function TeamStandingSummary({
           <div className="relative flex min-w-0 items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/65">
-                Division rank
+                Team
               </p>
               {resolvedTeamName ? (
                 <>
@@ -366,15 +427,7 @@ export function TeamStandingSummary({
         </div>
       ) : null}
 
-      {gamesRatio ? (
-        <GamesMeter
-          forValue={gamesRatio.forValue}
-          againstValue={gamesRatio.againstValue}
-          compact={compact}
-        />
-      ) : null}
-
-      {chips}
+      {statsBody}
     </section>
   );
 }
