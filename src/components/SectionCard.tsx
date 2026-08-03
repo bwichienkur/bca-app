@@ -5,13 +5,14 @@ type SectionCardProps = {
   title: string;
   description?: ReactNode;
   badge?: { label: string; value: string };
-  children: ReactNode;
-  /** Edge-to-edge body for tables / custom toolbars. */
+  /** When omitted, renders a header-only title card. */
+  children?: ReactNode;
+  /** Edge-to-edge body for custom toolbars / nested content. */
   flush?: boolean;
   className?: string;
 };
 
-/** Standing-style shell: felt header band + dark content body. */
+/** Standing-style shell: felt header band, optional dark content body. */
 export function SectionCard({
   eyebrow,
   title,
@@ -21,10 +22,13 @@ export function SectionCard({
   flush = false,
   className,
 }: SectionCardProps) {
+  const hasBody = children != null && children !== false;
+
   return (
     <section
       className={[
-        "overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]",
+        "overflow-hidden rounded-[1.35rem] border border-[var(--line)] shadow-[var(--shadow)]",
+        hasBody ? "bg-[var(--surface)]" : "bg-transparent",
         className,
       ]
         .filter(Boolean)
@@ -63,9 +67,11 @@ export function SectionCard({
           ) : null}
         </div>
       </div>
-      <div className={flush ? "min-w-0" : "space-y-4 p-3 sm:p-4"}>
-        {children}
-      </div>
+      {hasBody ? (
+        <div className={flush ? "min-w-0" : "space-y-4 p-3 sm:p-4"}>
+          {children}
+        </div>
+      ) : null}
     </section>
   );
 }
