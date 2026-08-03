@@ -189,7 +189,7 @@ function compactPlayers(lineup: LineupSlot[]): RosterPlayer[] {
 
 export function HandicapCalculator({
   divisionId,
-  divisionName,
+  divisionName: _divisionName,
   prefs,
   refreshToken = 0,
 }: HandicapCalculatorProps) {
@@ -208,6 +208,8 @@ export function HandicapCalculator({
   const [subTab, setSubTab] = useState<HandicapSubTab>("lineups");
   /** Sit just under the sticky report-tab nav (2×3 grid on mobile). */
   const [matchupStickyTop, setMatchupStickyTop] = useState(104);
+  const [matchupStuck, setMatchupStuck] = useState(false);
+  const matchupSentinelRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
     const tabs = document.querySelector<HTMLElement>("[data-report-tabs]");
@@ -231,6 +233,23 @@ export function HandicapCalculator({
       window.visualViewport?.removeEventListener("resize", measure);
     };
   }, []);
+
+  useEffect(() => {
+    const sentinel = matchupSentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setMatchupStuck(!entry?.isIntersecting);
+      },
+      {
+        root: null,
+        threshold: 0,
+        rootMargin: `-${matchupStickyTop + 1}px 0px 0px 0px`,
+      },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [matchupStickyTop]);
 
   useEffect(() => {
     if (!awayTeamId) setMobileSide("home");
@@ -494,7 +513,6 @@ export function HandicapCalculator({
       </h3>
       <p className="mt-1 text-sm text-[var(--muted)]">
         Build lineups, then review round handicaps
-        {divisionName ? <> · {divisionName}</> : null}
       </p>
     </div>
   );
@@ -560,11 +578,17 @@ export function HandicapCalculator({
     <div className="animate-panel space-y-4">
       {sectionHeader}
 
+      <div ref={matchupSentinelRef} className="h-px w-full" aria-hidden />
       <section
-        className="sticky z-10 -mx-1 space-y-2 rounded-2xl border border-[var(--line)] bg-[color-mix(in_srgb,var(--paper)_96%,transparent)] px-1 py-2 shadow-sm backdrop-blur"
+        className={[
+          "sticky z-10 -mx-1 space-y-2.5 rounded-[1.35rem] border bg-[var(--surface)]/95 px-3 py-3 shadow-[var(--shadow)] backdrop-blur sm:px-3.5",
+          matchupStuck
+            ? "border-[var(--line)] border-t-[var(--felt)] shadow-[0_12px_28px_rgba(0,0,0,0.35)]"
+            : "border-[var(--line)]",
+        ].join(" ")}
         style={{ top: matchupStickyTop }}
       >
-        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
             Matchup
           </p>
@@ -572,7 +596,7 @@ export function HandicapCalculator({
             {formatMeta}
           </p>
         </div>
-        <div className="relative z-10 grid gap-2 sm:grid-cols-2">
+        <div className="relative z-10 grid gap-2.5 sm:grid-cols-2">
           <Typeahead
             label="Home"
             placeholder="Select home team"
@@ -596,11 +620,11 @@ export function HandicapCalculator({
           body="Choose any two teams in this division to build lineups and calculate round handicaps."
         />
       ) : (
-        <>
+        <section className="overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)]/80 shadow-sm">
           <div
             role="tablist"
             aria-label="Handicap sections"
-            className="grid grid-cols-2 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+            className="grid grid-cols-2 gap-0.5 border-b border-[var(--line)] bg-[var(--surface-2)]/90 p-1"
           >
             {(
               [
@@ -626,7 +650,7 @@ export function HandicapCalculator({
                     startTransition(() => setSubTab(item.id))
                   }
                   className={[
-                    "rounded-lg px-2 py-1.5 text-center text-xs font-semibold transition sm:text-sm",
+                    "rounded-lg px-2 py-2 text-center text-xs font-semibold transition sm:text-sm",
                     selected
                       ? "bg-[var(--felt)] text-white shadow-sm"
                       : disabled
@@ -651,15 +675,10 @@ export function HandicapCalculator({
           </div>
 
           {subTab === "lineups" ? (
-            <section className="relative z-0 space-y-3">
-              <div>
-                <h4 className="font-[family-name:var(--font-display)] text-xl text-[var(--felt-deep)]">
-                  Lineups
-                </h4>
-                <p className="mt-1 text-sm text-[var(--muted)]">
-                  Pick {slots} players per side · drag ⠿ to reorder
-                </p>
-              </div>
+            <div className="relative z-0 space-y-3 px-3 py-3.5 sm:px-4">
+              <p className="text-sm text-[var(--muted)]">
+                Pick {slots} players per side · drag ⠿ to reorder
+              </p>
 
               <div className="grid gap-4 xl:grid-cols-2">
                 <div
@@ -811,26 +830,21 @@ export function HandicapCalculator({
                   Fill all {slots} slots on both sides to unlock Results.
                 </p>
               )}
-            </section>
+            </div>
           ) : (
-            <section className="space-y-3">
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <h4 className="font-[family-name:var(--font-display)] text-xl text-[var(--felt-deep)]">
-                    Results
-                  </h4>
-                  <p className="mt-1 text-sm text-[var(--muted)]">
-                    {roundTotals
-                      ? `Games awarded · Home +${roundTotals.home} · Away +${roundTotals.away}`
-                      : "Round handicaps from your lineups"}
-                  </p>
-                </div>
+            <div className="space-y-3 px-3 py-3.5 sm:px-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-[var(--muted)]">
+                  {roundTotals
+                    ? `Games awarded across rounds`
+                    : "Round handicaps from your lineups"}
+                </p>
                 <button
                   type="button"
                   onClick={() =>
                     startTransition(() => setSubTab("lineups"))
                   }
-                  className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)] hover:bg-[var(--surface-2)]"
+                  className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)] hover:bg-[var(--surface-3)]"
                 >
                   Edit lineups
                 </button>
@@ -875,7 +889,9 @@ export function HandicapCalculator({
                           <p
                             className={[
                               "mt-0.5 text-[10px] font-semibold tabular-nums leading-none",
-                              selected ? "text-white/85" : "text-[var(--muted)]",
+                              selected
+                                ? "text-white/85"
+                                : "text-[var(--muted)]",
                             ].join(" ")}
                           >
                             {points === 0 ? "even" : `${sideLabel}+${points}`}
@@ -899,9 +915,9 @@ export function HandicapCalculator({
                   body={`Fill all ${slots} slots on each side, then open Results.`}
                 />
               )}
-            </section>
+            </div>
           )}
-        </>
+        </section>
       )}
     </div>
   );
