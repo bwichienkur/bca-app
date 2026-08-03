@@ -33,6 +33,7 @@ import { EmptyState } from "./EmptyState";
 import { LoadLineupMenu } from "./LoadLineupMenu";
 import { LoadingState } from "./LoadingState";
 import { PlayerSelect } from "./PlayerSelect";
+import { SectionCard } from "./SectionCard";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
 type CalculatorPayload = {
@@ -445,37 +446,33 @@ export function HandicapCalculator({
         preset.divisionId === divisionId && preset.teamId === teamId,
     );
 
-  const sectionHeader = (
-    <div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-        Handicap
-      </p>
-      <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-        Matchup calculator
-      </h3>
-      <p className="mt-1 text-sm text-[var(--muted)]">
-        Build lineups, then review round handicaps
-      </p>
-    </div>
-  );
-
   if (loading) {
     return (
-      <section className="animate-rise space-y-4">
-        {sectionHeader}
-        <LoadingState label="Loading teams, ratings, and format…" />
+      <section className="animate-rise">
+        <SectionCard
+          eyebrow="Handicap"
+          title="Matchup calculator"
+          description="Build lineups, then review round handicaps"
+        >
+          <LoadingState label="Loading teams, ratings, and format…" />
+        </SectionCard>
       </section>
     );
   }
 
   if (error || !data) {
     return (
-      <section className="animate-rise space-y-4">
-        {sectionHeader}
-        <EmptyState
-          title="Couldn't load calculator"
-          body={error ?? "Try again in a moment."}
-        />
+      <section className="animate-rise">
+        <SectionCard
+          eyebrow="Handicap"
+          title="Matchup calculator"
+          description="Build lineups, then review round handicaps"
+        >
+          <EmptyState
+            title="Couldn't load calculator"
+            body={error ?? "Try again in a moment."}
+          />
+        </SectionCard>
       </section>
     );
   }
@@ -517,10 +514,14 @@ export function HandicapCalculator({
   }`;
 
   return (
-    <div className="animate-panel space-y-4">
-      {sectionHeader}
-
-      <section className="overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+    <div className="animate-panel">
+      <SectionCard
+        eyebrow="Handicap"
+        title="Matchup calculator"
+        description="Build lineups, then review round handicaps"
+        badge={{ label: "Sides", value: String(slots) }}
+        flush
+      >
         <div className="space-y-2.5 border-b border-[var(--line)] px-3 py-3 sm:px-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
@@ -782,7 +783,7 @@ export function HandicapCalculator({
             </div>
           </>
         )}
-      </section>
+      </SectionCard>
     </div>
   );
 }

@@ -53,6 +53,7 @@ import type { AuthUser } from "./LoginScreen";
 import { DraggableLineupList } from "./DraggableLineupList";
 import { LoadLineupMenu } from "./LoadLineupMenu";
 import { MatchListCard } from "./MatchListCard";
+import { SectionCard } from "./SectionCard";
 import { loadTeamLineupPresets } from "@/lib/lineup-sync";
 import type { LineupPreset } from "@/lib/types";
 import { normalizeTeamName } from "@/lib/matchups";
@@ -1262,101 +1263,97 @@ export function MatchScoring({
   }
 
   return (
-    <section className="animate-rise space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-            Score
-          </p>
-          <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-            Scoresheets
-          </h3>
-          <p className="mt-1 text-sm text-[var(--muted)]">
+    <section className="animate-rise">
+      <SectionCard
+        eyebrow="Score"
+        title="Scoresheets"
+        description={
+          <>
             {teamName ? (
               <>
                 Open a match to score for{" "}
-                <span className="font-medium text-[var(--ink)]">{teamName}</span>
+                <span className="font-medium text-white">{teamName}</span>
               </>
             ) : (
               "Open a match to score"
             )}
-            {divisionName ? (
-              <>
-                {" "}
-                · {divisionName}
-              </>
-            ) : null}
+            {divisionName ? <> · {divisionName}</> : null}
             {sharedDrafts ? " · multi-device draft sync on" : null}
+          </>
+        }
+        badge={
+          loadingMatches
+            ? undefined
+            : { label: "Matches", value: String(matches.length) }
+        }
+      >
+        {listError ? (
+          <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
+            {listError}
           </p>
-        </div>
-      </div>
+        ) : null}
+        {submitMessage ? (
+          <p className="rounded-xl border border-[var(--felt)]/35 bg-[color-mix(in_srgb,var(--felt)_18%,transparent)] px-3 py-2 text-sm text-[var(--felt-deep)]">
+            {submitMessage}
+          </p>
+        ) : null}
 
-      {listError ? (
-        <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
-          {listError}
-        </p>
-      ) : null}
-      {submitMessage ? (
-        <p className="rounded-xl border border-[var(--felt)]/35 bg-[color-mix(in_srgb,var(--felt)_18%,transparent)] px-3 py-2 text-sm text-[var(--felt-deep)]">
-          {submitMessage}
-        </p>
-      ) : null}
-
-      {loadingMatches ? (
-        <LoadingState label="Loading your matches…" />
-      ) : matches.length === 0 ? (
-        <EmptyState
-          title={
-            teamName
-              ? `No matches for ${teamName}`
-              : "No matches for your team"
-          }
-          body="When this team is scheduled in the selected division, those matches will show up here ready to score."
-        />
-      ) : (
-        <div className="space-y-2.5">
-          {matches.map((item, index) => {
-            const draftExists = draftMatchIds.has(item.id);
-            const myTeamKey = teamName ? normalizeTeamName(teamName) : null;
-            const status = [
-              item.hasBeenPlayed
-                ? "Submitted on LMS"
-                : draftExists
-                  ? "Draft in progress"
-                  : "Ready to score",
-              item.mySide ? "Your match" : null,
-            ]
-              .filter(Boolean)
-              .join(" · ");
-            return (
-              <MatchListCard
-                key={item.id}
-                className="animate-rise"
-                style={{ animationDelay: `${Math.min(index, 6) * 0.04}s` }}
-                homeName={item.teamOneName}
-                awayName={item.teamTwoName}
-                meta={formatMatchDate(item.datePlayed)}
-                location={item.location || undefined}
-                status={status}
-                ctaLabel={item.hasBeenPlayed ? "View" : "Score"}
-                emphasizeHome={
-                  Boolean(
-                    myTeamKey &&
-                      normalizeTeamName(item.teamOneName) === myTeamKey,
-                  )
-                }
-                emphasizeAway={
-                  Boolean(
-                    myTeamKey &&
-                      normalizeTeamName(item.teamTwoName) === myTeamKey,
-                  )
-                }
-                onClick={() => void openMatch(item.id)}
-              />
-            );
-          })}
-        </div>
-      )}
+        {loadingMatches ? (
+          <LoadingState label="Loading your matches…" />
+        ) : matches.length === 0 ? (
+          <EmptyState
+            title={
+              teamName
+                ? `No matches for ${teamName}`
+                : "No matches for your team"
+            }
+            body="When this team is scheduled in the selected division, those matches will show up here ready to score."
+          />
+        ) : (
+          <div className="space-y-2.5">
+            {matches.map((item, index) => {
+              const draftExists = draftMatchIds.has(item.id);
+              const myTeamKey = teamName ? normalizeTeamName(teamName) : null;
+              const status = [
+                item.hasBeenPlayed
+                  ? "Submitted on LMS"
+                  : draftExists
+                    ? "Draft in progress"
+                    : "Ready to score",
+                item.mySide ? "Your match" : null,
+              ]
+                .filter(Boolean)
+                .join(" · ");
+              return (
+                <MatchListCard
+                  key={item.id}
+                  className="animate-rise"
+                  style={{ animationDelay: `${Math.min(index, 6) * 0.04}s` }}
+                  homeName={item.teamOneName}
+                  awayName={item.teamTwoName}
+                  meta={formatMatchDate(item.datePlayed)}
+                  location={item.location || undefined}
+                  status={status}
+                  ctaLabel={item.hasBeenPlayed ? "View" : "Score"}
+                  emphasizeHome={
+                    Boolean(
+                      myTeamKey &&
+                        normalizeTeamName(item.teamOneName) === myTeamKey,
+                    )
+                  }
+                  emphasizeAway={
+                    Boolean(
+                      myTeamKey &&
+                        normalizeTeamName(item.teamTwoName) === myTeamKey,
+                    )
+                  }
+                  onClick={() => void openMatch(item.id)}
+                />
+              );
+            })}
+          </div>
+        )}
+      </SectionCard>
     </section>
   );
 }

@@ -6,6 +6,7 @@ import { isUpcomingScheduleDate, parseScheduleDate } from "@/lib/schedule";
 import type { ScheduleDay, ScheduleMatch } from "@/lib/types";
 import { EmptyState } from "./EmptyState";
 import { MatchListCard } from "./MatchListCard";
+import { SectionCard } from "./SectionCard";
 
 type ScheduleListProps = {
   days: ScheduleDay[];
@@ -96,123 +97,125 @@ export function ScheduleList({
   }
 
   return (
-    <section className="animate-rise space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-            Schedule
-          </p>
-          <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-            Your schedule
-          </h3>
-          <p className="mt-1 text-sm text-[var(--muted)]">
+    <section className="animate-rise">
+      <SectionCard
+        eyebrow="Schedule"
+        title="Your schedule"
+        description={
+          <>
             {teamName ? (
               <>
                 Upcoming and past matchups for{" "}
-                <span className="font-medium text-[var(--ink)]">{teamName}</span>
+                <span className="font-medium text-white">{teamName}</span>
               </>
             ) : (
               "Division schedule"
             )}
             {divisionName ? <> · {divisionName}</> : null}
             . Use Score to open a scoresheet.
-          </p>
-        </div>
-      </div>
-
-      <div
-        role="group"
-        aria-label="Schedule time range"
-        className="inline-flex rounded-full border border-[var(--line)] bg-[var(--surface)] p-0.5"
+          </>
+        }
+        badge={{
+          label: view === "upcoming" ? "Upcoming" : "Past",
+          value: String(visibleMatches.length),
+        }}
       >
-        {(
-          [
-            {
-              id: "upcoming" as const,
-              label: "Upcoming",
-              count: upcomingMatches.length,
-            },
-            { id: "past" as const, label: "Past", count: pastMatches.length },
-          ]
-        ).map((item) => {
-          const active = view === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              aria-pressed={active}
-              onClick={() => setView(item.id)}
-              className={[
-                "rounded-full px-3.5 py-1.5 text-sm font-semibold transition",
-                active
-                  ? "bg-[var(--felt)] text-white"
-                  : "text-[var(--muted)] hover:text-[var(--ink)]",
-              ].join(" ")}
-            >
-              {item.label}
-              <span
+        <div
+          role="group"
+          aria-label="Schedule time range"
+          className="inline-flex rounded-full border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+        >
+          {(
+            [
+              {
+                id: "upcoming" as const,
+                label: "Upcoming",
+                count: upcomingMatches.length,
+              },
+              { id: "past" as const, label: "Past", count: pastMatches.length },
+            ]
+          ).map((item) => {
+            const active = view === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setView(item.id)}
                 className={[
-                  "ml-1.5 tabular-nums",
-                  active ? "text-white/80" : "text-[var(--muted)]",
+                  "rounded-full px-3.5 py-1.5 text-sm font-semibold transition",
+                  active
+                    ? "bg-[var(--felt)] text-white"
+                    : "text-[var(--muted)] hover:text-[var(--ink)]",
                 ].join(" ")}
               >
-                {item.count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {!visibleMatches.length ? (
-        <EmptyState
-          title={view === "upcoming" ? "No upcoming matches" : "No past matches"}
-          body={
-            view === "upcoming"
-              ? "Matches stay here through their scheduled day, then move to Past."
-              : "Past match days will show up here after they pass."
-          }
-        />
-      ) : (
-        <div className="space-y-2.5">
-          {visibleMatches.map((item, index) => {
-            const { match, day } = item;
-            const status = [
-              item.upcoming ? "Upcoming" : "Played",
-              myTeam &&
-              (normalizeTeamName(match.home) === myTeam ||
-                normalizeTeamName(match.away) === myTeam)
-                ? "Your match"
-                : null,
-            ]
-              .filter(Boolean)
-              .join(" · ");
-            return (
-              <MatchListCard
-                key={item.key}
-                className="animate-rise"
-                style={{ animationDelay: `${Math.min(index, 6) * 0.04}s` }}
-                homeName={match.home}
-                awayName={match.away}
-                meta={formatScheduleDate(day.date)}
-                location={match.location || undefined}
-                status={status}
-                ctaLabel="View"
-                emphasizeHome={
-                  Boolean(
-                    myTeam && normalizeTeamName(match.home) === myTeam,
-                  )
-                }
-                emphasizeAway={
-                  Boolean(
-                    myTeam && normalizeTeamName(match.away) === myTeam,
-                  )
-                }
-                onClick={() => onMatchClick?.(match, day)}
-              />
+                {item.label}
+                <span
+                  className={[
+                    "ml-1.5 tabular-nums",
+                    active ? "text-white/80" : "text-[var(--muted)]",
+                  ].join(" ")}
+                >
+                  {item.count}
+                </span>
+              </button>
             );
           })}
         </div>
-      )}
+
+        {!visibleMatches.length ? (
+          <EmptyState
+            title={
+              view === "upcoming" ? "No upcoming matches" : "No past matches"
+            }
+            body={
+              view === "upcoming"
+                ? "Matches stay here through their scheduled day, then move to Past."
+                : "Past match days will show up here after they pass."
+            }
+          />
+        ) : (
+          <div className="space-y-2.5">
+            {visibleMatches.map((item, index) => {
+              const { match, day } = item;
+              const status = [
+                item.upcoming ? "Upcoming" : "Played",
+                myTeam &&
+                (normalizeTeamName(match.home) === myTeam ||
+                  normalizeTeamName(match.away) === myTeam)
+                  ? "Your match"
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ");
+              return (
+                <MatchListCard
+                  key={item.key}
+                  className="animate-rise"
+                  style={{ animationDelay: `${Math.min(index, 6) * 0.04}s` }}
+                  homeName={match.home}
+                  awayName={match.away}
+                  meta={formatScheduleDate(day.date)}
+                  location={match.location || undefined}
+                  status={status}
+                  ctaLabel="View"
+                  emphasizeHome={
+                    Boolean(
+                      myTeam && normalizeTeamName(match.home) === myTeam,
+                    )
+                  }
+                  emphasizeAway={
+                    Boolean(
+                      myTeam && normalizeTeamName(match.away) === myTeam,
+                    )
+                  }
+                  onClick={() => onMatchClick?.(match, day)}
+                />
+              );
+            })}
+          </div>
+        )}
+      </SectionCard>
     </section>
   );
 }

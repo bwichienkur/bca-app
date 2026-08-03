@@ -1,26 +1,35 @@
 import type { ReactNode } from "react";
 
-type TeamSectionCardProps = {
+type SectionCardProps = {
   eyebrow: string;
   title: string;
-  description?: string;
+  description?: ReactNode;
   badge?: { label: string; value: string };
   children: ReactNode;
-  /** Edge-to-edge body for tables; otherwise padded content. */
+  /** Edge-to-edge body for tables / custom toolbars. */
   flush?: boolean;
+  className?: string;
 };
 
 /** Standing-style shell: felt header band + dark content body. */
-export function TeamSectionCard({
+export function SectionCard({
   eyebrow,
   title,
   description,
   badge,
   children,
   flush = false,
-}: TeamSectionCardProps) {
+  className,
+}: SectionCardProps) {
   return (
-    <section className="overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+    <section
+      className={[
+        "overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <div className="relative overflow-hidden bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] px-4 py-4 text-white sm:px-5 sm:py-5">
         <div
           aria-hidden
@@ -39,7 +48,7 @@ export function TeamSectionCard({
               {title}
             </h3>
             {description ? (
-              <p className="mt-2 text-xs text-white/70">{description}</p>
+              <div className="mt-2 text-xs text-white/70">{description}</div>
             ) : null}
           </div>
           {badge ? (
