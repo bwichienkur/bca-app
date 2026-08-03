@@ -8,6 +8,8 @@ type TeamPlayerStatsProps = {
   headers: string[];
   rows: string[][];
   roster?: RosterPlayer[];
+  /** Sit flush inside a parent card shell. */
+  flush?: boolean;
 };
 
 function columnKind(header: string): "rank" | "name" | "stat" {
@@ -64,6 +66,7 @@ export function TeamPlayerStats({
   headers,
   rows,
   roster,
+  flush = false,
 }: TeamPlayerStatsProps) {
   const enriched = useMemo(() => {
     const nameIndex = headers.findIndex((header) => columnKind(header) === "name");
@@ -103,6 +106,7 @@ export function TeamPlayerStats({
       rows={enriched.rows}
       stickyFirst
       compact
+      flush={flush}
       emptyText="No player stats for this team."
     />
   );

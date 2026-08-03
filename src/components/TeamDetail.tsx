@@ -18,6 +18,8 @@ type TeamDetailProps = {
    * on the page context card). Standings drill-in keeps the full header.
    */
   embedded?: boolean;
+  /** When embedded inside TeamSectionCard, flush the stats grid to the shell. */
+  flushStats?: boolean;
 };
 
 function playerLabel(player: RosterPlayer): string {
@@ -33,6 +35,7 @@ export function TeamDetail({
   onSetAsMyTeam,
   isMyTeam,
   embedded = false,
+  flushStats = false,
 }: TeamDetailProps) {
   const statsTeam = playersByTeam?.teams.find(
     (item) =>
@@ -42,8 +45,12 @@ export function TeamDetail({
   const body = (
     <div
       className={[
-        "flex-1 space-y-5 overflow-y-auto",
-        embedded ? "pt-1" : "px-3 py-4 md:px-5",
+        "flex-1 overflow-y-auto",
+        embedded && flushStats
+          ? "min-w-0"
+          : embedded
+            ? "space-y-5 pt-1"
+            : "space-y-5 px-3 py-4 md:px-5",
       ].join(" ")}
     >
       {statsTeam && playersByTeam ? (
@@ -59,19 +66,31 @@ export function TeamDetail({
             headers={playersByTeam.headers}
             rows={statsTeam.rows}
             roster={team?.players}
+            flush={flushStats}
           />
         </section>
       ) : (
-        <p className="px-1 text-sm text-[var(--muted)]">
+        <p
+          className={[
+            "text-sm text-[var(--muted)]",
+            flushStats ? "px-4 py-6" : "px-1",
+          ].join(" ")}
+        >
           Player standings for this team aren’t loaded yet.
         </p>
       )}
 
       {team && !statsTeam ? (
-        <section className={embedded ? undefined : "px-1"}>
-          <h4 className="mb-2 text-sm font-semibold text-[var(--ink)]">
-            Roster & ratings
-          </h4>
+        <section
+          className={
+            flushStats ? "p-3 sm:p-4" : embedded ? undefined : "px-1"
+          }
+        >
+          {!flushStats ? (
+            <h4 className="mb-2 text-sm font-semibold text-[var(--ink)]">
+              Roster & ratings
+            </h4>
+          ) : null}
           <ul className="divide-y divide-[var(--line)] rounded-2xl border border-[var(--line)] bg-[var(--surface-2)]">
             {team.players.map((player) => (
               <li

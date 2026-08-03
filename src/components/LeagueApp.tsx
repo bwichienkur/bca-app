@@ -44,9 +44,9 @@ import { ScheduleList } from "./ScheduleList";
 import { ScheduleMatchDetail } from "./ScheduleMatchDetail";
 import { SearchField } from "./SearchField";
 import { SettingsScreen } from "./SettingsScreen";
-import { MyTeamSectionHeader } from "./MyTeamSectionHeader";
 import { TeamDetail } from "./TeamDetail";
 import { TeamLineupTemplates } from "./TeamLineupTemplates";
+import { TeamSectionCard } from "./TeamSectionCard";
 import { TeamStandingSummary } from "./TeamStandingSummary";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
@@ -1324,14 +1324,10 @@ export function LeagueApp() {
 
                 <div
                   className={
-                    myTeamSubTab === "standing" ? "min-w-0 space-y-3" : "hidden"
+                    myTeamSubTab === "standing" ? "min-w-0" : "hidden"
                   }
                   aria-hidden={myTeamSubTab !== "standing"}
                 >
-                  <MyTeamSectionHeader
-                    title="Standing"
-                    description="Division rank, games, and season totals"
-                  />
                   {myStandingCells ? (
                     <TeamStandingSummary
                       cells={myStandingCells}
@@ -1346,12 +1342,11 @@ export function LeagueApp() {
                 </div>
 
                 <div
-                  className={
-                    myTeamSubTab === "roster" ? "min-w-0 space-y-3" : "hidden"
-                  }
+                  className={myTeamSubTab === "roster" ? "min-w-0" : "hidden"}
                   aria-hidden={myTeamSubTab !== "roster"}
                 >
-                  <MyTeamSectionHeader
+                  <TeamSectionCard
+                    eyebrow="My team"
                     title="Roster"
                     description={
                       myTeam?.players.length
@@ -1363,38 +1358,53 @@ export function LeagueApp() {
                           )}`
                         : "Player statistics and Fargo ratings"
                     }
-                  />
-                  <TeamDetail
-                    teamName={prefs.teamName}
-                    team={myTeam}
-                    playersByTeam={playersByTeam}
-                    isMyTeam
-                    embedded
-                  />
+                    badge={
+                      myTeam?.players.length
+                        ? {
+                            label: "Players",
+                            value: String(myTeam.players.length),
+                          }
+                        : undefined
+                    }
+                    flush
+                  >
+                    <TeamDetail
+                      teamName={prefs.teamName}
+                      team={myTeam}
+                      playersByTeam={playersByTeam}
+                      isMyTeam
+                      embedded
+                      flushStats
+                    />
+                  </TeamSectionCard>
                 </div>
 
                 <div
-                  className={
-                    myTeamSubTab === "lineups" ? "min-w-0 space-y-3" : "hidden"
-                  }
+                  className={myTeamSubTab === "lineups" ? "min-w-0" : "hidden"}
                   aria-hidden={myTeamSubTab !== "lineups"}
                 >
-                  <MyTeamSectionHeader
+                  <TeamSectionCard
+                    eyebrow="My team"
                     title="Lineups"
                     description={`Save ${DEFAULT_PLAYERS_PER_TEAM}-player orders for league night. Load them from Handicap or Score.`}
-                  />
-                  {myTeam && selectedDivision ? (
-                    <TeamLineupTemplates
-                      divisionId={selectedDivision.id}
-                      team={myTeam}
-                      embedded
-                    />
-                  ) : (
-                    <EmptyState
-                      title="Team roster needed"
-                      body="Lineup templates need your team’s roster from this division."
-                    />
-                  )}
+                    badge={{
+                      label: "Slots",
+                      value: String(DEFAULT_PLAYERS_PER_TEAM),
+                    }}
+                  >
+                    {myTeam && selectedDivision ? (
+                      <TeamLineupTemplates
+                        divisionId={selectedDivision.id}
+                        team={myTeam}
+                        embedded
+                      />
+                    ) : (
+                      <EmptyState
+                        title="Team roster needed"
+                        body="Lineup templates need your team’s roster from this division."
+                      />
+                    )}
+                  </TeamSectionCard>
                 </div>
               </section>
             ) : (

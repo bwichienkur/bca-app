@@ -10,6 +10,11 @@ type DataTableProps = {
   stickyFirst?: boolean;
   /** Denser rows for team player grids */
   compact?: boolean;
+  /**
+   * Drop the outer card chrome so the grid can sit flush inside a parent
+   * shell (e.g. Team → Roster standing-style card).
+   */
+  flush?: boolean;
   onRowClick?: (row: string[], rowIndex: number) => void;
   /** Prefer content-based selection so sorting doesn't break highlights */
   isRowSelected?: (row: string[]) => boolean;
@@ -146,6 +151,7 @@ export function DataTable({
   rows,
   stickyFirst = true,
   compact = false,
+  flush = false,
   onRowClick,
   isRowSelected,
   selectedRowIndex = null,
@@ -229,7 +235,13 @@ export function DataTable({
     : "text-[13px] md:text-sm";
 
   return (
-    <div className="overflow-x-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+    <div
+      className={
+        flush
+          ? "overflow-x-auto bg-[var(--surface)]"
+          : "overflow-x-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]"
+      }
+    >
       <table
         className={[
           "w-full table-fixed border-separate border-spacing-0 text-left",
@@ -265,8 +277,12 @@ export function DataTable({
                     isSticky
                       ? "sticky left-0 z-10 bg-[var(--felt-soft)] shadow-[4px_0_10px_rgba(0,0,0,0.28)]"
                       : "bg-[var(--felt-soft)]",
-                    isFirst ? "rounded-tl-[calc(var(--radius)-1px)]" : "",
-                    isLast ? "rounded-tr-[calc(var(--radius)-1px)]" : "",
+                    !flush && isFirst
+                      ? "rounded-tl-[calc(var(--radius)-1px)]"
+                      : "",
+                    !flush && isLast
+                      ? "rounded-tr-[calc(var(--radius)-1px)]"
+                      : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
@@ -344,10 +360,12 @@ export function DataTable({
                         kind === "name"
                           ? "truncate whitespace-nowrap font-semibold text-[var(--ink)]"
                           : "whitespace-nowrap",
-                        isLastRow && isFirst
+                        !flush && isLastRow && isFirst
                           ? "rounded-bl-[calc(var(--radius)-1px)]"
                           : "",
-                        isLastRow && cellIndex === headers.length - 1
+                        !flush &&
+                        isLastRow &&
+                        cellIndex === headers.length - 1
                           ? "rounded-br-[calc(var(--radius)-1px)]"
                           : "",
                       ]
