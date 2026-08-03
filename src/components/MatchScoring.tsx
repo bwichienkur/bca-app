@@ -1263,7 +1263,7 @@ export function MatchScoring({
   }
 
   return (
-    <section className="animate-rise">
+    <section className="animate-rise space-y-3">
       <SectionCard
         eyebrow="Score"
         title="Scoresheets"
@@ -1286,74 +1286,74 @@ export function MatchScoring({
             ? undefined
             : { label: "Matches", value: String(matches.length) }
         }
-      >
-        {listError ? (
-          <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
-            {listError}
-          </p>
-        ) : null}
-        {submitMessage ? (
-          <p className="rounded-xl border border-[var(--felt)]/35 bg-[color-mix(in_srgb,var(--felt)_18%,transparent)] px-3 py-2 text-sm text-[var(--felt-deep)]">
-            {submitMessage}
-          </p>
-        ) : null}
+      />
 
-        {loadingMatches ? (
-          <LoadingState label="Loading your matches…" />
-        ) : matches.length === 0 ? (
-          <EmptyState
-            title={
-              teamName
-                ? `No matches for ${teamName}`
-                : "No matches for your team"
-            }
-            body="When this team is scheduled in the selected division, those matches will show up here ready to score."
-          />
-        ) : (
-          <div className="space-y-2.5">
-            {matches.map((item, index) => {
-              const draftExists = draftMatchIds.has(item.id);
-              const myTeamKey = teamName ? normalizeTeamName(teamName) : null;
-              const status = [
-                item.hasBeenPlayed
-                  ? "Submitted on LMS"
-                  : draftExists
-                    ? "Draft in progress"
-                    : "Ready to score",
-                item.mySide ? "Your match" : null,
-              ]
-                .filter(Boolean)
-                .join(" · ");
-              return (
-                <MatchListCard
-                  key={item.id}
-                  className="animate-rise"
-                  style={{ animationDelay: `${Math.min(index, 6) * 0.04}s` }}
-                  homeName={item.teamOneName}
-                  awayName={item.teamTwoName}
-                  meta={formatMatchDate(item.datePlayed)}
-                  location={item.location || undefined}
-                  status={status}
-                  ctaLabel={item.hasBeenPlayed ? "View" : "Score"}
-                  emphasizeHome={
-                    Boolean(
-                      myTeamKey &&
-                        normalizeTeamName(item.teamOneName) === myTeamKey,
-                    )
-                  }
-                  emphasizeAway={
-                    Boolean(
-                      myTeamKey &&
-                        normalizeTeamName(item.teamTwoName) === myTeamKey,
-                    )
-                  }
-                  onClick={() => void openMatch(item.id)}
-                />
-              );
-            })}
-          </div>
-        )}
-      </SectionCard>
+      {listError ? (
+        <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
+          {listError}
+        </p>
+      ) : null}
+      {submitMessage ? (
+        <p className="rounded-xl border border-[var(--felt)]/35 bg-[color-mix(in_srgb,var(--felt)_18%,transparent)] px-3 py-2 text-sm text-[var(--felt-deep)]">
+          {submitMessage}
+        </p>
+      ) : null}
+
+      {loadingMatches ? (
+        <LoadingState label="Loading your matches…" />
+      ) : matches.length === 0 ? (
+        <EmptyState
+          title={
+            teamName
+              ? `No matches for ${teamName}`
+              : "No matches for your team"
+          }
+          body="When this team is scheduled in the selected division, those matches will show up here ready to score."
+        />
+      ) : (
+        <div className="space-y-2.5">
+          {matches.map((item, index) => {
+            const draftExists = draftMatchIds.has(item.id);
+            const myTeamKey = teamName ? normalizeTeamName(teamName) : null;
+            const status = [
+              item.hasBeenPlayed
+                ? "Submitted on LMS"
+                : draftExists
+                  ? "Draft in progress"
+                  : "Ready to score",
+              item.mySide ? "Your match" : null,
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            return (
+              <MatchListCard
+                key={item.id}
+                className="animate-rise"
+                style={{ animationDelay: `${Math.min(index, 6) * 0.04}s` }}
+                homeName={item.teamOneName}
+                awayName={item.teamTwoName}
+                meta={formatMatchDate(item.datePlayed)}
+                location={item.location || undefined}
+                status={status}
+                ctaLabel={item.hasBeenPlayed ? "View" : "Score"}
+                emphasizeHome={
+                  Boolean(
+                    myTeamKey &&
+                      normalizeTeamName(item.teamOneName) === myTeamKey,
+                  )
+                }
+                emphasizeAway={
+                  Boolean(
+                    myTeamKey &&
+                      normalizeTeamName(item.teamTwoName) === myTeamKey,
+                  )
+                }
+                onClick={() => void openMatch(item.id)}
+              />
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }
