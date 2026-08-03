@@ -88,6 +88,18 @@ export const STATUS_LABELS: Record<TournamentStatus, string> = {
   canceled: "Cancelled",
 };
 
+/** Statuses an organizer can set manually (full is derived from capacity). */
+export const ORGANIZER_STATUS_OPTIONS: {
+  value: Exclude<TournamentStatus, "full">;
+  label: string;
+}[] = [
+  { value: "draft", label: "Draft" },
+  { value: "open", label: "Open" },
+  { value: "closed", label: "Closed" },
+  { value: "completed", label: "Completed" },
+  { value: "canceled", label: "Cancelled" },
+];
+
 export const FL_REGIONS = [
   "Palm Beach",
   "Broward",
