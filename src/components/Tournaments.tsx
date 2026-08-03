@@ -33,10 +33,12 @@ import type {
   TournamentStatus,
 } from "@/lib/tournaments/types";
 import type { AuthUser } from "./LoginScreen";
+import { DateTimeField } from "./DateTimeField";
 import { EmptyState } from "./EmptyState";
 import { LoadingState } from "./LoadingState";
 import { SearchField } from "./SearchField";
 import { SectionCard } from "./SectionCard";
+import { SelectField } from "./SelectField";
 
 type View = "browse" | "create" | "detail";
 
@@ -107,10 +109,10 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <label className="block min-w-0">
+    <div className="block min-w-0">
       <span className={labelClass}>{label}</span>
       {children}
-    </label>
+    </div>
   );
 }
 
@@ -483,78 +485,47 @@ export function Tournaments({
                   </Field>
                 </div>
                 <Field label="Game">
-                  <select
-                    className={fieldClass}
+                  <SelectField
+                    aria-label="Game"
                     value={form.gameType}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        gameType: e.target.value as CreateTournamentInput["gameType"],
-                      }))
+                    options={GAME_TYPE_OPTIONS}
+                    onChange={(gameType) =>
+                      setForm((p) => ({ ...p, gameType }))
                     }
-                  >
-                    {GAME_TYPE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </Field>
                 <Field label="Event type">
-                  <select
-                    className={fieldClass}
+                  <SelectField
+                    aria-label="Event type"
                     value={form.eventType}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        eventType: e.target.value as CreateTournamentInput["eventType"],
-                      }))
+                    options={EVENT_TYPE_OPTIONS}
+                    onChange={(eventType) =>
+                      setForm((p) => ({ ...p, eventType }))
                     }
-                  >
-                    {EVENT_TYPE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </Field>
                 <Field label="Bracket">
-                  <select
-                    className={fieldClass}
+                  <SelectField
+                    aria-label="Bracket"
                     value={form.bracketFormat}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        bracketFormat: e.target
-                          .value as CreateTournamentInput["bracketFormat"],
-                      }))
+                    options={BRACKET_FORMAT_OPTIONS}
+                    onChange={(bracketFormat) =>
+                      setForm((p) => ({ ...p, bracketFormat }))
                     }
-                  >
-                    {BRACKET_FORMAT_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </Field>
                 <Field label="Handicap">
-                  <select
-                    className={fieldClass}
+                  <SelectField
+                    aria-label="Handicap"
                     value={form.handicapSystem}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        handicapSystem: e.target
-                          .value as CreateTournamentInput["handicapSystem"],
-                      }))
+                    options={HANDICAP_SYSTEM_OPTIONS.map((o) => ({
+                      value: o.value,
+                      label: o.label,
+                    }))}
+                    onChange={(handicapSystem) =>
+                      setForm((p) => ({ ...p, handicapSystem }))
                     }
-                  >
-                    {HANDICAP_SYSTEM_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </Field>
                 <Field label="Winners race to">
                   <input
@@ -619,23 +590,14 @@ export function Tournaments({
                   />
                 </Field>
                 <Field label="Unrated players">
-                  <select
-                    className={fieldClass}
-                    value={form.unratedPolicy}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        unratedPolicy: e.target
-                          .value as CreateTournamentInput["unratedPolicy"],
-                      }))
+                  <SelectField
+                    aria-label="Unrated players"
+                    value={form.unratedPolicy ?? "message-organizer"}
+                    options={UNRATED_POLICY_OPTIONS}
+                    onChange={(unratedPolicy) =>
+                      setForm((p) => ({ ...p, unratedPolicy }))
                     }
-                  >
-                    {UNRATED_POLICY_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </Field>
                 <Field label="Max players">
                   <input
@@ -668,103 +630,67 @@ export function Tournaments({
                   />
                 </Field>
                 <Field label="Payment">
-                  <select
-                    className={fieldClass}
-                    value={form.payMethod}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        payMethod: e.target
-                          .value as CreateTournamentInput["payMethod"],
-                      }))
-                    }
-                  >
-                    {PAY_METHOD_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Registration">
-                  <select
-                    className={fieldClass}
-                    value={form.registrationMode}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        registrationMode: e.target
-                          .value as CreateTournamentInput["registrationMode"],
-                      }))
-                    }
-                  >
-                    {REGISTRATION_MODE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Ruleset">
-                  <select
-                    className={fieldClass}
-                    value={form.rulesetPreset}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        rulesetPreset: e.target
-                          .value as CreateTournamentInput["rulesetPreset"],
-                      }))
-                    }
-                  >
-                    {RULESET_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Table size">
-                  <select
-                    className={fieldClass}
-                    value={form.tableSize}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        tableSize: e.target
-                          .value as CreateTournamentInput["tableSize"],
-                      }))
-                    }
-                  >
-                    {TABLE_SIZE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Starts">
-                  <input
-                    required
-                    type="datetime-local"
-                    className={fieldClass}
-                    value={form.startsAt}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, startsAt: e.target.value }))
+                  <SelectField
+                    aria-label="Payment"
+                    value={form.payMethod ?? "door"}
+                    options={PAY_METHOD_OPTIONS}
+                    onChange={(payMethod) =>
+                      setForm((p) => ({ ...p, payMethod }))
                     }
                   />
                 </Field>
+                <Field label="Registration">
+                  <SelectField
+                    aria-label="Registration"
+                    value={form.registrationMode ?? "approval"}
+                    options={REGISTRATION_MODE_OPTIONS}
+                    onChange={(registrationMode) =>
+                      setForm((p) => ({ ...p, registrationMode }))
+                    }
+                  />
+                </Field>
+                <Field label="Ruleset">
+                  <SelectField
+                    aria-label="Ruleset"
+                    value={form.rulesetPreset ?? "bca"}
+                    options={RULESET_OPTIONS}
+                    onChange={(rulesetPreset) =>
+                      setForm((p) => ({ ...p, rulesetPreset }))
+                    }
+                  />
+                </Field>
+                <Field label="Table size">
+                  <SelectField
+                    aria-label="Table size"
+                    value={form.tableSize ?? "7ft"}
+                    options={TABLE_SIZE_OPTIONS}
+                    onChange={(tableSize) =>
+                      setForm((p) => ({ ...p, tableSize }))
+                    }
+                  />
+                </Field>
+                <Field label="Starts">
+                  <DateTimeField
+                    required
+                    aria-label="Starts"
+                    value={form.startsAt}
+                    onChange={(startsAt) =>
+                      setForm((p) => ({ ...p, startsAt }))
+                    }
+                    placeholder="Pick start date & time"
+                  />
+                </Field>
                 <Field label="Check-in">
-                  <input
-                    type="datetime-local"
-                    className={fieldClass}
+                  <DateTimeField
+                    aria-label="Check-in"
                     value={form.checkInAt ?? ""}
-                    onChange={(e) =>
+                    onChange={(checkInAt) =>
                       setForm((p) => ({
                         ...p,
-                        checkInAt: e.target.value || null,
+                        checkInAt: checkInAt || null,
                       }))
                     }
+                    placeholder="Optional check-in time"
                   />
                 </Field>
                 <Field label="Venue">
@@ -790,19 +716,12 @@ export function Tournaments({
                   />
                 </Field>
                 <Field label="Region">
-                  <select
-                    className={fieldClass}
-                    value={form.region}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, region: e.target.value }))
-                    }
-                  >
-                    {FL_REGIONS.map((r) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
-                    ))}
-                  </select>
+                  <SelectField
+                    aria-label="Region"
+                    value={form.region ?? "Palm Beach"}
+                    options={FL_REGIONS.map((r) => ({ value: r, label: r }))}
+                    onChange={(region) => setForm((p) => ({ ...p, region }))}
+                  />
                 </Field>
                 <Field label="Address">
                   <input
@@ -1267,32 +1186,26 @@ export function Tournaments({
             label="Search events"
           />
           <div className="grid gap-2 sm:grid-cols-3">
-            <select
-              className={fieldClass}
+            <SelectField
+              aria-label="Filter by region"
               value={region}
-              onChange={(e) => setRegion(e.target.value)}
-            >
-              <option value="">All regions</option>
-              {FL_REGIONS.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-            <select
-              className={fieldClass}
+              placeholder="All regions"
+              options={[
+                { value: "", label: "All regions" },
+                ...FL_REGIONS.map((r) => ({ value: r, label: r })),
+              ]}
+              onChange={setRegion}
+            />
+            <SelectField
+              aria-label="Filter by game"
               value={gameType}
-              onChange={(e) =>
-                setGameType(e.target.value as GameType | "")
-              }
-            >
-              <option value="">All games</option>
-              {GAME_TYPE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              placeholder="All games"
+              options={[
+                { value: "", label: "All games" },
+                ...GAME_TYPE_OPTIONS,
+              ]}
+              onChange={(next) => setGameType(next as GameType | "")}
+            />
             <label className="flex items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)]">
               <input
                 type="checkbox"
