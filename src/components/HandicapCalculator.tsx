@@ -3,6 +3,7 @@
 import {
   startTransition,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -205,6 +206,31 @@ export function HandicapCalculator({
   const [mobileSide, setMobileSide] = useState<LineupSide>("home");
   const [activeRound, setActiveRound] = useState(1);
   const [subTab, setSubTab] = useState<HandicapSubTab>("lineups");
+  /** Sit just under the sticky report-tab nav (2×3 grid on mobile). */
+  const [matchupStickyTop, setMatchupStickyTop] = useState(104);
+
+  useLayoutEffect(() => {
+    const tabs = document.querySelector<HTMLElement>("[data-report-tabs]");
+    const measure = () => {
+      const height = tabs
+        ? Math.ceil(tabs.getBoundingClientRect().height)
+        : 104;
+      setMatchupStickyTop(Math.max(height, 72));
+    };
+    measure();
+    const observer =
+      tabs && typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(measure)
+        : null;
+    if (tabs && observer) observer.observe(tabs);
+    window.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+    };
+  }, []);
 
   useEffect(() => {
     if (!awayTeamId) setMobileSide("home");
@@ -534,7 +560,10 @@ export function HandicapCalculator({
     <div className="animate-panel space-y-4">
       {sectionHeader}
 
-      <section className="sticky top-[5.75rem] z-40 -mx-1 space-y-2 rounded-2xl border border-[var(--line)] bg-[color-mix(in_srgb,var(--paper)_94%,transparent)] px-1 py-2 shadow-sm backdrop-blur sm:top-[3.75rem]">
+      <section
+        className="sticky z-10 -mx-1 space-y-2 rounded-2xl border border-[var(--line)] bg-[color-mix(in_srgb,var(--paper)_96%,transparent)] px-1 py-2 shadow-sm backdrop-blur"
+        style={{ top: matchupStickyTop }}
+      >
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
             Matchup
@@ -543,7 +572,7 @@ export function HandicapCalculator({
             {formatMeta}
           </p>
         </div>
-        <div className="relative z-40 grid gap-2 sm:grid-cols-2">
+        <div className="relative z-10 grid gap-2 sm:grid-cols-2">
           <Typeahead
             label="Home"
             placeholder="Select home team"
