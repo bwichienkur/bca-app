@@ -97,6 +97,18 @@ function ScoreIcon({ className }: IconProps) {
   );
 }
 
+function EventsIcon({ className }: IconProps) {
+  return (
+    <IconShell className={className}>
+      <path d="M8 4v3" />
+      <path d="M16 4v3" />
+      <path d="M5 9h14" />
+      <path d="M6 7h12a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z" />
+      <path d="m9.5 14 1.5 1.5 3.5-3.5" />
+    </IconShell>
+  );
+}
+
 const NAV_ICONS: Record<
   Exclude<ReportTab, "search">,
   (props: IconProps) => ReactNode
@@ -106,6 +118,7 @@ const NAV_ICONS: Record<
   players: PlayersIcon,
   schedule: ScheduleIcon,
   handicap: HandicapIcon,
+  events: EventsIcon,
   score: ScoreIcon,
 };
 
