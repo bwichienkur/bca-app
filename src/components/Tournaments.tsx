@@ -20,6 +20,7 @@ import {
   GAME_TYPE_OPTIONS,
   HANDICAP_SYSTEM_OPTIONS,
   maxEntriesLabel,
+  ORGANIZER_STATUS_OPTIONS,
   PAY_METHOD_OPTIONS,
   REGISTRATION_MODE_OPTIONS,
   RULESET_OPTIONS,
@@ -44,7 +45,11 @@ import { SearchField } from "./SearchField";
 import { SectionCard } from "./SectionCard";
 import { SelectField } from "./SelectField";
 
-type View = "browse" | "create" | "detail";
+type View = "browse" | "create" | "edit" | "detail";
+
+type EventFormState = Omit<CreateTournamentInput, "status"> & {
+  status: TournamentStatus;
+};
 
 type DetailPayload = {
   tournament: TournamentListItem;
@@ -144,7 +149,7 @@ type TeammateDraft = {
   ratingAtSignup: string;
 };
 
-const emptyForm = (): CreateTournamentInput => ({
+const emptyForm = (): EventFormState => ({
   title: "",
   description: "",
   thumbnailUrl: null,
@@ -184,6 +189,49 @@ function emptyTeammates(count: number): TeammateDraft[] {
   }));
 }
 
+function toLocalInputValue(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function tournamentToForm(t: TournamentListItem): EventFormState {
+  return {
+    title: t.title,
+    description: t.description,
+    thumbnailUrl: t.thumbnailUrl,
+    gameType: t.gameType,
+    eventType: t.eventType,
+    bracketFormat: t.bracketFormat,
+    handicapSystem: t.handicapSystem,
+    handicapNotes: t.handicapNotes,
+    rulesetPreset: t.rulesetPreset,
+    winnersRaceTo: t.winnersRaceTo,
+    losersRaceTo: t.losersRaceTo,
+    minFargo: t.minFargo,
+    maxFargo: t.maxFargo,
+    unratedPolicy: t.unratedPolicy,
+    maxPlayers: t.maxPlayers,
+    teamSize: t.teamSize,
+    entryFeeCents: t.entryFeeCents,
+    payMethod: t.payMethod,
+    payoutNotes: t.payoutNotes,
+    registrationMode: t.registrationMode,
+    reportedToFargo: t.reportedToFargo,
+    tableSize: t.tableSize,
+    venueName: t.venueName,
+    venueAddress: t.venueAddress,
+    city: t.city,
+    region: t.region,
+    startsAt: toLocalInputValue(t.startsAt),
+    checkInAt: toLocalInputValue(t.checkInAt),
+    organizerPhone: t.organizerPhone,
+    status: t.status === "full" ? "open" : t.status,
+  };
+}
+
 export function Tournaments({
   user,
   authLoading,
@@ -201,7 +249,8 @@ export function Tournaments({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<DetailPayload | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [form, setForm] = useState<CreateTournamentInput>(emptyForm);
+  const [form, setForm] = useState<EventFormState>(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [regNote, setRegNote] = useState("");
@@ -324,7 +373,47 @@ export function Tournaments({
     );
   }, [detail, user]);
 
-  const onCreate = async (event: FormEvent) => {
+  const buildFormPayload = () => ({
+    ...form,
+    title: form.title.trim(),
+    venueName: form.venueName.trim(),
+    city: form.city.trim(),
+    entryFeeCents: Math.round(Number(form.entryFeeCents) || 0),
+    maxPlayers: Math.max(2, Math.floor(Number(form.maxPlayers) || 2)),
+    teamSize: Math.max(1, Math.floor(Number(form.teamSize) || 1)),
+    startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : "",
+    checkInAt: form.checkInAt ? new Date(form.checkInAt).toISOString() : null,
+    minFargo:
+      form.minFargo === null || form.minFargo === ("" as unknown as number)
+        ? null
+        : Number(form.minFargo),
+    maxFargo:
+      form.maxFargo === null || form.maxFargo === ("" as unknown as number)
+        ? null
+        : Number(form.maxFargo),
+  });
+
+  const startEdit = (tournament: TournamentListItem) => {
+    setEditingId(tournament.id);
+    setForm(tournamentToForm(tournament));
+    setError(null);
+    setActionMsg(null);
+    setView("edit");
+  };
+
+  const leaveForm = () => {
+    const returnId = editingId ?? selectedId;
+    setForm(emptyForm());
+    setEditingId(null);
+    setError(null);
+    if (returnId && (view === "edit" || selectedId)) {
+      void openDetail(returnId);
+      return;
+    }
+    setView("browse");
+  };
+
+  const onSaveForm = async (event: FormEvent) => {
     event.preventDefault();
     if (!user) {
       onRequestLogin();
@@ -333,45 +422,38 @@ export function Tournaments({
     setSaving(true);
     setError(null);
     try {
-      const payload: CreateTournamentInput = {
-        ...form,
-        title: form.title.trim(),
-        venueName: form.venueName.trim(),
-        city: form.city.trim(),
-        entryFeeCents: Math.round(Number(form.entryFeeCents) || 0),
-        maxPlayers: Math.max(2, Math.floor(Number(form.maxPlayers) || 2)),
-        startsAt: form.startsAt
-          ? new Date(form.startsAt).toISOString()
-          : "",
-        checkInAt: form.checkInAt
-          ? new Date(form.checkInAt).toISOString()
-          : null,
-        minFargo:
-          form.minFargo === null || form.minFargo === ("" as unknown as number)
-            ? null
-            : Number(form.minFargo),
-        maxFargo:
-          form.maxFargo === null || form.maxFargo === ("" as unknown as number)
-            ? null
-            : Number(form.maxFargo),
-      };
-      const res = await fetch("/api/tournaments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const payload = buildFormPayload();
+      const isEdit = view === "edit" && Boolean(editingId);
+      const res = await fetch(
+        isEdit ? `/api/tournaments/${editingId}` : "/api/tournaments",
+        {
+          method: isEdit ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
       const data = (await res.json()) as {
         tournament?: TournamentListItem;
         error?: string;
       };
       if (!res.ok || !data.tournament) {
-        throw new Error(data.error || "Failed to create event.");
+        throw new Error(
+          data.error || (isEdit ? "Failed to update event." : "Failed to create event."),
+        );
       }
+      const savedId = data.tournament.id;
       setForm(emptyForm());
+      setEditingId(null);
       await loadEvents();
-      await openDetail(data.tournament.id);
+      await openDetail(savedId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create event.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : view === "edit"
+            ? "Failed to update event."
+            : "Failed to create event.",
+      );
     } finally {
       setSaving(false);
     }
@@ -485,25 +567,27 @@ export function Tournaments({
     }
   };
 
-  if (view === "create") {
+  if (view === "create" || view === "edit") {
+    const isEdit = view === "edit";
     return (
       <div className="space-y-4 animate-panel">
         <button
           type="button"
-          onClick={() => {
-            setView("browse");
-            setError(null);
-          }}
+          onClick={leaveForm}
           className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
         >
           <span aria-hidden>←</span>
-          All events
+          {isEdit ? "Back to event" : "All events"}
         </button>
 
         <SectionCard
           eyebrow="Events"
-          title="Create event"
-          description="Set the format, Fargo band, entry, and venue. Players can browse and sign up from Events."
+          title={isEdit ? "Edit event" : "Create event"}
+          description={
+            isEdit
+              ? "Update format, eligibility, venue, or close registration."
+              : "Set the format, Fargo band, entry, and venue. Players can browse and sign up from Events."
+          }
         />
 
         {!user && !authLoading ? (
@@ -522,7 +606,7 @@ export function Tournaments({
           />
         ) : (
           <SurfaceCard>
-            <form onSubmit={onCreate} className="space-y-5 p-3 sm:p-4">
+            <form onSubmit={onSaveForm} className="space-y-5 p-3 sm:p-4">
               {error ? (
                 <p className="rounded-xl border border-[var(--danger)]/40 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
                   {error}
@@ -530,6 +614,22 @@ export function Tournaments({
               ) : null}
 
               <div className="grid gap-3 sm:grid-cols-2">
+                {isEdit ? (
+                  <div className="sm:col-span-2">
+                    <Field label="Status">
+                      <SelectField
+                        aria-label="Status"
+                        value={
+                          form.status === "full" ? "open" : form.status
+                        }
+                        options={ORGANIZER_STATUS_OPTIONS}
+                        onChange={(status) =>
+                          setForm((p) => ({ ...p, status }))
+                        }
+                      />
+                    </Field>
+                  </div>
+                ) : null}
                 <div className="sm:col-span-2">
                   <Field label="Event title">
                     <input
@@ -895,11 +995,17 @@ export function Tournaments({
                   disabled={saving}
                   className="rounded-full bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--felt-soft)] disabled:opacity-50"
                 >
-                  {saving ? "Publishing…" : "Publish event"}
+                  {saving
+                    ? isEdit
+                      ? "Saving…"
+                      : "Publishing…"
+                    : isEdit
+                      ? "Save changes"
+                      : "Publish event"}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setView("browse")}
+                  onClick={leaveForm}
                   className="rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-semibold text-[var(--muted)]"
                 >
                   Cancel
@@ -1255,6 +1361,102 @@ export function Tournaments({
               <>
                 <SectionCard
                   eyebrow="Organizer"
+                  title="Manage event"
+                  description="Edit details, close registration, or review who signed up."
+                />
+                <SurfaceCard>
+                  <div className="flex flex-wrap gap-2 p-3 sm:p-4">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(t)}
+                      className="rounded-full bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--felt-soft)]"
+                    >
+                      Edit event
+                    </button>
+                    {t.status === "open" || t.status === "full" ? (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => {
+                          setSaving(true);
+                          setActionMsg(null);
+                          void (async () => {
+                            try {
+                              const res = await fetch(`/api/tournaments/${t.id}`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ status: "closed" }),
+                              });
+                              const data = (await res.json()) as {
+                                error?: string;
+                              };
+                              if (!res.ok) {
+                                throw new Error(
+                                  data.error || "Could not close event.",
+                                );
+                              }
+                              setActionMsg("Registration closed.");
+                              await refreshDetail();
+                            } catch (err) {
+                              setActionMsg(
+                                err instanceof Error
+                                  ? err.message
+                                  : "Could not close event.",
+                              );
+                            } finally {
+                              setSaving(false);
+                            }
+                          })();
+                        }}
+                        className="rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
+                      >
+                        Close registration
+                      </button>
+                    ) : t.status === "closed" || t.status === "draft" ? (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => {
+                          setSaving(true);
+                          setActionMsg(null);
+                          void (async () => {
+                            try {
+                              const res = await fetch(`/api/tournaments/${t.id}`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ status: "open" }),
+                              });
+                              const data = (await res.json()) as {
+                                error?: string;
+                              };
+                              if (!res.ok) {
+                                throw new Error(
+                                  data.error || "Could not reopen event.",
+                                );
+                              }
+                              setActionMsg("Registration reopened.");
+                              await refreshDetail();
+                            } catch (err) {
+                              setActionMsg(
+                                err instanceof Error
+                                  ? err.message
+                                  : "Could not reopen event.",
+                              );
+                            } finally {
+                              setSaving(false);
+                            }
+                          })();
+                        }}
+                        className="rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
+                      >
+                        Reopen registration
+                      </button>
+                    ) : null}
+                  </div>
+                </SurfaceCard>
+
+                <SectionCard
+                  eyebrow="Organizer"
                   title="Signups"
                   description="Approve players, mark door/Venmo paid, and review messages."
                   badge={{
@@ -1413,6 +1615,8 @@ export function Tournaments({
             <button
               type="button"
               onClick={() => {
+                setEditingId(null);
+                setForm(emptyForm());
                 setView("create");
                 setError(null);
               }}
@@ -1474,7 +1678,11 @@ export function Tournaments({
               action={
                 <button
                   type="button"
-                  onClick={() => setView("create")}
+                  onClick={() => {
+                    setEditingId(null);
+                    setForm(emptyForm());
+                    setView("create");
+                  }}
                   className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
                 >
                   Create event
