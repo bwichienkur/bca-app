@@ -235,7 +235,7 @@ export function TeamLineupTemplates({
 
   const header = (
     <SectionCard
-      eyebrow="My team"
+      eyebrow="Team"
       title="Lineups"
       description={`Save ${slots}-player orders for league night. Load them from Handicap or Score.`}
       badge={
@@ -251,11 +251,7 @@ export function TeamLineupTemplates({
 
   const library = (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
-          Saved lineups
-          {loading ? "" : ` · ${teamPresets.length}`}
-        </p>
+      <div className="flex justify-end">
         <button
           type="button"
           onClick={openNew}
