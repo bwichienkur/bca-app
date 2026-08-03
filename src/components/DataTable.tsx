@@ -10,6 +10,11 @@ type DataTableProps = {
   stickyFirst?: boolean;
   /** Denser rows for team player grids */
   compact?: boolean;
+  /**
+   * `premium` keeps the felt brand header but adds standing-card polish
+   * (gradient header, display names, softer rows). Used for Team → Roster.
+   */
+  tone?: "default" | "premium";
   onRowClick?: (row: string[], rowIndex: number) => void;
   /** Prefer content-based selection so sorting doesn't break highlights */
   isRowSelected?: (row: string[]) => boolean;
@@ -146,11 +151,13 @@ export function DataTable({
   rows,
   stickyFirst = true,
   compact = false,
+  tone = "default",
   onRowClick,
   isRowSelected,
   selectedRowIndex = null,
   emptyText = "No data available for this report.",
 }: DataTableProps) {
+  const premium = tone === "premium";
   const [sortColumn, setSortColumn] = useState<number | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
@@ -222,14 +229,29 @@ export function DataTable({
   };
 
   const cellPad = compact
-    ? "px-2 py-2 md:px-2.5"
+    ? premium
+      ? "px-2.5 py-2.5 md:px-3"
+      : "px-2 py-2 md:px-2.5"
     : "px-2.5 py-3 md:px-3.5";
   const tableText = compact
-    ? "text-xs md:text-[13px]"
+    ? premium
+      ? "text-[12px] md:text-[13px]"
+      : "text-xs md:text-[13px]"
     : "text-[13px] md:text-sm";
+  const headerBg = premium
+    ? "bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))]"
+    : "bg-[var(--felt-soft)]";
+  const headerStickyBg = premium
+    ? "bg-[rgb(24,90,130)]"
+    : "bg-[var(--felt-soft)]";
 
   return (
-    <div className="overflow-x-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+    <div
+      className={[
+        "overflow-x-auto border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]",
+        premium ? "rounded-[1.35rem]" : "rounded-[var(--radius)]",
+      ].join(" ")}
+    >
       <table
         className={[
           "w-full table-fixed border-separate border-spacing-0 text-left",
@@ -242,7 +264,7 @@ export function DataTable({
             <col key={`col-${index}`} style={{ width: column.width }} />
           ))}
         </colgroup>
-        <thead className="bg-[var(--felt-soft)] text-white">
+        <thead className={`${headerBg} text-white`}>
           <tr>
             {headers.map((header, index) => {
               const active = sortColumn === index;
@@ -260,13 +282,24 @@ export function DataTable({
                       : "none"
                   }
                   className={[
-                    "border-b border-[var(--felt-soft)] font-semibold tracking-wide text-white",
+                    "border-b border-white/10 font-semibold text-white",
+                    premium
+                      ? "text-[10px] uppercase tracking-[0.12em] md:text-[11px]"
+                      : "tracking-wide",
                     cellPad,
                     isSticky
-                      ? "sticky left-0 z-10 bg-[var(--felt-soft)] shadow-[4px_0_10px_rgba(0,0,0,0.28)]"
-                      : "bg-[var(--felt-soft)]",
-                    isFirst ? "rounded-tl-[calc(var(--radius)-1px)]" : "",
-                    isLast ? "rounded-tr-[calc(var(--radius)-1px)]" : "",
+                      ? `sticky left-0 z-10 ${headerStickyBg} shadow-[4px_0_12px_rgba(0,0,0,0.32)]`
+                      : headerBg,
+                    isFirst
+                      ? premium
+                        ? "rounded-tl-[calc(1.35rem-1px)]"
+                        : "rounded-tl-[calc(var(--radius)-1px)]"
+                      : "",
+                    isLast
+                      ? premium
+                        ? "rounded-tr-[calc(1.35rem-1px)]"
+                        : "rounded-tr-[calc(var(--radius)-1px)]"
+                      : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
@@ -281,13 +314,22 @@ export function DataTable({
                           : "Sorted descending — click to clear sort"
                         : "Sort column"
                     }
-                    className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-0.5 py-0.5 transition hover:text-[var(--amber)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                    className={[
+                      "inline-flex items-center gap-1 whitespace-nowrap rounded-md px-0.5 py-0.5 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
+                      premium
+                        ? "hover:text-white/90"
+                        : "hover:text-[var(--amber)]",
+                    ].join(" ")}
                   >
                     <span>{header}</span>
                     <span
                       className={[
                         "shrink-0 text-[10px] leading-none",
-                        active ? "opacity-100" : "opacity-45",
+                        active
+                          ? premium
+                            ? "text-[var(--amber)] opacity-100"
+                            : "opacity-100"
+                          : "opacity-45",
                       ].join(" ")}
                       aria-hidden
                     >
@@ -307,9 +349,13 @@ export function DataTable({
             const clickable = Boolean(onRowClick);
             const rowBg = selected
               ? "bg-[color-mix(in_srgb,var(--felt)_22%,var(--surface))]"
-              : displayIndex % 2 === 0
-                ? "bg-[var(--surface)]"
-                : "bg-[var(--surface-2)]";
+              : premium
+                ? displayIndex % 2 === 0
+                  ? "bg-[var(--surface)]"
+                  : "bg-[color-mix(in_srgb,var(--surface-2)_72%,var(--surface))]"
+                : displayIndex % 2 === 0
+                  ? "bg-[var(--surface)]"
+                  : "bg-[var(--surface-2)]";
             return (
               <tr
                 key={`${originalIndex}-${displayIndex}`}
@@ -319,7 +365,9 @@ export function DataTable({
                 className={[
                   clickable
                     ? "cursor-pointer transition hover:bg-[color-mix(in_srgb,var(--amber)_16%,var(--surface))]"
-                    : "",
+                    : premium
+                      ? "transition hover:bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]"
+                      : "",
                 ].join(" ")}
               >
                 {headers.map((_, cellIndex) => {
@@ -333,28 +381,54 @@ export function DataTable({
                       key={cellIndex}
                       title={kind === "name" ? value : undefined}
                       className={[
-                        "border-b border-[var(--line)]",
+                        premium
+                          ? "border-b border-[var(--line)]/80"
+                          : "border-b border-[var(--line)]",
                         cellPad,
                         rowBg,
                         isSticky
-                          ? "sticky left-0 z-[1] font-semibold text-[var(--ink)] shadow-[4px_0_10px_rgba(0,0,0,0.22)]"
+                          ? [
+                              "sticky left-0 z-[1] shadow-[4px_0_12px_rgba(0,0,0,0.22)]",
+                              premium
+                                ? "font-[family-name:var(--font-display)] font-semibold text-[var(--ink)]"
+                                : "font-semibold text-[var(--ink)]",
+                            ].join(" ")
                           : kind === "rank"
-                            ? "tabular-nums font-medium text-[var(--muted)]"
-                            : "tabular-nums font-semibold text-[var(--ink)]",
+                            ? premium
+                              ? "tabular-nums font-medium text-[var(--muted)]"
+                              : "tabular-nums font-medium text-[var(--muted)]"
+                            : premium
+                              ? "tabular-nums font-medium text-[var(--ink)]"
+                              : "tabular-nums font-semibold text-[var(--ink)]",
                         kind === "name"
-                          ? "truncate whitespace-nowrap font-semibold text-[var(--ink)]"
+                          ? [
+                              "truncate whitespace-nowrap text-[var(--ink)]",
+                              premium
+                                ? "font-[family-name:var(--font-display)] font-semibold"
+                                : "font-semibold",
+                            ].join(" ")
                           : "whitespace-nowrap",
                         isLastRow && isFirst
-                          ? "rounded-bl-[calc(var(--radius)-1px)]"
+                          ? premium
+                            ? "rounded-bl-[calc(1.35rem-1px)]"
+                            : "rounded-bl-[calc(var(--radius)-1px)]"
                           : "",
                         isLastRow && cellIndex === headers.length - 1
-                          ? "rounded-br-[calc(var(--radius)-1px)]"
+                          ? premium
+                            ? "rounded-br-[calc(1.35rem-1px)]"
+                            : "rounded-br-[calc(var(--radius)-1px)]"
                           : "",
                       ]
                         .filter(Boolean)
                         .join(" ")}
                     >
-                      {value}
+                      {kind === "rank" && premium && value ? (
+                        <span className="inline-flex min-w-[1.35rem] justify-center rounded-md bg-[var(--surface-2)] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-[var(--muted)]">
+                          {value}
+                        </span>
+                      ) : (
+                        value
+                      )}
                     </td>
                   );
                 })}
