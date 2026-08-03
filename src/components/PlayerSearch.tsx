@@ -5,6 +5,7 @@ import type { PlayerSearchResult } from "@/lib/types";
 import { useViewportAnchor } from "@/lib/use-viewport-anchor";
 import { EmptyState } from "./EmptyState";
 import { PlayerDetail } from "./PlayerDetail";
+import { SectionCard } from "./SectionCard";
 
 const MIN_QUERY = 2;
 const DEBOUNCE_MS = 320;
@@ -162,58 +163,56 @@ export function PlayerSearch() {
 
   return (
     <section className="space-y-3 md:space-y-4">
-      {/* Sticky under report tabs so typing never loses the search box */}
-      <div
-        ref={searchAnchor.ref}
-        className="sticky top-[5.75rem] z-10 -mx-1 space-y-3 bg-[color-mix(in_srgb,var(--paper)_94%,transparent)] px-1 py-2 backdrop-blur sm:top-[3.75rem]"
+      <SectionCard
+        eyebrow="Search"
+        title="Player search"
+        description="Look up any FargoRate rating by name or membership ID, then open stats, active leagues, and match history."
+        badge={
+          searched && !loading
+            ? { label: "Results", value: String(players.length) }
+            : undefined
+        }
+        flush
       >
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-            Search
-          </p>
-          <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-            Player search
-          </h3>
-          <p className="mt-1 max-w-xl text-sm text-[var(--muted)]">
-            Look up any FargoRate rating by name or membership ID, then open
-            stats, active leagues, and match history.
-          </p>
+        {/* Sticky under report tabs so typing never loses the search box */}
+        <div
+          ref={searchAnchor.ref}
+          className="sticky top-[5.75rem] z-10 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--surface)_94%,transparent)] px-3 py-3 backdrop-blur sm:top-[3.75rem] sm:px-4"
+        >
+          <label className="relative block w-full">
+            <span className="sr-only">Search players</span>
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(event) => updateQuery(event.target.value)}
+              placeholder="Name or ID…"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              className={[
+                "w-full rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] py-3 text-base text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2",
+                hasQuery ? "pl-4 pr-24" : "px-4 pr-12",
+              ].join(" ")}
+            />
+            {hasQuery && !loading ? (
+              <button
+                type="button"
+                onClick={clearQuery}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-[var(--surface)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)]"
+              >
+                Clear
+              </button>
+            ) : null}
+            {loading ? (
+              <span
+                className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-[var(--line-strong)] border-t-[var(--felt)]"
+                aria-label="Searching"
+              />
+            ) : null}
+          </label>
         </div>
 
-        <label className="relative block max-w-xl">
-          <span className="sr-only">Search players</span>
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(event) => updateQuery(event.target.value)}
-            placeholder="Name or ID…"
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck={false}
-            className={[
-              "w-full rounded-2xl border border-[var(--line)] bg-[var(--surface)] py-3 text-base text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2",
-              hasQuery ? "pl-4 pr-24" : "px-4 pr-12",
-            ].join(" ")}
-          />
-          {hasQuery && !loading ? (
-            <button
-              type="button"
-              onClick={clearQuery}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)]"
-            >
-              Clear
-            </button>
-          ) : null}
-          {loading ? (
-            <span
-              className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-[var(--line-strong)] border-t-[var(--felt)]"
-              aria-label="Searching"
-            />
-          ) : null}
-        </label>
-      </div>
-
-      <div className="min-h-[min(48dvh,22rem)] [overflow-anchor:none]">
+        <div className="min-h-[min(48dvh,22rem)] space-y-3 p-3 [overflow-anchor:none] sm:p-4">
         {error ? (
           <div className="rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
             {error}
@@ -366,7 +365,8 @@ export function PlayerSearch() {
             ) : null}
           </div>
         ) : null}
-      </div>
+        </div>
+      </SectionCard>
     </section>
   );
 }

@@ -46,7 +46,7 @@ import { SearchField } from "./SearchField";
 import { SettingsScreen } from "./SettingsScreen";
 import { TeamDetail } from "./TeamDetail";
 import { TeamLineupTemplates } from "./TeamLineupTemplates";
-import { TeamSectionCard } from "./TeamSectionCard";
+import { SectionCard } from "./SectionCard";
 import { TeamStandingSummary } from "./TeamStandingSummary";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
@@ -1345,7 +1345,7 @@ export function LeagueApp() {
                   className={myTeamSubTab === "roster" ? "min-w-0" : "hidden"}
                   aria-hidden={myTeamSubTab !== "roster"}
                 >
-                  <TeamSectionCard
+                  <SectionCard
                     eyebrow="My team"
                     title="Roster"
                     description={
@@ -1376,14 +1376,14 @@ export function LeagueApp() {
                       embedded
                       flushStats
                     />
-                  </TeamSectionCard>
+                  </SectionCard>
                 </div>
 
                 <div
                   className={myTeamSubTab === "lineups" ? "min-w-0" : "hidden"}
                   aria-hidden={myTeamSubTab !== "lineups"}
                 >
-                  <TeamSectionCard
+                  <SectionCard
                     eyebrow="My team"
                     title="Lineups"
                     description={`Save ${DEFAULT_PLAYERS_PER_TEAM}-player orders for league night. Load them from Handicap or Score.`}
@@ -1404,7 +1404,7 @@ export function LeagueApp() {
                         body="Lineup templates need your team’s roster from this division."
                       />
                     )}
-                  </TeamSectionCard>
+                  </SectionCard>
                 </div>
               </section>
             ) : (
@@ -1439,84 +1439,93 @@ export function LeagueApp() {
                 }
               />
             ) : (
-              <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-                    League
-                  </p>
-                  <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-                    Team standings
-                  </h3>
-                  <p className="mt-1 text-sm text-[var(--muted)]">
-                    Tap a team to view player statistics. Use back to return to
-                    the league grid.
-                  </p>
-                </div>
-                <SearchField
-                  value={filterQuery}
-                  anchorRef={filterAnchor.ref}
-                  onBeforeChange={filterAnchor.mark}
-                  onChange={setFilterQuery}
-                  placeholder="Filter teams…"
-                />
-                <DataTable
-                  headers={teamReport.headers}
-                  rows={filteredTeamRows}
-                  stickyFirst
-                  compact
-                  isRowSelected={(row) =>
-                    Boolean(
-                      prefs.teamName &&
-                        normalizeTeamName(
-                          row[teamNameIndex(teamReport.headers)] ?? "",
-                        ) === normalizeTeamName(prefs.teamName),
-                    )
-                  }
-                  onRowClick={(row) => {
-                    const name =
-                      row[teamNameIndex(teamReport.headers)]?.trim() ?? "";
-                    const matched = divisionTeams.find(
-                      (team) =>
-                        normalizeTeamName(team.name) ===
-                        normalizeTeamName(name),
-                    );
-                    setSelectedTeamName(matched?.name ?? name);
+              <section className="min-h-[min(50dvh,24rem)] [overflow-anchor:none]">
+                <SectionCard
+                  eyebrow="League"
+                  title="Team standings"
+                  description="Tap a team to view player statistics. Use back to return to the league grid."
+                  badge={{
+                    label: "Teams",
+                    value: String(filteredTeamRows.length),
                   }}
-                  emptyText="No teams match your filter."
-                />
+                  flush
+                >
+                  <div className="border-b border-[var(--line)] px-3 py-3 sm:px-4 [&_label]:max-w-none">
+                    <SearchField
+                      value={filterQuery}
+                      anchorRef={filterAnchor.ref}
+                      onBeforeChange={filterAnchor.mark}
+                      onChange={setFilterQuery}
+                      placeholder="Filter teams…"
+                    />
+                  </div>
+                  <DataTable
+                    headers={teamReport.headers}
+                    rows={filteredTeamRows}
+                    stickyFirst
+                    compact
+                    flush
+                    isRowSelected={(row) =>
+                      Boolean(
+                        prefs.teamName &&
+                          normalizeTeamName(
+                            row[teamNameIndex(teamReport.headers)] ?? "",
+                          ) === normalizeTeamName(prefs.teamName),
+                      )
+                    }
+                    onRowClick={(row) => {
+                      const name =
+                        row[teamNameIndex(teamReport.headers)]?.trim() ?? "";
+                      const matched = divisionTeams.find(
+                        (team) =>
+                          normalizeTeamName(team.name) ===
+                          normalizeTeamName(name),
+                      );
+                      setSelectedTeamName(matched?.name ?? name);
+                    }}
+                    emptyText="No teams match your filter."
+                  />
+                </SectionCard>
               </section>
             )
           ) : tab === "players" && playersWithRatings ? (
-            <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-                  Players
-                </p>
-                <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-                  Division players
-                </h3>
-                <p className="mt-1 text-sm text-[var(--muted)]">
-                  Standings and Fargo ratings for everyone in{" "}
-                  <span className="font-medium text-[var(--ink)]">
-                    {selectedDivision.name}
-                  </span>
-                  . Filter below to find someone quickly.
-                </p>
-              </div>
-              <SearchField
-                value={filterQuery}
-                anchorRef={filterAnchor.ref}
-                onBeforeChange={filterAnchor.mark}
-                onChange={setFilterQuery}
-                placeholder="Filter players…"
-              />
-              <DataTable
-                headers={playersWithRatings.headers}
-                rows={filteredPlayerRows}
-                stickyFirst
-                compact
-                emptyText="No players match your filter."
-              />
+            <section className="min-h-[min(50dvh,24rem)] [overflow-anchor:none]">
+              <SectionCard
+                eyebrow="Players"
+                title="Division players"
+                description={
+                  <>
+                    Standings and Fargo ratings for everyone in{" "}
+                    <span className="font-medium text-white">
+                      {selectedDivision.name}
+                    </span>
+                    . Filter below to find someone quickly.
+                  </>
+                }
+                badge={{
+                  label: "Players",
+                  value: String(filteredPlayerRows.length),
+                }}
+                flush
+              >
+                <div className="border-b border-[var(--line)] px-3 py-3 sm:px-4 [&_label]:max-w-none">
+                  <SearchField
+                    value={filterQuery}
+                    anchorRef={filterAnchor.ref}
+                    onBeforeChange={filterAnchor.mark}
+                    onChange={setFilterQuery}
+                    placeholder="Filter players…"
+                  />
+                </div>
+                <DataTable
+                  headers={playersWithRatings.headers}
+                  rows={filteredPlayerRows}
+                  stickyFirst
+                  compact
+                  flush
+                  emptyText="No players match your filter."
+                />
+              </SectionCard>
             </section>
           ) : tab === "schedule" && schedule ? (
             !prefs.teamName ? (
