@@ -1445,18 +1445,21 @@ export function LeagueApp() {
                     value: String(filteredTeamRows.length),
                   }}
                 />
-                <SearchField
-                  value={filterQuery}
-                  anchorRef={filterAnchor.ref}
-                  onBeforeChange={filterAnchor.mark}
-                  onChange={setFilterQuery}
-                  placeholder="Filter teams…"
-                />
                 <DataTable
                   headers={teamReport.headers}
                   rows={filteredTeamRows}
                   stickyFirst
                   compact
+                  toolbar={
+                    <SearchField
+                      embedded
+                      value={filterQuery}
+                      anchorRef={filterAnchor.ref}
+                      onBeforeChange={filterAnchor.mark}
+                      onChange={setFilterQuery}
+                      placeholder="Filter teams…"
+                    />
+                  }
                   isRowSelected={(row) =>
                     Boolean(
                       prefs.teamName &&
@@ -1490,7 +1493,7 @@ export function LeagueApp() {
                     <span className="font-medium text-white">
                       {selectedDivision.name}
                     </span>
-                    . Filter below to find someone quickly.
+                    . Filter the grid below to find someone quickly.
                   </>
                 }
                 badge={{
@@ -1498,18 +1501,21 @@ export function LeagueApp() {
                   value: String(filteredPlayerRows.length),
                 }}
               />
-              <SearchField
-                value={filterQuery}
-                anchorRef={filterAnchor.ref}
-                onBeforeChange={filterAnchor.mark}
-                onChange={setFilterQuery}
-                placeholder="Filter players…"
-              />
               <DataTable
                 headers={playersWithRatings.headers}
                 rows={filteredPlayerRows}
                 stickyFirst
                 compact
+                toolbar={
+                  <SearchField
+                    embedded
+                    value={filterQuery}
+                    anchorRef={filterAnchor.ref}
+                    onBeforeChange={filterAnchor.mark}
+                    onChange={setFilterQuery}
+                    placeholder="Filter players…"
+                  />
+                }
                 emptyText="No players match your filter."
               />
             </section>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 type SortDirection = "asc" | "desc";
 
@@ -15,6 +15,8 @@ type DataTableProps = {
    * shell (e.g. Team → Roster standing-style card).
    */
   flush?: boolean;
+  /** Filter / controls strip above the column header, inside the same card. */
+  toolbar?: ReactNode;
   onRowClick?: (row: string[], rowIndex: number) => void;
   /** Prefer content-based selection so sorting doesn't break highlights */
   isRowSelected?: (row: string[]) => boolean;
@@ -152,6 +154,7 @@ export function DataTable({
   stickyFirst = true,
   compact = false,
   flush = false,
+  toolbar,
   onRowClick,
   isRowSelected,
   selectedRowIndex = null,
@@ -234,14 +237,18 @@ export function DataTable({
     ? "text-xs md:text-[13px]"
     : "text-[13px] md:text-sm";
 
+  const shellClass = flush
+    ? "bg-[var(--surface)]"
+    : "overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]";
+
   return (
-    <div
-      className={
-        flush
-          ? "overflow-x-auto bg-[var(--surface)]"
-          : "overflow-x-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]"
-      }
-    >
+    <div className={shellClass}>
+      {toolbar ? (
+        <div className="border-b border-[var(--line)] bg-[var(--surface-2)]/55 px-3 py-2.5 sm:px-3.5">
+          {toolbar}
+        </div>
+      ) : null}
+      <div className="overflow-x-auto">
       <table
         className={[
           "w-full table-fixed border-separate border-spacing-0 text-left",
@@ -277,10 +284,10 @@ export function DataTable({
                     isSticky
                       ? "sticky left-0 z-10 bg-[var(--felt-soft)] shadow-[4px_0_10px_rgba(0,0,0,0.28)]"
                       : "bg-[var(--felt-soft)]",
-                    !flush && isFirst
+                    !flush && !toolbar && isFirst
                       ? "rounded-tl-[calc(var(--radius)-1px)]"
                       : "",
-                    !flush && isLast
+                    !flush && !toolbar && isLast
                       ? "rounded-tr-[calc(var(--radius)-1px)]"
                       : "",
                   ]
@@ -381,6 +388,7 @@ export function DataTable({
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
