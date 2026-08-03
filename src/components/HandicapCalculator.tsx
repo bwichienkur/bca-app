@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  startTransition,
   useEffect,
   useMemo,
   useRef,
@@ -60,6 +61,7 @@ type HandicapCalculatorProps = {
 
 type LineupSlot = RosterPlayer | null;
 type LineupSide = "home" | "away";
+type HandicapSubTab = "lineups" | "results";
 
 type DragState = {
   side: LineupSide;
@@ -202,6 +204,7 @@ export function HandicapCalculator({
   const [dropTarget, setDropTarget] = useState<DragState | null>(null);
   const [mobileSide, setMobileSide] = useState<LineupSide>("home");
   const [activeRound, setActiveRound] = useState(1);
+  const [subTab, setSubTab] = useState<HandicapSubTab>("lineups");
 
   useEffect(() => {
     if (!awayTeamId) setMobileSide("home");
@@ -211,6 +214,10 @@ export function HandicapCalculator({
     setDragState(null);
     setDropTarget(null);
   }, [mobileSide]);
+
+  useEffect(() => {
+    setSubTab("lineups");
+  }, [homeTeamId, awayTeamId]);
 
   useEffect(() => {
     if (!prefs.teamId) {
@@ -314,6 +321,12 @@ export function HandicapCalculator({
         : results[0]!.round,
     );
   }, [results]);
+
+  useEffect(() => {
+    if (!results && subTab === "results") {
+      setSubTab("lineups");
+    }
+  }, [results, subTab]);
 
   function lineupForTeam(
     team: DivisionTeam | null,
@@ -454,8 +467,7 @@ export function HandicapCalculator({
         Matchup calculator
       </h3>
       <p className="mt-1 text-sm text-[var(--muted)]">
-        Pick home and away from your division, build lineups, and see round
-        handicaps
+        Build lineups, then review round handicaps
         {divisionName ? <> · {divisionName}</> : null}
       </p>
     </div>
@@ -513,31 +525,40 @@ export function HandicapCalculator({
       )
     : null;
 
+  const lineupsReady = Boolean(results && activeResult);
+  const formatMeta = `${data.format.pointSystem || "10"}-point · ${slots}/side · ${
+    data.format.fargoRateHandicapType || "RoundBased"
+  }`;
+
   return (
     <div className="animate-panel space-y-4">
       {sectionHeader}
 
-      <p className="text-xs text-[var(--muted)]">
-        {data.format.pointSystem || "10"}-point · {slots} players/side ·{" "}
-        {data.format.fargoRateHandicapType || "RoundBased"}
-        {divisionName ? ` · ${divisionName}` : ""}
-      </p>
-
-      <section className="relative z-40 grid gap-3 sm:grid-cols-2">
-        <Typeahead
-          label="Home"
-          placeholder="Select home team"
-          value={homeOption}
-          options={teamOptions.filter((option) => option.id !== awayTeamId)}
-          onChange={(option) => chooseHome(option?.value ?? null)}
-        />
-        <Typeahead
-          label="Away"
-          placeholder="Select away team"
-          value={awayOption}
-          options={teamOptions.filter((option) => option.id !== homeTeamId)}
-          onChange={(option) => chooseAway(option?.value ?? null)}
-        />
+      <section className="sticky top-[5.75rem] z-40 -mx-1 space-y-2 rounded-2xl border border-[var(--line)] bg-[color-mix(in_srgb,var(--paper)_94%,transparent)] px-1 py-2 shadow-sm backdrop-blur sm:top-[3.75rem]">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+            Matchup
+          </p>
+          <p className="text-[11px] tabular-nums text-[var(--muted)]">
+            {formatMeta}
+          </p>
+        </div>
+        <div className="relative z-40 grid gap-2 sm:grid-cols-2">
+          <Typeahead
+            label="Home"
+            placeholder="Select home team"
+            value={homeOption}
+            options={teamOptions.filter((option) => option.id !== awayTeamId)}
+            onChange={(option) => chooseHome(option?.value ?? null)}
+          />
+          <Typeahead
+            label="Away"
+            placeholder="Select away team"
+            value={awayOption}
+            options={teamOptions.filter((option) => option.id !== homeTeamId)}
+            onChange={(option) => chooseAway(option?.value ?? null)}
+          />
+        </div>
       </section>
 
       {!homeTeam || !awayTeam ? (
@@ -546,205 +567,313 @@ export function HandicapCalculator({
           body="Choose any two teams in this division to build lineups and calculate round handicaps."
         />
       ) : (
-        <section className="relative z-0 grid gap-4 xl:grid-cols-2">
+        <>
           <div
             role="tablist"
-            aria-label="Handicap teams"
-            className="grid grid-cols-2 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5 xl:hidden"
+            aria-label="Handicap sections"
+            className="grid grid-cols-2 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
           >
             {(
               [
-                {
-                  id: "home" as const,
-                  label: "Home",
-                  teamName: homeTeam.name,
-                  filled: filledCount(
-                    homeLineup.length === slots
-                      ? homeLineup
-                      : emptyLineup(slots),
-                  ),
-                },
-                {
-                  id: "away" as const,
-                  label: "Away",
-                  teamName: awayTeam.name,
-                  filled: filledCount(
-                    awayLineup.length === slots
-                      ? awayLineup
-                      : emptyLineup(slots),
-                  ),
-                },
+                { id: "lineups" as const, label: "Lineups" },
+                { id: "results" as const, label: "Results" },
               ]
-            ).map((side) => {
-              const selected = mobileSide === side.id;
+            ).map((item) => {
+              const selected = subTab === item.id;
+              const disabled = item.id === "results" && !lineupsReady;
               return (
                 <button
-                  key={side.id}
+                  key={item.id}
                   type="button"
                   role="tab"
                   aria-selected={selected}
-                  onClick={() => setMobileSide(side.id)}
+                  disabled={disabled}
+                  title={
+                    disabled
+                      ? `Fill all ${slots} slots on both sides first`
+                      : undefined
+                  }
+                  onClick={() =>
+                    startTransition(() => setSubTab(item.id))
+                  }
                   className={[
-                    "min-w-0 rounded-lg px-2 py-1.5 text-left transition",
+                    "rounded-lg px-2 py-1.5 text-center text-xs font-semibold transition sm:text-sm",
                     selected
                       ? "bg-[var(--felt)] text-white shadow-sm"
-                      : "text-[var(--ink)] hover:bg-[var(--surface)]",
+                      : disabled
+                        ? "cursor-not-allowed text-[var(--muted)] opacity-45"
+                        : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
                   ].join(" ")}
                 >
-                  <p
-                    className={[
-                      "text-[10px] font-semibold uppercase tracking-[0.12em]",
-                      selected ? "text-white/75" : "text-[var(--muted)]",
-                    ].join(" ")}
-                  >
-                    {side.label}
-                    <span className="ml-1.5 tabular-nums">
-                      {side.filled}/{slots}
+                  {item.label}
+                  {item.id === "results" && lineupsReady && roundTotals ? (
+                    <span
+                      className={[
+                        "ml-1.5 tabular-nums",
+                        selected ? "text-white/80" : "text-[var(--muted)]",
+                      ].join(" ")}
+                    >
+                      H+{roundTotals.home} · A+{roundTotals.away}
                     </span>
-                  </p>
-                  <p className="mt-0.5 truncate text-sm font-semibold leading-tight">
-                    {side.teamName}
-                  </p>
+                  ) : null}
                 </button>
               );
             })}
           </div>
 
-          <div
-            className={mobileSide === "home" ? "min-w-0" : "hidden xl:block"}
-          >
-            <LineupPicker
-              side="home"
-              title={homeTeam.name}
-              subtitle="Home · pick players · drag ⠿ to reorder"
-              roster={homeTeam.players}
-              lineup={
-                homeLineup.length === slots ? homeLineup : emptyLineup(slots)
-              }
-              slots={slots}
-              actions={
-                homeTeamId === prefs.teamId ? (
-                  <LoadLineupMenu
-                    presets={presetsFor(homeTeamId)}
-                    onLoad={(preset) => applyPreset("home", preset)}
-                  />
-                ) : undefined
-              }
-              onSelectSlot={(slotIndex, playerId) =>
-                setSlotPlayer("home", slotIndex, playerId)
-              }
-              onMove={(from, to) => moveInLineup("home", from, to)}
-              dragState={dragState}
-              dropTarget={dropTarget}
-              setDragState={setDragState}
-              setDropTarget={setDropTarget}
-            />
-          </div>
+          {subTab === "lineups" ? (
+            <section className="relative z-0 space-y-3">
+              <div>
+                <h4 className="font-[family-name:var(--font-display)] text-xl text-[var(--felt-deep)]">
+                  Lineups
+                </h4>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  Pick {slots} players per side · drag ⠿ to reorder
+                </p>
+              </div>
 
-          <div
-            className={mobileSide === "away" ? "min-w-0" : "hidden xl:block"}
-          >
-            <LineupPicker
-              side="away"
-              title={awayTeam.name}
-              subtitle="Away · pick players · drag ⠿ to reorder"
-              roster={awayTeam.players}
-              lineup={
-                awayLineup.length === slots ? awayLineup : emptyLineup(slots)
-              }
-              slots={slots}
-              actions={
-                awayTeamId === prefs.teamId ? (
-                  <LoadLineupMenu
-                    presets={presetsFor(awayTeamId)}
-                    onLoad={(preset) => applyPreset("away", preset)}
-                  />
-                ) : undefined
-              }
-              onSelectSlot={(slotIndex, playerId) =>
-                setSlotPlayer("away", slotIndex, playerId)
-              }
-              onMove={(from, to) => moveInLineup("away", from, to)}
-              dragState={dragState}
-              dropTarget={dropTarget}
-              setDragState={setDragState}
-              setDropTarget={setDropTarget}
-            />
-          </div>
-        </section>
-      )}
+              <div className="grid gap-4 xl:grid-cols-2">
+                <div
+                  role="tablist"
+                  aria-label="Handicap teams"
+                  className="grid grid-cols-2 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5 xl:hidden"
+                >
+                  {(
+                    [
+                      {
+                        id: "home" as const,
+                        label: "Home",
+                        teamName: homeTeam.name,
+                        filled: filledCount(
+                          homeLineup.length === slots
+                            ? homeLineup
+                            : emptyLineup(slots),
+                        ),
+                      },
+                      {
+                        id: "away" as const,
+                        label: "Away",
+                        teamName: awayTeam.name,
+                        filled: filledCount(
+                          awayLineup.length === slots
+                            ? awayLineup
+                            : emptyLineup(slots),
+                        ),
+                      },
+                    ]
+                  ).map((side) => {
+                    const selected = mobileSide === side.id;
+                    return (
+                      <button
+                        key={side.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={selected}
+                        onClick={() => setMobileSide(side.id)}
+                        className={[
+                          "min-w-0 rounded-lg px-2 py-1.5 text-left transition",
+                          selected
+                            ? "bg-[var(--felt)] text-white shadow-sm"
+                            : "text-[var(--ink)] hover:bg-[var(--surface)]",
+                        ].join(" ")}
+                      >
+                        <p
+                          className={[
+                            "text-[10px] font-semibold uppercase tracking-[0.12em]",
+                            selected ? "text-white/75" : "text-[var(--muted)]",
+                          ].join(" ")}
+                        >
+                          {side.label}
+                          <span className="ml-1.5 tabular-nums">
+                            {side.filled}/{slots}
+                          </span>
+                        </p>
+                        <p className="mt-0.5 truncate text-sm font-semibold leading-tight">
+                          {side.teamName}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
 
-      <section className="space-y-3">
-        <div>
-          <h4 className="font-[family-name:var(--font-display)] text-xl text-[var(--ink)]">
-            Handicap by round
-          </h4>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            {roundTotals
-              ? `Season games awarded · Home +${roundTotals.home} · Away +${roundTotals.away}`
-              : "Games awarded from expected scores · pairings follow your lineups"}
-          </p>
-        </div>
-        {!results || !activeResult ? (
-          <EmptyState
-            title="Finish both lineups"
-            body={`Pick home and away, then fill all ${slots} slots on each side.`}
-          />
-        ) : (
-          <div className="space-y-3">
-            <div
-              role="tablist"
-              aria-label="Rounds"
-              className="grid gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
-              style={{
-                gridTemplateColumns: `repeat(${results.length}, minmax(0, 1fr))`,
-              }}
-            >
-              {results.map((result) => {
-                const points = Math.max(result.teamOne, result.teamTwo);
-                const selected = result.round === activeResult.round;
-                const sideLabel =
-                  result.teamOne > 0 ? "H" : result.teamTwo > 0 ? "A" : "—";
-                return (
-                  <button
-                    key={result.round}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    onClick={() => setActiveRound(result.round)}
-                    className={[
-                      "min-w-0 rounded-lg px-1 py-1.5 text-center transition",
-                      selected
-                        ? "bg-[var(--felt)] text-white shadow-sm"
-                        : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
-                    ].join(" ")}
+                <div
+                  className={
+                    mobileSide === "home" ? "min-w-0" : "hidden xl:block"
+                  }
+                >
+                  <LineupPicker
+                    side="home"
+                    title={homeTeam.name}
+                    subtitle="Home · pick players · drag ⠿ to reorder"
+                    roster={homeTeam.players}
+                    lineup={
+                      homeLineup.length === slots
+                        ? homeLineup
+                        : emptyLineup(slots)
+                    }
+                    slots={slots}
+                    actions={
+                      homeTeamId === prefs.teamId ? (
+                        <LoadLineupMenu
+                          presets={presetsFor(homeTeamId)}
+                          onLoad={(preset) => applyPreset("home", preset)}
+                        />
+                      ) : undefined
+                    }
+                    onSelectSlot={(slotIndex, playerId) =>
+                      setSlotPlayer("home", slotIndex, playerId)
+                    }
+                    onMove={(from, to) => moveInLineup("home", from, to)}
+                    dragState={dragState}
+                    dropTarget={dropTarget}
+                    setDragState={setDragState}
+                    setDropTarget={setDropTarget}
+                  />
+                </div>
+
+                <div
+                  className={
+                    mobileSide === "away" ? "min-w-0" : "hidden xl:block"
+                  }
+                >
+                  <LineupPicker
+                    side="away"
+                    title={awayTeam.name}
+                    subtitle="Away · pick players · drag ⠿ to reorder"
+                    roster={awayTeam.players}
+                    lineup={
+                      awayLineup.length === slots
+                        ? awayLineup
+                        : emptyLineup(slots)
+                    }
+                    slots={slots}
+                    actions={
+                      awayTeamId === prefs.teamId ? (
+                        <LoadLineupMenu
+                          presets={presetsFor(awayTeamId)}
+                          onLoad={(preset) => applyPreset("away", preset)}
+                        />
+                      ) : undefined
+                    }
+                    onSelectSlot={(slotIndex, playerId) =>
+                      setSlotPlayer("away", slotIndex, playerId)
+                    }
+                    onMove={(from, to) => moveInLineup("away", from, to)}
+                    dragState={dragState}
+                    dropTarget={dropTarget}
+                    setDragState={setDragState}
+                    setDropTarget={setDropTarget}
+                  />
+                </div>
+              </div>
+
+              {lineupsReady ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    startTransition(() => setSubTab("results"))
+                  }
+                  className="w-full rounded-xl bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white shadow-sm transition active:scale-[0.99] sm:w-auto"
+                >
+                  View round handicaps
+                </button>
+              ) : (
+                <p className="text-sm text-[var(--muted)]">
+                  Fill all {slots} slots on both sides to unlock Results.
+                </p>
+              )}
+            </section>
+          ) : (
+            <section className="space-y-3">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h4 className="font-[family-name:var(--font-display)] text-xl text-[var(--felt-deep)]">
+                    Results
+                  </h4>
+                  <p className="mt-1 text-sm text-[var(--muted)]">
+                    {roundTotals
+                      ? `Games awarded · Home +${roundTotals.home} · Away +${roundTotals.away}`
+                      : "Round handicaps from your lineups"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    startTransition(() => setSubTab("lineups"))
+                  }
+                  className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)] hover:bg-[var(--surface-2)]"
+                >
+                  Edit lineups
+                </button>
+              </div>
+
+              {activeResult && results ? (
+                <div className="space-y-3">
+                  <div
+                    role="tablist"
+                    aria-label="Rounds"
+                    className="grid gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+                    style={{
+                      gridTemplateColumns: `repeat(${results.length}, minmax(0, 1fr))`,
+                    }}
                   >
-                    <p className="text-[11px] font-semibold leading-none sm:text-xs">
-                      R{result.round}
-                    </p>
-                    <p
-                      className={[
-                        "mt-0.5 text-[10px] font-semibold tabular-nums leading-none",
-                        selected ? "text-white/85" : "text-[var(--muted)]",
-                      ].join(" ")}
-                    >
-                      {points === 0 ? "even" : `${sideLabel}+${points}`}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
+                    {results.map((result) => {
+                      const points = Math.max(result.teamOne, result.teamTwo);
+                      const selected = result.round === activeResult.round;
+                      const sideLabel =
+                        result.teamOne > 0
+                          ? "H"
+                          : result.teamTwo > 0
+                            ? "A"
+                            : "—";
+                      return (
+                        <button
+                          key={result.round}
+                          type="button"
+                          role="tab"
+                          aria-selected={selected}
+                          onClick={() => setActiveRound(result.round)}
+                          className={[
+                            "min-w-0 rounded-lg px-1 py-1.5 text-center transition",
+                            selected
+                              ? "bg-[var(--felt)] text-white shadow-sm"
+                              : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
+                          ].join(" ")}
+                        >
+                          <p className="text-[11px] font-semibold leading-none sm:text-xs">
+                            R{result.round}
+                          </p>
+                          <p
+                            className={[
+                              "mt-0.5 text-[10px] font-semibold tabular-nums leading-none",
+                              selected ? "text-white/85" : "text-[var(--muted)]",
+                            ].join(" ")}
+                          >
+                            {points === 0 ? "even" : `${sideLabel}+${points}`}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
 
-            <RoundHandicapCard
-              result={activeResult}
-              homeName={homeTeam?.name ?? "Home"}
-              awayName={awayTeam?.name ?? "Away"}
-              homePlayers={compactPlayers(homeLineup)}
-              awayPlayers={compactPlayers(awayLineup)}
-            />
-          </div>
-        )}
-      </section>
+                  <RoundHandicapCard
+                    result={activeResult}
+                    homeName={homeTeam.name}
+                    awayName={awayTeam.name}
+                    homePlayers={compactPlayers(homeLineup)}
+                    awayPlayers={compactPlayers(awayLineup)}
+                  />
+                </div>
+              ) : (
+                <EmptyState
+                  title="Finish both lineups"
+                  body={`Fill all ${slots} slots on each side, then open Results.`}
+                />
+              )}
+            </section>
+          )}
+        </>
+      )}
     </div>
   );
 }
