@@ -10,6 +10,7 @@ import {
 import type { DivisionTeam, LineupPreset, RosterPlayer } from "@/lib/types";
 import { DraggableLineupList } from "./DraggableLineupList";
 import { EmptyState } from "./EmptyState";
+import { SectionCard } from "./SectionCard";
 
 function playerLabel(player: RosterPlayer): string {
   return `${player.firstName} ${player.lastName}`.trim();
@@ -47,11 +48,13 @@ function defaultTopIds(team: DivisionTeam, slots: number): (string | null)[] {
   return Array.from({ length: slots }, (_, index) => top[index]?.id ?? null);
 }
 
+type EditorMode = "library" | "editor";
+
 type TeamLineupTemplatesProps = {
   divisionId: string;
   team: DivisionTeam;
   slots?: number;
-  /** When true, page already shows the section title/description. */
+  /** When true, page already shows context; this component owns the section header. */
   embedded?: boolean;
 };
 
@@ -62,10 +65,12 @@ export function TeamLineupTemplates({
   embedded = false,
 }: TeamLineupTemplatesProps) {
   const [presets, setPresets] = useState<LineupPreset[]>([]);
+  const [mode, setMode] = useState<EditorMode>("library");
   const [lineupIds, setLineupIds] = useState<(string | null)[]>(() =>
-    defaultTopIds(team, slots),
+    emptyIds(slots),
   );
   const [presetName, setPresetName] = useState("Default lineup");
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -113,6 +118,10 @@ export function TeamLineupTemplates({
 
   const filled = lineupIds.filter(Boolean).length;
   const complete = filled === slots && lineupIds.every(Boolean);
+  const isUpdate = teamPresets.some(
+    (preset) =>
+      preset.name.trim().toLowerCase() === presetName.trim().toLowerCase(),
+  );
 
   const onChange = (index: number, playerId: string | null) => {
     setLineupIds((current) => {
@@ -145,37 +154,60 @@ export function TeamLineupTemplates({
     });
   };
 
+  const openNew = () => {
+    setLineupIds(defaultTopIds(team, slots));
+    setPresetName("Default lineup");
+    setEditingId(null);
+    setStatus(null);
+    setMode("editor");
+  };
+
+  const openPreset = (preset: LineupPreset) => {
+    setLineupIds(idsFromPreset(team, preset, slots));
+    setPresetName(preset.name);
+    setEditingId(preset.id);
+    setStatus(null);
+    setMode("editor");
+  };
+
+  const backToLibrary = () => {
+    setMode("library");
+    setStatus(null);
+  };
+
   const savePreset = () => {
     if (!complete) {
       setStatus(`Fill all ${slots} slots before saving.`);
       return;
     }
     const name = presetName.trim() || "Default lineup";
+    const nextId = presetId(team.id, name);
+    const previousId = editingId;
     const preset: LineupPreset = {
-      id: presetId(team.id, name),
+      id: nextId,
       name,
       divisionId,
       teamId: team.id,
       playerIds: lineupIds.filter((id): id is string => Boolean(id)),
       updatedAt: new Date().toISOString(),
     };
+
     void saveTeamLineupPreset(preset)
-      .then((result) => {
+      .then(async (result) => {
+        if (previousId && previousId !== nextId) {
+          result = await removeTeamLineupPreset({
+            teamId: team.id,
+            divisionId,
+            presetId: previousId,
+          });
+        }
         setPresets(result.presets);
         setPresetName(name);
-        setStatus(
-          result.shared
-            ? `Saved “${name}” for the team — available on Handicap and Score.`
-            : `Saved “${name}” on this device — available on Handicap and Score.`,
-        );
+        setEditingId(nextId);
+        setStatus(null);
+        setMode("library");
       })
       .catch(() => setStatus("Couldn't save lineup."));
-  };
-
-  const loadPreset = (preset: LineupPreset) => {
-    setLineupIds(idsFromPreset(team, preset, slots));
-    setPresetName(preset.name);
-    setStatus(`Loaded “${preset.name}” into the editor.`);
   };
 
   const deletePreset = (preset: LineupPreset) => {
@@ -185,7 +217,10 @@ export function TeamLineupTemplates({
       presetId: preset.id,
     }).then((result) => {
       setPresets(result.presets);
-      setStatus(`Deleted “${preset.name}”.`);
+      if (editingId === preset.id) {
+        setEditingId(null);
+        setMode("library");
+      }
     });
   };
 
@@ -198,9 +233,177 @@ export function TeamLineupTemplates({
     );
   }
 
+  const header = (
+    <SectionCard
+      eyebrow="My team"
+      title="Lineups"
+      description={`Save ${slots}-player orders for league night. Load them from Handicap or Score.`}
+      badge={
+        mode === "editor"
+          ? { label: "Filled", value: `${filled}/${slots}` }
+          : {
+              label: "Saved",
+              value: loading ? "—" : String(teamPresets.length),
+            }
+      }
+    />
+  );
+
+  const library = (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
+          Saved lineups
+          {loading ? "" : ` · ${teamPresets.length}`}
+        </p>
+        <button
+          type="button"
+          onClick={openNew}
+          className="rounded-full bg-[var(--felt)] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--felt-soft)]"
+        >
+          New lineup
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] px-4 py-6 text-center text-sm text-[var(--muted)]">
+          Loading saved lineups…
+        </p>
+      ) : teamPresets.length === 0 ? (
+        <EmptyState
+          title="No lineups yet"
+          body="Create a lineup for league night. You can load it from Handicap or Score."
+          action={
+            <button
+              type="button"
+              onClick={openNew}
+              className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+            >
+              Create lineup
+            </button>
+          }
+        />
+      ) : (
+        <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+          {teamPresets.map((preset) => {
+            const names = idsFromPreset(team, preset, slots)
+              .map((id) => {
+                if (!id) return "—";
+                const player = team.players.find((item) => item.id === id);
+                return player ? playerLabel(player) : "—";
+              })
+              .join(" · ");
+            return (
+              <li key={preset.id} className="px-3 py-3 sm:px-4">
+                <div className="flex items-start justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openPreset(preset)}
+                    className="min-w-0 flex-1 rounded-lg text-left transition hover:opacity-90"
+                  >
+                    <p className="truncate font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)]">
+                      {preset.name}
+                    </p>
+                    <p className="mt-1 line-clamp-2 text-[11px] text-[var(--muted)]">
+                      {names}
+                    </p>
+                  </button>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => openPreset(preset)}
+                      className="rounded-full bg-[var(--felt)] px-3 py-1.5 text-[11px] font-semibold text-white"
+                    >
+                      Open
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deletePreset(preset)}
+                      className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[11px] font-semibold text-[var(--danger)]"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+
+  const editor = (
+    <div className="space-y-3">
+      <button
+        type="button"
+        onClick={backToLibrary}
+        className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
+      >
+        <span aria-hidden>←</span>
+        Saved lineups
+      </button>
+
+      <section className="overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        <div className="space-y-2.5 border-b border-[var(--line)] px-3 py-3 sm:px-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+              {editingId ? "Edit lineup" : "New lineup"}
+            </p>
+            <span
+              className={[
+                "rounded-full px-2.5 py-1 text-xs font-semibold",
+                complete
+                  ? "bg-[var(--felt)] text-white"
+                  : "bg-[var(--surface-2)] text-[var(--muted)]",
+              ].join(" ")}
+            >
+              {filled}/{slots}
+            </span>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              value={presetName}
+              onChange={(event) => {
+                setPresetName(event.target.value);
+                setStatus(null);
+              }}
+              placeholder="Lineup name"
+              className="w-full flex-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]"
+            />
+            <button
+              type="button"
+              disabled={!complete}
+              onClick={savePreset}
+              className="rounded-full bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--felt-soft)] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {isUpdate ? "Update" : "Save"}
+            </button>
+          </div>
+          {status ? (
+            <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
+              {status}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="p-3 sm:p-4">
+          <DraggableLineupList
+            bare
+            slotPrefix="#"
+            lineupIds={lineupIds.length === slots ? lineupIds : emptyIds(slots)}
+            roster={roster}
+            onChange={onChange}
+            onMove={onMove}
+          />
+        </div>
+      </section>
+    </div>
+  );
+
   return (
-    <section className="space-y-4">
-      {embedded ? null : (
+    <section className="space-y-3">
+      {embedded ? header : (
         <div>
           <h3 className="font-[family-name:var(--font-display)] text-xl text-[var(--felt-deep)]">
             Lineup templates
@@ -211,103 +414,7 @@ export function TeamLineupTemplates({
           </p>
         </div>
       )}
-
-      <DraggableLineupList
-        title="Draft lineup"
-        subtitle="Drag ⠿ or ▲▼ to reorder · handicaps follow Fargo"
-        slotPrefix="#"
-        lineupIds={lineupIds.length === slots ? lineupIds : emptyIds(slots)}
-        roster={roster}
-        onChange={onChange}
-        onMove={onMove}
-      />
-
-      <div className="space-y-3 rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-3 sm:p-4">
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <input
-            value={presetName}
-            onChange={(event) => {
-              setPresetName(event.target.value);
-              setStatus(null);
-            }}
-            placeholder="Template name"
-            className="w-full flex-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]"
-          />
-          <button
-            type="button"
-            disabled={!complete}
-            onClick={savePreset}
-            className="rounded-full bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--felt-soft)] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {teamPresets.some(
-              (preset) =>
-                preset.name.trim().toLowerCase() ===
-                presetName.trim().toLowerCase(),
-            )
-              ? "Update template"
-              : "Save template"}
-          </button>
-        </div>
-        {status ? (
-          <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
-            {status}
-          </p>
-        ) : null}
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
-          Saved templates
-          {loading ? "" : ` · ${teamPresets.length}`}
-        </p>
-        {teamPresets.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-[var(--line)] px-3 py-4 text-center text-sm text-[var(--muted)]">
-            No templates yet — fill the draft, name it, then save.
-          </p>
-        ) : (
-          <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface-2)]">
-            {teamPresets.map((preset) => {
-              const names = idsFromPreset(team, preset, slots)
-                .map((id) => {
-                  if (!id) return "—";
-                  const player = team.players.find((item) => item.id === id);
-                  return player ? playerLabel(player) : "—";
-                })
-                .join(" · ");
-              return (
-                <li key={preset.id} className="px-3 py-3 sm:px-3.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-[var(--ink)]">
-                        {preset.name}
-                      </p>
-                      <p className="mt-1 line-clamp-2 text-[11px] text-[var(--muted)]">
-                        {names}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => loadPreset(preset)}
-                        className="rounded-full bg-[var(--felt)] px-3 py-1.5 text-[11px] font-semibold text-white"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deletePreset(preset)}
-                        className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[11px] font-semibold text-[var(--danger)]"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+      {mode === "library" ? library : editor}
     </section>
   );
 }
