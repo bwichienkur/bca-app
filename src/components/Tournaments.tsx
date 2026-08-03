@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
   type ChangeEvent,
@@ -33,6 +34,7 @@ import type {
   CreateTournamentInput,
   EventType,
   GameType,
+  RobustnessStatus,
   TournamentListItem,
   TournamentMessage,
   TournamentRegistration,
@@ -42,6 +44,7 @@ import type { AuthUser } from "./LoginScreen";
 import { DateTimeField } from "./DateTimeField";
 import { EmptyState } from "./EmptyState";
 import { LoadingState } from "./LoadingState";
+import { PlayerDetail } from "./PlayerDetail";
 import { SearchField } from "./SearchField";
 import { SectionCard } from "./SectionCard";
 import { SelectField } from "./SelectField";
@@ -95,6 +98,32 @@ function handicapLabel(value: string): string {
   return (
     HANDICAP_SYSTEM_OPTIONS.find((o) => o.value === value)?.label ?? value
   );
+}
+
+function robustnessLabel(status: RobustnessStatus | null | undefined): string {
+  if (status === "established") return "Established";
+  if (status === "preliminary") return "Preliminary";
+  return "Starter";
+}
+
+function robustnessClass(status: RobustnessStatus | null | undefined): string {
+  if (status === "established") {
+    return "bg-[var(--felt)]/20 text-[var(--felt-deep)]";
+  }
+  if (status === "preliminary") {
+    return "bg-[var(--amber)]/15 text-[var(--amber)]";
+  }
+  return "bg-[var(--surface-2)] text-[var(--muted)]";
+}
+
+type PlayerLiveStats = {
+  rating: number | null;
+  robustness: number | null;
+  robustnessStatus: RobustnessStatus;
+};
+
+function registrationPlayerId(reg: TournamentRegistration): string | null {
+  return reg.fargoPlayerId?.trim() || null;
 }
 
 function fargoBandText(t: TournamentListItem): string {
@@ -340,6 +369,13 @@ export function Tournaments({
   const [houseRulesOpen, setHouseRulesOpen] = useState(false);
   const [fieldFilter, setFieldFilter] = useState<FieldBoardFilter>("all");
   const [fieldQuery, setFieldQuery] = useState("");
+  const [inspectPlayer, setInspectPlayer] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [playerStats, setPlayerStats] = useState<
+    Record<string, PlayerLiveStats>
+  >({});
   const [, startDetailTransition] = useTransition();
 
   useEffect(() => {
@@ -656,6 +692,20 @@ export function Tournaments({
     }
   };
 
+  const statsForRegistration = (reg: TournamentRegistration) => {
+    const playerId = registrationPlayerId(reg);
+    const live = playerId ? playerStats[playerId] : undefined;
+    return {
+      playerId,
+      rating: live?.rating ?? reg.ratingAtSignup,
+      robustness: live?.robustness ?? reg.robustnessAtSignup,
+      robustnessStatus:
+        live?.robustnessStatus ??
+        reg.robustnessStatusAtSignup ??
+        ("starter" as RobustnessStatus),
+    };
+  };
+
   const setTournamentStatus = async (
     id: string,
     status: TournamentStatus,
@@ -697,6 +747,75 @@ export function Tournaments({
     });
   }, [detail?.registrations]);
 
+  const pendingRegistrations = useMemo(
+    () => sortedRegistrations.filter((r) => r.status === "pending"),
+    [sortedRegistrations],
+  );
+  const otherRegistrations = useMemo(
+    () => sortedRegistrations.filter((r) => r.status !== "pending"),
+    [sortedRegistrations],
+  );
+
+  const loadedPlayerIdsRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (!detail?.isOrganizer || detailSubTab !== "signups") return;
+    const ids = [
+      ...new Set(
+        detail.registrations
+          .map((r) => registrationPlayerId(r))
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ].filter((id) => !loadedPlayerIdsRef.current.has(id));
+    if (!ids.length) return;
+    for (const id of ids) loadedPlayerIdsRef.current.add(id);
+
+    let cancelled = false;
+    void (async () => {
+      const entries = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const res = await fetch(`/api/players/${encodeURIComponent(id)}`);
+            const data = (await res.json()) as {
+              player?: {
+                effectiveRating?: number | null;
+                provisionalRating?: number | null;
+                robustness?: number | null;
+                robustnessStatus?: RobustnessStatus;
+              };
+            };
+            if (!res.ok || !data.player) return null;
+            return [
+              id,
+              {
+                rating:
+                  data.player.effectiveRating ??
+                  data.player.provisionalRating ??
+                  null,
+                robustness: data.player.robustness ?? null,
+                robustnessStatus: data.player.robustnessStatus ?? "starter",
+              } satisfies PlayerLiveStats,
+            ] as const;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      if (cancelled) return;
+      setPlayerStats((prev) => {
+        const next = { ...prev };
+        for (const entry of entries) {
+          if (entry) next[entry[0]] = entry[1];
+        }
+        return next;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [detail, detailSubTab]);
+
   const fieldEntries = useMemo(() => {
     const approved = (detail?.registrations ?? []).filter(
       (r) => r.status === "approved",
@@ -733,6 +852,16 @@ export function Tournaments({
       paid: approved.filter((r) => r.paid).length,
     };
   }, [detail?.registrations]);
+
+  if (inspectPlayer) {
+    return (
+      <PlayerDetail
+        playerId={inspectPlayer.id}
+        fallbackName={inspectPlayer.name}
+        onBack={() => setInspectPlayer(null)}
+      />
+    );
+  }
 
   if (view === "create" || view === "edit") {
     const isEdit = view === "edit";
@@ -1712,7 +1841,7 @@ export function Tournaments({
                 <SectionCard
                   eyebrow="Organizer"
                   title="Signups"
-                  description="Pending entries first. Approve, reject, or mark door/Venmo paid."
+                  description="Review Fargo and robustness, open player stats, then approve or reject."
                   badge={{
                     label: "Pending",
                     value: String(t.pendingCount),
@@ -1723,68 +1852,101 @@ export function Tournaments({
                     {actionMsg}
                   </p>
                 ) : null}
-                <SurfaceCard>
-                  <ul className="divide-y divide-[var(--line)]">
-                    {sortedRegistrations.length === 0 ? (
-                      <li className="px-4 py-6 text-center text-sm text-[var(--muted)]">
-                        No signups yet.
-                      </li>
-                    ) : (
-                      sortedRegistrations.map((reg) => (
-                        <li key={reg.id} className="space-y-2.5 px-3 py-3.5 sm:px-4">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div className="min-w-0 flex-1">
-                              <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)]">
-                                {reg.teamName || reg.displayName}
-                              </p>
-                              <p className="mt-0.5 text-xs text-[var(--muted)]">
-                                {reg.displayName}
-                                {reg.ratingAtSignup != null
-                                  ? ` · Fargo ${reg.ratingAtSignup}`
-                                  : " · Unrated"}
-                                {reg.email ? ` · ${reg.email}` : ""}
-                              </p>
-                              <div className="mt-2 flex flex-wrap gap-1.5">
-                                <span
-                                  className={[
-                                    "rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize",
-                                    reg.status === "pending"
-                                      ? "bg-[var(--amber)] text-[#1a140c]"
-                                      : reg.status === "approved"
-                                        ? "bg-[var(--felt)] text-white"
-                                        : "bg-[var(--surface-2)] text-[var(--muted)]",
-                                  ].join(" ")}
-                                >
-                                  {reg.status}
-                                </span>
-                                <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
-                                  {reg.paid ? "Paid" : "Unpaid"}
-                                </span>
-                              </div>
-                              {reg.teammates?.length ? (
-                                <div className="mt-2 flex flex-wrap gap-1.5">
-                                  {reg.teammates.map((mate) => (
-                                    <span
-                                      key={`${reg.id}-${mate.displayName}`}
-                                      className="rounded-full border border-[var(--line)] bg-[var(--surface-2)]/70 px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]"
-                                    >
-                                      {mate.displayName}
-                                      {mate.ratingAtSignup != null
-                                        ? ` · ${mate.ratingAtSignup}`
-                                        : ""}
-                                    </span>
-                                  ))}
+
+                <div>
+                  <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                    Requests
+                    {pendingRegistrations.length
+                      ? ` · ${pendingRegistrations.length}`
+                      : ""}
+                  </p>
+                  {pendingRegistrations.length === 0 ? (
+                    <SurfaceCard>
+                      <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">
+                        No pending requests.
+                      </p>
+                    </SurfaceCard>
+                  ) : (
+                    <ul className="space-y-3">
+                      {pendingRegistrations.map((reg) => {
+                        const stats = statsForRegistration(reg);
+                        return (
+                          <li key={reg.id}>
+                            <SurfaceCard className="animate-rise">
+                              <div className="space-y-3 p-3 sm:p-4">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight text-[var(--ink)]">
+                                      {reg.teamName || reg.displayName}
+                                    </p>
+                                    <p className="mt-0.5 text-sm text-[var(--muted)]">
+                                      {reg.displayName}
+                                      {reg.email ? ` · ${reg.email}` : ""}
+                                    </p>
+                                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                                      <span className="rounded-full bg-[var(--amber)] px-2.5 py-1 text-[11px] font-semibold text-[#1a140c]">
+                                        Pending
+                                      </span>
+                                      <span
+                                        className={[
+                                          "rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]",
+                                          robustnessClass(stats.robustnessStatus),
+                                        ].join(" ")}
+                                      >
+                                        {robustnessLabel(stats.robustnessStatus)}
+                                        {stats.robustness != null
+                                          ? ` · ${Math.round(stats.robustness)}`
+                                          : ""}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="shrink-0 text-right">
+                                    <p className="font-[family-name:var(--font-display)] text-3xl font-semibold tabular-nums leading-none text-[var(--felt-deep)]">
+                                      {stats.rating ?? "—"}
+                                    </p>
+                                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                                      Fargo
+                                    </p>
+                                  </div>
                                 </div>
-                              ) : null}
-                              {reg.noteToOrganizer ? (
-                                <p className="mt-2 text-xs text-[var(--ink)]">
-                                  {reg.noteToOrganizer}
-                                </p>
-                              ) : null}
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {reg.status === "pending" ? (
-                                <>
+
+                                {reg.teammates?.length ? (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {reg.teammates.map((mate) => (
+                                      <span
+                                        key={`${reg.id}-${mate.displayName}`}
+                                        className="rounded-full border border-[var(--line)] bg-[var(--surface-2)]/70 px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]"
+                                      >
+                                        {mate.displayName}
+                                        {mate.ratingAtSignup != null
+                                          ? ` · ${mate.ratingAtSignup}`
+                                          : ""}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : null}
+
+                                {reg.noteToOrganizer ? (
+                                  <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)]/60 px-3 py-2 text-xs text-[var(--ink)]">
+                                    {reg.noteToOrganizer}
+                                  </p>
+                                ) : null}
+
+                                <div className="flex flex-wrap gap-2">
+                                  {stats.playerId ? (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setInspectPlayer({
+                                          id: stats.playerId!,
+                                          name: reg.displayName,
+                                        })
+                                      }
+                                      className="rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-2 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
+                                    >
+                                      Player details
+                                    </button>
+                                  ) : null}
                                   <button
                                     type="button"
                                     disabled={saving}
@@ -1793,7 +1955,7 @@ export function Tournaments({
                                         status: "approved",
                                       })
                                     }
-                                    className="rounded-full bg-[var(--felt)] px-3 py-1.5 text-[11px] font-semibold text-white"
+                                    className="rounded-full bg-[var(--felt)] px-3.5 py-2 text-xs font-semibold text-white"
                                   >
                                     Approve
                                   </button>
@@ -1805,33 +1967,110 @@ export function Tournaments({
                                         status: "rejected",
                                       })
                                     }
-                                    className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[11px] font-semibold text-[var(--danger)]"
+                                    className="rounded-full border border-[var(--line)] px-3.5 py-2 text-xs font-semibold text-[var(--danger)]"
                                   >
                                     Reject
                                   </button>
-                                </>
-                              ) : null}
-                              {reg.status === "approved" ? (
-                                <button
-                                  type="button"
-                                  disabled={saving}
-                                  onClick={() =>
-                                    void onUpdateRegistration(reg.id, {
-                                      paid: !reg.paid,
-                                    })
-                                  }
-                                  className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[11px] font-semibold text-[var(--ink)]"
-                                >
-                                  {reg.paid ? "Mark unpaid" : "Mark paid"}
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-                        </li>
-                      ))
-                    )}
-                  </ul>
-                </SurfaceCard>
+                                </div>
+                              </div>
+                            </SurfaceCard>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+
+                {otherRegistrations.length > 0 ? (
+                  <div>
+                    <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                      Reviewed
+                    </p>
+                    <SurfaceCard>
+                      <ul className="divide-y divide-[var(--line)]">
+                        {otherRegistrations.map((reg) => {
+                          const stats = statsForRegistration(reg);
+                          return (
+                            <li
+                              key={reg.id}
+                              className="flex flex-wrap items-start justify-between gap-3 px-3 py-3.5 sm:px-4"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)]">
+                                  {reg.teamName || reg.displayName}
+                                </p>
+                                <p className="mt-0.5 text-xs text-[var(--muted)]">
+                                  {reg.displayName}
+                                  {stats.rating != null
+                                    ? ` · Fargo ${stats.rating}`
+                                    : " · Unrated"}
+                                  {stats.robustness != null
+                                    ? ` · Rob ${Math.round(stats.robustness)}`
+                                    : ""}
+                                </p>
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  <span
+                                    className={[
+                                      "rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize",
+                                      reg.status === "approved"
+                                        ? "bg-[var(--felt)] text-white"
+                                        : "bg-[var(--surface-2)] text-[var(--muted)]",
+                                    ].join(" ")}
+                                  >
+                                    {reg.status}
+                                  </span>
+                                  <span
+                                    className={[
+                                      "rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]",
+                                      robustnessClass(stats.robustnessStatus),
+                                    ].join(" ")}
+                                  >
+                                    {robustnessLabel(stats.robustnessStatus)}
+                                  </span>
+                                  {reg.status === "approved" ? (
+                                    <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
+                                      {reg.paid ? "Paid" : "Unpaid"}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {stats.playerId ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setInspectPlayer({
+                                        id: stats.playerId!,
+                                        name: reg.displayName,
+                                      })
+                                    }
+                                    className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[11px] font-semibold text-[var(--ink)]"
+                                  >
+                                    Details
+                                  </button>
+                                ) : null}
+                                {reg.status === "approved" ? (
+                                  <button
+                                    type="button"
+                                    disabled={saving}
+                                    onClick={() =>
+                                      void onUpdateRegistration(reg.id, {
+                                        paid: !reg.paid,
+                                      })
+                                    }
+                                    className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[11px] font-semibold text-[var(--ink)]"
+                                  >
+                                    {reg.paid ? "Mark unpaid" : "Mark paid"}
+                                  </button>
+                                ) : null}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </SurfaceCard>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 

@@ -227,6 +227,17 @@ function normalizeRegistration(
       typeof raw.checkedInAt === "string" && raw.checkedInAt
         ? raw.checkedInAt
         : null,
+    robustnessAtSignup:
+      typeof raw.robustnessAtSignup === "number" &&
+      Number.isFinite(raw.robustnessAtSignup)
+        ? raw.robustnessAtSignup
+        : null,
+    robustnessStatusAtSignup:
+      raw.robustnessStatusAtSignup === "starter" ||
+      raw.robustnessStatusAtSignup === "preliminary" ||
+      raw.robustnessStatusAtSignup === "established"
+        ? raw.robustnessStatusAtSignup
+        : null,
   };
 }
 
@@ -380,6 +391,8 @@ export async function createRegistration(input: {
   email: string | null;
   phone: string | null;
   ratingAtSignup: number | null;
+  robustnessAtSignup?: number | null;
+  robustnessStatusAtSignup?: TournamentRegistration["robustnessStatusAtSignup"];
   isGuest: boolean;
   teamName?: string | null;
   teammates?: RegistrationTeammate[];
@@ -460,6 +473,8 @@ export async function createRegistration(input: {
     email: input.email,
     phone: input.phone,
     ratingAtSignup: input.ratingAtSignup,
+    robustnessAtSignup: input.robustnessAtSignup ?? null,
+    robustnessStatusAtSignup: input.robustnessStatusAtSignup ?? null,
     isGuest: input.isGuest,
     teamName:
       tournament.eventType === "scotch-doubles"
