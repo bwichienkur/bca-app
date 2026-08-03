@@ -1342,7 +1342,9 @@ export function LeagueApp() {
                 </div>
 
                 <div
-                  className={myTeamSubTab === "roster" ? "min-w-0" : "hidden"}
+                  className={
+                    myTeamSubTab === "roster" ? "min-w-0 space-y-3" : "hidden"
+                  }
                   aria-hidden={myTeamSubTab !== "roster"}
                 >
                   <SectionCard
@@ -1366,17 +1368,14 @@ export function LeagueApp() {
                           }
                         : undefined
                     }
-                    flush
-                  >
-                    <TeamDetail
-                      teamName={prefs.teamName}
-                      team={myTeam}
-                      playersByTeam={playersByTeam}
-                      isMyTeam
-                      embedded
-                      flushStats
-                    />
-                  </SectionCard>
+                  />
+                  <TeamDetail
+                    teamName={prefs.teamName}
+                    team={myTeam}
+                    playersByTeam={playersByTeam}
+                    isMyTeam
+                    embedded
+                  />
                 </div>
 
                 <div
@@ -1439,7 +1438,7 @@ export function LeagueApp() {
                 }
               />
             ) : (
-              <section className="min-h-[min(50dvh,24rem)] [overflow-anchor:none]">
+              <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
                 <SectionCard
                   eyebrow="League"
                   title="Team standings"
@@ -1448,48 +1447,43 @@ export function LeagueApp() {
                     label: "Teams",
                     value: String(filteredTeamRows.length),
                   }}
-                  flush
-                >
-                  <div className="border-b border-[var(--line)] px-3 py-3 sm:px-4 [&_label]:max-w-none">
-                    <SearchField
-                      value={filterQuery}
-                      anchorRef={filterAnchor.ref}
-                      onBeforeChange={filterAnchor.mark}
-                      onChange={setFilterQuery}
-                      placeholder="Filter teams…"
-                    />
-                  </div>
-                  <DataTable
-                    headers={teamReport.headers}
-                    rows={filteredTeamRows}
-                    stickyFirst
-                    compact
-                    flush
-                    isRowSelected={(row) =>
-                      Boolean(
-                        prefs.teamName &&
-                          normalizeTeamName(
-                            row[teamNameIndex(teamReport.headers)] ?? "",
-                          ) === normalizeTeamName(prefs.teamName),
-                      )
-                    }
-                    onRowClick={(row) => {
-                      const name =
-                        row[teamNameIndex(teamReport.headers)]?.trim() ?? "";
-                      const matched = divisionTeams.find(
-                        (team) =>
-                          normalizeTeamName(team.name) ===
-                          normalizeTeamName(name),
-                      );
-                      setSelectedTeamName(matched?.name ?? name);
-                    }}
-                    emptyText="No teams match your filter."
-                  />
-                </SectionCard>
+                />
+                <SearchField
+                  value={filterQuery}
+                  anchorRef={filterAnchor.ref}
+                  onBeforeChange={filterAnchor.mark}
+                  onChange={setFilterQuery}
+                  placeholder="Filter teams…"
+                />
+                <DataTable
+                  headers={teamReport.headers}
+                  rows={filteredTeamRows}
+                  stickyFirst
+                  compact
+                  isRowSelected={(row) =>
+                    Boolean(
+                      prefs.teamName &&
+                        normalizeTeamName(
+                          row[teamNameIndex(teamReport.headers)] ?? "",
+                        ) === normalizeTeamName(prefs.teamName),
+                    )
+                  }
+                  onRowClick={(row) => {
+                    const name =
+                      row[teamNameIndex(teamReport.headers)]?.trim() ?? "";
+                    const matched = divisionTeams.find(
+                      (team) =>
+                        normalizeTeamName(team.name) ===
+                        normalizeTeamName(name),
+                    );
+                    setSelectedTeamName(matched?.name ?? name);
+                  }}
+                  emptyText="No teams match your filter."
+                />
               </section>
             )
           ) : tab === "players" && playersWithRatings ? (
-            <section className="min-h-[min(50dvh,24rem)] [overflow-anchor:none]">
+            <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
               <SectionCard
                 eyebrow="Players"
                 title="Division players"
@@ -1506,26 +1500,21 @@ export function LeagueApp() {
                   label: "Players",
                   value: String(filteredPlayerRows.length),
                 }}
-                flush
-              >
-                <div className="border-b border-[var(--line)] px-3 py-3 sm:px-4 [&_label]:max-w-none">
-                  <SearchField
-                    value={filterQuery}
-                    anchorRef={filterAnchor.ref}
-                    onBeforeChange={filterAnchor.mark}
-                    onChange={setFilterQuery}
-                    placeholder="Filter players…"
-                  />
-                </div>
-                <DataTable
-                  headers={playersWithRatings.headers}
-                  rows={filteredPlayerRows}
-                  stickyFirst
-                  compact
-                  flush
-                  emptyText="No players match your filter."
-                />
-              </SectionCard>
+              />
+              <SearchField
+                value={filterQuery}
+                anchorRef={filterAnchor.ref}
+                onBeforeChange={filterAnchor.mark}
+                onChange={setFilterQuery}
+                placeholder="Filter players…"
+              />
+              <DataTable
+                headers={playersWithRatings.headers}
+                rows={filteredPlayerRows}
+                stickyFirst
+                compact
+                emptyText="No players match your filter."
+              />
             </section>
           ) : tab === "schedule" && schedule ? (
             !prefs.teamName ? (
