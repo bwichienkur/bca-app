@@ -11,12 +11,15 @@ import {
 } from "react";
 import {
   BRACKET_FORMAT_OPTIONS,
+  defaultTeamSize,
+  entryNoun,
   EVENT_TYPE_OPTIONS,
   FL_REGIONS,
   formatEntryFee,
   formatStartsAt,
   GAME_TYPE_OPTIONS,
   HANDICAP_SYSTEM_OPTIONS,
+  maxEntriesLabel,
   PAY_METHOD_OPTIONS,
   REGISTRATION_MODE_OPTIONS,
   RULESET_OPTIONS,
@@ -26,6 +29,7 @@ import {
 } from "@/lib/tournaments/options";
 import type {
   CreateTournamentInput,
+  EventType,
   GameType,
   TournamentListItem,
   TournamentMessage,
@@ -135,6 +139,11 @@ function SurfaceCard({
   );
 }
 
+type TeammateDraft = {
+  displayName: string;
+  ratingAtSignup: string;
+};
+
 const emptyForm = (): CreateTournamentInput => ({
   title: "",
   description: "",
@@ -151,6 +160,7 @@ const emptyForm = (): CreateTournamentInput => ({
   maxFargo: null,
   unratedPolicy: "message-organizer",
   maxPlayers: 32,
+  teamSize: 1,
   entryFeeCents: 2000,
   payMethod: "door",
   payoutNotes: "",
@@ -166,6 +176,13 @@ const emptyForm = (): CreateTournamentInput => ({
   organizerPhone: null,
   status: "open",
 });
+
+function emptyTeammates(count: number): TeammateDraft[] {
+  return Array.from({ length: Math.max(0, count) }, () => ({
+    displayName: "",
+    ratingAtSignup: "",
+  }));
+}
 
 export function Tournaments({
   user,
@@ -188,10 +205,45 @@ export function Tournaments({
   const [saving, setSaving] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [regNote, setRegNote] = useState("");
-  const [regRating, setRegRating] = useState("");
-  const [guestMode, setGuestMode] = useState(false);
+  const [teamName, setTeamName] = useState("");
+  const [teammates, setTeammates] = useState<TeammateDraft[]>([]);
+  const [resolvedFargo, setResolvedFargo] = useState<number | null>(playerFargo);
+  const [fargoLoading, setFargoLoading] = useState(false);
   const [messageBody, setMessageBody] = useState("");
   const [messageName, setMessageName] = useState("");
+
+  useEffect(() => {
+    if (!user) {
+      setResolvedFargo(null);
+      setFargoLoading(false);
+      return;
+    }
+    // Prefer roster Fargo immediately; refresh from Fargo profile when possible.
+    setResolvedFargo(playerFargo);
+    const lookupId = user.readableId?.trim();
+    if (!lookupId) return;
+    let cancelled = false;
+    setFargoLoading(true);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/players/${encodeURIComponent(lookupId)}`);
+        const data = (await res.json()) as {
+          player?: { effectiveRating?: number | null; provisionalRating?: number | null };
+        };
+        if (cancelled || !res.ok) return;
+        const rating =
+          data.player?.effectiveRating ?? data.player?.provisionalRating ?? null;
+        if (rating != null) setResolvedFargo(rating);
+      } catch {
+        /* keep roster fallback */
+      } finally {
+        if (!cancelled) setFargoLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [playerFargo, user]);
 
   const loadEvents = useCallback(async () => {
     setLoading(true);
@@ -201,8 +253,8 @@ export function Tournaments({
       if (q.trim()) params.set("q", q.trim());
       if (region) params.set("region", region);
       if (gameType) params.set("gameType", gameType);
-      if (eligibleOnly && playerFargo != null) {
-        params.set("eligibleForFargo", String(playerFargo));
+      if (eligibleOnly && resolvedFargo != null) {
+        params.set("eligibleForFargo", String(resolvedFargo));
       }
       const res = await fetch(`/api/tournaments?${params.toString()}`);
       const data = (await res.json()) as {
@@ -217,7 +269,7 @@ export function Tournaments({
     } finally {
       setLoading(false);
     }
-  }, [eligibleOnly, gameType, playerFargo, q, region]);
+  }, [eligibleOnly, gameType, q, region, resolvedFargo]);
 
   useEffect(() => {
     void loadEvents();
@@ -229,16 +281,23 @@ export function Tournaments({
     setDetailLoading(true);
     setActionMsg(null);
     setError(null);
+    setRegNote("");
+    setTeamName("");
     try {
       const res = await fetch(`/api/tournaments/${id}`);
       const data = (await res.json()) as DetailPayload & { error?: string };
       if (!res.ok) throw new Error(data.error || "Failed to load event.");
+      const tournament = data.tournament;
       setDetail({
-        tournament: data.tournament,
+        tournament,
         registrations: data.registrations ?? [],
         messages: data.messages ?? [],
         isOrganizer: Boolean(data.isOrganizer),
       });
+      const mateCount = Math.max(0, (tournament.teamSize ?? defaultTeamSize(tournament.eventType)) - 1);
+      setTeammates(
+        tournament.eventType === "singles" ? [] : emptyTeammates(mateCount || (tournament.eventType === "scotch-doubles" ? 1 : 4)),
+      );
     } catch (err) {
       setDetail(null);
       setError(err instanceof Error ? err.message : "Failed to load event.");
@@ -319,32 +378,44 @@ export function Tournaments({
   };
 
   const onRegister = async () => {
-    if (!user || !selectedId) {
+    if (!user || !selectedId || !detail) {
       onRequestLogin();
       return;
     }
     setSaving(true);
     setActionMsg(null);
     try {
-      const rating =
-        regRating.trim() === ""
-          ? playerFargo
-          : Number(regRating);
+      const eventType = detail.tournament.eventType;
+      const payloadTeammates =
+        eventType === "singles"
+          ? []
+          : teammates
+              .filter((t) => t.displayName.trim())
+              .map((t) => ({
+                displayName: t.displayName.trim(),
+                ratingAtSignup:
+                  t.ratingAtSignup.trim() === ""
+                    ? null
+                    : Number(t.ratingAtSignup),
+              }));
+
       const res = await fetch(`/api/tournaments/${selectedId}/registrations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           displayName: user.name ?? user.email ?? "Player",
-          ratingAtSignup:
-            rating == null || Number.isNaN(rating) ? null : rating,
-          isGuest: guestMode || rating == null,
           noteToOrganizer: regNote,
+          teamName: eventType === "teams" || eventType === "scotch-doubles"
+            ? teamName.trim() || null
+            : null,
+          teammates: payloadTeammates,
         }),
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Registration failed.");
       setActionMsg("Registration submitted.");
       setRegNote("");
+      setTeamName("");
       await refreshDetail();
     } catch (err) {
       setActionMsg(err instanceof Error ? err.message : "Registration failed.");
@@ -499,8 +570,12 @@ export function Tournaments({
                     aria-label="Event type"
                     value={form.eventType}
                     options={EVENT_TYPE_OPTIONS}
-                    onChange={(eventType) =>
-                      setForm((p) => ({ ...p, eventType }))
+                    onChange={(eventType: EventType) =>
+                      setForm((p) => ({
+                        ...p,
+                        eventType,
+                        teamSize: defaultTeamSize(eventType),
+                      }))
                     }
                   />
                 </Field>
@@ -599,7 +674,7 @@ export function Tournaments({
                     }
                   />
                 </Field>
-                <Field label="Max players">
+                <Field label={maxEntriesLabel(form.eventType)}>
                   <input
                     required
                     type="number"
@@ -614,6 +689,31 @@ export function Tournaments({
                     }
                   />
                 </Field>
+                {form.eventType !== "singles" ? (
+                  <Field
+                    label={
+                      form.eventType === "scotch-doubles"
+                        ? "Players per pair"
+                        : "Players per team"
+                    }
+                  >
+                    <input
+                      required
+                      type="number"
+                      min={form.eventType === "scotch-doubles" ? 2 : 2}
+                      max={12}
+                      className={fieldClass}
+                      value={form.teamSize ?? defaultTeamSize(form.eventType)}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          teamSize: Number(e.target.value),
+                        }))
+                      }
+                      disabled={form.eventType === "scotch-doubles"}
+                    />
+                  </Field>
+                ) : null}
                 <Field label="Entry fee ($)">
                   <input
                     type="number"
@@ -840,7 +940,7 @@ export function Tournaments({
               title={t.title}
               description={`${formatStartsAt(t.startsAt)} · ${t.venueName}, ${t.city}`}
               badge={{
-                label: "Spots",
+                label: entryNoun(t.eventType),
                 value: String(t.spotsLeft),
               }}
             />
@@ -919,17 +1019,36 @@ export function Tournaments({
                 ) : null}
 
                 {myRegistration ? (
-                  <p className="text-sm text-[var(--ink)]">
-                    Your status:{" "}
-                    <span className="font-semibold capitalize">
-                      {myRegistration.status}
-                    </span>
-                    {myRegistration.paid ? " · Paid" : " · Unpaid"}
-                  </p>
+                  <div className="space-y-1 text-sm text-[var(--ink)]">
+                    <p>
+                      Your status:{" "}
+                      <span className="font-semibold capitalize">
+                        {myRegistration.status}
+                      </span>
+                      {myRegistration.paid ? " · Paid" : " · Unpaid"}
+                      {myRegistration.ratingAtSignup != null
+                        ? ` · Fargo ${myRegistration.ratingAtSignup}`
+                        : " · Unrated"}
+                    </p>
+                    {myRegistration.teamName ? (
+                      <p className="text-xs text-[var(--muted)]">
+                        Entry: {myRegistration.teamName}
+                        {myRegistration.teammates?.length
+                          ? ` · ${myRegistration.teammates
+                              .map((mate) => mate.displayName)
+                              .join(", ")}`
+                          : ""}
+                      </p>
+                    ) : null}
+                  </div>
                 ) : t.status === "open" ? (
                   <div className="space-y-3 rounded-[1.2rem] border border-[var(--line)] bg-[var(--surface-2)]/60 p-3">
                     <p className="text-sm font-semibold text-[var(--ink)]">
-                      Sign up
+                      {t.eventType === "teams"
+                        ? "Register your team"
+                        : t.eventType === "scotch-doubles"
+                          ? "Register your pair"
+                          : "Sign up"}
                     </p>
                     {!user ? (
                       <button
@@ -941,41 +1060,150 @@ export function Tournaments({
                       </button>
                     ) : (
                       <>
-                        <Field label="Fargo at signup">
-                          <input
-                            className={fieldClass}
-                            value={regRating}
-                            onChange={(e) => setRegRating(e.target.value)}
-                            placeholder={
-                              playerFargo != null
-                                ? String(playerFargo)
-                                : "Leave blank if unrated"
+                        <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5">
+                          <p className={labelClass}>Your Fargo</p>
+                          <p className="text-sm font-semibold text-[var(--ink)]">
+                            {fargoLoading
+                              ? "Looking up…"
+                              : resolvedFargo != null
+                                ? resolvedFargo
+                                : "Unrated"}
+                          </p>
+                          <p className="mt-1 text-[11px] text-[var(--muted)]">
+                            Pulled from your FargoRate account — it can’t be
+                            changed at signup.
+                          </p>
+                        </div>
+
+                        {resolvedFargo == null && !fargoLoading ? (
+                          <p className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--muted)]">
+                            No Fargo on file. You can still request a spot
+                            {t.unratedPolicy === "message-organizer"
+                              ? " — message the organizer below if needed"
+                              : ""}
+                            .
+                          </p>
+                        ) : null}
+
+                        {t.eventType === "teams" ? (
+                          <Field label="Team name">
+                            <input
+                              required
+                              className={fieldClass}
+                              value={teamName}
+                              onChange={(e) => setTeamName(e.target.value)}
+                              placeholder="Team name"
+                            />
+                          </Field>
+                        ) : null}
+
+                        {t.eventType === "scotch-doubles" ? (
+                          <Field label="Pair name (optional)">
+                            <input
+                              className={fieldClass}
+                              value={teamName}
+                              onChange={(e) => setTeamName(e.target.value)}
+                              placeholder="e.g. Smith / Lee"
+                            />
+                          </Field>
+                        ) : null}
+
+                        {t.eventType !== "singles"
+                          ? teammates.map((mate, index) => (
+                              <div
+                                key={`mate-${index}`}
+                                className="grid gap-2 sm:grid-cols-[1fr_7rem]"
+                              >
+                                <Field
+                                  label={
+                                    t.eventType === "scotch-doubles"
+                                      ? "Partner name"
+                                      : `Teammate ${index + 1}`
+                                  }
+                                >
+                                  <input
+                                    className={fieldClass}
+                                    value={mate.displayName}
+                                    onChange={(e) =>
+                                      setTeammates((prev) =>
+                                        prev.map((row, i) =>
+                                          i === index
+                                            ? {
+                                                ...row,
+                                                displayName: e.target.value,
+                                              }
+                                            : row,
+                                        ),
+                                      )
+                                    }
+                                    placeholder={
+                                      t.eventType === "scotch-doubles"
+                                        ? "Partner full name"
+                                        : "Player name"
+                                    }
+                                  />
+                                </Field>
+                                <Field label="Fargo">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    className={fieldClass}
+                                    value={mate.ratingAtSignup}
+                                    onChange={(e) =>
+                                      setTeammates((prev) =>
+                                        prev.map((row, i) =>
+                                          i === index
+                                            ? {
+                                                ...row,
+                                                ratingAtSignup: e.target.value,
+                                              }
+                                            : row,
+                                        ),
+                                      )
+                                    }
+                                    placeholder="Opt."
+                                  />
+                                </Field>
+                              </div>
+                            ))
+                          : null}
+
+                        {t.eventType === "teams" ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setTeammates((prev) => [
+                                ...prev,
+                                { displayName: "", ratingAtSignup: "" },
+                              ])
                             }
-                          />
-                        </Field>
-                        <label className="flex items-center gap-2 text-sm text-[var(--ink)]">
-                          <input
-                            type="checkbox"
-                            checked={guestMode}
-                            onChange={(e) => setGuestMode(e.target.checked)}
-                          />
-                          Unrated / guest signup
-                        </label>
+                            className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)]"
+                          >
+                            Add teammate
+                          </button>
+                        ) : null}
+
                         <Field label="Note to organizer">
                           <textarea
                             className={`${fieldClass} min-h-[72px] resize-y`}
                             value={regNote}
                             onChange={(e) => setRegNote(e.target.value)}
-                            placeholder="Venmo handle, partner name, questions…"
+                            placeholder="Venmo handle, questions…"
                           />
                         </Field>
                         <button
                           type="button"
-                          disabled={saving}
+                          disabled={saving || fargoLoading}
                           onClick={() => void onRegister()}
                           className="rounded-full bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                         >
-                          {saving ? "Submitting…" : "Request spot"}
+                          {saving
+                            ? "Submitting…"
+                            : t.eventType === "teams"
+                              ? "Request team spot"
+                              : t.eventType === "scotch-doubles"
+                                ? "Request pair spot"
+                                : "Request spot"}
                         </button>
                       </>
                     )}
@@ -1046,17 +1274,32 @@ export function Tournaments({
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div className="min-w-0">
                               <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)]">
-                                {reg.displayName}
+                                {reg.teamName || reg.displayName}
                               </p>
                               <p className="mt-0.5 text-xs text-[var(--muted)]">
+                                Captain: {reg.displayName}
                                 {reg.ratingAtSignup != null
-                                  ? `Fargo ${reg.ratingAtSignup}`
-                                  : "Unrated"}
+                                  ? ` · Fargo ${reg.ratingAtSignup}`
+                                  : " · Unrated"}
                                 {reg.email ? ` · ${reg.email}` : ""}
                                 {reg.paid ? " · Paid" : " · Unpaid"}
                                 {" · "}
                                 <span className="capitalize">{reg.status}</span>
                               </p>
+                              {reg.teammates?.length ? (
+                                <p className="mt-1 text-xs text-[var(--ink)]">
+                                  {reg.teammates
+                                    .map(
+                                      (mate) =>
+                                        `${mate.displayName}${
+                                          mate.ratingAtSignup != null
+                                            ? ` (${mate.ratingAtSignup})`
+                                            : ""
+                                        }`,
+                                    )
+                                    .join(" · ")}
+                                </p>
+                              ) : null}
                               {reg.noteToOrganizer ? (
                                 <p className="mt-1 text-xs text-[var(--ink)]">
                                   {reg.noteToOrganizer}
@@ -1211,10 +1454,10 @@ export function Tournaments({
                 type="checkbox"
                 checked={eligibleOnly}
                 onChange={(e) => setEligibleOnly(e.target.checked)}
-                disabled={playerFargo == null}
+                disabled={resolvedFargo == null}
               />
               Eligible for my Fargo
-              {playerFargo != null ? ` (${playerFargo})` : ""}
+              {resolvedFargo != null ? ` (${resolvedFargo})` : ""}
             </label>
           </div>
         </div>
@@ -1285,7 +1528,8 @@ export function Tournaments({
                         {" · "}
                         {formatEntryFee(event.entryFeeCents)}
                         {" · "}
-                        {event.spotsLeft} spots left
+                        {event.spotsLeft}{" "}
+                        {entryNoun(event.eventType)} left
                       </p>
                     </div>
                   </button>

@@ -45,7 +45,10 @@ export type Tournament = {
   minFargo: number | null;
   maxFargo: number | null;
   unratedPolicy: UnratedPolicy;
+  /** Max entries (singles players, doubles pairs, or teams). */
   maxPlayers: number;
+  /** Players per entry, including the captain. Singles=1, scotch=2, teams configurable. */
+  teamSize: number;
   entryFeeCents: number;
   payMethod: PayMethod;
   payoutNotes: string;
@@ -67,6 +70,11 @@ export type Tournament = {
   updatedAt: string;
 };
 
+export type RegistrationTeammate = {
+  displayName: string;
+  ratingAtSignup: number | null;
+};
+
 export type TournamentRegistration = {
   id: string;
   tournamentId: string;
@@ -77,6 +85,10 @@ export type TournamentRegistration = {
   phone: string | null;
   ratingAtSignup: number | null;
   isGuest: boolean;
+  /** Required for team events; optional label for scotch doubles. */
+  teamName: string | null;
+  /** Additional players on the entry (partner / teammates). Captain is displayName. */
+  teammates: RegistrationTeammate[];
   status: RegistrationStatus;
   paid: boolean;
   noteToOrganizer: string;
@@ -111,6 +123,7 @@ export type CreateTournamentInput = {
   maxFargo?: number | null;
   unratedPolicy?: UnratedPolicy;
   maxPlayers: number;
+  teamSize?: number;
   entryFeeCents?: number;
   payMethod?: PayMethod;
   payoutNotes?: string;

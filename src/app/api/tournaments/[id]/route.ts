@@ -91,6 +91,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       "maxFargo",
       "unratedPolicy",
       "maxPlayers",
+      "teamSize",
       "entryFeeCents",
       "payMethod",
       "payoutNotes",
