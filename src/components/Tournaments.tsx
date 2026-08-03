@@ -5,6 +5,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useTransition,
   type ChangeEvent,
   type FormEvent,
   type ReactNode,
@@ -46,6 +47,7 @@ import { SectionCard } from "./SectionCard";
 import { SelectField } from "./SelectField";
 
 type View = "browse" | "create" | "edit" | "detail";
+type DetailSubTab = "overview" | "signups" | "manage";
 
 type EventFormState = Omit<CreateTournamentInput, "status"> & {
   status: TournamentStatus;
@@ -91,6 +93,50 @@ function statusTone(status: TournamentStatus): string {
 function handicapLabel(value: string): string {
   return (
     HANDICAP_SYSTEM_OPTIONS.find((o) => o.value === value)?.label ?? value
+  );
+}
+
+function fargoBandText(t: TournamentListItem): string {
+  if (t.minFargo == null && t.maxFargo == null) return "Open";
+  return `${t.minFargo ?? "—"} – ${t.maxFargo ?? "—"}`;
+}
+
+function entryShapeText(t: TournamentListItem): string {
+  if (t.eventType === "scotch-doubles") return "2-player pairs";
+  if (t.eventType === "teams") return `${t.teamSize}-player teams`;
+  return "Singles";
+}
+
+function raceText(t: TournamentListItem): string {
+  if (!t.winnersRaceTo) return "—";
+  return t.losersRaceTo
+    ? `W ${t.winnersRaceTo} / L ${t.losersRaceTo}`
+    : `Race to ${t.winnersRaceTo}`;
+}
+
+function StatTile({
+  label,
+  value,
+  delayClass = "",
+}: {
+  label: string;
+  value: string;
+  delayClass?: string;
+}) {
+  return (
+    <div
+      className={[
+        "animate-rise min-w-0 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)]/70 px-3 py-3",
+        delayClass,
+      ].join(" ")}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+        {label}
+      </p>
+      <p className="mt-1.5 break-words font-[family-name:var(--font-display)] text-xl font-semibold leading-tight tracking-tight text-[var(--ink)] sm:text-2xl">
+        {value}
+      </p>
+    </div>
   );
 }
 
@@ -260,6 +306,9 @@ export function Tournaments({
   const [fargoLoading, setFargoLoading] = useState(false);
   const [messageBody, setMessageBody] = useState("");
   const [messageName, setMessageName] = useState("");
+  const [detailSubTab, setDetailSubTab] = useState<DetailSubTab>("overview");
+  const [houseRulesOpen, setHouseRulesOpen] = useState(false);
+  const [, startDetailTransition] = useTransition();
 
   useEffect(() => {
     if (!user) {
@@ -332,6 +381,8 @@ export function Tournaments({
     setError(null);
     setRegNote("");
     setTeamName("");
+    setDetailSubTab("overview");
+    setHouseRulesOpen(false);
     try {
       const res = await fetch(`/api/tournaments/${id}`);
       const data = (await res.json()) as DetailPayload & { error?: string };
@@ -566,6 +617,47 @@ export function Tournaments({
       setError("Could not process thumbnail image.");
     }
   };
+
+  const setTournamentStatus = async (
+    id: string,
+    status: TournamentStatus,
+    successMsg: string,
+  ) => {
+    setSaving(true);
+    setActionMsg(null);
+    try {
+      const res = await fetch(`/api/tournaments/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Could not update event.");
+      setActionMsg(successMsg);
+      await refreshDetail();
+    } catch (err) {
+      setActionMsg(
+        err instanceof Error ? err.message : "Could not update event.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sortedRegistrations = useMemo(() => {
+    const regs = detail?.registrations ?? [];
+    const rank = (status: TournamentRegistration["status"]) => {
+      if (status === "pending") return 0;
+      if (status === "approved") return 1;
+      if (status === "waitlisted") return 2;
+      return 3;
+    };
+    return [...regs].sort((a, b) => {
+      const byStatus = rank(a.status) - rank(b.status);
+      if (byStatus !== 0) return byStatus;
+      return a.createdAt.localeCompare(b.createdAt);
+    });
+  }, [detail?.registrations]);
 
   if (view === "create" || view === "edit") {
     const isEdit = view === "edit";
@@ -1020,6 +1112,293 @@ export function Tournaments({
 
   if (view === "detail") {
     const t = detail?.tournament;
+    const isOrganizer = Boolean(detail?.isOrganizer);
+    const activeTab: DetailSubTab = isOrganizer ? detailSubTab : "overview";
+    const gameLabel =
+      t
+        ? (GAME_TYPE_OPTIONS.find((o) => o.value === t.gameType)?.label ??
+          t.gameType)
+        : "";
+    const formatLabel =
+      t
+        ? (BRACKET_FORMAT_OPTIONS.find((o) => o.value === t.bracketFormat)
+            ?.label ?? t.bracketFormat)
+        : "";
+    const paymentLabel =
+      t
+        ? (PAY_METHOD_OPTIONS.find((o) => o.value === t.payMethod)?.label ??
+          t.payMethod)
+        : "";
+
+    const overviewSignup = t ? (
+      <>
+        {actionMsg ? (
+          <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
+            {actionMsg}
+          </p>
+        ) : null}
+
+        {myRegistration ? (
+          <SurfaceCard>
+            <div className="space-y-2 p-3 sm:p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                Your entry
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-[var(--felt)] px-2.5 py-1 text-[11px] font-semibold capitalize text-white">
+                  {myRegistration.status}
+                </span>
+                <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
+                  {myRegistration.paid ? "Paid" : "Unpaid"}
+                </span>
+                <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
+                  {myRegistration.ratingAtSignup != null
+                    ? `Fargo ${myRegistration.ratingAtSignup}`
+                    : "Unrated"}
+                </span>
+              </div>
+              {myRegistration.teamName || myRegistration.teammates?.length ? (
+                <div>
+                  <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)]">
+                    {myRegistration.teamName || myRegistration.displayName}
+                  </p>
+                  {myRegistration.teammates?.length ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {myRegistration.teammates.map((mate) => (
+                        <span
+                          key={`${mate.displayName}-${mate.ratingAtSignup ?? "x"}`}
+                          className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]"
+                        >
+                          {mate.displayName}
+                          {mate.ratingAtSignup != null
+                            ? ` · ${mate.ratingAtSignup}`
+                            : ""}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </SurfaceCard>
+        ) : t.status === "open" ? (
+          <SurfaceCard>
+            <div className="space-y-3 p-3 sm:p-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                  {t.eventType === "teams"
+                    ? "Register your team"
+                    : t.eventType === "scotch-doubles"
+                      ? "Register your pair"
+                      : "Sign up"}
+                </p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  {entryShapeText(t)}
+                  {t.minFargo != null || t.maxFargo != null
+                    ? ` · Fargo ${fargoBandText(t)}`
+                    : ""}
+                </p>
+              </div>
+              {!user ? (
+                <button
+                  type="button"
+                  onClick={onRequestLogin}
+                  className="rounded-full bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+                >
+                  Sign in to register
+                </button>
+              ) : (
+                <>
+                  <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)]/60 px-3 py-2.5">
+                    <p className={labelClass}>Your Fargo</p>
+                    <p className="text-sm font-semibold text-[var(--ink)]">
+                      {fargoLoading
+                        ? "Looking up…"
+                        : resolvedFargo != null
+                          ? resolvedFargo
+                          : "Unrated"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-[var(--muted)]">
+                      From your FargoRate account — locked at signup.
+                    </p>
+                  </div>
+
+                  {resolvedFargo == null && !fargoLoading ? (
+                    <p className="text-xs text-[var(--muted)]">
+                      No Fargo on file. You can still request a spot
+                      {t.unratedPolicy === "message-organizer"
+                        ? " — message the organizer if needed"
+                        : ""}
+                      .
+                    </p>
+                  ) : null}
+
+                  {t.eventType === "teams" ? (
+                    <Field label="Team name">
+                      <input
+                        required
+                        className={fieldClass}
+                        value={teamName}
+                        onChange={(e) => setTeamName(e.target.value)}
+                        placeholder="Team name"
+                      />
+                    </Field>
+                  ) : null}
+
+                  {t.eventType === "scotch-doubles" ? (
+                    <Field label="Pair name (optional)">
+                      <input
+                        className={fieldClass}
+                        value={teamName}
+                        onChange={(e) => setTeamName(e.target.value)}
+                        placeholder="e.g. Smith / Lee"
+                      />
+                    </Field>
+                  ) : null}
+
+                  {t.eventType !== "singles"
+                    ? teammates.map((mate, index) => (
+                        <div
+                          key={`mate-${index}`}
+                          className="grid gap-2 sm:grid-cols-[1fr_7rem]"
+                        >
+                          <Field
+                            label={
+                              t.eventType === "scotch-doubles"
+                                ? "Partner name"
+                                : `Teammate ${index + 1}`
+                            }
+                          >
+                            <input
+                              className={fieldClass}
+                              value={mate.displayName}
+                              onChange={(e) =>
+                                setTeammates((prev) =>
+                                  prev.map((row, i) =>
+                                    i === index
+                                      ? { ...row, displayName: e.target.value }
+                                      : row,
+                                  ),
+                                )
+                              }
+                              placeholder={
+                                t.eventType === "scotch-doubles"
+                                  ? "Partner full name"
+                                  : "Player name"
+                              }
+                            />
+                          </Field>
+                          <Field label="Fargo">
+                            <input
+                              type="number"
+                              min={0}
+                              className={fieldClass}
+                              value={mate.ratingAtSignup}
+                              onChange={(e) =>
+                                setTeammates((prev) =>
+                                  prev.map((row, i) =>
+                                    i === index
+                                      ? {
+                                          ...row,
+                                          ratingAtSignup: e.target.value,
+                                        }
+                                      : row,
+                                  ),
+                                )
+                              }
+                              placeholder="Opt."
+                            />
+                          </Field>
+                        </div>
+                      ))
+                    : null}
+
+                  {t.eventType === "teams" ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setTeammates((prev) => [
+                          ...prev,
+                          { displayName: "", ratingAtSignup: "" },
+                        ])
+                      }
+                      className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)]"
+                    >
+                      Add teammate
+                    </button>
+                  ) : null}
+
+                  <Field label="Note to organizer">
+                    <textarea
+                      className={`${fieldClass} min-h-[72px] resize-y`}
+                      value={regNote}
+                      onChange={(e) => setRegNote(e.target.value)}
+                      placeholder="Venmo handle, questions…"
+                    />
+                  </Field>
+                  <button
+                    type="button"
+                    disabled={saving || fargoLoading}
+                    onClick={() => void onRegister()}
+                    className="rounded-full bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    {saving
+                      ? "Submitting…"
+                      : t.eventType === "teams"
+                        ? "Request team spot"
+                        : t.eventType === "scotch-doubles"
+                          ? "Request pair spot"
+                          : "Request spot"}
+                  </button>
+                </>
+              )}
+            </div>
+          </SurfaceCard>
+        ) : null}
+
+        {(t.unratedPolicy === "message-organizer" || !user) &&
+        !myRegistration ? (
+          <SurfaceCard>
+            <form onSubmit={onSendMessage} className="space-y-3 p-3 sm:p-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                  Message organizer
+                </p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  For unrated players or questions before signup.
+                </p>
+              </div>
+              {!user ? (
+                <Field label="Your name">
+                  <input
+                    required
+                    className={fieldClass}
+                    value={messageName}
+                    onChange={(e) => setMessageName(e.target.value)}
+                  />
+                </Field>
+              ) : null}
+              <Field label="Message">
+                <textarea
+                  required
+                  className={`${fieldClass} min-h-[72px] resize-y`}
+                  value={messageBody}
+                  onChange={(e) => setMessageBody(e.target.value)}
+                />
+              </Field>
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-4 py-2 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
+              >
+                Send message
+              </button>
+            </form>
+          </SurfaceCard>
+        ) : null}
+      </>
+    ) : null;
+
     return (
       <div className="space-y-4 animate-panel">
         <button
@@ -1030,6 +1409,7 @@ export function Tournaments({
             setSelectedId(null);
             setError(null);
             setActionMsg(null);
+            setDetailSubTab("overview");
           }}
           className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
         >
@@ -1051,459 +1431,261 @@ export function Tournaments({
               }}
             />
 
-            <SurfaceCard>
-              {t.thumbnailUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={t.thumbnailUrl}
-                  alt=""
-                  className="h-40 w-full object-cover sm:h-52"
-                />
-              ) : null}
-              <div className="space-y-4 p-3 sm:p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={[
-                      "rounded-full px-2.5 py-1 text-[11px] font-semibold",
-                      statusTone(t.status),
-                    ].join(" ")}
-                  >
-                    {STATUS_LABELS[t.status]}
-                  </span>
-                  <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
-                    {formatEntryFee(t.entryFeeCents)}
-                  </span>
-                  <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
-                    {t.approvedCount}/{t.maxPlayers} in
-                  </span>
-                </div>
+            {isOrganizer ? (
+              <div
+                role="tablist"
+                aria-label="Event organizer sections"
+                className="grid grid-cols-3 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+              >
+                {(
+                  [
+                    { id: "overview" as const, label: "Overview" },
+                    {
+                      id: "signups" as const,
+                      label:
+                        t.pendingCount > 0
+                          ? `Signups (${t.pendingCount})`
+                          : "Signups",
+                    },
+                    { id: "manage" as const, label: "Manage" },
+                  ] as const
+                ).map((item) => {
+                  const selected = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      onClick={() =>
+                        startDetailTransition(() => setDetailSubTab(item.id))
+                      }
+                      className={[
+                        "rounded-lg px-2 py-1.5 text-center text-xs font-semibold transition sm:text-sm",
+                        selected
+                          ? "bg-[var(--felt)] text-white shadow-sm"
+                          : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
+                      ].join(" ")}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
 
-                {t.description ? (
-                  <p className="text-sm leading-relaxed text-[var(--ink)]">
-                    {t.description}
-                  </p>
-                ) : null}
-
-                <dl className="grid gap-3 sm:grid-cols-2">
-                  {[
-                    ["Game", GAME_TYPE_OPTIONS.find((o) => o.value === t.gameType)?.label ?? t.gameType],
-                    ["Format", BRACKET_FORMAT_OPTIONS.find((o) => o.value === t.bracketFormat)?.label ?? t.bracketFormat],
-                    ["Handicap", handicapLabel(t.handicapSystem)],
-                    [
-                      "Fargo band",
-                      t.minFargo == null && t.maxFargo == null
-                        ? "Open"
-                        : `${t.minFargo ?? "—"} – ${t.maxFargo ?? "—"}`,
-                    ],
-                    [
-                      "Race",
-                      t.winnersRaceTo
-                        ? `W ${t.winnersRaceTo}${t.losersRaceTo ? ` / L ${t.losersRaceTo}` : ""}`
-                        : "—",
-                    ],
-                    ["Tables", t.tableSize],
-                    ["Payment", PAY_METHOD_OPTIONS.find((o) => o.value === t.payMethod)?.label ?? t.payMethod],
-                    ["Organizer", t.organizerName],
-                  ].map(([label, value]) => (
-                    <div key={label}>
-                      <dt className={labelClass}>{label}</dt>
-                      <dd className="text-sm text-[var(--ink)]">{value}</dd>
+            {activeTab === "overview" ? (
+              <div className="space-y-4">
+                <SurfaceCard>
+                  {t.thumbnailUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={t.thumbnailUrl}
+                      alt=""
+                      className="h-44 w-full object-cover sm:h-56"
+                    />
+                  ) : (
+                    <div className="relative h-28 overflow-hidden bg-[linear-gradient(145deg,rgba(29,110,158,0.55),rgba(19,78,115,0.85))] sm:h-32">
+                      <div
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 opacity-40"
+                        style={{
+                          background:
+                            "radial-gradient(120% 80% at 100% 0%, rgba(224,163,90,0.35), transparent 55%)",
+                        }}
+                      />
+                      <div className="relative flex h-full items-end px-4 py-3">
+                        <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-white/90">
+                          Match night
+                        </p>
+                      </div>
                     </div>
-                  ))}
-                </dl>
-
-                {t.payoutNotes ? (
-                  <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--muted)]">
-                    {t.payoutNotes}
-                  </p>
-                ) : null}
-
-                {actionMsg ? (
-                  <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
-                    {actionMsg}
-                  </p>
-                ) : null}
-
-                {myRegistration ? (
-                  <div className="space-y-1 text-sm text-[var(--ink)]">
-                    <p>
-                      Your status:{" "}
-                      <span className="font-semibold capitalize">
-                        {myRegistration.status}
+                  )}
+                  <div className="space-y-3 p-3 sm:p-4">
+                    <p className="text-sm text-[var(--muted)]">
+                      <span
+                        className={[
+                          "mr-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                          statusTone(t.status),
+                        ].join(" ")}
+                      >
+                        {STATUS_LABELS[t.status]}
                       </span>
-                      {myRegistration.paid ? " · Paid" : " · Unpaid"}
-                      {myRegistration.ratingAtSignup != null
-                        ? ` · Fargo ${myRegistration.ratingAtSignup}`
-                        : " · Unrated"}
+                      {formatEntryFee(t.entryFeeCents)}
+                      {" · "}
+                      {t.approvedCount}/{t.maxPlayers}{" "}
+                      {entryNoun(t.eventType)} in
                     </p>
-                    {myRegistration.teamName ? (
-                      <p className="text-xs text-[var(--muted)]">
-                        Entry: {myRegistration.teamName}
-                        {myRegistration.teammates?.length
-                          ? ` · ${myRegistration.teammates
-                              .map((mate) => mate.displayName)
-                              .join(", ")}`
-                          : ""}
+                    {t.description ? (
+                      <p className="text-sm leading-relaxed text-[var(--ink)]">
+                        {t.description}
                       </p>
                     ) : null}
-                  </div>
-                ) : t.status === "open" ? (
-                  <div className="space-y-3 rounded-[1.2rem] border border-[var(--line)] bg-[var(--surface-2)]/60 p-3">
-                    <p className="text-sm font-semibold text-[var(--ink)]">
-                      {t.eventType === "teams"
-                        ? "Register your team"
-                        : t.eventType === "scotch-doubles"
-                          ? "Register your pair"
-                          : "Sign up"}
-                    </p>
-                    {!user ? (
-                      <button
-                        type="button"
-                        onClick={onRequestLogin}
-                        className="rounded-full bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
-                      >
-                        Sign in to register
-                      </button>
-                    ) : (
-                      <>
-                        <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5">
-                          <p className={labelClass}>Your Fargo</p>
-                          <p className="text-sm font-semibold text-[var(--ink)]">
-                            {fargoLoading
-                              ? "Looking up…"
-                              : resolvedFargo != null
-                                ? resolvedFargo
-                                : "Unrated"}
-                          </p>
-                          <p className="mt-1 text-[11px] text-[var(--muted)]">
-                            Pulled from your FargoRate account — it can’t be
-                            changed at signup.
-                          </p>
-                        </div>
-
-                        {resolvedFargo == null && !fargoLoading ? (
-                          <p className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--muted)]">
-                            No Fargo on file. You can still request a spot
-                            {t.unratedPolicy === "message-organizer"
-                              ? " — message the organizer below if needed"
-                              : ""}
-                            .
-                          </p>
-                        ) : null}
-
-                        {t.eventType === "teams" ? (
-                          <Field label="Team name">
-                            <input
-                              required
-                              className={fieldClass}
-                              value={teamName}
-                              onChange={(e) => setTeamName(e.target.value)}
-                              placeholder="Team name"
-                            />
-                          </Field>
-                        ) : null}
-
-                        {t.eventType === "scotch-doubles" ? (
-                          <Field label="Pair name (optional)">
-                            <input
-                              className={fieldClass}
-                              value={teamName}
-                              onChange={(e) => setTeamName(e.target.value)}
-                              placeholder="e.g. Smith / Lee"
-                            />
-                          </Field>
-                        ) : null}
-
-                        {t.eventType !== "singles"
-                          ? teammates.map((mate, index) => (
-                              <div
-                                key={`mate-${index}`}
-                                className="grid gap-2 sm:grid-cols-[1fr_7rem]"
-                              >
-                                <Field
-                                  label={
-                                    t.eventType === "scotch-doubles"
-                                      ? "Partner name"
-                                      : `Teammate ${index + 1}`
-                                  }
-                                >
-                                  <input
-                                    className={fieldClass}
-                                    value={mate.displayName}
-                                    onChange={(e) =>
-                                      setTeammates((prev) =>
-                                        prev.map((row, i) =>
-                                          i === index
-                                            ? {
-                                                ...row,
-                                                displayName: e.target.value,
-                                              }
-                                            : row,
-                                        ),
-                                      )
-                                    }
-                                    placeholder={
-                                      t.eventType === "scotch-doubles"
-                                        ? "Partner full name"
-                                        : "Player name"
-                                    }
-                                  />
-                                </Field>
-                                <Field label="Fargo">
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    className={fieldClass}
-                                    value={mate.ratingAtSignup}
-                                    onChange={(e) =>
-                                      setTeammates((prev) =>
-                                        prev.map((row, i) =>
-                                          i === index
-                                            ? {
-                                                ...row,
-                                                ratingAtSignup: e.target.value,
-                                              }
-                                            : row,
-                                        ),
-                                      )
-                                    }
-                                    placeholder="Opt."
-                                  />
-                                </Field>
-                              </div>
-                            ))
-                          : null}
-
-                        {t.eventType === "teams" ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setTeammates((prev) => [
-                                ...prev,
-                                { displayName: "", ratingAtSignup: "" },
-                              ])
-                            }
-                            className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)]"
-                          >
-                            Add teammate
-                          </button>
-                        ) : null}
-
-                        <Field label="Note to organizer">
-                          <textarea
-                            className={`${fieldClass} min-h-[72px] resize-y`}
-                            value={regNote}
-                            onChange={(e) => setRegNote(e.target.value)}
-                            placeholder="Venmo handle, questions…"
-                          />
-                        </Field>
-                        <button
-                          type="button"
-                          disabled={saving || fargoLoading}
-                          onClick={() => void onRegister()}
-                          className="rounded-full bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-                        >
-                          {saving
-                            ? "Submitting…"
-                            : t.eventType === "teams"
-                              ? "Request team spot"
-                              : t.eventType === "scotch-doubles"
-                                ? "Request pair spot"
-                                : "Request spot"}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                ) : null}
-
-                {(t.unratedPolicy === "message-organizer" || !user) && (
-                  <form
-                    onSubmit={onSendMessage}
-                    className="space-y-3 rounded-[1.2rem] border border-[var(--line)] bg-[var(--surface-2)]/40 p-3"
-                  >
-                    <p className="text-sm font-semibold text-[var(--ink)]">
-                      Message organizer
-                    </p>
                     <p className="text-xs text-[var(--muted)]">
-                      For unrated players or questions before signup.
+                      {entryShapeText(t)}
+                      {" · "}
+                      Fargo {fargoBandText(t)}
+                      {" · "}
+                      {t.tableSize} tables
                     </p>
-                    {!user ? (
-                      <Field label="Your name">
-                        <input
-                          required
-                          className={fieldClass}
-                          value={messageName}
-                          onChange={(e) => setMessageName(e.target.value)}
-                        />
-                      </Field>
-                    ) : null}
-                    <Field label="Message">
-                      <textarea
-                        required
-                        className={`${fieldClass} min-h-[72px] resize-y`}
-                        value={messageBody}
-                        onChange={(e) => setMessageBody(e.target.value)}
-                      />
-                    </Field>
-                    <button
-                      type="submit"
-                      disabled={saving}
-                      className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-4 py-2 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
-                    >
-                      Send message
-                    </button>
-                  </form>
-                )}
-              </div>
-            </SurfaceCard>
-
-            {detail?.isOrganizer ? (
-              <>
-                <SectionCard
-                  eyebrow="Organizer"
-                  title="Manage event"
-                  description="Edit details, close registration, or review who signed up."
-                />
-                <SurfaceCard>
-                  <div className="flex flex-wrap gap-2 p-3 sm:p-4">
-                    <button
-                      type="button"
-                      onClick={() => startEdit(t)}
-                      className="rounded-full bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--felt-soft)]"
-                    >
-                      Edit event
-                    </button>
-                    {t.status === "open" || t.status === "full" ? (
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={() => {
-                          setSaving(true);
-                          setActionMsg(null);
-                          void (async () => {
-                            try {
-                              const res = await fetch(`/api/tournaments/${t.id}`, {
-                                method: "PATCH",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ status: "closed" }),
-                              });
-                              const data = (await res.json()) as {
-                                error?: string;
-                              };
-                              if (!res.ok) {
-                                throw new Error(
-                                  data.error || "Could not close event.",
-                                );
-                              }
-                              setActionMsg("Registration closed.");
-                              await refreshDetail();
-                            } catch (err) {
-                              setActionMsg(
-                                err instanceof Error
-                                  ? err.message
-                                  : "Could not close event.",
-                              );
-                            } finally {
-                              setSaving(false);
-                            }
-                          })();
-                        }}
-                        className="rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
-                      >
-                        Close registration
-                      </button>
-                    ) : t.status === "closed" || t.status === "draft" ? (
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={() => {
-                          setSaving(true);
-                          setActionMsg(null);
-                          void (async () => {
-                            try {
-                              const res = await fetch(`/api/tournaments/${t.id}`, {
-                                method: "PATCH",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ status: "open" }),
-                              });
-                              const data = (await res.json()) as {
-                                error?: string;
-                              };
-                              if (!res.ok) {
-                                throw new Error(
-                                  data.error || "Could not reopen event.",
-                                );
-                              }
-                              setActionMsg("Registration reopened.");
-                              await refreshDetail();
-                            } catch (err) {
-                              setActionMsg(
-                                err instanceof Error
-                                  ? err.message
-                                  : "Could not reopen event.",
-                              );
-                            } finally {
-                              setSaving(false);
-                            }
-                          })();
-                        }}
-                        className="rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
-                      >
-                        Reopen registration
-                      </button>
-                    ) : null}
                   </div>
                 </SurfaceCard>
 
+                <div>
+                  <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                    The rack
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <StatTile label="Game" value={gameLabel} />
+                    <StatTile
+                      label="Format"
+                      value={formatLabel}
+                      delayClass="animate-delay-1"
+                    />
+                    <StatTile
+                      label="Handicap"
+                      value={handicapLabel(t.handicapSystem)}
+                      delayClass="animate-delay-1"
+                    />
+                    <StatTile
+                      label="Race"
+                      value={raceText(t)}
+                      delayClass="animate-delay-2"
+                    />
+                  </div>
+                </div>
+
+                <SurfaceCard>
+                  <button
+                    type="button"
+                    onClick={() => setHouseRulesOpen((open) => !open)}
+                    className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left sm:px-4"
+                  >
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                        House rules
+                      </p>
+                      <p className="mt-1 text-sm text-[var(--ink)]">
+                        Payment, tables, organizer
+                      </p>
+                    </div>
+                    <span className="text-[var(--muted)]" aria-hidden>
+                      {houseRulesOpen ? "▴" : "▾"}
+                    </span>
+                  </button>
+                  {houseRulesOpen ? (
+                    <div className="space-y-3 border-t border-[var(--line)] px-3 py-3 sm:px-4">
+                      <dl className="grid gap-3 sm:grid-cols-2">
+                        {[
+                          ["Fargo band", fargoBandText(t)],
+                          ["Tables", t.tableSize],
+                          ["Payment", paymentLabel],
+                          ["Organizer", t.organizerName],
+                          [
+                            "Registration",
+                            REGISTRATION_MODE_OPTIONS.find(
+                              (o) => o.value === t.registrationMode,
+                            )?.label ?? t.registrationMode,
+                          ],
+                          [
+                            "Ruleset",
+                            RULESET_OPTIONS.find(
+                              (o) => o.value === t.rulesetPreset,
+                            )?.label ?? t.rulesetPreset,
+                          ],
+                        ].map(([label, value]) => (
+                          <div key={label}>
+                            <dt className={labelClass}>{label}</dt>
+                            <dd className="text-sm text-[var(--ink)]">
+                              {value}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                      {t.payoutNotes ? (
+                        <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--muted)]">
+                          {t.payoutNotes}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </SurfaceCard>
+
+                {overviewSignup}
+              </div>
+            ) : null}
+
+            {isOrganizer && activeTab === "signups" ? (
+              <div className="space-y-4">
                 <SectionCard
                   eyebrow="Organizer"
                   title="Signups"
-                  description="Approve players, mark door/Venmo paid, and review messages."
+                  description="Pending entries first. Approve, reject, or mark door/Venmo paid."
                   badge={{
                     label: "Pending",
                     value: String(t.pendingCount),
                   }}
                 />
+                {actionMsg ? (
+                  <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
+                    {actionMsg}
+                  </p>
+                ) : null}
                 <SurfaceCard>
                   <ul className="divide-y divide-[var(--line)]">
-                    {detail.registrations.length === 0 ? (
+                    {sortedRegistrations.length === 0 ? (
                       <li className="px-4 py-6 text-center text-sm text-[var(--muted)]">
                         No signups yet.
                       </li>
                     ) : (
-                      detail.registrations.map((reg) => (
-                        <li key={reg.id} className="space-y-2 px-3 py-3 sm:px-4">
+                      sortedRegistrations.map((reg) => (
+                        <li key={reg.id} className="space-y-2.5 px-3 py-3.5 sm:px-4">
                           <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)]">
                                 {reg.teamName || reg.displayName}
                               </p>
                               <p className="mt-0.5 text-xs text-[var(--muted)]">
-                                Captain: {reg.displayName}
+                                {reg.displayName}
                                 {reg.ratingAtSignup != null
                                   ? ` · Fargo ${reg.ratingAtSignup}`
                                   : " · Unrated"}
                                 {reg.email ? ` · ${reg.email}` : ""}
-                                {reg.paid ? " · Paid" : " · Unpaid"}
-                                {" · "}
-                                <span className="capitalize">{reg.status}</span>
                               </p>
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                <span
+                                  className={[
+                                    "rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize",
+                                    reg.status === "pending"
+                                      ? "bg-[var(--amber)] text-[#1a140c]"
+                                      : reg.status === "approved"
+                                        ? "bg-[var(--felt)] text-white"
+                                        : "bg-[var(--surface-2)] text-[var(--muted)]",
+                                  ].join(" ")}
+                                >
+                                  {reg.status}
+                                </span>
+                                <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
+                                  {reg.paid ? "Paid" : "Unpaid"}
+                                </span>
+                              </div>
                               {reg.teammates?.length ? (
-                                <p className="mt-1 text-xs text-[var(--ink)]">
-                                  {reg.teammates
-                                    .map(
-                                      (mate) =>
-                                        `${mate.displayName}${
-                                          mate.ratingAtSignup != null
-                                            ? ` (${mate.ratingAtSignup})`
-                                            : ""
-                                        }`,
-                                    )
-                                    .join(" · ")}
-                                </p>
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {reg.teammates.map((mate) => (
+                                    <span
+                                      key={`${reg.id}-${mate.displayName}`}
+                                      className="rounded-full border border-[var(--line)] bg-[var(--surface-2)]/70 px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]"
+                                    >
+                                      {mate.displayName}
+                                      {mate.ratingAtSignup != null
+                                        ? ` · ${mate.ratingAtSignup}`
+                                        : ""}
+                                    </span>
+                                  ))}
+                                </div>
                               ) : null}
                               {reg.noteToOrganizer ? (
-                                <p className="mt-1 text-xs text-[var(--ink)]">
+                                <p className="mt-2 text-xs text-[var(--ink)]">
                                   {reg.noteToOrganizer}
                                 </p>
                               ) : null}
@@ -1558,14 +1740,87 @@ export function Tournaments({
                     )}
                   </ul>
                 </SurfaceCard>
+              </div>
+            ) : null}
 
-                {detail.messages.length > 0 ? (
+            {isOrganizer && activeTab === "manage" ? (
+              <div className="space-y-4">
+                <SectionCard
+                  eyebrow="Organizer"
+                  title="Manage"
+                  description="Edit the flyer, close registration, or review messages."
+                />
+                <SurfaceCard>
+                  <div className="flex flex-wrap gap-2 p-3 sm:p-4">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(t)}
+                      className="rounded-full bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--felt-soft)]"
+                    >
+                      Edit event
+                    </button>
+                    {t.status === "open" || t.status === "full" ? (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() =>
+                          void setTournamentStatus(
+                            t.id,
+                            "closed",
+                            "Registration closed.",
+                          )
+                        }
+                        className="rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
+                      >
+                        Close registration
+                      </button>
+                    ) : t.status === "closed" || t.status === "draft" ? (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() =>
+                          void setTournamentStatus(
+                            t.id,
+                            "open",
+                            "Registration reopened.",
+                          )
+                        }
+                        className="rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
+                      >
+                        Reopen registration
+                      </button>
+                    ) : null}
+                  </div>
+                </SurfaceCard>
+
+                {actionMsg ? (
+                  <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
+                    {actionMsg}
+                  </p>
+                ) : null}
+
+                {t.payoutNotes ? (
                   <SurfaceCard>
-                    <div className="border-b border-[var(--line)] px-3 py-3 sm:px-4">
+                    <div className="space-y-1 px-3 py-3 sm:px-4">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                        Messages
+                        Payout notes
                       </p>
+                      <p className="text-sm text-[var(--ink)]">{t.payoutNotes}</p>
                     </div>
+                  </SurfaceCard>
+                ) : null}
+
+                <SurfaceCard>
+                  <div className="border-b border-[var(--line)] px-3 py-3 sm:px-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                      Messages
+                    </p>
+                  </div>
+                  {detail.messages.length === 0 ? (
+                    <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">
+                      No messages yet.
+                    </p>
+                  ) : (
                     <ul className="divide-y divide-[var(--line)]">
                       {detail.messages.map((msg) => (
                         <li key={msg.id} className="px-3 py-3 sm:px-4">
@@ -1582,9 +1837,9 @@ export function Tournaments({
                         </li>
                       ))}
                     </ul>
-                  </SurfaceCard>
-                ) : null}
-              </>
+                  )}
+                </SurfaceCard>
+              </div>
             ) : null}
           </>
         )}
@@ -1597,6 +1852,7 @@ export function Tournaments({
       </div>
     );
   }
+
 
   return (
     <div className="space-y-4 animate-panel">
