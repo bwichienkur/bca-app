@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useTransition,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
@@ -61,11 +62,20 @@ type HandicapCalculatorProps = {
 
 type LineupSlot = RosterPlayer | null;
 type LineupSide = "home" | "away";
+type HandicapSubTab = "matchup" | "lineups" | "rounds";
 
 type DragState = {
   side: LineupSide;
   from: number;
 };
+
+function ContentCard({ children }: { children: ReactNode }) {
+  return (
+    <section className="space-y-4 overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-[var(--shadow)] sm:p-4">
+      {children}
+    </section>
+  );
+}
 
 function playerLabel(player: RosterPlayer): string {
   return `${player.firstName} ${player.lastName}`.trim();
@@ -203,6 +213,8 @@ export function HandicapCalculator({
   const [dropTarget, setDropTarget] = useState<DragState | null>(null);
   const [mobileSide, setMobileSide] = useState<LineupSide>("home");
   const [activeRound, setActiveRound] = useState(1);
+  const [subTab, setSubTab] = useState<HandicapSubTab>("matchup");
+  const [, startTransition] = useTransition();
 
   useEffect(() => {
     if (!awayTeamId) setMobileSide("home");
@@ -448,31 +460,31 @@ export function HandicapCalculator({
 
   if (loading) {
     return (
-      <section className="animate-rise space-y-3">
+      <section className="animate-rise space-y-4">
         <SectionCard
           eyebrow="Handicap"
           title="Matchup"
           description="Loading teams, ratings, and format…"
-        >
+        />
+        <ContentCard>
           <LoadingState label="Loading teams, ratings, and format…" />
-        </SectionCard>
+        </ContentCard>
       </section>
     );
   }
 
   if (error || !data) {
     return (
-      <section className="animate-rise space-y-3">
+      <section className="animate-rise space-y-4">
         <SectionCard
           eyebrow="Handicap"
           title="Matchup"
           description="Couldn't load the calculator"
-        >
-          <EmptyState
-            title="Couldn't load calculator"
-            body={error ?? "Try again in a moment."}
-          />
-        </SectionCard>
+        />
+        <EmptyState
+          title="Couldn't load calculator"
+          body={error ?? "Try again in a moment."}
+        />
       </section>
     );
   }
@@ -521,61 +533,104 @@ export function HandicapCalculator({
   const teamsReady = Boolean(homeTeam && awayTeam);
 
   return (
-    <div className="animate-panel space-y-3">
-      <SectionCard
-        eyebrow="Handicap"
-        title="Matchup"
-        description={formatMeta}
-        badge={{ label: "Sides", value: String(slots) }}
+    <section className="animate-panel space-y-4">
+      <div
+        role="tablist"
+        aria-label="Handicap sections"
+        className="grid grid-cols-3 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
       >
-        <div className="relative z-20 grid gap-2.5 sm:grid-cols-2">
-          <Typeahead
-            label="Home"
-            placeholder="Select home team"
-            value={homeOption}
-            options={teamOptions.filter((option) => option.id !== awayTeamId)}
-            onChange={(option) => chooseHome(option?.value ?? null)}
-          />
-          <Typeahead
-            label="Away"
-            placeholder="Select away team"
-            value={awayOption}
-            options={teamOptions.filter((option) => option.id !== homeTeamId)}
-            onChange={(option) => chooseAway(option?.value ?? null)}
-          />
-        </div>
-        {!teamsReady ? (
-          <EmptyState
-            title="Pick home and away"
-            body="Choose any two teams in this division to build lineups and calculate round handicaps."
-          />
-        ) : null}
-      </SectionCard>
+        {(
+          [
+            { id: "matchup" as const, label: "Matchup" },
+            { id: "lineups" as const, label: "Lineups" },
+            { id: "rounds" as const, label: "Rounds" },
+          ]
+        ).map((item) => {
+          const selected = subTab === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => startTransition(() => setSubTab(item.id))}
+              className={[
+                "rounded-lg px-2 py-1.5 text-center text-xs font-semibold transition sm:text-sm",
+                selected
+                  ? "bg-[var(--felt)] text-white shadow-sm"
+                  : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
+              ].join(" ")}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
 
-      <SectionCard
-        eyebrow="Handicap"
-        title="Lineups"
-        description={
-          teamsReady
-            ? `Pick ${slots} players per side · drag ⠿ to reorder`
-            : "Select a matchup first, then build both sides"
-        }
-        badge={
-          teamsReady
-            ? {
-                label: "Filled",
-                value: `${homeFilled + awayFilled}/${slots * 2}`,
-              }
-            : undefined
-        }
+      <div
+        className={subTab === "matchup" ? "min-w-0 space-y-3" : "hidden"}
+        aria-hidden={subTab !== "matchup"}
       >
+        <SectionCard
+          eyebrow="Handicap"
+          title="Matchup"
+          description={formatMeta}
+          badge={{ label: "Sides", value: String(slots) }}
+        />
+        <ContentCard>
+          <div className="relative z-20 grid gap-2.5 sm:grid-cols-2">
+            <Typeahead
+              label="Home"
+              placeholder="Select home team"
+              value={homeOption}
+              options={teamOptions.filter((option) => option.id !== awayTeamId)}
+              onChange={(option) => chooseHome(option?.value ?? null)}
+            />
+            <Typeahead
+              label="Away"
+              placeholder="Select away team"
+              value={awayOption}
+              options={teamOptions.filter((option) => option.id !== homeTeamId)}
+              onChange={(option) => chooseAway(option?.value ?? null)}
+            />
+          </div>
+          {!teamsReady ? (
+            <EmptyState
+              title="Pick home and away"
+              body="Choose any two teams in this division to build lineups and calculate round handicaps."
+            />
+          ) : null}
+        </ContentCard>
+      </div>
+
+      <div
+        className={subTab === "lineups" ? "min-w-0 space-y-3" : "hidden"}
+        aria-hidden={subTab !== "lineups"}
+      >
+        <SectionCard
+          eyebrow="Handicap"
+          title="Lineups"
+          description={
+            teamsReady
+              ? `Pick ${slots} players per side · drag ⠿ to reorder`
+              : "Select a matchup first, then build both sides"
+          }
+          badge={
+            teamsReady
+              ? {
+                  label: "Filled",
+                  value: `${homeFilled + awayFilled}/${slots * 2}`,
+                }
+              : undefined
+          }
+        />
         {!homeTeam || !awayTeam ? (
           <EmptyState
             title="Waiting on matchup"
             body="Home and away teams unlock the lineup builders."
           />
         ) : (
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid gap-3 xl:grid-cols-2">
             <div
               role="tablist"
               aria-label="Handicap teams"
@@ -698,24 +753,28 @@ export function HandicapCalculator({
             </div>
           </div>
         )}
-      </SectionCard>
+      </div>
 
-      <SectionCard
-        eyebrow="Handicap"
-        title="Round handicaps"
-        description={
-          lineupsReady && roundTotals
-            ? `Games awarded · Home +${roundTotals.home} · Away +${roundTotals.away}`
-            : teamsReady
-              ? `Finish both ${slots}-player lineups to see round results`
-              : "Round results appear after both lineups are set"
-        }
-        badge={
-          lineupsReady && results
-            ? { label: "Rounds", value: String(results.length) }
-            : undefined
-        }
+      <div
+        className={subTab === "rounds" ? "min-w-0 space-y-3" : "hidden"}
+        aria-hidden={subTab !== "rounds"}
       >
+        <SectionCard
+          eyebrow="Handicap"
+          title="Round handicaps"
+          description={
+            lineupsReady && roundTotals
+              ? `Games awarded · Home +${roundTotals.home} · Away +${roundTotals.away}`
+              : teamsReady
+                ? `Finish both ${slots}-player lineups to see round results`
+                : "Round results appear after both lineups are set"
+          }
+          badge={
+            lineupsReady && results
+              ? { label: "Rounds", value: String(results.length) }
+              : undefined
+          }
+        />
         {!teamsReady ? (
           <EmptyState
             title="Waiting on matchup"
@@ -780,8 +839,8 @@ export function HandicapCalculator({
             body={`Fill all ${slots} slots on both sides to calculate round handicaps.`}
           />
         )}
-      </SectionCard>
-    </div>
+      </div>
+    </section>
   );
 }
 
