@@ -1572,8 +1572,6 @@ export function MatchScoring({
                     showScores={showScores}
                     homeRounds={summary?.teamOneRoundWins ?? 0}
                     awayRounds={summary?.teamTwoRoundWins ?? 0}
-                    homeGames={summary?.teamOneGameWins ?? null}
-                    awayGames={summary?.teamTwoGameWins ?? null}
                     ctaLabel={ctaLabel}
                     emphasizeHome={item.mySide === 1}
                     emphasizeAway={item.mySide === 2}
