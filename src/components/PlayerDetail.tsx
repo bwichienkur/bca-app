@@ -11,10 +11,12 @@ import {
 import type {
   FargoLeagueTeam,
   FargoMatchType,
+  FargoOpponentRecord,
   FargoPlayerMatch,
   FargoPlayerProfile,
   FargoStatsByRating,
   FargoStatsOverall,
+  OpponentSort,
 } from "@/lib/fargo-player";
 import { SearchField } from "./SearchField";
 import { SectionCard } from "./SectionCard";
@@ -42,13 +44,35 @@ type MatchesPayload = {
   error?: string;
 };
 
-type DetailSection = "overview" | "performance" | "leagues" | "matches";
+type DetailSection =
+  | "overview"
+  | "performance"
+  | "leagues"
+  | "matches"
+  | "opponents";
 
 const SECTIONS: Array<{ id: DetailSection; label: string }> = [
   { id: "overview", label: "Overview" },
   { id: "performance", label: "By Rating" },
   { id: "leagues", label: "Leagues" },
   { id: "matches", label: "Matches" },
+  { id: "opponents", label: "Opponents" },
+];
+
+type OpponentsPayload = {
+  opponents: FargoOpponentRecord[];
+  total: number;
+  page: number;
+  totalPages: number;
+  error?: string;
+};
+
+const OPPONENT_SORTS: Array<{ id: OpponentSort; label: string }> = [
+  { id: "wins", label: "Most wins" },
+  { id: "losses", label: "Most losses" },
+  { id: "played", label: "Most played" },
+  { id: "winpct", label: "Best win %" },
+  { id: "name", label: "Name" },
 ];
 
 function statusLabel(status: FargoPlayerProfile["robustnessStatus"]): string {
@@ -59,7 +83,7 @@ function statusLabel(status: FargoPlayerProfile["robustnessStatus"]): string {
 
 function statusClass(status: FargoPlayerProfile["robustnessStatus"]): string {
   if (status === "established") {
-    return "bg-[var(--felt)]/20 text-[var(--felt-deep)]";
+    return "bg-[var(--felt)] text-white";
   }
   if (status === "preliminary") {
     return "bg-[var(--amber)]/15 text-[var(--amber)]";
@@ -394,6 +418,16 @@ export function PlayerDetail({
   >([]);
   const [ratingsWarming, setRatingsWarming] = useState(false);
 
+  const [opponentsLoading, setOpponentsLoading] = useState(false);
+  const [opponentsError, setOpponentsError] = useState<string | null>(null);
+  const [opponents, setOpponents] = useState<FargoOpponentRecord[]>([]);
+  const [opponentsTotal, setOpponentsTotal] = useState(0);
+  const [opponentsPage, setOpponentsPage] = useState(1);
+  const [opponentsTotalPages, setOpponentsTotalPages] = useState(1);
+  const [opponentQuery, setOpponentQuery] = useState("");
+  const [debouncedOpponentQuery, setDebouncedOpponentQuery] = useState("");
+  const [opponentSort, setOpponentSort] = useState<OpponentSort>("wins");
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -406,6 +440,10 @@ export function PlayerDetail({
     setMatchBucket(null);
     setMatchType(null);
     setMatchesPage(1);
+    setOpponentQuery("");
+    setDebouncedOpponentQuery("");
+    setOpponentSort("wins");
+    setOpponentsPage(1);
 
     void fetch(`/api/players/${encodeURIComponent(playerId)}`)
       .then(async (response) => {
@@ -454,6 +492,63 @@ export function PlayerDetail({
     }, 280);
     return () => window.clearTimeout(timer);
   }, [matchQuery]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedOpponentQuery(opponentQuery.trim());
+      setOpponentsPage(1);
+    }, 280);
+    return () => window.clearTimeout(timer);
+  }, [opponentQuery]);
+
+  useEffect(() => {
+    if (section !== "opponents") return;
+
+    let cancelled = false;
+    setOpponentsLoading(true);
+    setOpponentsError(null);
+
+    const params = new URLSearchParams({
+      page: String(opponentsPage),
+      limit: "20",
+      sort: opponentSort,
+    });
+    if (debouncedOpponentQuery) params.set("q", debouncedOpponentQuery);
+
+    void fetch(
+      `/api/players/${encodeURIComponent(playerId)}/opponents?${params.toString()}`,
+    )
+      .then(async (response) => {
+        const payload = (await response.json()) as OpponentsPayload;
+        if (!response.ok) {
+          throw new Error(payload.error || "Failed to load opponents.");
+        }
+        if (cancelled) return;
+        setOpponents(payload.opponents ?? []);
+        setOpponentsTotal(payload.total ?? 0);
+        setOpponentsTotalPages(payload.totalPages ?? 1);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setOpponents([]);
+        setOpponentsError(
+          err instanceof Error ? err.message : "Failed to load opponents.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setOpponentsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    section,
+    playerId,
+    opponentsPage,
+    debouncedOpponentQuery,
+    opponentSort,
+  ]);
 
   useEffect(() => {
     if (section !== "matches") return;
@@ -525,6 +620,20 @@ export function PlayerDetail({
     setMatchesPage(Math.min(Math.max(1, next), matchesTotalPages));
   };
 
+  const goToOpponentsPage = (next: number) => {
+    setOpponentsPage(Math.min(Math.max(1, next), opponentsTotalPages));
+  };
+
+  const opponentSortOptions = useMemo<FilterOption<OpponentSort>[]>(
+    () =>
+      OPPONENT_SORTS.map((item) => ({
+        id: item.id,
+        label: item.label,
+        value: item.id,
+      })),
+    [],
+  );
+
   const bucketOptions = useMemo<FilterOption<number | null>[]>(() => {
     const rows = bucketCounts.length
       ? bucketCounts.filter(({ count }) => count !== 0)
@@ -567,73 +676,67 @@ export function PlayerDetail({
     [matchTypeCounts],
   );
 
+  const playerMeta = player
+    ? [
+        player.readableId ? `#${player.readableId}` : null,
+        player.membershipNumber || player.membershipId,
+        player.location,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
+
   return (
     <section className="space-y-4 md:space-y-5">
       <div className="sticky top-[5.75rem] z-40 -mx-1 space-y-3 bg-[color-mix(in_srgb,var(--paper)_94%,transparent)] px-1 py-2 backdrop-blur sm:top-[3.75rem]">
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
+          className="inline-flex items-center gap-1.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
         >
           <span aria-hidden>←</span>
           Back to search
         </button>
 
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-              Player
-            </p>
-            <h3 className="mt-1 font-[family-name:var(--font-display)] text-2xl text-[var(--felt-deep)]">
-              {player?.name || fallbackName || "Player details"}
-            </h3>
-            {player ? (
-              <p className="mt-1 text-sm text-[var(--muted)]">
-                {[
-                  player.readableId ? `#${player.readableId}` : null,
-                  player.membershipNumber || player.membershipId,
-                  player.location,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-            ) : null}
-          </div>
+        <SectionCard
+          eyebrow="Player"
+          title={player?.name || fallbackName || "Player details"}
+          description={playerMeta}
+          badge={
+            player
+              ? {
+                  label: "Rating",
+                  value: String(player.effectiveRating ?? "—"),
+                }
+              : undefined
+          }
+        >
           {player ? (
-            <div className="shrink-0 text-right">
-              <p className="font-[family-name:var(--font-display)] text-3xl tabular-nums leading-none text-[var(--felt-deep)]">
-                {player.effectiveRating ?? "—"}
-              </p>
-              <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                Rating
-              </p>
-            </div>
-          ) : null}
-        </div>
-
-        {player ? (
-          <div className="flex flex-nowrap items-center gap-2">
-            <span
-              className={[
-                "inline-flex shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]",
-                statusClass(player.robustnessStatus),
-              ].join(" ")}
-            >
-              {statusLabel(player.robustnessStatus)}
-              {player.robustness != null ? ` · ${player.robustness}` : ""}
-            </span>
-            {player.provisionalRating != null ? (
-              <span className="inline-flex shrink-0 rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                Provisional · {player.provisionalRating}
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={[
+                  "inline-flex shrink-0 rounded-[var(--radius)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]",
+                  statusClass(player.robustnessStatus),
+                ].join(" ")}
+              >
+                {statusLabel(player.robustnessStatus)}
+                {player.robustness != null ? ` · ${player.robustness}` : ""}
               </span>
-            ) : null}
-          </div>
-        ) : null}
+              {player.provisionalRating != null ? (
+                <span className="inline-flex shrink-0 rounded-[var(--radius)] bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                  Provisional · {player.provisionalRating}
+                </span>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-sm text-[var(--muted)]">Loading profile…</p>
+          )}
+        </SectionCard>
 
         <div
           role="tablist"
           aria-label="Player detail sections"
-          className="grid w-full grid-cols-4 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+          className="grid w-full grid-cols-5 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
         >
           {SECTIONS.map((item) => {
             const selected = section === item.id;
@@ -647,7 +750,7 @@ export function PlayerDetail({
                   startTransition(() => setSection(item.id))
                 }
                 className={[
-                  "min-w-0 rounded-md px-1 py-1.5 text-center text-[11px] font-semibold leading-tight transition sm:px-2 sm:text-sm",
+                  "min-w-0 rounded-md px-0.5 py-1.5 text-center text-[10px] font-semibold leading-tight transition sm:px-1.5 sm:text-xs",
                   selected
                     ? "bg-[var(--felt)] text-white shadow-sm"
                     : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
@@ -826,24 +929,24 @@ export function PlayerDetail({
       ) : null}
 
       {player && section === "leagues" ? (
-        <div className="space-y-3">
-          <div>
-            <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
-              Active leagues
-            </h4>
-            <p className="text-sm text-[var(--muted)]">
-              Divisions with upcoming matches for this player.
-            </p>
-          </div>
-
+        <SectionCard
+          eyebrow="Leagues"
+          title="Active"
+          description="Divisions with upcoming matches for this player."
+          badge={{
+            label: "Teams",
+            value: String(teams.length),
+          }}
+          flush
+        >
           {teams.length ? (
-            <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]/90">
+            <ul className="divide-y divide-[var(--line)]">
               {teams.map((team) => (
                 <li
                   key={`${team.leagueId}-${team.divisionId}-${team.teamId}`}
-                  className="px-4 py-3"
+                  className="px-3 py-3 sm:px-4"
                 >
-                  <p className="font-medium text-[var(--ink)]">
+                  <p className="font-[family-name:var(--font-display)] text-base font-semibold text-[var(--ink)]">
                     {team.teamName}
                   </p>
                   <p className="mt-0.5 text-sm text-[var(--muted)]">
@@ -856,38 +959,40 @@ export function PlayerDetail({
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-[var(--muted)]">
+            <p className="px-3 py-4 text-sm text-[var(--muted)] sm:px-4">
               No active league divisions found.
             </p>
           )}
-        </div>
+        </SectionCard>
       ) : null}
 
       {player && section === "matches" ? (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h4 className="font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
-                Match history
-              </h4>
-              <p className="text-sm text-[var(--muted)]">
-                {matchesTotal
-                  ? `${matchesTotal.toLocaleString()} match${matchesTotal === 1 ? "" : "es"}`
-                  : "Search and filter results"}
-                {ratingsWarming ? (
-                  <span className="ml-2 text-[var(--amber)]">
-                    Loading opponent ratings…
-                  </span>
-                ) : null}
-              </p>
-            </div>
-            {matchesTotalPages > 1 ? (
-              <p className="text-xs tabular-nums text-[var(--muted)]">
-                Page {matchesPage} of {matchesTotalPages}
-              </p>
-            ) : null}
-          </div>
-
+        <SectionCard
+          eyebrow="Matches"
+          title="History"
+          description={
+            <>
+              {matchesTotal
+                ? `${matchesTotal.toLocaleString()} match${matchesTotal === 1 ? "" : "es"}`
+                : "Search and filter results"}
+              {ratingsWarming ? (
+                <span className="ml-2 text-[var(--amber)]">
+                  Loading opponent ratings…
+                </span>
+              ) : null}
+              {matchesTotalPages > 1 ? (
+                <span className="ml-2 tabular-nums text-white/55">
+                  · Page {matchesPage} of {matchesTotalPages}
+                </span>
+              ) : null}
+            </>
+          }
+          badge={
+            matchesTotal
+              ? { label: "Total", value: String(matchesTotal) }
+              : undefined
+          }
+        >
           <div className="space-y-2">
             <SearchField
               value={matchQuery}
@@ -942,14 +1047,14 @@ export function PlayerDetail({
           {matches.length ? (
             <ul
               className={[
-                "divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]/90 transition-opacity",
+                "divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] transition-opacity",
                 matchesLoading ? "opacity-60" : "opacity-100",
               ].join(" ")}
             >
               {matches.map((match) => (
                 <li
                   key={match.id}
-                  className="flex items-start justify-between gap-3 px-4 py-3"
+                  className="flex items-start justify-between gap-3 px-3 py-3 sm:px-4"
                 >
                   <div className="min-w-0">
                     <p className="font-medium text-[var(--ink)]">
@@ -1004,13 +1109,13 @@ export function PlayerDetail({
           {matchesTotalPages > 1 ? (
             <nav
               aria-label="Match history pages"
-              className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]/80 px-2.5 py-2 sm:px-3"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-2.5 py-2 sm:px-3"
             >
               <button
                 type="button"
                 onClick={() => goToMatchesPage(matchesPage - 1)}
                 disabled={matchesPage <= 1 || matchesLoading}
-                className="rounded-full bg-[var(--surface-2)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
+                className="rounded-[var(--radius)] bg-[var(--surface)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
               >
                 Previous
               </button>
@@ -1035,10 +1140,10 @@ export function PlayerDetail({
                         onClick={() => goToMatchesPage(item)}
                         disabled={matchesLoading}
                         className={[
-                          "min-w-9 rounded-full px-2.5 py-1.5 text-sm font-semibold tabular-nums transition",
+                          "min-w-9 rounded-[var(--radius)] px-2.5 py-1.5 text-sm font-semibold tabular-nums transition",
                           item === matchesPage
                             ? "bg-[var(--felt)] text-white shadow-sm"
-                            : "bg-[var(--surface-2)] text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--ink)]",
+                            : "bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--ink)]",
                         ].join(" ")}
                       >
                         {item}
@@ -1051,13 +1156,185 @@ export function PlayerDetail({
                 type="button"
                 onClick={() => goToMatchesPage(matchesPage + 1)}
                 disabled={matchesPage >= matchesTotalPages || matchesLoading}
-                className="rounded-full bg-[var(--surface-2)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
+                className="rounded-[var(--radius)] bg-[var(--surface)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
               >
                 Next
               </button>
             </nav>
           ) : null}
-        </div>
+        </SectionCard>
+      ) : null}
+
+      {player && section === "opponents" ? (
+        <SectionCard
+          eyebrow="Record"
+          title="Opponents"
+          description={
+            <>
+              Career wins and losses against each player.
+              {opponentsTotalPages > 1 ? (
+                <span className="ml-2 tabular-nums text-white/55">
+                  · Page {opponentsPage} of {opponentsTotalPages}
+                </span>
+              ) : null}
+            </>
+          }
+          badge={
+            opponentsTotal
+              ? { label: "Faced", value: String(opponentsTotal) }
+              : undefined
+          }
+        >
+          <div className="space-y-2">
+            <SearchField
+              value={opponentQuery}
+              onChange={setOpponentQuery}
+              label="Search opponents"
+              placeholder="Search opponent name or ID…"
+              className="max-w-none"
+            />
+            <ThemedFilterSelect
+              ariaLabel="Sort opponents"
+              emptyLabel="Most wins"
+              value={opponentSort}
+              options={opponentSortOptions}
+              onChange={(next) => {
+                setOpponentSort(next);
+                setOpponentsPage(1);
+              }}
+            />
+          </div>
+
+          {opponentsError ? (
+            <div className="rounded-[var(--radius)] border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
+              {opponentsError}
+            </div>
+          ) : null}
+
+          {opponentsLoading && !opponents.length ? (
+            <p className="py-4 text-center text-sm text-[var(--muted)]">
+              Aggregating opponent records…
+            </p>
+          ) : null}
+
+          {!opponentsLoading && !opponentsError && !opponents.length ? (
+            <p className="text-sm text-[var(--muted)]">No opponents found.</p>
+          ) : null}
+
+          {opponents.length ? (
+            <ul
+              className={[
+                "divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] transition-opacity",
+                opponentsLoading ? "opacity-60" : "opacity-100",
+              ].join(" ")}
+            >
+              {opponents.map((row) => {
+                const pct = winPct(row.wins, row.losses);
+                return (
+                  <li
+                    key={row.key}
+                    className="flex items-start justify-between gap-3 px-3 py-3 sm:px-4"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-[var(--ink)]">
+                        {row.opponentName}
+                        {row.opponentRating != null ? (
+                          <span className="ml-2 tabular-nums text-[var(--felt-deep)]">
+                            {Math.round(row.opponentRating)}
+                          </span>
+                        ) : null}
+                      </p>
+                      <p className="mt-0.5 text-sm text-[var(--muted)]">
+                        {[
+                          row.opponentReadableId
+                            ? `#${row.opponentReadableId}`
+                            : null,
+                          `${row.played} played`,
+                          row.lastPlayed
+                            ? `Last ${formatDate(row.lastPlayed)}`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="font-[family-name:var(--font-display)] text-xl tabular-nums leading-none text-[var(--ink)]">
+                        <span className="text-[var(--felt-deep)]">{row.wins}</span>
+                        <span className="mx-1 text-[var(--muted)]">–</span>
+                        <span className="text-[var(--danger)]">{row.losses}</span>
+                      </p>
+                      <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                        {row.wins + row.losses > 0 ? `${pct}% win` : "No W/L"}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+
+          {opponentsTotalPages > 1 ? (
+            <nav
+              aria-label="Opponent records pages"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-2.5 py-2 sm:px-3"
+            >
+              <button
+                type="button"
+                onClick={() => goToOpponentsPage(opponentsPage - 1)}
+                disabled={opponentsPage <= 1 || opponentsLoading}
+                className="rounded-[var(--radius)] bg-[var(--surface)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                Previous
+              </button>
+
+              <div className="flex flex-wrap items-center justify-center gap-1">
+                {pageNumbers(opponentsPage, opponentsTotalPages).map(
+                  (item, index) =>
+                    item === "…" ? (
+                      <span
+                        key={`ellipsis-${index}`}
+                        className="px-1 text-sm text-[var(--muted)]"
+                        aria-hidden
+                      >
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={item}
+                        type="button"
+                        aria-label={`Page ${item}`}
+                        aria-current={
+                          item === opponentsPage ? "page" : undefined
+                        }
+                        onClick={() => goToOpponentsPage(item)}
+                        disabled={opponentsLoading}
+                        className={[
+                          "min-w-9 rounded-[var(--radius)] px-2.5 py-1.5 text-sm font-semibold tabular-nums transition",
+                          item === opponentsPage
+                            ? "bg-[var(--felt)] text-white shadow-sm"
+                            : "bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--ink)]",
+                        ].join(" ")}
+                      >
+                        {item}
+                      </button>
+                    ),
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => goToOpponentsPage(opponentsPage + 1)}
+                disabled={
+                  opponentsPage >= opponentsTotalPages || opponentsLoading
+                }
+                className="rounded-[var(--radius)] bg-[var(--surface)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                Next
+              </button>
+            </nav>
+          ) : null}
+        </SectionCard>
       ) : null}
     </section>
   );
