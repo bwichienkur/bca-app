@@ -271,6 +271,7 @@ export function MatchListCard({
   const hasBoard = boardStatus != null;
   const displayScores = showScores ?? hasBoard;
   const scoresMuted = boardStatus === "not_started";
+  const isLive = boardStatus === "in_progress";
   // Board cards hoist venue to the night header; schedule keeps meta/location.
   const headerMeta = hasBoard
     ? null
@@ -287,10 +288,18 @@ export function MatchListCard({
       aria-label={`${label}: ${homeDisplay} vs ${awayDisplay}`}
       className={[
         "group block w-full overflow-hidden rounded-[var(--radius)] border text-left transition",
+        isLive
+          ? "border-[var(--amber)]"
+          : isMyMatch
+            ? "border-[color-mix(in_srgb,var(--felt)_70%,var(--line))]"
+            : "border-[var(--line)]",
         isMyMatch
-          ? "border-[color-mix(in_srgb,var(--felt)_70%,var(--line))] bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))]"
-          : "border-[var(--line)] bg-[var(--surface)]",
-        "hover:border-[color-mix(in_srgb,var(--felt)_55%,var(--line))] hover:bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]",
+          ? "bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))]"
+          : "bg-[var(--surface)]",
+        isLive
+          ? "hover:border-[color-mix(in_srgb,var(--amber)_85%,white)]"
+          : "hover:border-[color-mix(in_srgb,var(--felt)_55%,var(--line))]",
+        "hover:bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--felt-soft)]",
         className ?? "",
       ].join(" ")}
