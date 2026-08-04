@@ -32,12 +32,12 @@ type MatchListCardProps = {
 
 function statusTone(status: MatchBoardStatus): string {
   if (status === "complete") {
-    return "bg-[var(--surface-3)] text-[var(--muted)]";
+    return "bg-black/25 text-white/75 ring-1 ring-white/15";
   }
   if (status === "in_progress") {
     return "bg-[var(--amber)] text-[#1a140c]";
   }
-  return "bg-[var(--surface-2)] text-[var(--muted)]";
+  return "bg-white/12 text-white/80 ring-1 ring-white/15";
 }
 
 function statusLabel(status: MatchBoardStatus): string {
@@ -108,18 +108,18 @@ function actionIcon(
 ): { icon: ReactNode; label: string } {
   if (boardStatus === "complete") {
     return {
-      icon: <EyeIcon className="h-4 w-4" />,
+      icon: <EyeIcon className="h-3.5 w-3.5" />,
       label: ctaLabel ?? "View",
     };
   }
   if (boardStatus === "in_progress" || (boardStatus != null && isMyMatch)) {
     return {
-      icon: <ScorePadIcon className="h-4 w-4" />,
+      icon: <ScorePadIcon className="h-3.5 w-3.5" />,
       label: ctaLabel ?? (isMyMatch ? "Score" : "Open"),
     };
   }
   return {
-    icon: <ChevronIcon className="h-4 w-4" />,
+    icon: <ChevronIcon className="h-3.5 w-3.5" />,
     label: ctaLabel ?? "Open",
   };
 }
@@ -136,7 +136,7 @@ function ScoreBox({
   return (
     <div
       className={[
-        "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+        "flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
         "bg-black/25 ring-1",
         muted
           ? "ring-white/10 opacity-55"
@@ -147,7 +147,7 @@ function ScoreBox({
     >
       <span
         className={[
-          "font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums leading-none",
+          "font-[family-name:var(--font-display)] text-base font-semibold tabular-nums leading-none",
           muted
             ? "text-[var(--muted)]"
             : emphasize
@@ -216,8 +216,7 @@ export function MatchListCard({
       style={style}
       aria-label={`${label}: ${homeName} vs ${awayName}`}
       className={[
-        "group grid w-full grid-cols-[minmax(0,1fr)_auto] text-left transition",
-        "rounded-2xl border",
+        "group block w-full overflow-hidden rounded-xl border text-left transition",
         isMyMatch
           ? "border-[color-mix(in_srgb,var(--felt)_70%,var(--line))] bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))]"
           : "border-[var(--line)] bg-[var(--surface)]",
@@ -226,68 +225,77 @@ export function MatchListCard({
         className ?? "",
       ].join(" ")}
     >
-      {/* Header — status chips */}
-      <div className="flex min-h-9 min-w-0 flex-wrap items-center gap-1.5 border-b border-[var(--line)] px-3.5 py-2">
-        {isMyMatch ? (
-          <span className="rounded-full bg-[var(--felt)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
-            My match
-          </span>
-        ) : null}
-        {boardStatus ? (
-          <span
-            className={[
-              "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
-              statusTone(boardStatus),
-            ].join(" ")}
-          >
-            {statusLabel(boardStatus)}
-          </span>
-        ) : null}
-        {headerMeta ? (
-          <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--amber)]">
-            {headerMeta}
-          </p>
-        ) : null}
-      </div>
-      <div className="flex items-center justify-center border-b border-[var(--line)] py-2 pr-3.5">
-        <span
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--felt)] text-white transition group-hover:bg-[var(--felt-soft)]"
+      <div className="relative overflow-hidden bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] text-white">
+        <div
           aria-hidden
-        >
-          {icon}
-        </span>
+          className="pointer-events-none absolute inset-0 opacity-40"
+          style={{
+            background:
+              "radial-gradient(120% 80% at 100% 0%, rgba(224,163,90,0.28), transparent 55%)",
+          }}
+        />
+        <div className="relative flex items-center gap-2 px-3 py-1.5">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+            {isMyMatch ? (
+              <span className="rounded-full bg-white/18 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white ring-1 ring-white/20">
+                My match
+              </span>
+            ) : null}
+            {boardStatus ? (
+              <span
+                className={[
+                  "rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
+                  statusTone(boardStatus),
+                ].join(" ")}
+              >
+                {statusLabel(boardStatus)}
+              </span>
+            ) : null}
+            {headerMeta ? (
+              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--amber)]">
+                {headerMeta}
+              </p>
+            ) : null}
+          </div>
+          <span
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-black/25 text-white ring-1 ring-white/15 transition group-hover:bg-black/35"
+            aria-hidden
+          >
+            {icon}
+          </span>
+        </div>
       </div>
 
-      {/* Home row */}
-      <div className="flex min-w-0 items-center px-3.5 py-2.5">
-        <TeamName name={homeName} emphasize={emphasizeHome} />
-      </div>
-      <div className="flex items-center justify-center py-2.5 pr-3.5">
-        {displayScores ? (
-          <ScoreBox
-            value={homeRounds ?? 0}
-            emphasize={emphasizeHome}
-            muted={scoresMuted}
-          />
-        ) : null}
-      </div>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto]">
+        <div className="flex min-w-0 items-center px-3 py-2">
+          <TeamName name={homeName} emphasize={emphasizeHome} />
+        </div>
+        <div className="flex items-center justify-center py-2 pr-3">
+          {displayScores ? (
+            <ScoreBox
+              value={homeRounds ?? 0}
+              emphasize={emphasizeHome}
+              muted={scoresMuted}
+            />
+          ) : null}
+        </div>
 
-      {/* Away row */}
-      <div className="flex min-w-0 items-center border-t border-[var(--line)] px-3.5 py-2.5">
-        <TeamName name={awayName} emphasize={emphasizeAway} />
-      </div>
-      <div className="flex items-center justify-center border-t border-[var(--line)] py-2.5 pr-3.5">
-        {displayScores ? (
-          <ScoreBox
-            value={awayRounds ?? 0}
-            emphasize={emphasizeAway}
-            muted={scoresMuted}
-          />
-        ) : null}
+        <div className="flex min-w-0 items-center border-t border-[var(--line)] px-3 py-2">
+          <TeamName name={awayName} emphasize={emphasizeAway} />
+        </div>
+        <div className="flex items-center justify-center border-t border-[var(--line)] py-2 pr-3">
+          {displayScores ? (
+            <ScoreBox
+              value={awayRounds ?? 0}
+              emphasize={emphasizeAway}
+              muted={scoresMuted}
+            />
+          ) : null}
+        </div>
       </div>
 
       {!hasBoard && status ? (
-        <p className="col-span-2 border-t border-[var(--line)] px-3.5 py-2 text-xs text-[var(--muted)]">
+        <p className="border-t border-[var(--line)] px-3 py-2 text-xs text-[var(--muted)]">
           {status}
         </p>
       ) : null}
