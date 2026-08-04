@@ -27,7 +27,7 @@ export function SectionCard({
   return (
     <section
       className={[
-        "overflow-hidden rounded-[1.35rem] border border-[var(--line)] shadow-[var(--shadow)]",
+        "overflow-hidden rounded-[var(--radius)] border border-[var(--line)] shadow-[var(--shadow)]",
         hasBody ? "bg-[var(--surface)]" : "bg-transparent",
         className,
       ]
@@ -56,7 +56,7 @@ export function SectionCard({
             ) : null}
           </div>
           {badge ? (
-            <div className="flex shrink-0 flex-col items-center justify-center rounded-2xl bg-black/25 px-3.5 py-2.5 text-center ring-1 ring-white/15">
+            <div className="flex shrink-0 flex-col items-center justify-center rounded-[var(--radius)] bg-black/25 px-3.5 py-2.5 text-center ring-1 ring-white/15">
               <p className="text-[10px] font-semibold uppercase leading-none tracking-[0.14em] text-white/65">
                 {badge.label}
               </p>

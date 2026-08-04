@@ -244,7 +244,7 @@ export function DateTimeField({
             role="dialog"
             aria-label={ariaLabel ?? "Choose date and time"}
             style={panelStyle}
-            className="overflow-hidden rounded-2xl border border-[var(--line-strong)] bg-[var(--surface)] shadow-[var(--shadow)]"
+            className="overflow-hidden rounded-[var(--radius)] border border-[var(--line-strong)] bg-[var(--surface)] shadow-[var(--shadow)]"
           >
             <div className="border-b border-[var(--line)] bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] px-3 py-2.5 text-white">
               <div className="flex items-center justify-between gap-2">

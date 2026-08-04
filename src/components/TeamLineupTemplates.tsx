@@ -262,7 +262,7 @@ export function TeamLineupTemplates({
       </div>
 
       {loading ? (
-        <p className="rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] px-4 py-6 text-center text-sm text-[var(--muted)]">
+        <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-4 py-6 text-center text-sm text-[var(--muted)]">
           Loading saved lineups…
         </p>
       ) : teamPresets.length === 0 ? (
@@ -280,7 +280,7 @@ export function TeamLineupTemplates({
           }
         />
       ) : (
-        <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
           {teamPresets.map((preset) => {
             const names = idsFromPreset(team, preset, slots)
               .map((id) => {
@@ -340,7 +340,7 @@ export function TeamLineupTemplates({
         Saved lineups
       </button>
 
-      <section className="overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      <section className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="space-y-2.5 border-b border-[var(--line)] px-3 py-3 sm:px-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">

@@ -190,7 +190,7 @@ export function PlayerSearch() {
             autoCorrect="off"
             spellCheck={false}
             className={[
-              "w-full rounded-2xl border border-[var(--line)] bg-[var(--surface)] py-3 text-base text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2",
+              "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] py-3 text-base text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2",
               hasQuery ? "pl-4 pr-24" : "px-4 pr-12",
             ].join(" ")}
           />
@@ -214,7 +214,7 @@ export function PlayerSearch() {
 
       <div className="min-h-[min(48dvh,22rem)] [overflow-anchor:none]">
         {error ? (
-          <div className="rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
+          <div className="rounded-[var(--radius)] border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
             {error}
           </div>
         ) : null}
@@ -257,7 +257,7 @@ export function PlayerSearch() {
 
             <ul
               className={[
-                "divide-y divide-[var(--line)] overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)]/90 transition-opacity",
+                "divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]/90 transition-opacity",
                 loading ? "opacity-60" : "opacity-100",
               ].join(" ")}
             >
@@ -312,7 +312,7 @@ export function PlayerSearch() {
             {totalPages > 1 ? (
               <nav
                 aria-label="Search results pages"
-                className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface)]/80 px-2.5 py-2 sm:px-3"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]/80 px-2.5 py-2 sm:px-3"
               >
                 <button
                   type="button"

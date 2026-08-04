@@ -68,7 +68,7 @@ function MatchTeamPanel({
   );
 
   return (
-    <article className="min-w-0 overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] shadow-sm">
+    <article className="min-w-0 overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-sm">
       <div className="border-b border-[var(--line)] bg-[linear-gradient(135deg,rgba(29,110,158,0.16),transparent_55%)] px-3 py-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
@@ -226,7 +226,7 @@ export function ScheduleMatchDetail({
         <div
           role="tablist"
           aria-label="Match teams"
-          className="grid grid-cols-2 gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-1"
+          className="grid grid-cols-2 gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-1"
         >
           {sides.map((side) => {
             const selected = mobileSide === side.id;

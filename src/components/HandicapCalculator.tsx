@@ -71,7 +71,7 @@ type DragState = {
 
 function ContentCard({ children }: { children: ReactNode }) {
   return (
-    <section className="space-y-4 overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-[var(--shadow)] sm:p-4">
+    <section className="space-y-4 overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-[var(--shadow)] sm:p-4">
       {children}
     </section>
   );
@@ -863,7 +863,7 @@ function RoundHandicapCard({
   const recipientName = homeGets ? homeName : awayGets ? awayName : null;
 
   return (
-    <article className="animate-rise overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] shadow-sm">
+    <article className="animate-rise overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-sm">
       <div className="flex items-center gap-3 px-3.5 py-3 sm:px-4">
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
@@ -1183,7 +1183,7 @@ function LineupPicker({
   };
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm sm:p-3.5">
+    <div className="min-w-0 overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm sm:p-3.5">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1 overflow-hidden">
           <h4 className="truncate font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">
@@ -1208,7 +1208,7 @@ function LineupPicker({
 
       <ol
         ref={listRef}
-        className="min-w-0 divide-y divide-[var(--line)] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface-2)]"
+        className="min-w-0 divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]"
       >
         {Array.from({ length: slots }).map((_, index) => {
           const player = previewLineup[index];

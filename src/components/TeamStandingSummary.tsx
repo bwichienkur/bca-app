@@ -343,7 +343,7 @@ export function TeamStandingSummary({
           />
         ) : null}
         {hasBody ? (
-          <section className="overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+          <section className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
             {statsBody}
           </section>
         ) : null}
@@ -352,7 +352,7 @@ export function TeamStandingSummary({
   }
 
   return (
-    <section className="overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+    <section className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
       {hasHeader ? (
         <div
           className={[
@@ -406,7 +406,7 @@ export function TeamStandingSummary({
             {resolvedTeamName && rankCell ? (
               <div
                 className={[
-                  "shrink-0 rounded-2xl bg-black/25 text-center ring-1 ring-white/15",
+                  "shrink-0 rounded-[var(--radius)] bg-black/25 text-center ring-1 ring-white/15",
                   compact ? "px-2.5 py-2" : "px-3.5 py-2.5",
                 ].join(" ")}
               >

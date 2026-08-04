@@ -1048,7 +1048,7 @@ export function LeagueApp() {
       </header>
 
       {error ? (
-        <div className="mb-4 rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
+        <div className="mb-4 rounded-[var(--radius)] border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
           {error}
         </div>
       ) : null}
@@ -1064,7 +1064,7 @@ export function LeagueApp() {
         </p>
       ) : null}
 
-      <section className="animate-rise animate-delay-1 relative z-40 mb-2 overflow-visible rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] text-white shadow-[var(--shadow)]">
+      <section className="animate-rise animate-delay-1 relative z-40 mb-2 overflow-visible rounded-[var(--radius)] border border-white/10 bg-[linear-gradient(135deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] text-white shadow-[var(--shadow)]">
         <button
           type="button"
           onClick={() => setContextOpen((open) => !open)}

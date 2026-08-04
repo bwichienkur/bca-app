@@ -63,7 +63,7 @@ export function LoginScreen({ onSuccess, onCancel }: LoginScreenProps) {
 
       <form
         onSubmit={onSubmit}
-        className="space-y-4 rounded-[1.4rem] border border-[var(--line)] bg-[var(--surface)] p-5 shadow-sm"
+        className="space-y-4 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-5 shadow-sm"
       >
         <label className="block space-y-1.5">
           <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
