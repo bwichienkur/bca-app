@@ -360,6 +360,10 @@ export function MatchScoring({
       const aMine = a.mySide != null ? 0 : 1;
       const bMine = b.mySide != null ? 0 : 1;
       if (aMine !== bMine) return aMine - bMine;
+      // Keep completed matches on the board, just after live/open ones.
+      if (a.hasBeenPlayed !== b.hasBeenPlayed) {
+        return a.hasBeenPlayed ? 1 : -1;
+      }
       const loc = (a.location || "").localeCompare(b.location || "");
       if (loc !== 0) return loc;
       return a.teamOneName.localeCompare(b.teamOneName);
@@ -367,15 +371,14 @@ export function MatchScoring({
     return rows;
   }, [matches, selectedNightKey]);
 
-  // Live-refresh draft scores while viewing the night board.
+  // Live-refresh draft scores + match list while viewing the night board.
   useEffect(() => {
-    if (!user || view.mode !== "list" || nightMatches.length === 0) return;
+    if (!user || !divisionId || view.mode !== "list") return;
     let cancelled = false;
-    const refresh = async () => {
+    const refreshScores = async (ids: string[]) => {
+      if (ids.length === 0) return;
       try {
-        const remote = await fetchRemoteDraftSummaries(
-          nightMatches.map((item) => item.id),
-        );
+        const remote = await fetchRemoteDraftSummaries(ids);
         if (cancelled) return;
         setSharedDrafts(remote.shared);
         setDraftSummaries((prev) => ({ ...prev, ...remote.summaries }));
@@ -383,14 +386,30 @@ export function MatchScoring({
         // keep last known scores
       }
     };
-    const timer = window.setInterval(() => {
-      void refresh();
+    const refreshMatches = async () => {
+      try {
+        const data = await fetchJson<{ matches: ScoringMatchSummary[] }>(
+          matchesUrl(divisionId, teamId),
+        );
+        if (cancelled) return;
+        setMatches(data.matches);
+        await refreshScores(data.matches.map((item) => item.id));
+      } catch {
+        // keep last known board
+      }
+    };
+    const scoreTimer = window.setInterval(() => {
+      void refreshScores(nightMatches.map((item) => item.id));
     }, 5000);
+    const matchTimer = window.setInterval(() => {
+      void refreshMatches();
+    }, 30000);
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      window.clearInterval(scoreTimer);
+      window.clearInterval(matchTimer);
     };
-  }, [user, view.mode, nightMatches]);
+  }, [user, divisionId, teamId, view.mode, nightMatches]);
 
   const openMatch = async (matchId: string) => {
     setLoadingMatch(true);
