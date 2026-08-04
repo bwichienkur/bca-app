@@ -1411,49 +1411,11 @@ export function MatchScoring({
               onClose={() => setActiveGame(null)}
               onSave={(next) => {
                 if (!activeGame || sheetLocked || !match) return;
-                const savedRound = activeGame.roundNumber;
-                const savedIndex = activeGame.gameIndex;
-                setGameScore(savedRound, savedIndex, next, {
+                setGameScore(activeGame.roundNumber, activeGame.gameIndex, next, {
                   immediate: true,
                 });
-
-                const finished =
-                  gameWinner(next, {
-                    maxScore: match.maxScore > 0 ? match.maxScore : 10,
-                    maxLosingScore:
-                      match.maxLosingScore >= 0 ? match.maxLosingScore : 7,
-                  }) != null;
-                if (!finished) {
-                  setActiveGame(null);
-                  return;
-                }
-
-                const round =
-                  match.matchFormat?.rounds.find(
-                    (item) => item.roundNumber === savedRound,
-                  ) ?? null;
-                const unfinished =
-                  round?.games.filter((game) => {
-                    if (game.index === savedIndex) return false;
-                    return (
-                      gameWinner(
-                        draft?.games[gameKey(savedRound, game.index)],
-                      ) == null
-                    );
-                  }) ?? [];
-                const nextGame =
-                  unfinished.find((game) => game.index > savedIndex) ??
-                  unfinished[0] ??
-                  null;
-
-                if (nextGame) {
-                  setActiveGame({
-                    roundNumber: savedRound,
-                    gameIndex: nextGame.index,
-                  });
-                } else {
-                  setActiveGame(null);
-                }
+                // Stay on the sheet after save — don't auto-open the next game.
+                setActiveGame(null);
               }}
             />
           </div>
