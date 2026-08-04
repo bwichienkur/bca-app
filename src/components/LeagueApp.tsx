@@ -1578,6 +1578,7 @@ export function LeagueApp() {
                 days={schedule}
                 teamName={prefs.teamName}
                 divisionName={selectedDivision?.name ?? prefs.divisionName}
+                teamReport={teamReport}
                 onMatchClick={(match, day) =>
                   setSelectedScheduleMatch({ match, date: day.date })
                 }

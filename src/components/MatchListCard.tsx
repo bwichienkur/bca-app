@@ -18,6 +18,9 @@ type MatchListCardProps = {
   ctaLabel?: string;
   emphasizeHome?: boolean;
   emphasizeAway?: boolean;
+  /** Division standing rank labels, e.g. "3". */
+  homeRank?: string | null;
+  awayRank?: string | null;
   onClick?: () => void;
   className?: string;
   style?: CSSProperties;
@@ -163,22 +166,37 @@ function ScoreBox({
 
 function TeamName({
   name,
+  side,
+  rank,
   emphasize,
 }: {
   name: string;
+  side: "Home" | "Away";
+  rank?: string | null;
   emphasize?: boolean;
 }) {
+  const rankLabel = rank?.trim() ? `#${rank.trim().replace(/^#/, "")}` : null;
   return (
-    <p
-      className={[
-        "min-w-0 truncate font-[family-name:var(--font-display)] text-[15px] leading-tight",
-        emphasize
-          ? "font-semibold text-[var(--felt-deep)]"
-          : "font-medium text-[var(--ink)]",
-      ].join(" ")}
-    >
-      {name}
-    </p>
+    <div className="flex min-w-0 items-baseline gap-2">
+      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+        {side}
+      </span>
+      {rankLabel ? (
+        <span className="shrink-0 font-[family-name:var(--font-display)] text-[13px] font-semibold tabular-nums text-[var(--chalk)]">
+          {rankLabel}
+        </span>
+      ) : null}
+      <p
+        className={[
+          "min-w-0 truncate font-[family-name:var(--font-display)] text-[15px] leading-tight",
+          emphasize
+            ? "font-semibold text-[var(--felt-deep)]"
+            : "font-medium text-[var(--ink)]",
+        ].join(" ")}
+      >
+        {name}
+      </p>
+    </div>
   );
 }
 
@@ -191,6 +209,8 @@ export function MatchListCard({
   ctaLabel,
   emphasizeHome,
   emphasizeAway,
+  homeRank = null,
+  awayRank = null,
   onClick,
   className,
   style,
@@ -252,7 +272,7 @@ export function MatchListCard({
               </span>
             ) : null}
             {headerMeta ? (
-              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--amber)]">
+              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-white/95">
                 {headerMeta}
               </p>
             ) : null}
@@ -268,7 +288,12 @@ export function MatchListCard({
 
       <div className="grid grid-cols-[minmax(0,1fr)_auto]">
         <div className="flex min-w-0 items-center px-3 py-2">
-          <TeamName name={homeName} emphasize={emphasizeHome} />
+          <TeamName
+            name={homeName}
+            side="Home"
+            rank={homeRank}
+            emphasize={emphasizeHome}
+          />
         </div>
         <div className="flex items-center justify-center py-2 pr-3">
           {displayScores ? (
@@ -281,7 +306,12 @@ export function MatchListCard({
         </div>
 
         <div className="flex min-w-0 items-center border-t border-[var(--line)] px-3 py-2">
-          <TeamName name={awayName} emphasize={emphasizeAway} />
+          <TeamName
+            name={awayName}
+            side="Away"
+            rank={awayRank}
+            emphasize={emphasizeAway}
+          />
         </div>
         <div className="flex items-center justify-center border-t border-[var(--line)] py-2 pr-3">
           {displayScores ? (

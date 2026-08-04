@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { normalizeTeamName } from "@/lib/matchups";
 import { isUpcomingScheduleDate, parseScheduleDate } from "@/lib/schedule";
-import type { ScheduleDay, ScheduleMatch } from "@/lib/types";
+import type { ScheduleDay, ScheduleMatch, TableReport } from "@/lib/types";
 import { EmptyState } from "./EmptyState";
 import { MatchListCard } from "./MatchListCard";
 import { SectionCard } from "./SectionCard";
@@ -12,8 +12,39 @@ type ScheduleListProps = {
   days: ScheduleDay[];
   teamName?: string | null;
   divisionName?: string | null;
+  /** Division standings — used for Home/Away rank badges. */
+  teamReport?: TableReport | null;
   onMatchClick?: (match: ScheduleMatch, day: ScheduleDay) => void;
 };
+
+function isRankHeader(header: string): boolean {
+  const h = header.trim().toLowerCase();
+  return h === "#" || h === "rank" || h === "rk" || h === "pos";
+}
+
+function isNameHeader(header: string): boolean {
+  const h = header.trim().toLowerCase();
+  return h === "team" || h === "name";
+}
+
+/** Map normalized team name → standing rank string. */
+function ranksFromReport(report: TableReport | null | undefined): Map<string, string> {
+  const ranks = new Map<string, string>();
+  if (!report?.headers.length || !report.rows.length) return ranks;
+
+  const nameIndex = report.headers.findIndex(isNameHeader);
+  const rankIndex = report.headers.findIndex(isRankHeader);
+  if (nameIndex < 0) return ranks;
+
+  report.rows.forEach((row, rowIndex) => {
+    const name = normalizeTeamName(row[nameIndex] ?? "");
+    if (!name) return;
+    const raw =
+      rankIndex >= 0 ? (row[rankIndex] ?? "").trim() : String(rowIndex + 1);
+    if (raw) ranks.set(name, raw.replace(/^#/, ""));
+  });
+  return ranks;
+}
 
 type ScheduleView = "upcoming" | "past";
 
@@ -38,9 +69,11 @@ export function ScheduleList({
   days,
   teamName,
   divisionName,
+  teamReport = null,
   onMatchClick,
 }: ScheduleListProps) {
   const [view, setView] = useState<ScheduleView>("upcoming");
+  const teamRanks = useMemo(() => ranksFromReport(teamReport), [teamReport]);
 
   const teamDays = useMemo(() => {
     if (!teamName) return days;
@@ -179,16 +212,11 @@ export function ScheduleList({
         <div className="space-y-2.5">
           {visibleMatches.map((item, index) => {
             const { match, day } = item;
-            const status = [
-              item.upcoming ? "Upcoming" : "Played",
+            const isMyMatch = Boolean(
               myTeam &&
-              (normalizeTeamName(match.home) === myTeam ||
-                normalizeTeamName(match.away) === myTeam)
-                ? "Your match"
-                : null,
-            ]
-              .filter(Boolean)
-              .join(" · ");
+                (normalizeTeamName(match.home) === myTeam ||
+                  normalizeTeamName(match.away) === myTeam),
+            );
             return (
               <MatchListCard
                 key={item.key}
@@ -198,8 +226,14 @@ export function ScheduleList({
                 awayName={match.away}
                 meta={formatScheduleDate(day.date)}
                 location={match.location || undefined}
-                status={status}
                 ctaLabel="View"
+                isMyMatch={isMyMatch}
+                homeRank={
+                  teamRanks.get(normalizeTeamName(match.home)) ?? null
+                }
+                awayRank={
+                  teamRanks.get(normalizeTeamName(match.away)) ?? null
+                }
                 emphasizeHome={
                   Boolean(
                     myTeam && normalizeTeamName(match.home) === myTeam,
