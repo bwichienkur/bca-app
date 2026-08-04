@@ -181,7 +181,6 @@ function TeamRow({
   rank,
   score,
   emphasize,
-  showRank,
   showScore,
   scoresMuted,
   bordered,
@@ -191,7 +190,6 @@ function TeamRow({
   rank?: string | null;
   score: number;
   emphasize?: boolean;
-  showRank: boolean;
   showScore: boolean;
   scoresMuted?: boolean;
   bordered?: boolean;
@@ -202,6 +200,7 @@ function TeamRow({
       <div
         className={[
           "flex min-w-0 items-center gap-2 px-3 py-2",
+          !showScore ? "pr-3" : "",
           bordered ? "border-t border-[var(--line)]" : "",
         ].join(" ")}
       >
@@ -218,22 +217,12 @@ function TeamRow({
         >
           {displayTeamName(name)}
         </p>
+        {rankLabel ? (
+          <span className="shrink-0 font-[family-name:var(--font-display)] text-[13px] font-semibold tabular-nums leading-none text-[var(--chalk)]">
+            {rankLabel}
+          </span>
+        ) : null}
       </div>
-      {showRank ? (
-        <div
-          className={[
-            "flex w-9 items-center justify-end py-2",
-            showScore ? "" : "pr-3",
-            bordered ? "border-t border-[var(--line)]" : "",
-          ].join(" ")}
-        >
-          {rankLabel ? (
-            <span className="font-[family-name:var(--font-display)] text-[13px] font-semibold tabular-nums leading-none text-[var(--chalk)]">
-              {rankLabel}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
       {showScore ? (
         <div
           className={[
@@ -275,9 +264,6 @@ export function MatchListCard({
   const hasBoard = boardStatus != null;
   const displayScores = showScores ?? hasBoard;
   const scoresMuted = boardStatus === "not_started";
-  const showRanks = Boolean(
-    formatRank(homeRank) || formatRank(awayRank),
-  );
   // Board cards hoist venue to the night header; schedule keeps meta/location.
   const headerMeta = hasBoard
     ? null
@@ -285,14 +271,6 @@ export function MatchListCard({
   const { icon, label } = actionIcon(boardStatus, isMyMatch, ctaLabel);
   const homeDisplay = displayTeamName(homeName);
   const awayDisplay = displayTeamName(awayName);
-
-  const bodyCols = [
-    "minmax(0,1fr)",
-    showRanks ? "auto" : null,
-    displayScores ? "auto" : null,
-  ]
-    .filter(Boolean)
-    .join(" ");
 
   return (
     <button
@@ -352,8 +330,12 @@ export function MatchListCard({
       </div>
 
       <div
-        className="grid"
-        style={{ gridTemplateColumns: bodyCols }}
+        className={[
+          "grid",
+          displayScores
+            ? "grid-cols-[minmax(0,1fr)_auto]"
+            : "grid-cols-1",
+        ].join(" ")}
       >
         <TeamRow
           name={homeName}
@@ -361,7 +343,6 @@ export function MatchListCard({
           rank={homeRank}
           score={homeRounds ?? 0}
           emphasize={emphasizeHome}
-          showRank={showRanks}
           showScore={displayScores}
           scoresMuted={scoresMuted}
         />
@@ -371,7 +352,6 @@ export function MatchListCard({
           rank={awayRank}
           score={awayRounds ?? 0}
           emphasize={emphasizeAway}
-          showRank={showRanks}
           showScore={displayScores}
           scoresMuted={scoresMuted}
           bordered
