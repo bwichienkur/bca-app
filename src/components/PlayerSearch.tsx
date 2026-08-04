@@ -160,7 +160,7 @@ export function PlayerSearch() {
     return (
       <PlayerDetail
         playerId={selectedPlayer.id}
-        fallbackName={selectedPlayer.name}
+        fallbackName={displayName(selectedPlayer)}
         onBack={() => {
           setSelectedPlayer(null);
           requestAnimationFrame(() => {
