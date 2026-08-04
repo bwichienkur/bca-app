@@ -2543,7 +2543,7 @@ export function Tournaments({
             <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)]">
               {events.map((event) => (
                 <li key={event.id}>
-                  <div className="flex w-full items-stretch gap-3 px-3 py-3 transition hover:bg-[var(--surface-2)]/70 sm:px-4">
+                  <div className="flex w-full items-center gap-3 px-3 py-3 transition hover:bg-[var(--surface-2)]/70 sm:px-4">
                     {event.thumbnailUrl ? (
                       <button
                         type="button"
