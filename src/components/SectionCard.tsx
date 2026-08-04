@@ -43,7 +43,7 @@ export function SectionCard({
               "radial-gradient(120% 80% at 100% 0%, rgba(224,163,90,0.28), transparent 55%)",
           }}
         />
-        <div className="relative flex min-w-0 items-start justify-between gap-3">
+        <div className="relative flex min-w-0 items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/65">
               {eyebrow}
@@ -56,11 +56,11 @@ export function SectionCard({
             ) : null}
           </div>
           {badge ? (
-            <div className="shrink-0 rounded-2xl bg-black/25 px-3.5 py-2.5 text-center ring-1 ring-white/15">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/65">
+            <div className="flex shrink-0 flex-col items-center justify-center rounded-2xl bg-black/25 px-3.5 py-2.5 text-center ring-1 ring-white/15">
+              <p className="text-[10px] font-semibold uppercase leading-none tracking-[0.14em] text-white/65">
                 {badge.label}
               </p>
-              <p className="mt-1 font-[family-name:var(--font-display)] text-3xl font-semibold tabular-nums leading-none">
+              <p className="mt-1.5 font-[family-name:var(--font-display)] text-3xl font-semibold tabular-nums leading-none">
                 {badge.value}
               </p>
             </div>
