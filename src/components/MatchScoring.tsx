@@ -2904,22 +2904,22 @@ function ScorePad({
                   [
                     {
                       code: "" as WinAdornment,
-                      label: "Clear",
+                      label: "CLR",
                       hint: "No adornment",
                     },
                     {
                       code: "BR" as WinAdornment,
-                      label: "B&R",
+                      label: "BR",
                       hint: "Break and run",
                     },
                     {
                       code: "TR" as WinAdornment,
-                      label: "Table",
+                      label: "TR",
                       hint: "Table run",
                     },
                     {
                       code: "WZ" as WinAdornment,
-                      label: "Zip",
+                      label: "ZP",
                       hint: "Win zip (10–0)",
                     },
                   ] as const
