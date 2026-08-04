@@ -54,6 +54,7 @@ import { DraggableLineupList } from "./DraggableLineupList";
 import { LoadLineupMenu } from "./LoadLineupMenu";
 import { MatchListCard, type MatchBoardStatus } from "./MatchListCard";
 import { SectionCard } from "./SectionCard";
+import { SelectField } from "./SelectField";
 import { loadTeamLineupPresets } from "@/lib/lineup-sync";
 import type { LineupPreset } from "@/lib/types";
 
@@ -1509,28 +1510,37 @@ export function MatchScoring({
       ) : (
         <>
           {nightKeys.length > 1 ? (
-            <label className="block space-y-1.5">
+            <div className="space-y-1.5">
               <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
                 Match night
               </span>
-              <select
-                value={selectedNightKey ?? ""}
-                onChange={(event) => setSelectedNightKey(event.target.value)}
-                className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--ink)]"
-              >
-                {nightKeys.map((key) => (
-                  <option key={key} value={key}>
-                    {formatMatchDate(`${key}T12:00:00`)}
-                    {key === todayNightKey() ? " · Tonight" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <SelectField
+                aria-label="Match night"
+                value={selectedNightKey ?? nightKeys[0] ?? ""}
+                onChange={setSelectedNightKey}
+                options={nightKeys.map((key) => ({
+                  value: key,
+                  label: `${formatMatchDate(`${key}T12:00:00`)}${
+                    key === todayNightKey() ? " · Tonight" : ""
+                  }`,
+                }))}
+                buttonClassName={[
+                  "rounded-2xl border-[var(--line)] bg-[var(--surface)] px-3.5 py-2.5",
+                  "font-[family-name:var(--font-display)] text-[15px] font-semibold tracking-wide text-[var(--amber)]",
+                  "hover:border-[color-mix(in_srgb,var(--felt)_55%,var(--line))] hover:bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]",
+                ].join(" ")}
+              />
+            </div>
           ) : nightLabel ? (
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--amber)]">
-              {nightLabel}
-              {selectedNightKey === todayNightKey() ? " · Tonight" : ""}
-            </p>
+            <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3.5 py-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                Match night
+              </p>
+              <p className="mt-1 font-[family-name:var(--font-display)] text-[15px] font-semibold tracking-wide text-[var(--amber)]">
+                {nightLabel}
+                {selectedNightKey === todayNightKey() ? " · Tonight" : ""}
+              </p>
+            </div>
           ) : null}
 
           {nightMatches.length === 0 ? (
