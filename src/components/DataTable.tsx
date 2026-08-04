@@ -279,8 +279,11 @@ export function DataTable({
                       : "none"
                   }
                   className={[
-                    "border-b border-[var(--felt-soft)] font-semibold tracking-wide text-white",
+                    "align-middle border-b border-[var(--felt-soft)] font-semibold tracking-wide text-white",
                     cellPad,
+                    columnMeta[index]?.kind === "name"
+                      ? "text-left"
+                      : "text-center",
                     isSticky
                       ? "sticky left-0 z-10 bg-[var(--felt-soft)] shadow-[4px_0_10px_rgba(0,0,0,0.28)]"
                       : "bg-[var(--felt-soft)]",
@@ -304,7 +307,12 @@ export function DataTable({
                           : "Sorted descending — click to clear sort"
                         : "Sort column"
                     }
-                    className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-0.5 py-0.5 transition hover:text-[var(--amber)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                    className={[
+                      "inline-flex items-center gap-1 whitespace-nowrap rounded-md px-0.5 py-0.5 transition hover:text-[var(--amber)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
+                      columnMeta[index]?.kind === "name"
+                        ? "justify-start"
+                        : "justify-center",
+                    ].join(" ")}
                   >
                     <span>{header}</span>
                     <span
@@ -356,14 +364,17 @@ export function DataTable({
                       key={cellIndex}
                       title={kind === "name" ? value : undefined}
                       className={[
-                        "border-b border-[var(--line)]",
+                        "align-middle border-b border-[var(--line)]",
                         cellPad,
                         rowBg,
+                        kind === "name" ? "text-left" : "text-center leading-none",
                         isSticky
                           ? "sticky left-0 z-[1] font-semibold text-[var(--ink)] shadow-[4px_0_10px_rgba(0,0,0,0.22)]"
                           : kind === "rank"
                             ? "tabular-nums font-medium text-[var(--muted)]"
-                            : "tabular-nums font-semibold text-[var(--ink)]",
+                            : kind === "stat"
+                              ? "tabular-nums font-semibold text-[var(--ink)]"
+                              : "",
                         kind === "name"
                           ? "truncate whitespace-nowrap font-semibold text-[var(--ink)]"
                           : "whitespace-nowrap",
