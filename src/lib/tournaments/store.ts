@@ -1,10 +1,16 @@
 import { getRedis, isRedisConfigured } from "@/lib/redis";
+import {
+  defaultCalcutta,
+  normalizeCalcutta,
+  syncCalcuttaLots,
+} from "@/lib/tournaments/calcutta";
 import { defaultTeamSize } from "@/lib/tournaments/options";
 import type {
   CreateTournamentInput,
   RegistrationStatus,
   RegistrationTeammate,
   Tournament,
+  TournamentCalcutta,
   TournamentListItem,
   TournamentMessage,
   TournamentRegistration,
@@ -14,12 +20,14 @@ const INDEX_KEY = "tableside:tournaments:index:v1";
 const tournamentKey = (id: string) => `tableside:tournaments:event:v1:${id}`;
 const regsKey = (id: string) => `tableside:tournaments:regs:v1:${id}`;
 const messagesKey = (id: string) => `tableside:tournaments:msgs:v1:${id}`;
+const calcuttaKey = (id: string) => `tableside:tournaments:calcutta:v1:${id}`;
 const TTL_SECONDS = 60 * 60 * 24 * 365 * 2;
 
 type MemoryStore = {
   tournaments: Map<string, Tournament>;
   registrations: Map<string, TournamentRegistration[]>;
   messages: Map<string, TournamentMessage[]>;
+  calcuttas: Map<string, TournamentCalcutta>;
 };
 
 const globalForTournaments = globalThis as typeof globalThis & {
@@ -32,9 +40,12 @@ function memory(): MemoryStore {
       tournaments: new Map(),
       registrations: new Map(),
       messages: new Map(),
+      calcuttas: new Map(),
     };
   }
-  return globalForTournaments.__tablesideTournamentMemory;
+  const store = globalForTournaments.__tablesideTournamentMemory;
+  if (!store.calcuttas) store.calcuttas = new Map();
+  return store;
 }
 
 export type TournamentFilters = {
@@ -606,6 +617,51 @@ export async function createMessage(input: {
   }
   memory().messages.set(input.tournamentId, next);
   return message;
+}
+
+export async function getCalcutta(
+  tournamentId: string,
+): Promise<TournamentCalcutta> {
+  const regs = await getRegistrationsRaw(tournamentId);
+  const redis = getRedis();
+  let raw: unknown = null;
+  if (redis) {
+    try {
+      raw = await redis.get(calcuttaKey(tournamentId));
+    } catch {
+      raw = memory().calcuttas.get(tournamentId) ?? null;
+    }
+  } else {
+    raw = memory().calcuttas.get(tournamentId) ?? null;
+  }
+  const normalized = normalizeCalcutta(tournamentId, raw ?? defaultCalcutta(tournamentId));
+  return syncCalcuttaLots(normalized, regs);
+}
+
+export async function saveCalcutta(
+  calcutta: TournamentCalcutta,
+): Promise<TournamentCalcutta> {
+  const regs = await getRegistrationsRaw(calcutta.tournamentId);
+  const next = syncCalcuttaLots(
+    {
+      ...normalizeCalcutta(calcutta.tournamentId, calcutta),
+      updatedAt: new Date().toISOString(),
+    },
+    regs,
+  );
+  const redis = getRedis();
+  if (redis) {
+    try {
+      await redis.set(calcuttaKey(calcutta.tournamentId), next, {
+        ex: TTL_SECONDS,
+      });
+      return next;
+    } catch {
+      /* fall through */
+    }
+  }
+  memory().calcuttas.set(calcutta.tournamentId, next);
+  return next;
 }
 
 export function tournamentStoreMode(): "redis" | "memory" {

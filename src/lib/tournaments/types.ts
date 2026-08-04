@@ -151,3 +151,52 @@ export type TournamentListItem = Tournament & {
   pendingCount: number;
   spotsLeft: number;
 };
+
+/** Organizer-run player/team auction side pot (Calcutta). */
+export type CalcuttaStatus = "setup" | "live" | "settled";
+
+export type CalcuttaPayoutTier = {
+  place: number;
+  percent: number;
+};
+
+export type CalcuttaLot = {
+  registrationId: string;
+  buyerName: string;
+  /** Winning hammer price in cents; null = unsold. */
+  soldPriceCents: number | null;
+  buyBackHalf: boolean;
+  buyerPaid: boolean;
+  playerPaidBuyBack: boolean;
+  /** Finishing place for Calcutta payout (1 = first). */
+  place: number | null;
+  notes: string;
+};
+
+export type TournamentCalcutta = {
+  tournamentId: string;
+  enabled: boolean;
+  status: CalcuttaStatus;
+  minBidCents: number;
+  houseCutPercent: number;
+  allowBuyBackHalf: boolean;
+  payoutTiers: CalcuttaPayoutTier[];
+  lots: CalcuttaLot[];
+  updatedAt: string;
+};
+
+export type CalcuttaSummary = {
+  grossPotCents: number;
+  houseCutCents: number;
+  netPotCents: number;
+  soldCount: number;
+  lotCount: number;
+  payouts: Array<{
+    place: number;
+    percent: number;
+    amountCents: number;
+    registrationId: string | null;
+    buyerName: string | null;
+    buyBackHalf: boolean;
+  }>;
+};
