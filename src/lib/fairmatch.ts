@@ -39,7 +39,7 @@ function mapPlayer(player: FairMatchIndexPlayer): PlayerSearchResult | null {
 
   const firstName = (player.firstName ?? "").trim();
   const lastName = (player.lastName ?? "").trim();
-  const name = [lastName, firstName].filter(Boolean).join(", ") || "Unknown";
+  const name = [firstName, lastName].filter(Boolean).join(" ") || "Unknown";
   const robustness = toNumber(player.robustness);
   const effectiveRating =
     toNumber(player.effectiveRating) ?? toNumber(player.rating);
