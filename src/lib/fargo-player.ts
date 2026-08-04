@@ -744,3 +744,165 @@ export async function fetchFargoPlayerMatches(
     ratingsComplete,
   };
 }
+
+export type FargoOpponentRecord = {
+  key: string;
+  opponentId: string | null;
+  opponentName: string;
+  opponentReadableId: number | null;
+  opponentRating: number | null;
+  wins: number;
+  losses: number;
+  draws: number;
+  played: number;
+  lastPlayed: string | null;
+};
+
+export type OpponentSort =
+  | "wins"
+  | "losses"
+  | "played"
+  | "winpct"
+  | "name";
+
+export type FargoOpponentQuery = {
+  page?: number;
+  limit?: number;
+  q?: string;
+  sort?: OpponentSort;
+};
+
+function opponentKey(match: FargoPlayerMatch): string {
+  if (match.opponentReadableId != null) {
+    return `rid:${match.opponentReadableId}`;
+  }
+  if (match.opponentId) return `id:${match.opponentId}`;
+  return `name:${match.opponentName.trim().toLowerCase()}`;
+}
+
+function winPctValue(wins: number, losses: number): number {
+  const total = wins + losses;
+  if (total <= 0) return 0;
+  return wins / total;
+}
+
+/** Aggregate career W/L against each unique opponent. */
+export async function fetchFargoOpponentRecords(
+  playerId: string,
+  options?: FargoOpponentQuery,
+): Promise<{
+  opponents: FargoOpponentRecord[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  query: string;
+  sort: OpponentSort;
+}> {
+  const id = playerId.trim();
+  if (!id) throw new Error("Player id is required.");
+
+  const limit = Math.min(Math.max(options?.limit ?? 20, 1), 100);
+  const page = Math.max(options?.page ?? 1, 1);
+  const query = (options?.q ?? "").trim().toLowerCase();
+  const sort: OpponentSort = options?.sort ?? "wins";
+
+  const all = await loadAllMatches(id);
+  const byOpponent = new Map<string, FargoOpponentRecord>();
+
+  for (const match of all) {
+    const key = opponentKey(match);
+    const existing = byOpponent.get(key);
+    if (!existing) {
+      byOpponent.set(key, {
+        key,
+        opponentId: match.opponentId,
+        opponentName: match.opponentName,
+        opponentReadableId: match.opponentReadableId,
+        opponentRating: null,
+        wins: match.result === "win" ? 1 : 0,
+        losses: match.result === "loss" ? 1 : 0,
+        draws: match.result === "draw" ? 1 : 0,
+        played: 1,
+        lastPlayed: match.datePlayed,
+      });
+      continue;
+    }
+    if (match.result === "win") existing.wins += 1;
+    else if (match.result === "loss") existing.losses += 1;
+    else existing.draws += 1;
+    existing.played += 1;
+    if (
+      match.datePlayed &&
+      (!existing.lastPlayed || match.datePlayed > existing.lastPlayed)
+    ) {
+      existing.lastPlayed = match.datePlayed;
+    }
+    if (!existing.opponentName && match.opponentName) {
+      existing.opponentName = match.opponentName;
+    }
+    if (existing.opponentReadableId == null && match.opponentReadableId != null) {
+      existing.opponentReadableId = match.opponentReadableId;
+    }
+    if (!existing.opponentId && match.opponentId) {
+      existing.opponentId = match.opponentId;
+    }
+  }
+
+  let working = [...byOpponent.values()];
+  if (query) {
+    working = working.filter((row) => {
+      const haystack = [
+        row.opponentName,
+        row.opponentReadableId != null ? String(row.opponentReadableId) : "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }
+
+  working.sort((a, b) => {
+    if (sort === "name") {
+      return a.opponentName.localeCompare(b.opponentName);
+    }
+    if (sort === "losses") {
+      if (b.losses !== a.losses) return b.losses - a.losses;
+    } else if (sort === "played") {
+      if (b.played !== a.played) return b.played - a.played;
+    } else if (sort === "winpct") {
+      const aw = winPctValue(a.wins, a.losses);
+      const bw = winPctValue(b.wins, b.losses);
+      if (bw !== aw) return bw - aw;
+    } else if (b.wins !== a.wins) {
+      return b.wins - a.wins;
+    }
+    if (b.played !== a.played) return b.played - a.played;
+    return a.opponentName.localeCompare(b.opponentName);
+  });
+
+  const total = working.length;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * limit;
+  let pageRows = working.slice(start, start + limit);
+
+  const ratings = await lookupRatingsByReadableIds(
+    pageRows.map((row) => row.opponentReadableId),
+  );
+  pageRows = pageRows.map((row) => {
+    if (row.opponentReadableId == null) return row;
+    const rating = ratings.get(String(row.opponentReadableId));
+    return rating != null ? { ...row, opponentRating: rating } : row;
+  });
+
+  return {
+    opponents: pageRows,
+    total,
+    page: safePage,
+    limit,
+    totalPages,
+    query: (options?.q ?? "").trim(),
+    sort,
+  };
+}
