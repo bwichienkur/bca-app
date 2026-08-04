@@ -5,6 +5,7 @@ import type { PlayerSearchResult } from "@/lib/types";
 import { useViewportAnchor } from "@/lib/use-viewport-anchor";
 import { EmptyState } from "./EmptyState";
 import { PlayerDetail } from "./PlayerDetail";
+import { SearchField } from "./SearchField";
 import { SectionCard } from "./SectionCard";
 
 const MIN_QUERY = 2;
@@ -53,14 +54,7 @@ export function PlayerSearch() {
   const [selectedPlayer, setSelectedPlayer] =
     useState<PlayerSearchResult | null>(null);
   const requestId = useRef(0);
-  const inputRef = useRef<HTMLInputElement>(null);
   const searchAnchor = useViewportAnchor<HTMLDivElement>();
-
-  const updateQuery = (next: string) => {
-    searchAnchor.mark();
-    setQuery(next);
-  };
-
   const markSearchAnchor = searchAnchor.mark;
 
   useEffect(() => {
@@ -132,16 +126,10 @@ export function PlayerSearch() {
     });
   };
 
-  const clearQuery = () => {
-    updateQuery("");
-    inputRef.current?.focus();
-  };
-
   const showResults = searched && !error && players.length > 0;
   const showEmpty = searched && !error && !loading && players.length === 0;
   const showHint =
     query.trim().length > 0 && query.trim().length < MIN_QUERY && !loading;
-  const hasQuery = query.trim().length > 0;
 
   if (selectedPlayer) {
     return (
@@ -179,37 +167,16 @@ export function PlayerSearch() {
         ref={searchAnchor.ref}
         className="sticky top-[5.75rem] z-10 -mx-1 bg-[color-mix(in_srgb,var(--paper)_94%,transparent)] px-1 py-2 backdrop-blur sm:top-[3.75rem]"
       >
-        <label className="relative block w-full max-w-xl">
-          <span className="sr-only">Search players</span>
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(event) => updateQuery(event.target.value)}
-            placeholder="Name or ID…"
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck={false}
-            className={[
-              "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] py-3 text-base text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2",
-              hasQuery ? "pl-4 pr-24" : "px-4 pr-12",
-            ].join(" ")}
-          />
-          {hasQuery && !loading ? (
-            <button
-              type="button"
-              onClick={clearQuery}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)]"
-            >
-              Clear
-            </button>
-          ) : null}
-          {loading ? (
-            <span
-              className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-[var(--line-strong)] border-t-[var(--felt)]"
-              aria-label="Searching"
-            />
-          ) : null}
-        </label>
+        <SearchField
+          value={query}
+          onChange={setQuery}
+          onBeforeChange={markSearchAnchor}
+          label="Search players"
+          placeholder="Name or ID…"
+          size="large"
+          loading={loading}
+          className="max-w-xl"
+        />
       </div>
 
       <div className="min-h-[min(48dvh,22rem)] [overflow-anchor:none]">
