@@ -4,6 +4,7 @@ import { LMS_CACHE_TTL, lmsCacheKey, withLmsCache } from "./lms-cache";
 import {
   gameKey,
   gameWinner,
+  tallyBoardRoundWins,
   type DraftBoardSummary,
   type GameScoreState,
   type ScoringDraft,
@@ -184,6 +185,8 @@ export function summarizeLmsGamesForBoard(
     teamOneScore: number;
     teamTwoScore: number;
     winAdornment?: WinAdornment;
+    teamOneHandicap?: number | null;
+    teamTwoHandicap?: number | null;
   }>,
 ): DraftBoardSummary | null {
   if (games.length === 0) return null;
@@ -191,7 +194,6 @@ export function summarizeLmsGamesForBoard(
   let teamOneGameWins = 0;
   let teamTwoGameWins = 0;
   let gamesScored = 0;
-  const byRound = new Map<number, { one: number; two: number }>();
 
   for (const game of games) {
     const winner = gameWinner({
@@ -209,33 +211,25 @@ export function summarizeLmsGamesForBoard(
     gamesScored += 1;
     if (winner === 1) teamOneGameWins += 1;
     else teamTwoGameWins += 1;
-    const row = byRound.get(game.round) ?? { one: 0, two: 0 };
-    if (winner === 1) row.one += 1;
-    else row.two += 1;
-    byRound.set(game.round, row);
   }
 
   if (gamesScored === 0) return null;
 
-  let teamOneRoundWins = 0;
-  let teamTwoRoundWins = 0;
-  let roundsStarted = 0;
-  for (const row of byRound.values()) {
-    roundsStarted += 1;
-    if (row.one === row.two) continue;
-    if (row.one > row.two) teamOneRoundWins += 1;
-    else teamTwoRoundWins += 1;
-  }
+  // Don't use LMS player Fargo values as round HC; points-only + match-points R6.
+  const rounds = tallyBoardRoundWins(games, {
+    includeMatchPointsRound: true,
+    useGameHandicaps: false,
+  });
 
   const now = new Date().toISOString();
   return {
     matchId,
     teamOneGameWins,
     teamTwoGameWins,
-    teamOneRoundWins,
-    teamTwoRoundWins,
+    teamOneRoundWins: rounds.teamOneRoundWins,
+    teamTwoRoundWins: rounds.teamTwoRoundWins,
     gamesScored,
-    roundsStarted,
+    roundsStarted: rounds.roundsStarted,
     updatedAt: now,
     submittedAt: now,
     status: "submitted",
@@ -320,7 +314,7 @@ export async function fetchMatchResultDetail(
   matchId: string,
 ): Promise<LmsMatchResultDetail | null> {
   return withLmsCache(
-    lmsCacheKey("match-result-detail", matchId),
+    lmsCacheKey("match-result-detail-v2", matchId),
     Math.min(LMS_CACHE_TTL.match, 15 * 60),
     async () => {
       const html = await loadMatchResultHtml(matchId);
