@@ -179,16 +179,11 @@ export function ScheduleList({
         <div className="space-y-2.5">
           {visibleMatches.map((item, index) => {
             const { match, day } = item;
-            const status = [
-              item.upcoming ? "Upcoming" : "Played",
+            const isMyMatch = Boolean(
               myTeam &&
-              (normalizeTeamName(match.home) === myTeam ||
-                normalizeTeamName(match.away) === myTeam)
-                ? "Your match"
-                : null,
-            ]
-              .filter(Boolean)
-              .join(" · ");
+                (normalizeTeamName(match.home) === myTeam ||
+                  normalizeTeamName(match.away) === myTeam),
+            );
             return (
               <MatchListCard
                 key={item.key}
@@ -198,8 +193,8 @@ export function ScheduleList({
                 awayName={match.away}
                 meta={formatScheduleDate(day.date)}
                 location={match.location || undefined}
-                status={status}
                 ctaLabel="View"
+                isMyMatch={isMyMatch}
                 emphasizeHome={
                   Boolean(
                     myTeam && normalizeTeamName(match.home) === myTeam,
