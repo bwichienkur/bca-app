@@ -48,7 +48,64 @@ function defaultTopIds(team: DivisionTeam, slots: number): (string | null)[] {
   return Array.from({ length: slots }, (_, index) => top[index]?.id ?? null);
 }
 
-type EditorMode = "library" | "editor";
+function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  );
+}
+
+function EyeIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
+      <circle cx="12" cy="12" r="2.5" />
+    </svg>
+  );
+}
+
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M4 7h16" />
+      <path d="M9 7V5h6v2" />
+      <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  );
+}
+
+type EditorMode = "library" | "viewer" | "editor";
 
 type TeamLineupTemplatesProps = {
   divisionId: string;
@@ -123,6 +180,13 @@ export function TeamLineupTemplates({
       preset.name.trim().toLowerCase() === presetName.trim().toLowerCase(),
   );
 
+  const viewingPlayers = useMemo(() => {
+    return lineupIds.map((id) => {
+      if (!id) return null;
+      return team.players.find((player) => player.id === id) ?? null;
+    });
+  }, [lineupIds, team.players]);
+
   const onChange = (index: number, playerId: string | null) => {
     setLineupIds((current) => {
       const next = [...current];
@@ -162,10 +226,15 @@ export function TeamLineupTemplates({
     setMode("editor");
   };
 
-  const openPreset = (preset: LineupPreset) => {
+  const viewPreset = (preset: LineupPreset) => {
     setLineupIds(idsFromPreset(team, preset, slots));
     setPresetName(preset.name);
     setEditingId(preset.id);
+    setStatus(null);
+    setMode("viewer");
+  };
+
+  const editCurrent = () => {
     setStatus(null);
     setMode("editor");
   };
@@ -205,7 +274,7 @@ export function TeamLineupTemplates({
         setPresetName(name);
         setEditingId(nextId);
         setStatus(null);
-        setMode("library");
+        setMode("viewer");
       })
       .catch(() => setStatus("Couldn't save lineup."));
   };
@@ -239,12 +308,12 @@ export function TeamLineupTemplates({
       title="Lineups"
       description={`Save ${slots}-player orders for league night. Load them from Handicap or Score.`}
       badge={
-        mode === "editor"
-          ? { label: "Filled", value: `${filled}/${slots}` }
-          : {
+        mode === "library"
+          ? {
               label: "Saved",
               value: loading ? "—" : String(teamPresets.length),
             }
+          : { label: "Filled", value: `${filled}/${slots}` }
       }
     />
   );
@@ -255,9 +324,10 @@ export function TeamLineupTemplates({
         <button
           type="button"
           onClick={openNew}
-          className="rounded-full bg-[var(--felt)] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--felt-soft)]"
+          className="inline-flex items-center gap-1.5 rounded-[var(--radius)] bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--felt-soft)]"
         >
-          New lineup
+          <PlusIcon className="h-3.5 w-3.5" />
+          Add
         </button>
       </div>
 
@@ -273,14 +343,15 @@ export function TeamLineupTemplates({
             <button
               type="button"
               onClick={openNew}
-              className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+              className="inline-flex items-center gap-1.5 rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
             >
-              Create lineup
+              <PlusIcon className="h-4 w-4" />
+              Add
             </button>
           }
         />
       ) : (
-        <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        <ul className="space-y-2.5">
           {teamPresets.map((preset) => {
             const names = idsFromPreset(team, preset, slots)
               .map((id) => {
@@ -290,12 +361,15 @@ export function TeamLineupTemplates({
               })
               .join(" · ");
             return (
-              <li key={preset.id} className="px-3 py-3 sm:px-4">
-                <div className="flex items-start justify-between gap-2">
+              <li
+                key={preset.id}
+                className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-3 shadow-[var(--shadow)] sm:px-4"
+              >
+                <div className="flex items-start justify-between gap-3">
                   <button
                     type="button"
-                    onClick={() => openPreset(preset)}
-                    className="min-w-0 flex-1 rounded-lg text-left transition hover:opacity-90"
+                    onClick={() => viewPreset(preset)}
+                    className="min-w-0 flex-1 rounded-[var(--radius)] text-left transition hover:opacity-90"
                   >
                     <p className="truncate font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)]">
                       {preset.name}
@@ -304,20 +378,24 @@ export function TeamLineupTemplates({
                       {names}
                     </p>
                   </button>
-                  <div className="flex shrink-0 items-center gap-1.5">
+                  <div className="flex shrink-0 flex-col gap-1.5">
                     <button
                       type="button"
-                      onClick={() => openPreset(preset)}
-                      className="rounded-full bg-[var(--felt)] px-3 py-1.5 text-[11px] font-semibold text-white"
+                      onClick={() => viewPreset(preset)}
+                      aria-label={`View ${preset.name}`}
+                      title="View lineup"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] text-white transition hover:bg-[var(--felt-soft)]"
                     >
-                      Open
+                      <EyeIcon className="h-4 w-4" />
                     </button>
                     <button
                       type="button"
                       onClick={() => deletePreset(preset)}
-                      className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[11px] font-semibold text-[var(--danger)]"
+                      aria-label={`Delete ${preset.name}`}
+                      title="Delete lineup"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] text-[var(--danger)] transition hover:border-[var(--line-strong)]"
                     >
-                      Delete
+                      <TrashIcon className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
@@ -329,15 +407,94 @@ export function TeamLineupTemplates({
     </div>
   );
 
+  const viewer = (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={backToLibrary}
+          className="inline-flex items-center gap-1.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
+        >
+          <span aria-hidden>←</span>
+          Saved lineups
+        </button>
+        <button
+          type="button"
+          onClick={editCurrent}
+          className="rounded-[var(--radius)] bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--felt-soft)]"
+        >
+          Edit
+        </button>
+      </div>
+
+      <section className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        <div className="flex items-center justify-between gap-2 border-b border-[var(--line)] px-3 py-3 sm:px-4">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+              Lineup
+            </p>
+            <p className="mt-0.5 truncate font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)]">
+              {presetName}
+            </p>
+          </div>
+          <span
+            className={[
+              "shrink-0 rounded-[var(--radius)] px-2.5 py-1 text-xs font-semibold",
+              complete
+                ? "bg-[var(--felt)] text-white"
+                : "bg-[var(--surface-2)] text-[var(--muted)]",
+            ].join(" ")}
+          >
+            {filled}/{slots}
+          </span>
+        </div>
+
+        <ol className="divide-y divide-[var(--line)]">
+          {viewingPlayers.map((player, index) => (
+            <li
+              key={`${editingId ?? "lineup"}-${index}`}
+              className="flex items-center gap-3 px-3 py-3 sm:px-4"
+            >
+              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius)] bg-[var(--surface-2)] text-xs font-semibold text-[var(--muted)]">
+                {index + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-[var(--ink)]">
+                  {player ? playerLabel(player) : "Empty slot"}
+                </p>
+                {player ? (
+                  <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                    Fargo {player.fargoRating}
+                  </p>
+                ) : (
+                  <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                    No player assigned
+                  </p>
+                )}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
+    </div>
+  );
+
   const editor = (
     <div className="space-y-3">
       <button
         type="button"
-        onClick={backToLibrary}
-        className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
+        onClick={() => {
+          if (editingId) {
+            setMode("viewer");
+            setStatus(null);
+            return;
+          }
+          backToLibrary();
+        }}
+        className="inline-flex items-center gap-1.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
       >
         <span aria-hidden>←</span>
-        Saved lineups
+        {editingId ? "View lineup" : "Saved lineups"}
       </button>
 
       <section className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
@@ -348,7 +505,7 @@ export function TeamLineupTemplates({
             </p>
             <span
               className={[
-                "rounded-full px-2.5 py-1 text-xs font-semibold",
+                "rounded-[var(--radius)] px-2.5 py-1 text-xs font-semibold",
                 complete
                   ? "bg-[var(--felt)] text-white"
                   : "bg-[var(--surface-2)] text-[var(--muted)]",
@@ -371,7 +528,7 @@ export function TeamLineupTemplates({
               type="button"
               disabled={!complete}
               onClick={savePreset}
-              className="rounded-full bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--felt-soft)] disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--felt-soft)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {isUpdate ? "Update" : "Save"}
             </button>
@@ -410,7 +567,7 @@ export function TeamLineupTemplates({
           </p>
         </div>
       )}
-      {mode === "library" ? library : editor}
+      {mode === "library" ? library : mode === "viewer" ? viewer : editor}
     </section>
   );
 }
