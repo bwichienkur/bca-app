@@ -4,6 +4,7 @@ import {
   requireScoringSession,
 } from "@/lib/scoring-auth";
 import {
+  deleteTournament,
   getTournamentDetail,
   tournamentStoreMode,
   updateTournament,
@@ -125,6 +126,35 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to update event.";
+    const status = message.includes("Sign in")
+      ? 401
+      : message.includes("Organizer")
+        ? 403
+        : 502;
+    return NextResponse.json({ error: message }, { status });
+  }
+}
+
+export async function DELETE(_request: NextRequest, context: RouteContext) {
+  try {
+    const session = await requireScoringSession();
+    const { id } = await context.params;
+    const detail = await getTournamentDetail(id);
+    if (!detail) {
+      return NextResponse.json({ error: "Event not found." }, { status: 404 });
+    }
+    if (detail.tournament.organizerUserId !== session.lmsId) {
+      return NextResponse.json({ error: "Organizer only." }, { status: 403 });
+    }
+
+    const removed = await deleteTournament(id);
+    if (!removed) {
+      return NextResponse.json({ error: "Event not found." }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, store: tournamentStoreMode() });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to remove event.";
     const status = message.includes("Sign in")
       ? 401
       : message.includes("Organizer")

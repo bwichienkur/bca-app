@@ -213,6 +213,33 @@ export async function updateTournament(
   return saveTournament(next);
 }
 
+/** Permanently remove an event and its registrations, messages, and calcutta. */
+export async function deleteTournament(id: string): Promise<boolean> {
+  const existing = await getTournament(id);
+  if (!existing) return false;
+
+  const redis = getRedis();
+  if (redis) {
+    try {
+      await redis.del(
+        tournamentKey(id),
+        regsKey(id),
+        messagesKey(id),
+        calcuttaKey(id),
+      );
+      await redis.srem(INDEX_KEY, id);
+    } catch {
+      /* fall through to memory cleanup */
+    }
+  }
+
+  memory().tournaments.delete(id);
+  memory().registrations.delete(id);
+  memory().messages.delete(id);
+  memory().calcuttas.delete(id);
+  return true;
+}
+
 function normalizeRegistration(
   raw: TournamentRegistration,
 ): TournamentRegistration {

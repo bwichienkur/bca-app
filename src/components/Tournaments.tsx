@@ -426,6 +426,7 @@ export function Tournaments({
   const [form, setForm] = useState<EventFormState>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [regNote, setRegNote] = useState("");
   const [teamName, setTeamName] = useState("");
@@ -520,6 +521,7 @@ export function Tournaments({
     setView("detail");
     setDetailLoading(true);
     setActionMsg(null);
+    setConfirmRemove(false);
     setError(null);
     setRegNote("");
     setTeamName("");
@@ -800,6 +802,27 @@ export function Tournaments({
     } catch (err) {
       setActionMsg(
         err instanceof Error ? err.message : "Could not update event.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeTournament = async (id: string) => {
+    setSaving(true);
+    setActionMsg(null);
+    try {
+      const res = await fetch(`/api/tournaments/${id}`, { method: "DELETE" });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Could not remove event.");
+      setConfirmRemove(false);
+      setDetail(null);
+      setSelectedId(null);
+      setView("browse");
+      await loadEvents();
+    } catch (err) {
+      setActionMsg(
+        err instanceof Error ? err.message : "Could not remove event.",
       );
     } finally {
       setSaving(false);
@@ -1759,7 +1782,10 @@ export function Tournaments({
                       role="tab"
                       aria-selected={selected}
                       onClick={() =>
-                        startDetailTransition(() => setDetailSubTab(item.id))
+                        startDetailTransition(() => {
+                          if (item.id !== "manage") setConfirmRemove(false);
+                          setDetailSubTab(item.id);
+                        })
                       }
                       className={[
                         "rounded-md px-0.5 py-1.5 text-center text-[10px] font-semibold leading-tight transition sm:px-1.5 sm:text-xs",
@@ -2352,7 +2378,7 @@ export function Tournaments({
                 <SectionCard
                   eyebrow="Organizer"
                   title="Manage"
-                  description="Edit the flyer, close registration, or review messages."
+                  description="Edit the flyer, close registration, remove the event, or review messages."
                 />
                 <SurfaceCard>
                   <div className="flex flex-wrap gap-2 p-3 sm:p-4">
@@ -2394,7 +2420,48 @@ export function Tournaments({
                         Reopen registration
                       </button>
                     ) : null}
+                    {!confirmRemove ? (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => {
+                          setActionMsg(null);
+                          setConfirmRemove(true);
+                        }}
+                        className="rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-semibold text-[var(--danger)] disabled:opacity-50"
+                      >
+                        Remove event
+                      </button>
+                    ) : null}
                   </div>
+                  {confirmRemove ? (
+                    <div className="space-y-3 border-t border-[var(--line)] px-3 py-3 sm:px-4">
+                      <p className="text-sm text-[var(--ink)]">
+                        Remove{" "}
+                        <span className="font-semibold">{t.title}</span>? This
+                        permanently deletes the event, signups, messages, and
+                        Calcutta data. This cannot be undone.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => void removeTournament(t.id)}
+                          className="rounded-full bg-[var(--danger-strong)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                        >
+                          {saving ? "Removing…" : "Yes, remove event"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => setConfirmRemove(false)}
+                          className="rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
+                        >
+                          Keep event
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </SurfaceCard>
 
                 {actionMsg ? (
