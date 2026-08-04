@@ -33,6 +33,17 @@ type MatchListCardProps = {
   showScores?: boolean;
 };
 
+/** Drop LMS schedule prefixes like "(H) " / "(A) ". */
+function displayTeamName(name: string): string {
+  return name.replace(/^\((H|A)\)\s*/i, "").trim();
+}
+
+function formatRank(rank?: string | null): string | null {
+  const trimmed = rank?.trim();
+  if (!trimmed) return null;
+  return `#${trimmed.replace(/^#/, "")}`;
+}
+
 function statusTone(status: MatchBoardStatus): string {
   if (status === "complete") {
     return "bg-black/25 text-white/75 ring-1 ring-white/15";
@@ -164,39 +175,80 @@ function ScoreBox({
   );
 }
 
-function TeamName({
+function TeamRow({
   name,
   side,
   rank,
+  score,
   emphasize,
+  showRank,
+  showScore,
+  scoresMuted,
+  bordered,
 }: {
   name: string;
   side: "Home" | "Away";
   rank?: string | null;
+  score: number;
   emphasize?: boolean;
+  showRank: boolean;
+  showScore: boolean;
+  scoresMuted?: boolean;
+  bordered?: boolean;
 }) {
-  const rankLabel = rank?.trim() ? `#${rank.trim().replace(/^#/, "")}` : null;
+  const rankLabel = formatRank(rank);
   return (
-    <div className="flex min-w-0 items-baseline gap-2">
-      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-        {side}
-      </span>
-      {rankLabel ? (
-        <span className="shrink-0 font-[family-name:var(--font-display)] text-[13px] font-semibold tabular-nums text-[var(--chalk)]">
-          {rankLabel}
-        </span>
-      ) : null}
-      <p
+    <>
+      <div
         className={[
-          "min-w-0 truncate font-[family-name:var(--font-display)] text-[15px] leading-tight",
-          emphasize
-            ? "font-semibold text-[var(--felt-deep)]"
-            : "font-medium text-[var(--ink)]",
+          "flex min-w-0 items-center gap-2 px-3 py-2",
+          bordered ? "border-t border-[var(--line)]" : "",
         ].join(" ")}
       >
-        {name}
-      </p>
-    </div>
+        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+          {side}
+        </span>
+        <p
+          className={[
+            "min-w-0 truncate font-[family-name:var(--font-display)] text-[15px] leading-tight",
+            emphasize
+              ? "font-semibold text-[var(--felt-deep)]"
+              : "font-medium text-[var(--ink)]",
+          ].join(" ")}
+        >
+          {displayTeamName(name)}
+        </p>
+      </div>
+      {showRank ? (
+        <div
+          className={[
+            "flex w-9 items-center justify-end py-2",
+            showScore ? "" : "pr-3",
+            bordered ? "border-t border-[var(--line)]" : "",
+          ].join(" ")}
+        >
+          {rankLabel ? (
+            <span className="font-[family-name:var(--font-display)] text-[13px] font-semibold tabular-nums leading-none text-[var(--chalk)]">
+              {rankLabel}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+      {showScore ? (
+        <div
+          className={[
+            "flex items-center justify-center py-2 pr-3",
+            bordered ? "border-t border-[var(--line)]" : "",
+          ].join(" ")}
+        >
+          <ScoreBox
+            value={score}
+            emphasize={emphasize}
+            muted={scoresMuted}
+          />
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -223,18 +275,31 @@ export function MatchListCard({
   const hasBoard = boardStatus != null;
   const displayScores = showScores ?? hasBoard;
   const scoresMuted = boardStatus === "not_started";
+  const showRanks = Boolean(
+    formatRank(homeRank) || formatRank(awayRank),
+  );
   // Board cards hoist venue to the night header; schedule keeps meta/location.
   const headerMeta = hasBoard
     ? null
     : [meta, location].filter(Boolean).join(" · ") || null;
   const { icon, label } = actionIcon(boardStatus, isMyMatch, ctaLabel);
+  const homeDisplay = displayTeamName(homeName);
+  const awayDisplay = displayTeamName(awayName);
+
+  const bodyCols = [
+    "minmax(0,1fr)",
+    showRanks ? "auto" : null,
+    displayScores ? "auto" : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <button
       type="button"
       onClick={onClick}
       style={style}
-      aria-label={`${label}: ${homeName} vs ${awayName}`}
+      aria-label={`${label}: ${homeDisplay} vs ${awayDisplay}`}
       className={[
         "group block w-full overflow-hidden rounded-[var(--radius)] border text-left transition",
         isMyMatch
@@ -257,7 +322,7 @@ export function MatchListCard({
         <div className="relative flex items-center gap-2 px-3 py-1.5">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
             {isMyMatch ? (
-              <span className="rounded-full bg-white/18 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white ring-1 ring-white/20">
+              <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--felt-soft)]">
                 My match
               </span>
             ) : null}
@@ -286,42 +351,31 @@ export function MatchListCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_auto]">
-        <div className="flex min-w-0 items-center px-3 py-2">
-          <TeamName
-            name={homeName}
-            side="Home"
-            rank={homeRank}
-            emphasize={emphasizeHome}
-          />
-        </div>
-        <div className="flex items-center justify-center py-2 pr-3">
-          {displayScores ? (
-            <ScoreBox
-              value={homeRounds ?? 0}
-              emphasize={emphasizeHome}
-              muted={scoresMuted}
-            />
-          ) : null}
-        </div>
-
-        <div className="flex min-w-0 items-center border-t border-[var(--line)] px-3 py-2">
-          <TeamName
-            name={awayName}
-            side="Away"
-            rank={awayRank}
-            emphasize={emphasizeAway}
-          />
-        </div>
-        <div className="flex items-center justify-center border-t border-[var(--line)] py-2 pr-3">
-          {displayScores ? (
-            <ScoreBox
-              value={awayRounds ?? 0}
-              emphasize={emphasizeAway}
-              muted={scoresMuted}
-            />
-          ) : null}
-        </div>
+      <div
+        className="grid"
+        style={{ gridTemplateColumns: bodyCols }}
+      >
+        <TeamRow
+          name={homeName}
+          side="Home"
+          rank={homeRank}
+          score={homeRounds ?? 0}
+          emphasize={emphasizeHome}
+          showRank={showRanks}
+          showScore={displayScores}
+          scoresMuted={scoresMuted}
+        />
+        <TeamRow
+          name={awayName}
+          side="Away"
+          rank={awayRank}
+          score={awayRounds ?? 0}
+          emphasize={emphasizeAway}
+          showRank={showRanks}
+          showScore={displayScores}
+          scoresMuted={scoresMuted}
+          bordered
+        />
       </div>
 
       {!hasBoard && status ? (
