@@ -1435,6 +1435,19 @@ export function MatchScoring({
   const nightLabel = selectedNightKey
     ? formatMatchDate(`${selectedNightKey}T12:00:00`)
     : null;
+  const nightVenues = [
+    ...new Set(
+      nightMatches
+        .map((item) => item.location?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ];
+  const nightVenue =
+    nightVenues.length === 1
+      ? nightVenues[0]
+      : nightVenues.length > 1
+        ? `${nightVenues.length} venues`
+        : null;
   const liveCount = nightMatches.filter((item) => {
     const summary = mergeBoardSummary(
       draftSummaries[item.id],
@@ -1530,6 +1543,11 @@ export function MatchScoring({
                   "hover:border-[color-mix(in_srgb,var(--felt)_55%,var(--line))] hover:bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]",
                 ].join(" ")}
               />
+              {nightVenue ? (
+                <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--amber)]">
+                  {nightVenue}
+                </p>
+              ) : null}
             </div>
           ) : nightLabel ? (
             <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3.5 py-2.5">
@@ -1540,6 +1558,11 @@ export function MatchScoring({
                 {nightLabel}
                 {selectedNightKey === todayNightKey() ? " · Tonight" : ""}
               </p>
+              {nightVenue ? (
+                <p className="mt-1 truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--amber)]/80">
+                  {nightVenue}
+                </p>
+              ) : null}
             </div>
           ) : null}
 
@@ -1557,16 +1580,6 @@ export function MatchScoring({
                 );
                 const boardStatus = boardStatusFor(item, summary);
                 const isMyMatch = item.mySide != null;
-                const showScores =
-                  boardStatus === "complete" ||
-                  boardStatus === "in_progress" ||
-                  (summary != null && summary.gamesScored > 0);
-                const ctaLabel =
-                  boardStatus === "complete"
-                    ? "View"
-                    : isMyMatch
-                      ? "Score"
-                      : "Open";
                 return (
                   <MatchListCard
                     key={item.id}
@@ -1576,13 +1589,10 @@ export function MatchScoring({
                     }}
                     homeName={item.teamOneName}
                     awayName={item.teamTwoName}
-                    location={item.location || undefined}
                     boardStatus={boardStatus}
                     isMyMatch={isMyMatch}
-                    showScores={showScores}
                     homeRounds={summary?.teamOneRoundWins ?? 0}
                     awayRounds={summary?.teamTwoRoundWins ?? 0}
-                    ctaLabel={ctaLabel}
                     emphasizeHome={item.mySide === 1}
                     emphasizeAway={item.mySide === 2}
                     onClick={() => void openMatch(item.id)}

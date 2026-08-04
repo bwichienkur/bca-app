@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 export type MatchBoardStatus = "not_started" | "in_progress" | "complete";
 
@@ -11,7 +11,10 @@ type MatchListCardProps = {
   meta?: string;
   location?: string;
   status?: string;
-  /** Pill CTA; when omitted, a chevron is shown. */
+  /**
+   * Accessible label for the trailing action control.
+   * Board cards pick an icon from status; schedule cards use a chevron.
+   */
   ctaLabel?: string;
   emphasizeHome?: boolean;
   emphasizeAway?: boolean;
@@ -23,6 +26,7 @@ type MatchListCardProps = {
   isMyMatch?: boolean;
   homeRounds?: number | null;
   awayRounds?: number | null;
+  /** When omitted on board cards, scores always show (including 0–0). */
   showScores?: boolean;
 };
 
@@ -42,27 +46,113 @@ function statusLabel(status: MatchBoardStatus): string {
   return "Not started";
 }
 
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  );
+}
+
+function ScorePadIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M8 8h8" />
+      <path d="M8 12h8" />
+      <path d="M8 16h5" />
+    </svg>
+  );
+}
+
+function EyeIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
+      <circle cx="12" cy="12" r="2.5" />
+    </svg>
+  );
+}
+
+function actionIcon(
+  boardStatus: MatchBoardStatus | undefined,
+  isMyMatch: boolean,
+  ctaLabel: string | undefined,
+): { icon: ReactNode; label: string } {
+  if (boardStatus === "complete") {
+    return {
+      icon: <EyeIcon className="h-4 w-4" />,
+      label: ctaLabel ?? "View",
+    };
+  }
+  if (boardStatus === "in_progress" || (boardStatus != null && isMyMatch)) {
+    return {
+      icon: <ScorePadIcon className="h-4 w-4" />,
+      label: ctaLabel ?? (isMyMatch ? "Score" : "Open"),
+    };
+  }
+  return {
+    icon: <ChevronIcon className="h-4 w-4" />,
+    label: ctaLabel ?? "Open",
+  };
+}
+
 function ScoreBox({
   value,
   emphasize,
+  muted,
 }: {
   value: number;
   emphasize?: boolean;
+  muted?: boolean;
 }) {
   return (
     <div
       className={[
         "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
         "bg-black/25 ring-1",
-        emphasize
-          ? "ring-[color-mix(in_srgb,var(--felt)_60%,white)]"
-          : "ring-white/15",
+        muted
+          ? "ring-white/10 opacity-55"
+          : emphasize
+            ? "ring-[color-mix(in_srgb,var(--felt)_60%,white)]"
+            : "ring-white/15",
       ].join(" ")}
     >
       <span
         className={[
           "font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums leading-none",
-          emphasize ? "text-[var(--felt-deep)]" : "text-[var(--ink)]",
+          muted
+            ? "text-[var(--muted)]"
+            : emphasize
+              ? "text-[var(--felt-deep)]"
+              : "text-[var(--ink)]",
         ].join(" ")}
       >
         {value}
@@ -71,31 +161,24 @@ function ScoreBox({
   );
 }
 
-function TeamRow({
+function TeamName({
   name,
-  score,
   emphasize,
-  showScore,
 }: {
   name: string;
-  score: number;
   emphasize?: boolean;
-  showScore: boolean;
 }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_2.25rem] items-center gap-x-3">
-      <p
-        className={[
-          "min-w-0 truncate font-[family-name:var(--font-display)] text-[15px] leading-tight",
-          emphasize
-            ? "font-semibold text-[var(--felt-deep)]"
-            : "font-medium text-[var(--ink)]",
-        ].join(" ")}
-      >
-        {name}
-      </p>
-      {showScore ? <ScoreBox value={score} emphasize={emphasize} /> : <span />}
-    </div>
+    <p
+      className={[
+        "min-w-0 truncate font-[family-name:var(--font-display)] text-[15px] leading-tight",
+        emphasize
+          ? "font-semibold text-[var(--felt-deep)]"
+          : "font-medium text-[var(--ink)]",
+      ].join(" ")}
+    >
+      {name}
+    </p>
   );
 }
 
@@ -115,81 +198,98 @@ export function MatchListCard({
   isMyMatch = false,
   homeRounds = null,
   awayRounds = null,
-  showScores = false,
+  showScores,
 }: MatchListCardProps) {
-  const metaLine = [meta, location].filter(Boolean).join(" · ");
   const hasBoard = boardStatus != null;
+  const displayScores = showScores ?? hasBoard;
+  const scoresMuted = boardStatus === "not_started";
+  // Board cards hoist venue to the night header; schedule keeps meta/location.
+  const headerMeta = hasBoard
+    ? null
+    : [meta, location].filter(Boolean).join(" · ") || null;
+  const { icon, label } = actionIcon(boardStatus, isMyMatch, ctaLabel);
 
   return (
     <button
       type="button"
       onClick={onClick}
       style={style}
+      aria-label={`${label}: ${homeName} vs ${awayName}`}
       className={[
-        "group block w-full rounded-2xl border text-left transition",
+        "group grid w-full grid-cols-[minmax(0,1fr)_auto] text-left transition",
+        "rounded-2xl border",
         isMyMatch
           ? "border-[color-mix(in_srgb,var(--felt)_70%,var(--line))] bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))]"
           : "border-[var(--line)] bg-[var(--surface)]",
-        "px-3.5 py-2.5",
         "hover:border-[color-mix(in_srgb,var(--felt)_55%,var(--line))] hover:bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--felt-soft)]",
         className ?? "",
       ].join(" ")}
     >
-      <div className="flex min-h-7 items-center gap-2">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-          {isMyMatch ? (
-            <span className="rounded-full bg-[var(--felt)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
-              My match
-            </span>
-          ) : null}
-          {boardStatus ? (
-            <span
-              className={[
-                "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
-                statusTone(boardStatus),
-              ].join(" ")}
-            >
-              {statusLabel(boardStatus)}
-            </span>
-          ) : null}
-          {metaLine ? (
-            <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--amber)]">
-              {metaLine}
-            </p>
-          ) : null}
-        </div>
-        {ctaLabel ? (
-          <span className="inline-flex h-7 shrink-0 items-center justify-center rounded-full bg-[var(--felt)] px-3 text-[11px] font-semibold text-white transition group-hover:bg-[var(--felt-soft)]">
-            {ctaLabel}
+      {/* Header — status chips */}
+      <div className="flex min-h-9 min-w-0 flex-wrap items-center gap-1.5 border-b border-[var(--line)] px-3.5 py-2">
+        {isMyMatch ? (
+          <span className="rounded-full bg-[var(--felt)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
+            My match
           </span>
-        ) : (
+        ) : null}
+        {boardStatus ? (
           <span
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-[var(--amber)] transition group-hover:translate-x-0.5"
-            aria-hidden
+            className={[
+              "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
+              statusTone(boardStatus),
+            ].join(" ")}
           >
-            →
+            {statusLabel(boardStatus)}
           </span>
-        )}
+        ) : null}
+        {headerMeta ? (
+          <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--amber)]">
+            {headerMeta}
+          </p>
+        ) : null}
+      </div>
+      <div className="flex items-center justify-center border-b border-[var(--line)] py-2 pr-3.5">
+        <span
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--felt)] text-white transition group-hover:bg-[var(--felt-soft)]"
+          aria-hidden
+        >
+          {icon}
+        </span>
       </div>
 
-      <div className="mt-2 space-y-1.5">
-        <TeamRow
-          name={homeName}
-          score={homeRounds ?? 0}
-          emphasize={emphasizeHome}
-          showScore={showScores}
-        />
-        <TeamRow
-          name={awayName}
-          score={awayRounds ?? 0}
-          emphasize={emphasizeAway}
-          showScore={showScores}
-        />
+      {/* Home row */}
+      <div className="flex min-w-0 items-center px-3.5 py-2.5">
+        <TeamName name={homeName} emphasize={emphasizeHome} />
+      </div>
+      <div className="flex items-center justify-center py-2.5 pr-3.5">
+        {displayScores ? (
+          <ScoreBox
+            value={homeRounds ?? 0}
+            emphasize={emphasizeHome}
+            muted={scoresMuted}
+          />
+        ) : null}
+      </div>
+
+      {/* Away row */}
+      <div className="flex min-w-0 items-center border-t border-[var(--line)] px-3.5 py-2.5">
+        <TeamName name={awayName} emphasize={emphasizeAway} />
+      </div>
+      <div className="flex items-center justify-center border-t border-[var(--line)] py-2.5 pr-3.5">
+        {displayScores ? (
+          <ScoreBox
+            value={awayRounds ?? 0}
+            emphasize={emphasizeAway}
+            muted={scoresMuted}
+          />
+        ) : null}
       </div>
 
       {!hasBoard && status ? (
-        <p className="mt-1.5 text-xs text-[var(--muted)]">{status}</p>
+        <p className="col-span-2 border-t border-[var(--line)] px-3.5 py-2 text-xs text-[var(--muted)]">
+          {status}
+        </p>
       ) : null}
     </button>
   );
