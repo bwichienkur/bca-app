@@ -28,6 +28,23 @@ function statusClass(status: PlayerSearchResult["robustnessStatus"]): string {
   return "bg-[var(--surface-2)] text-[var(--muted)]";
 }
 
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  );
+}
+
 function pageNumbers(current: number, total: number): (number | "…")[] {
   if (total <= 5) {
     return Array.from({ length: total }, (_, index) => index + 1);
@@ -224,7 +241,7 @@ export function PlayerSearch() {
 
             <ul
               className={[
-                "space-y-2.5 transition-opacity",
+                "space-y-2 transition-opacity",
                 loading ? "opacity-60" : "opacity-100",
               ].join(" ")}
             >
@@ -244,8 +261,9 @@ export function PlayerSearch() {
                         searchAnchor.mark();
                         setSelectedPlayer(player);
                       }}
+                      aria-label={`View stats: ${player.name}`}
                       className={[
-                        "group block w-full overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] text-left shadow-[var(--shadow)] transition",
+                        "group block w-full overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] text-left transition",
                         "hover:border-[color-mix(in_srgb,var(--felt)_55%,var(--line))] hover:bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--felt-soft)]",
                       ].join(" ")}
@@ -259,47 +277,40 @@ export function PlayerSearch() {
                               "radial-gradient(120% 80% at 100% 0%, rgba(224,163,90,0.28), transparent 55%)",
                           }}
                         />
-                        <div className="relative flex min-w-0 items-center justify-between gap-3 px-3 py-3 sm:px-4">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/65">
-                              Player
-                            </p>
-                            <p className="mt-1 truncate font-[family-name:var(--font-display)] text-lg font-semibold leading-tight tracking-tight text-white sm:text-xl">
-                              {player.name}
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 flex-col items-center justify-center rounded-[var(--radius)] bg-black/25 px-3 py-2 text-center ring-1 ring-white/15">
-                            <p className="text-[10px] font-semibold uppercase leading-none tracking-[0.14em] text-white/65">
-                              Rating
-                            </p>
-                            <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl font-semibold tabular-nums leading-none">
-                              {player.effectiveRating ?? "—"}
-                            </p>
-                          </div>
+                        <div className="relative flex min-w-0 items-center gap-2 px-3 py-1.5">
+                          <p className="min-w-0 flex-1 truncate font-[family-name:var(--font-display)] text-base font-semibold leading-tight tracking-tight text-white">
+                            {player.name}
+                          </p>
+                          <p className="shrink-0 font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums leading-none text-white">
+                            {player.effectiveRating ?? "—"}
+                          </p>
+                          <span
+                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-black/25 text-white ring-1 ring-white/15 transition group-hover:bg-black/35"
+                            aria-hidden
+                          >
+                            <ChevronIcon className="h-3.5 w-3.5" />
+                          </span>
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 sm:px-4">
-                        <div className="min-w-0">
-                          {meta ? (
-                            <p className="truncate text-xs text-[var(--muted)]">
-                              {meta}
-                            </p>
-                          ) : null}
-                          <span
-                            className={[
-                              "mt-1.5 inline-flex rounded-[var(--radius)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
-                              statusClass(player.robustnessStatus),
-                            ].join(" ")}
-                          >
-                            {statusLabel(player.robustnessStatus)}
-                            {player.robustness != null
-                              ? ` · ${player.robustness}`
-                              : ""}
-                          </span>
-                        </div>
-                        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)] transition group-hover:text-[var(--felt-deep)]">
-                          View stats →
+                      <div className="flex min-w-0 items-center gap-2 px-3 py-1.5">
+                        {meta ? (
+                          <p className="min-w-0 flex-1 truncate text-[11px] text-[var(--muted)]">
+                            {meta}
+                          </p>
+                        ) : (
+                          <span className="min-w-0 flex-1" />
+                        )}
+                        <span
+                          className={[
+                            "inline-flex shrink-0 rounded-[var(--radius)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
+                            statusClass(player.robustnessStatus),
+                          ].join(" ")}
+                        >
+                          {statusLabel(player.robustnessStatus)}
+                          {player.robustness != null
+                            ? ` · ${player.robustness}`
+                            : ""}
                         </span>
                       </div>
                     </button>
