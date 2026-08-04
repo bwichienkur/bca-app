@@ -84,12 +84,18 @@ export async function GET(request: NextRequest) {
     // match for the player (same as the official BCAPL app). Filter here.
     for (const match of raw) {
       if (match.divisionId && match.divisionId !== divisionId) continue;
-      if (
-        teamId &&
-        match.teamOneId !== teamId &&
-        match.teamTwoId !== teamId
-      ) {
-        continue;
+
+      // mine=1 (default): only matches involving the signed-in player.
+      // Optional teamId further narrows to that team's matches.
+      // mine=0: full division night board; teamId only marks mySide.
+      if (mineOnly) {
+        if (
+          teamId &&
+          match.teamOneId !== teamId &&
+          match.teamTwoId !== teamId
+        ) {
+          continue;
+        }
       }
 
       let mySide: 1 | 2 | null = null;
@@ -109,7 +115,8 @@ export async function GET(request: NextRequest) {
         if (!onOne && !onTwo) continue;
         mySide = onOne ? 1 : 2;
       } else if (teamId) {
-        mySide = match.teamOneId === teamId ? 1 : 2;
+        if (match.teamOneId === teamId) mySide = 1;
+        else if (match.teamTwoId === teamId) mySide = 2;
       }
 
       matches.push({

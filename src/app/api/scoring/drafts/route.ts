@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  getSharedDraftSummaries,
   isDraftStoreConfigured,
   whichSharedDraftsExist,
 } from "@/lib/draft-store";
@@ -7,7 +8,7 @@ import { requireScoringSession } from "@/lib/scoring-auth";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/scoring/drafts?ids=a,b,c — which match ids have a shared draft. */
+/** GET /api/scoring/drafts?ids=a,b,c[&summaries=1] */
 export async function GET(request: NextRequest) {
   try {
     await requireScoringSession();
@@ -17,16 +18,30 @@ export async function GET(request: NextRequest) {
       .map((id) => id.trim())
       .filter(Boolean)
       .slice(0, 80);
+    const wantSummaries =
+      request.nextUrl.searchParams.get("summaries") === "1";
 
     if (!isDraftStoreConfigured()) {
       return NextResponse.json({
         shared: false,
         matchIds: [] as string[],
+        summaries: {},
+      });
+    }
+
+    if (wantSummaries) {
+      const summaries = await getSharedDraftSummaries(ids);
+      return NextResponse.json({
+        shared: true,
+        matchIds: Object.keys(summaries).filter(
+          (id) => summaries[id]?.status === "in_progress",
+        ),
+        summaries,
       });
     }
 
     const matchIds = await whichSharedDraftsExist(ids);
-    return NextResponse.json({ shared: true, matchIds });
+    return NextResponse.json({ shared: true, matchIds, summaries: {} });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to list drafts.";

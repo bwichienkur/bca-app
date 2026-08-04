@@ -254,6 +254,77 @@ export function tallyDraft(draft: ScoringDraft): {
   return { teamOneWins, teamTwoWins, scored, total: games.length };
 }
 
+/**
+ * Board-level round tally from draft game keys (`${round}-${gameIndex}`).
+ * Uses game-win majority per round (no handicap) — good enough for the night board.
+ */
+export function tallyDraftRounds(draft: ScoringDraft): {
+  teamOneRoundWins: number;
+  teamTwoRoundWins: number;
+  roundsStarted: number;
+  roundsDecided: number;
+} {
+  const byRound = new Map<number, { one: number; two: number }>();
+  for (const [key, game] of Object.entries(draft.games)) {
+    const round = Number(key.split("-")[0]);
+    if (!Number.isFinite(round)) continue;
+    const winner = gameWinner(game);
+    if (!winner) continue;
+    const row = byRound.get(round) ?? { one: 0, two: 0 };
+    if (winner === 1) row.one += 1;
+    else row.two += 1;
+    byRound.set(round, row);
+  }
+  let teamOneRoundWins = 0;
+  let teamTwoRoundWins = 0;
+  let roundsDecided = 0;
+  for (const row of byRound.values()) {
+    if (row.one === row.two) continue;
+    roundsDecided += 1;
+    if (row.one > row.two) teamOneRoundWins += 1;
+    else teamTwoRoundWins += 1;
+  }
+  return {
+    teamOneRoundWins,
+    teamTwoRoundWins,
+    roundsStarted: byRound.size,
+    roundsDecided,
+  };
+}
+
+export type DraftBoardSummary = {
+  matchId: string;
+  teamOneGameWins: number;
+  teamTwoGameWins: number;
+  teamOneRoundWins: number;
+  teamTwoRoundWins: number;
+  gamesScored: number;
+  roundsStarted: number;
+  updatedAt: string;
+  submittedAt: string | null;
+  status: "in_progress" | "submitted";
+};
+
+export function summarizeDraftForBoard(
+  draft: ScoringDraft,
+  submittedAt: string | null = null,
+): DraftBoardSummary {
+  const games = tallyDraft(draft);
+  const rounds = tallyDraftRounds(draft);
+  return {
+    matchId: draft.matchId,
+    teamOneGameWins: games.teamOneWins,
+    teamTwoGameWins: games.teamTwoWins,
+    teamOneRoundWins: rounds.teamOneRoundWins,
+    teamTwoRoundWins: rounds.teamTwoRoundWins,
+    gamesScored: games.scored,
+    roundsStarted: rounds.roundsStarted,
+    updatedAt: draft.updatedAt,
+    submittedAt,
+    status: submittedAt ? "submitted" : "in_progress",
+  };
+}
+
 export type RoundPointsTally = {
   roundNumber: number;
   teamOneGamePoints: number;

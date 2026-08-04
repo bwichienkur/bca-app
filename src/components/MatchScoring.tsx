@@ -15,7 +15,7 @@ import { createPortal } from "react-dom";
 import {
   deleteRemoteDraft,
   fetchRemoteDraft,
-  fetchRemoteDraftMatchIds,
+  fetchRemoteDraftSummaries,
   newerDraft,
   pushRemoteDraft,
 } from "@/lib/draft-sync";
@@ -35,10 +35,12 @@ import {
   playerDisplayName,
   RACE_SCORE_OPTIONS,
   saveDraft,
+  summarizeDraftForBoard,
   syncLineupToGames,
   tallyAllRoundPoints,
   tallyDraft,
   tallyMatchPointsRound,
+  type DraftBoardSummary,
   type GameScoreState,
   type RoundPointsTally,
   type ScoringDraft,
@@ -52,11 +54,10 @@ import { LoadingState } from "./LoadingState";
 import type { AuthUser } from "./LoginScreen";
 import { DraggableLineupList } from "./DraggableLineupList";
 import { LoadLineupMenu } from "./LoadLineupMenu";
-import { MatchListCard } from "./MatchListCard";
+import { MatchListCard, type MatchBoardStatus } from "./MatchListCard";
 import { SectionCard } from "./SectionCard";
 import { loadTeamLineupPresets } from "@/lib/lineup-sync";
 import type { LineupPreset } from "@/lib/types";
-import { normalizeTeamName } from "@/lib/matchups";
 
 type MatchScoringProps = {
   divisionId: string | null;
@@ -95,6 +96,62 @@ function formatMatchDate(value: string): string {
     month: "short",
     day: "numeric",
   });
+}
+
+/** Local YYYY-MM-DD for grouping a division night. */
+function matchNightKey(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value.slice(0, 10) || value;
+  }
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function todayNightKey(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function pickDefaultNightKey(keys: string[]): string | null {
+  if (keys.length === 0) return null;
+  const sorted = [...keys].sort();
+  const today = todayNightKey();
+  if (sorted.includes(today)) return today;
+  const upcoming = sorted.find((key) => key >= today);
+  if (upcoming) return upcoming;
+  return sorted[sorted.length - 1] ?? null;
+}
+
+function mergeBoardSummary(
+  remote: DraftBoardSummary | undefined,
+  local: ScoringDraft | null,
+): DraftBoardSummary | null {
+  if (!local && !remote) return null;
+  if (!local) return remote ?? null;
+  const fromLocal = summarizeDraftForBoard(local, null);
+  if (!remote) return fromLocal;
+  if (remote.submittedAt) return remote;
+  const localTs = Date.parse(fromLocal.updatedAt);
+  const remoteTs = Date.parse(remote.updatedAt);
+  if (Number.isNaN(localTs)) return remote;
+  if (Number.isNaN(remoteTs) || localTs >= remoteTs) return fromLocal;
+  return remote;
+}
+
+function boardStatusFor(
+  match: ScoringMatchSummary,
+  summary: DraftBoardSummary | null,
+): MatchBoardStatus {
+  if (match.hasBeenPlayed || summary?.submittedAt) return "complete";
+  if (summary && summary.gamesScored > 0) return "in_progress";
+  if (summary?.status === "in_progress") return "in_progress";
+  return "not_started";
 }
 
 function scoreLabel(game: GameScoreState | undefined): string {
@@ -148,7 +205,10 @@ export function MatchScoring({
   const [submitting, setSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [submitNeedsReview, setSubmitNeedsReview] = useState(false);
-  const [draftMatchIds, setDraftMatchIds] = useState<Set<string>>(new Set());
+  const [draftSummaries, setDraftSummaries] = useState<
+    Record<string, DraftBoardSummary>
+  >({});
+  const [selectedNightKey, setSelectedNightKey] = useState<string | null>(null);
   const [sharedDrafts, setSharedDrafts] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [syncNote, setSyncNote] = useState<string | null>(null);
@@ -165,6 +225,15 @@ export function MatchScoring({
   const draftRef = useRef<ScoringDraft | null>(null);
   const pushSeqRef = useRef(0);
   const sheetLockedRef = useRef(false);
+
+  const matchesUrl = (divId: string, selectedTeamId: string | null) => {
+    const params = new URLSearchParams({
+      divisionId: divId,
+      mine: "0",
+    });
+    if (selectedTeamId) params.set("teamId", selectedTeamId);
+    return `/api/scoring/matches?${params.toString()}`;
+  };
 
   useEffect(() => {
     draftRef.current = draft;
@@ -224,6 +293,8 @@ export function MatchScoring({
   useEffect(() => {
     if (!user || !divisionId) {
       setMatches([]);
+      setDraftSummaries({});
+      setSelectedNightKey(null);
       return;
     }
     let cancelled = false;
@@ -231,31 +302,21 @@ export function MatchScoring({
       setLoadingMatches(true);
       setListError(null);
       try {
-        const params = new URLSearchParams({
-          divisionId: divisionId!,
-        });
-        if (teamId) params.set("teamId", teamId);
         const data = await fetchJson<{ matches: ScoringMatchSummary[] }>(
-          `/api/scoring/matches?${params.toString()}`,
+          matchesUrl(divisionId!, teamId),
         );
-        if (!cancelled) {
-          setMatches(data.matches);
-          const ids = new Set<string>();
-          for (const item of data.matches) {
-            if (loadDraft(item.id)) ids.add(item.id);
+        if (cancelled) return;
+        setMatches(data.matches);
+        try {
+          const remote = await fetchRemoteDraftSummaries(
+            data.matches.map((item) => item.id),
+          );
+          if (!cancelled) {
+            setSharedDrafts(remote.shared);
+            setDraftSummaries(remote.summaries);
           }
-          try {
-            const remote = await fetchRemoteDraftMatchIds(
-              data.matches.map((item) => item.id),
-            );
-            if (!cancelled) {
-              setSharedDrafts(remote.shared);
-              for (const id of remote.matchIds) ids.add(id);
-            }
-          } catch {
-            // local markers still apply
-          }
-          if (!cancelled) setDraftMatchIds(ids);
+        } catch {
+          // Board still works with LMS status + local drafts.
         }
       } catch (err) {
         if (!cancelled) {
@@ -272,6 +333,64 @@ export function MatchScoring({
       cancelled = true;
     };
   }, [user, divisionId, teamId]);
+
+  const nightKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const match of matches) keys.add(matchNightKey(match.datePlayed));
+    return Array.from(keys).sort();
+  }, [matches]);
+
+  useEffect(() => {
+    if (nightKeys.length === 0) {
+      setSelectedNightKey(null);
+      return;
+    }
+    setSelectedNightKey((current) => {
+      if (current && nightKeys.includes(current)) return current;
+      return pickDefaultNightKey(nightKeys);
+    });
+  }, [nightKeys]);
+
+  const nightMatches = useMemo(() => {
+    if (!selectedNightKey) return [];
+    const rows = matches.filter(
+      (match) => matchNightKey(match.datePlayed) === selectedNightKey,
+    );
+    rows.sort((a, b) => {
+      const aMine = a.mySide != null ? 0 : 1;
+      const bMine = b.mySide != null ? 0 : 1;
+      if (aMine !== bMine) return aMine - bMine;
+      const loc = (a.location || "").localeCompare(b.location || "");
+      if (loc !== 0) return loc;
+      return a.teamOneName.localeCompare(b.teamOneName);
+    });
+    return rows;
+  }, [matches, selectedNightKey]);
+
+  // Live-refresh draft scores while viewing the night board.
+  useEffect(() => {
+    if (!user || view.mode !== "list" || nightMatches.length === 0) return;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const remote = await fetchRemoteDraftSummaries(
+          nightMatches.map((item) => item.id),
+        );
+        if (cancelled) return;
+        setSharedDrafts(remote.shared);
+        setDraftSummaries((prev) => ({ ...prev, ...remote.summaries }));
+      } catch {
+        // keep last known scores
+      }
+    };
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [user, view.mode, nightMatches]);
 
   const openMatch = async (matchId: string) => {
     setLoadingMatch(true);
@@ -328,7 +447,10 @@ export function MatchScoring({
             }
           })
           .catch(() => undefined);
-        setDraftMatchIds((prev) => new Set(prev).add(matchId));
+        setDraftSummaries((prev) => ({
+          ...prev,
+          [matchId]: summarizeDraftForBoard(nextDraft, null),
+        }));
       }
     } catch (err) {
       setListError(
@@ -569,17 +691,26 @@ export function MatchScoring({
         setView({ mode: "list" });
         setMatch(null);
         setDraft(null);
-        setDraftMatchIds((prev) => {
-          const next = new Set(prev);
-          next.delete(match.id);
+        setDraftSummaries((prev) => {
+          const next = { ...prev };
+          delete next[match.id];
           return next;
         });
-        // refresh list
+        // refresh night board
         if (divisionId) {
           const data = await fetchJson<{ matches: ScoringMatchSummary[] }>(
-            `/api/scoring/matches?divisionId=${encodeURIComponent(divisionId)}`,
+            matchesUrl(divisionId, teamId),
           );
           setMatches(data.matches);
+          try {
+            const remote = await fetchRemoteDraftSummaries(
+              data.matches.map((item) => item.id),
+            );
+            setSharedDrafts(remote.shared);
+            setDraftSummaries(remote.summaries);
+          } catch {
+            // list still refreshed from LMS
+          }
         }
       } else {
         setSubmitNeedsReview(true);
@@ -603,7 +734,7 @@ export function MatchScoring({
     return (
       <EmptyState
         title="Sign in to score"
-        body="Use Login at the top of the page with your BCA / FargoRate account. Scoring submits to LMS and only lists matches for your selected team."
+        body="Use Login at the top of the page with your BCA / FargoRate account. Scoring submits to LMS and shows live scores for your division night."
         action={
           <button
             type="button"
@@ -629,24 +760,6 @@ export function MatchScoring({
             className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
           >
             Choose division
-          </button>
-        }
-      />
-    );
-  }
-
-  if (!teamId) {
-    return (
-      <EmptyState
-        title="Set My team to score"
-        body="Score only lists matches for your selected team."
-        action={
-          <button
-            type="button"
-            onClick={onRequestContext}
-            className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
-          >
-            Set my team
           </button>
         }
       />
@@ -1262,29 +1375,47 @@ export function MatchScoring({
     );
   }
 
+  const nightLabel = selectedNightKey
+    ? formatMatchDate(`${selectedNightKey}T12:00:00`)
+    : null;
+  const liveCount = nightMatches.filter((item) => {
+    const summary = mergeBoardSummary(
+      draftSummaries[item.id],
+      loadDraft(item.id),
+    );
+    return boardStatusFor(item, summary) === "in_progress";
+  }).length;
+
   return (
     <section className="animate-rise space-y-3">
       <SectionCard
         eyebrow="Score"
-        title="Scoresheets"
+        title="Night board"
         description={
           <>
+            Live scores for every match in{" "}
+            {divisionName ? (
+              <span className="font-medium text-white">{divisionName}</span>
+            ) : (
+              "your division"
+            )}
             {teamName ? (
               <>
-                Open a match to score for{" "}
+                {" "}
+                · your team{" "}
                 <span className="font-medium text-white">{teamName}</span>
               </>
-            ) : (
-              "Open a match to score"
-            )}
-            {divisionName ? <> · {divisionName}</> : null}
-            {sharedDrafts ? " · multi-device draft sync on" : null}
+            ) : null}
+            {sharedDrafts ? " · live sync on" : null}
           </>
         }
         badge={
           loadingMatches
             ? undefined
-            : { label: "Matches", value: String(matches.length) }
+            : {
+                label: liveCount > 0 ? "Live" : "Matches",
+                value: String(nightMatches.length),
+              }
         }
       />
 
@@ -1299,60 +1430,111 @@ export function MatchScoring({
         </p>
       ) : null}
 
+      {!teamId ? (
+        <p className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--muted)]">
+          Set your team in context to highlight which match is yours.{" "}
+          <button
+            type="button"
+            onClick={onRequestContext}
+            className="font-semibold text-[var(--felt-deep)] underline-offset-2 hover:underline"
+          >
+            Set My team
+          </button>
+        </p>
+      ) : null}
+
       {loadingMatches ? (
-        <LoadingState label="Loading your matches…" />
+        <LoadingState label="Loading night board…" />
       ) : matches.length === 0 ? (
         <EmptyState
-          title={
-            teamName
-              ? `No matches for ${teamName}`
-              : "No matches for your team"
-          }
-          body="When this team is scheduled in the selected division, those matches will show up here ready to score."
+          title="No matches in this division"
+          body="When the division schedule is available, every match that night will show here with live round scores."
         />
       ) : (
-        <div className="space-y-2.5">
-          {matches.map((item, index) => {
-            const draftExists = draftMatchIds.has(item.id);
-            const myTeamKey = teamName ? normalizeTeamName(teamName) : null;
-            const status = [
-              item.hasBeenPlayed
-                ? "Submitted on LMS"
-                : draftExists
-                  ? "Draft in progress"
-                  : "Ready to score",
-              item.mySide ? "Your match" : null,
-            ]
-              .filter(Boolean)
-              .join(" · ");
-            return (
-              <MatchListCard
-                key={item.id}
-                className="animate-rise"
-                style={{ animationDelay: `${Math.min(index, 6) * 0.04}s` }}
-                homeName={item.teamOneName}
-                awayName={item.teamTwoName}
-                meta={formatMatchDate(item.datePlayed)}
-                location={item.location || undefined}
-                status={status}
-                ctaLabel={item.hasBeenPlayed ? "View" : "Score"}
-                emphasizeHome={
-                  Boolean(
-                    myTeamKey &&
-                      normalizeTeamName(item.teamOneName) === myTeamKey,
-                  )
-                }
-                emphasizeAway={
-                  Boolean(
-                    myTeamKey &&
-                      normalizeTeamName(item.teamTwoName) === myTeamKey,
-                  )
-                }
-                onClick={() => void openMatch(item.id)}
-              />
-            );
-          })}
-        </div>
+        <>
+          {nightKeys.length > 1 ? (
+            <label className="block space-y-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                Match night
+              </span>
+              <select
+                value={selectedNightKey ?? ""}
+                onChange={(event) => setSelectedNightKey(event.target.value)}
+                className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--ink)]"
+              >
+                {nightKeys.map((key) => (
+                  <option key={key} value={key}>
+                    {formatMatchDate(`${key}T12:00:00`)}
+                    {key === todayNightKey() ? " · Tonight" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : nightLabel ? (
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--amber)]">
+              {nightLabel}
+              {selectedNightKey === todayNightKey() ? " · Tonight" : ""}
+            </p>
+          ) : null}
+
+          {nightMatches.length === 0 ? (
+            <EmptyState
+              title="No matches this night"
+              body="Pick another night above, or check back when the schedule posts."
+            />
+          ) : (
+            <div className="space-y-2.5">
+              {nightMatches.map((item, index) => {
+                const summary = mergeBoardSummary(
+                  draftSummaries[item.id],
+                  loadDraft(item.id),
+                );
+                const boardStatus = boardStatusFor(item, summary);
+                const isMyMatch = item.mySide != null;
+                const showScores =
+                  boardStatus !== "not_started" ||
+                  (summary != null && summary.gamesScored > 0);
+                const ctaLabel =
+                  boardStatus === "complete"
+                    ? "View"
+                    : isMyMatch
+                      ? "Score"
+                      : "Open";
+                return (
+                  <MatchListCard
+                    key={item.id}
+                    className="animate-rise"
+                    style={{
+                      animationDelay: `${Math.min(index, 6) * 0.04}s`,
+                    }}
+                    homeName={item.teamOneName}
+                    awayName={item.teamTwoName}
+                    location={item.location || undefined}
+                    boardStatus={boardStatus}
+                    isMyMatch={isMyMatch}
+                    showScores={showScores}
+                    homeRounds={
+                      summary ? summary.teamOneRoundWins : null
+                    }
+                    awayRounds={
+                      summary ? summary.teamTwoRoundWins : null
+                    }
+                    homeGames={
+                      summary ? summary.teamOneGameWins : null
+                    }
+                    awayGames={
+                      summary ? summary.teamTwoGameWins : null
+                    }
+                    ctaLabel={ctaLabel}
+                    emphasizeHome={item.mySide === 1}
+                    emphasizeAway={item.mySide === 2}
+                    onClick={() => void openMatch(item.id)}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
     </section>
   );
