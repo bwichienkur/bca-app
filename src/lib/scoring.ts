@@ -254,9 +254,183 @@ export function tallyDraft(draft: ScoringDraft): {
   return { teamOneWins, teamTwoWins, scored, total: games.length };
 }
 
+type BoardRoundGame = {
+  round: number;
+  teamOneScore: number;
+  teamTwoScore: number;
+  winAdornment?: WinAdornment;
+  teamOneHandicap?: number | null;
+  teamTwoHandicap?: number | null;
+};
+
+export type BoardRoundTallyOptions = {
+  /** Include overall match-points round (R6). Default true. */
+  includeMatchPointsRound?: boolean;
+  maxScore?: number;
+  maxLosingScore?: number;
+  /**
+   * Use per-game handicap fields as round HC.
+   * Disable for LMS-hydrated drafts where those fields may be Fargo ratings.
+   */
+  useGameHandicaps?: boolean;
+};
+
+function plausibleRoundHandicap(value: number | null | undefined): number {
+  if (value == null || !Number.isFinite(value)) return 0;
+  // Round HC is capped (typically ≤ 50). Fargo ratings are much larger.
+  if (value < 0 || value > 50) return 0;
+  return value;
+}
+
+/**
+ * Board-level round tally from scored games.
+ * Uses points + round HC with the same clinch rules as the scoresheet, and
+ * optionally awards the final match-points round (R6).
+ */
+export function tallyBoardRoundWins(
+  games: BoardRoundGame[],
+  options: BoardRoundTallyOptions = {},
+): {
+  teamOneRoundWins: number;
+  teamTwoRoundWins: number;
+  roundsStarted: number;
+  roundsDecided: number;
+  matchPointsWinner: 1 | 2 | null;
+} {
+  const includeMatchPoints = options.includeMatchPointsRound !== false;
+  const maxWin =
+    options.maxScore && options.maxScore > 0 ? options.maxScore : 10;
+  const maxLoss =
+    options.maxLosingScore != null && options.maxLosingScore >= 0
+      ? options.maxLosingScore
+      : 7;
+  const useHc = options.useGameHandicaps !== false;
+
+  type RoundAcc = {
+    onePts: number;
+    twoPts: number;
+    oneWins: number;
+    twoWins: number;
+    complete: number;
+    total: number;
+    oneHc: number;
+    twoHc: number;
+  };
+  const byRound = new Map<number, RoundAcc>();
+
+  for (const game of games) {
+    // Skip synthetic match-points round key if present (see MATCH_POINTS_ROUND).
+    if (!Number.isFinite(game.round) || game.round === 6) {
+      continue;
+    }
+    const row = byRound.get(game.round) ?? {
+      onePts: 0,
+      twoPts: 0,
+      oneWins: 0,
+      twoWins: 0,
+      complete: 0,
+      total: 0,
+      oneHc: 0,
+      twoHc: 0,
+    };
+    row.total += 1;
+    row.onePts += game.teamOneScore ?? 0;
+    row.twoPts += game.teamTwoScore ?? 0;
+    if (useHc) {
+      row.oneHc = Math.max(
+        row.oneHc,
+        plausibleRoundHandicap(game.teamOneHandicap),
+      );
+      row.twoHc = Math.max(
+        row.twoHc,
+        plausibleRoundHandicap(game.teamTwoHandicap),
+      );
+    }
+    const winner = gameWinner({
+      teamOnePlayerId: null,
+      teamTwoPlayerId: null,
+      teamOneScore: game.teamOneScore,
+      teamTwoScore: game.teamTwoScore,
+      winAdornment: game.winAdornment ?? "",
+      isWinZip: (game.winAdornment ?? "") === "WZ",
+      breakingTeam: 1,
+      teamOneHandicap: null,
+      teamTwoHandicap: null,
+    }, { maxScore: maxWin, maxLosingScore: maxLoss });
+    if (winner) {
+      row.complete += 1;
+      if (winner === 1) row.oneWins += 1;
+      else row.twoWins += 1;
+    }
+    byRound.set(game.round, row);
+  }
+
+  let teamOneRoundWins = 0;
+  let teamTwoRoundWins = 0;
+  let roundsDecided = 0;
+  let matchOnePts = 0;
+  let matchTwoPts = 0;
+  let matchOneWins = 0;
+  let matchTwoWins = 0;
+  let matchComplete = 0;
+  let matchTotal = 0;
+
+  for (const row of byRound.values()) {
+    const oneTotal = row.onePts + row.oneHc;
+    const twoTotal = row.twoPts + row.twoHc;
+    const remaining = Math.max(0, row.total - row.complete);
+    const winner = clinchRoundWinner({
+      teamOnePoints: oneTotal,
+      teamTwoPoints: twoTotal,
+      teamOneGameWins: row.oneWins,
+      teamTwoGameWins: row.twoWins,
+      gamesRemaining: remaining,
+      maxWin,
+      maxLoss,
+    });
+    if (winner === 1) {
+      teamOneRoundWins += 1;
+      roundsDecided += 1;
+    } else if (winner === 2) {
+      teamTwoRoundWins += 1;
+      roundsDecided += 1;
+    }
+    matchOnePts += oneTotal;
+    matchTwoPts += twoTotal;
+    matchOneWins += row.oneWins;
+    matchTwoWins += row.twoWins;
+    matchComplete += row.complete;
+    matchTotal += row.total;
+  }
+
+  let matchPointsWinner: 1 | 2 | null = null;
+  if (includeMatchPoints && matchTotal > 0) {
+    matchPointsWinner = clinchRoundWinner({
+      teamOnePoints: matchOnePts,
+      teamTwoPoints: matchTwoPts,
+      teamOneGameWins: matchOneWins,
+      teamTwoGameWins: matchTwoWins,
+      gamesRemaining: Math.max(0, matchTotal - matchComplete),
+      maxWin,
+      maxLoss,
+    });
+    if (matchPointsWinner === 1) teamOneRoundWins += 1;
+    if (matchPointsWinner === 2) teamTwoRoundWins += 1;
+    if (matchPointsWinner) roundsDecided += 1;
+  }
+
+  return {
+    teamOneRoundWins,
+    teamTwoRoundWins,
+    roundsStarted: byRound.size + (matchPointsWinner ? 1 : 0),
+    roundsDecided,
+    matchPointsWinner,
+  };
+}
+
 /**
  * Board-level round tally from draft game keys (`${round}-${gameIndex}`).
- * Uses game-win majority per round (no handicap) — good enough for the night board.
+ * Includes the final match-points round when decided.
  */
 export function tallyDraftRounds(draft: ScoringDraft): {
   teamOneRoundWins: number;
@@ -264,32 +438,20 @@ export function tallyDraftRounds(draft: ScoringDraft): {
   roundsStarted: number;
   roundsDecided: number;
 } {
-  const byRound = new Map<number, { one: number; two: number }>();
+  const games: BoardRoundGame[] = [];
   for (const [key, game] of Object.entries(draft.games)) {
     const round = Number(key.split("-")[0]);
     if (!Number.isFinite(round)) continue;
-    const winner = gameWinner(game);
-    if (!winner) continue;
-    const row = byRound.get(round) ?? { one: 0, two: 0 };
-    if (winner === 1) row.one += 1;
-    else row.two += 1;
-    byRound.set(round, row);
+    games.push({
+      round,
+      teamOneScore: game.teamOneScore ?? 0,
+      teamTwoScore: game.teamTwoScore ?? 0,
+      winAdornment: game.winAdornment,
+      teamOneHandicap: game.teamOneHandicap,
+      teamTwoHandicap: game.teamTwoHandicap,
+    });
   }
-  let teamOneRoundWins = 0;
-  let teamTwoRoundWins = 0;
-  let roundsDecided = 0;
-  for (const row of byRound.values()) {
-    if (row.one === row.two) continue;
-    roundsDecided += 1;
-    if (row.one > row.two) teamOneRoundWins += 1;
-    else teamTwoRoundWins += 1;
-  }
-  return {
-    teamOneRoundWins,
-    teamTwoRoundWins,
-    roundsStarted: byRound.size,
-    roundsDecided,
-  };
+  return tallyBoardRoundWins(games, { useGameHandicaps: true });
 }
 
 export type DraftBoardSummary = {
