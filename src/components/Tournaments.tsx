@@ -49,9 +49,10 @@ import { PlayerDetail } from "./PlayerDetail";
 import { SearchField } from "./SearchField";
 import { SectionCard } from "./SectionCard";
 import { SelectField } from "./SelectField";
+import { TournamentCalcuttaPanel } from "./TournamentCalcutta";
 
 type View = "browse" | "create" | "edit" | "detail";
-type DetailSubTab = "overview" | "signups" | "field" | "manage";
+type DetailSubTab = "overview" | "signups" | "field" | "calcutta" | "manage";
 type FieldBoardFilter = "all" | "not-checked-in" | "unpaid";
 
 type EventFormState = Omit<CreateTournamentInput, "status"> & {
@@ -1733,7 +1734,7 @@ export function Tournaments({
               <div
                 role="tablist"
                 aria-label="Event organizer sections"
-                className="grid grid-cols-4 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+                className="grid grid-cols-5 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
               >
                 {(
                   [
@@ -1746,6 +1747,7 @@ export function Tournaments({
                           : "Signups",
                     },
                     { id: "field" as const, label: "Field" },
+                    { id: "calcutta" as const, label: "Calcutta" },
                     { id: "manage" as const, label: "Manage" },
                   ] as const
                 ).map((item) => {
@@ -1760,7 +1762,7 @@ export function Tournaments({
                         startDetailTransition(() => setDetailSubTab(item.id))
                       }
                       className={[
-                        "rounded-lg px-1.5 py-1.5 text-center text-[11px] font-semibold transition sm:px-2 sm:text-sm",
+                        "rounded-md px-0.5 py-1.5 text-center text-[10px] font-semibold leading-tight transition sm:px-1.5 sm:text-xs",
                         selected
                           ? "bg-[var(--felt)] text-white shadow-sm"
                           : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
@@ -1926,6 +1928,13 @@ export function Tournaments({
                 </SurfaceCard>
 
                 {overviewSignup}
+
+                <TournamentCalcuttaPanel
+                  tournamentId={t.id}
+                  registrations={detail?.registrations ?? []}
+                  isOrganizer={false}
+                  variant="board"
+                />
               </div>
             ) : null}
 
@@ -2327,6 +2336,15 @@ export function Tournaments({
                   </ul>
                 </SurfaceCard>
               </div>
+            ) : null}
+
+            {isOrganizer && activeTab === "calcutta" ? (
+              <TournamentCalcuttaPanel
+                tournamentId={t.id}
+                registrations={detail?.registrations ?? []}
+                isOrganizer
+                variant="manage"
+              />
             ) : null}
 
             {isOrganizer && activeTab === "manage" ? (
