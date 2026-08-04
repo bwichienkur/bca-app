@@ -1232,7 +1232,7 @@ export function LeagueApp() {
                     }
                   }}
                   className={[
-                    "flex flex-col items-center justify-center gap-1 rounded-xl px-1.5 py-2 transition sm:py-2.5",
+                    "flex flex-col items-center justify-center gap-1 rounded-[var(--radius)] px-1.5 py-2 transition sm:py-2.5",
                     active
                       ? "bg-[var(--felt)] text-white shadow-sm"
                       : "bg-[var(--surface)]/80 text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
@@ -1289,7 +1289,7 @@ export function LeagueApp() {
                 <button
                   type="button"
                   onClick={() => setContextOpen(true)}
-                  className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+                  className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
                 >
                   Choose division
                 </button>
@@ -1310,7 +1310,7 @@ export function LeagueApp() {
                 <div
                   role="tablist"
                   aria-label="My team sections"
-                  className="grid grid-cols-3 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+                  className="grid grid-cols-3 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
                 >
                   {(
                     [
@@ -1330,7 +1330,7 @@ export function LeagueApp() {
                           startTransition(() => setMyTeamSubTab(item.id))
                         }
                         className={[
-                          "rounded-lg px-2 py-1.5 text-center text-xs font-semibold transition sm:text-sm",
+                          "rounded-md px-2 py-1.5 text-center text-xs font-semibold transition sm:text-sm",
                           selected
                             ? "bg-[var(--felt)] text-white shadow-sm"
                             : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
@@ -1431,7 +1431,7 @@ export function LeagueApp() {
                   <button
                     type="button"
                     onClick={() => setContextOpen(true)}
-                    className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+                    className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
                   >
                     Set my team
                   </button>
@@ -1548,7 +1548,7 @@ export function LeagueApp() {
                   <button
                     type="button"
                     onClick={() => setContextOpen(true)}
-                    className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+                    className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
                   >
                     Set my team
                   </button>

@@ -299,7 +299,7 @@ export function DateTimeField({
                       type="button"
                       onClick={() => commitDay(cell.day!)}
                       className={[
-                        "h-9 rounded-xl text-sm tabular-nums transition",
+                        "h-9 rounded-[var(--radius)] text-sm tabular-nums transition",
                         selected
                           ? "bg-[var(--felt)] font-semibold text-white"
                           : isToday
@@ -386,7 +386,7 @@ export function DateTimeField({
           setOpen((current) => !current);
         }}
         className={[
-          "flex w-full min-w-0 items-center justify-between gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-left text-sm outline-none transition hover:border-[var(--line-strong)] focus:ring-2 focus:ring-[var(--felt-soft)] disabled:opacity-50",
+          "flex w-full min-w-0 items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-left text-sm outline-none transition hover:border-[var(--line-strong)] focus:ring-2 focus:ring-[var(--felt-soft)] disabled:opacity-50",
           value ? "text-[var(--ink)]" : "text-[var(--muted)]",
         ].join(" ")}
       >

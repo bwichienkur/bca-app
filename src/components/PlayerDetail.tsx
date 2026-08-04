@@ -608,7 +608,7 @@ export function PlayerDetail({
         <div
           role="tablist"
           aria-label="Player detail sections"
-          className="grid w-full grid-cols-4 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+          className="grid w-full grid-cols-4 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
         >
           {SECTIONS.map((item) => {
             const selected = section === item.id;
@@ -622,7 +622,7 @@ export function PlayerDetail({
                   startTransition(() => setSection(item.id))
                 }
                 className={[
-                  "min-w-0 rounded-lg px-1 py-1.5 text-center text-[11px] font-semibold leading-tight transition sm:px-2 sm:text-sm",
+                  "min-w-0 rounded-md px-1 py-1.5 text-center text-[11px] font-semibold leading-tight transition sm:px-2 sm:text-sm",
                   selected
                     ? "bg-[var(--felt)] text-white shadow-sm"
                     : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",

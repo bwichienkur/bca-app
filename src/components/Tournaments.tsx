@@ -72,7 +72,7 @@ type TournamentsProps = {
 };
 
 const fieldClass =
-  "w-full rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]";
+  "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]";
 const labelClass =
   "mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]";
 
@@ -894,7 +894,7 @@ export function Tournaments({
               <button
                 type="button"
                 onClick={onRequestLogin}
-                className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+                className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
               >
                 Sign in
               </button>
@@ -904,7 +904,7 @@ export function Tournaments({
           <SurfaceCard>
             <form onSubmit={onSaveForm} className="space-y-5 p-3 sm:p-4">
               {error ? (
-                <p className="rounded-xl border border-[var(--danger)]/40 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
+                <p className="rounded-[var(--radius)] border border-[var(--danger)]/40 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
                   {error}
                 </p>
               ) : null}
@@ -1266,7 +1266,7 @@ export function Tournaments({
                     <img
                       src={form.thumbnailUrl}
                       alt=""
-                      className="mt-2 h-28 w-full rounded-xl object-cover"
+                      className="mt-2 h-28 w-full rounded-[var(--radius)] object-cover"
                     />
                   ) : null}
                 </div>
@@ -1333,7 +1333,7 @@ export function Tournaments({
     const overviewSignup = t ? (
       <>
         {actionMsg ? (
-          <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
+          <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
             {actionMsg}
           </p>
         ) : null}
@@ -1414,7 +1414,7 @@ export function Tournaments({
                 </button>
               ) : (
                 <>
-                  <div className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)]/60 px-3 py-2.5">
+                  <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/60 px-3 py-2.5">
                     <p className={labelClass}>Your Fargo</p>
                     <p className="text-sm font-semibold text-[var(--ink)]">
                       {fargoLoading
@@ -1655,7 +1655,7 @@ export function Tournaments({
               <div
                 role="tablist"
                 aria-label="Event organizer sections"
-                className="grid grid-cols-4 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+                className="grid grid-cols-4 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
               >
                 {(
                   [
@@ -1824,7 +1824,7 @@ export function Tournaments({
                         ))}
                       </dl>
                       {t.payoutNotes ? (
-                        <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--muted)]">
+                        <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--muted)]">
                           {t.payoutNotes}
                         </p>
                       ) : null}
@@ -1848,7 +1848,7 @@ export function Tournaments({
                   }}
                 />
                 {actionMsg ? (
-                  <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
+                  <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
                     {actionMsg}
                   </p>
                 ) : null}
@@ -1927,7 +1927,7 @@ export function Tournaments({
                                 ) : null}
 
                                 {reg.noteToOrganizer ? (
-                                  <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)]/60 px-3 py-2 text-xs text-[var(--ink)]">
+                                  <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/60 px-3 py-2 text-xs text-[var(--ink)]">
                                     {reg.noteToOrganizer}
                                   </p>
                                 ) : null}
@@ -2112,7 +2112,7 @@ export function Tournaments({
                     <div
                       role="group"
                       aria-label="Field board filters"
-                      className="grid grid-cols-3 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+                      className="grid grid-cols-3 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
                     >
                       {(
                         [
@@ -2131,7 +2131,7 @@ export function Tournaments({
                             type="button"
                             onClick={() => setFieldFilter(item.id)}
                             className={[
-                              "rounded-lg px-2 py-1.5 text-center text-xs font-semibold transition",
+                              "rounded-md px-2 py-1.5 text-center text-xs font-semibold transition",
                               selected
                                 ? "bg-[var(--felt)] text-white shadow-sm"
                                 : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
@@ -2145,7 +2145,7 @@ export function Tournaments({
                   </div>
 
                   {actionMsg ? (
-                    <p className="mx-3 mt-3 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)] sm:mx-4">
+                    <p className="mx-3 mt-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)] sm:mx-4">
                       {actionMsg}
                     </p>
                   ) : null}
@@ -2202,7 +2202,7 @@ export function Tournaments({
                                 })
                               }
                               className={[
-                                "rounded-xl px-3 py-2.5 text-sm font-semibold transition disabled:opacity-50",
+                                "rounded-[var(--radius)] px-3 py-2.5 text-sm font-semibold transition disabled:opacity-50",
                                 reg.checkedIn
                                   ? "bg-[var(--felt)] text-white"
                                   : "border border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)]",
@@ -2219,7 +2219,7 @@ export function Tournaments({
                                 })
                               }
                               className={[
-                                "rounded-xl px-3 py-2.5 text-sm font-semibold transition disabled:opacity-50",
+                                "rounded-[var(--radius)] px-3 py-2.5 text-sm font-semibold transition disabled:opacity-50",
                                 reg.paid
                                   ? "bg-[var(--amber)] text-[#1a140c]"
                                   : "border border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)]",
@@ -2287,7 +2287,7 @@ export function Tournaments({
                 </SurfaceCard>
 
                 {actionMsg ? (
-                  <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
+                  <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
                     {actionMsg}
                   </p>
                 ) : null}
@@ -2338,7 +2338,7 @@ export function Tournaments({
         )}
 
         {error ? (
-          <p className="rounded-xl border border-[var(--danger)]/40 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
+          <p className="rounded-[var(--radius)] border border-[var(--danger)]/40 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
             {error}
           </p>
         ) : null}
@@ -2402,7 +2402,7 @@ export function Tournaments({
               ]}
               onChange={(next) => setGameType(next as GameType | "")}
             />
-            <label className="flex items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)]">
+            <label className="flex items-center gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)]">
               <input
                 type="checkbox"
                 checked={eligibleOnly}
@@ -2432,7 +2432,7 @@ export function Tournaments({
                     setForm(emptyForm());
                     setView("create");
                   }}
-                  className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+                  className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
                 >
                   Create event
                 </button>
@@ -2452,10 +2452,10 @@ export function Tournaments({
                       <img
                         src={event.thumbnailUrl}
                         alt=""
-                        className="h-16 w-16 shrink-0 rounded-xl object-cover"
+                        className="h-16 w-16 shrink-0 rounded-[var(--radius)] object-cover"
                       />
                     ) : (
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(145deg,rgba(29,110,158,0.55),rgba(19,78,115,0.75))] text-xs font-semibold text-white/80">
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[var(--radius)] bg-[linear-gradient(145deg,rgba(29,110,158,0.55),rgba(19,78,115,0.75))] text-xs font-semibold text-white/80">
                         Event
                       </div>
                     )}

@@ -273,7 +273,7 @@ export function TeamLineupTemplates({
             <button
               type="button"
               onClick={openNew}
-              className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+              className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
             >
               Create lineup
             </button>
@@ -365,7 +365,7 @@ export function TeamLineupTemplates({
                 setStatus(null);
               }}
               placeholder="Lineup name"
-              className="w-full flex-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]"
+              className="w-full flex-1 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]"
             />
             <button
               type="button"
@@ -377,7 +377,7 @@ export function TeamLineupTemplates({
             </button>
           </div>
           {status ? (
-            <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
+            <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
               {status}
             </p>
           ) : null}

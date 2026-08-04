@@ -130,9 +130,9 @@ export function ScheduleList({
       />
 
       <div
-        role="group"
+        role="tablist"
         aria-label="Schedule time range"
-        className="inline-flex rounded-full border border-[var(--line)] bg-[var(--surface)] p-0.5"
+        className="grid grid-cols-2 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
       >
         {(
           [
@@ -144,25 +144,26 @@ export function ScheduleList({
             { id: "past" as const, label: "Past", count: pastMatches.length },
           ]
         ).map((item) => {
-          const active = view === item.id;
+          const selected = view === item.id;
           return (
             <button
               key={item.id}
               type="button"
-              aria-pressed={active}
+              role="tab"
+              aria-selected={selected}
               onClick={() => setView(item.id)}
               className={[
-                "rounded-full px-3.5 py-1.5 text-sm font-semibold transition",
-                active
-                  ? "bg-[var(--felt)] text-white"
-                  : "text-[var(--muted)] hover:text-[var(--ink)]",
+                "rounded-md px-2 py-1.5 text-center text-xs font-semibold transition sm:text-sm",
+                selected
+                  ? "bg-[var(--felt)] text-white shadow-sm"
+                  : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
               ].join(" ")}
             >
               {item.label}
               <span
                 className={[
                   "ml-1.5 tabular-nums",
-                  active ? "text-white/80" : "text-[var(--muted)]",
+                  selected ? "text-white/80" : "text-[var(--muted)]",
                 ].join(" ")}
               >
                 {item.count}

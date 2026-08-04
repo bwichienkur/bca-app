@@ -120,7 +120,7 @@ export function PlayerSelect({
             id={listId}
             role="listbox"
             style={menuStyle}
-            className="overflow-y-auto rounded-xl border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow)] [background-color:var(--surface-2)]"
+            className="overflow-y-auto rounded-[var(--radius)] border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow)] [background-color:var(--surface-2)]"
           >
             {menuOptions.map((option, index) => {
               const active = index === highlight;
@@ -180,7 +180,7 @@ export function PlayerSelect({
         className={[
           "flex w-full min-w-0 items-center justify-between gap-2 border border-[var(--line)] bg-[var(--surface)] text-left text-sm text-[var(--ink)] outline-none transition hover:border-[var(--line-strong)] focus:ring-2 focus:ring-[var(--felt-soft)] disabled:opacity-50",
           compact
-            ? "rounded-xl px-2.5 py-1.5"
+            ? "rounded-[var(--radius)] px-2.5 py-1.5"
             : "rounded-[var(--radius)] px-3 py-2",
         ].join(" ")}
       >

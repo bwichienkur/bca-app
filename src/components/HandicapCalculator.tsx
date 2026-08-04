@@ -136,7 +136,7 @@ function DragGhostCard({
     <div
       style={style}
       className={[
-        "flex items-center gap-2 rounded-xl border px-2.5 py-2 shadow-[var(--shadow)]",
+        "flex items-center gap-2 rounded-[var(--radius)] border px-2.5 py-2 shadow-[var(--shadow)]",
         floating
           ? "pointer-events-none border-[var(--felt)] bg-[color-mix(in_srgb,var(--surface)_82%,var(--felt))] opacity-90 backdrop-blur-sm"
           : "border-dashed border-[var(--felt)] bg-[color-mix(in_srgb,var(--felt)_16%,var(--surface))] opacity-80",
@@ -537,7 +537,7 @@ export function HandicapCalculator({
       <div
         role="tablist"
         aria-label="Handicap sections"
-        className="grid grid-cols-3 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+        className="grid grid-cols-3 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
       >
         {(
           [
@@ -555,7 +555,7 @@ export function HandicapCalculator({
               aria-selected={selected}
               onClick={() => startTransition(() => setSubTab(item.id))}
               className={[
-                "rounded-lg px-2 py-1.5 text-center text-xs font-semibold transition sm:text-sm",
+                "rounded-md px-2 py-1.5 text-center text-xs font-semibold transition sm:text-sm",
                 selected
                   ? "bg-[var(--felt)] text-white shadow-sm"
                   : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
@@ -634,7 +634,7 @@ export function HandicapCalculator({
             <div
               role="tablist"
               aria-label="Handicap teams"
-              className="grid grid-cols-2 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5 xl:hidden"
+              className="grid grid-cols-2 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5 xl:hidden"
             >
               {(
                 [
@@ -661,7 +661,7 @@ export function HandicapCalculator({
                     aria-selected={selected}
                     onClick={() => setMobileSide(side.id)}
                     className={[
-                      "min-w-0 rounded-lg px-2 py-1.5 text-left transition",
+                      "min-w-0 rounded-md px-2 py-1.5 text-left transition",
                       selected
                         ? "bg-[var(--felt)] text-white shadow-sm"
                         : "text-[var(--ink)] hover:bg-[var(--surface)]",
@@ -785,7 +785,7 @@ export function HandicapCalculator({
             <div
               role="tablist"
               aria-label="Rounds"
-              className="grid gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+              className="grid gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
               style={{
                 gridTemplateColumns: `repeat(${results.length}, minmax(0, 1fr))`,
               }}
@@ -803,7 +803,7 @@ export function HandicapCalculator({
                     aria-selected={selected}
                     onClick={() => setActiveRound(result.round)}
                     className={[
-                      "min-w-0 rounded-lg px-1 py-1.5 text-center transition",
+                      "min-w-0 rounded-md px-1 py-1.5 text-center transition",
                       selected
                         ? "bg-[var(--felt)] text-white shadow-sm"
                         : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
