@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  deleteSharedDraft,
   isDraftStoreConfigured,
   markSharedDraftSubmitted,
 } from "@/lib/draft-store";
@@ -79,12 +78,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Keep the shared draft after submit so the night board can still show
+    // round/game scores. Only mark it submitted (locks editing on reopen).
     if (matchId && isDraftStoreConfigured()) {
-      if (verifiedPlayed) {
-        await deleteSharedDraft(matchId);
-      } else {
-        await markSharedDraftSubmitted(matchId, session.lmsId);
-      }
+      await markSharedDraftSubmitted(matchId, session.lmsId);
     }
 
     return NextResponse.json({

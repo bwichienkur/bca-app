@@ -13,7 +13,6 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
-  deleteRemoteDraft,
   fetchRemoteDraft,
   fetchRemoteDraftSummaries,
   newerDraft,
@@ -23,7 +22,6 @@ import {
   applyQuickWin,
   applyRaceScore,
   buildVerticalMatchPayload,
-  clearDraft,
   computeMatchHandicaps,
   emptyDraft,
   gameKey,
@@ -701,20 +699,20 @@ export function MatchScoring({
       });
 
       if (result.verifiedPlayed) {
-        clearDraft(match.id);
-        void deleteRemoteDraft(match.id);
+        const submittedAt = new Date().toISOString();
+        // Keep local + shared drafts so the night board still shows scores.
+        saveDraft(draft);
         sheetLockedRef.current = true;
-        setRemoteSubmittedAt(new Date().toISOString());
+        setRemoteSubmittedAt(submittedAt);
         setSubmitMessage("Match submitted to LMS.");
         setSubmitNeedsReview(false);
+        setDraftSummaries((prev) => ({
+          ...prev,
+          [match.id]: summarizeDraftForBoard(draft, submittedAt),
+        }));
         setView({ mode: "list" });
         setMatch(null);
         setDraft(null);
-        setDraftSummaries((prev) => {
-          const next = { ...prev };
-          delete next[match.id];
-          return next;
-        });
         // refresh night board
         if (divisionId) {
           const data = await fetchJson<{ matches: ScoringMatchSummary[] }>(
