@@ -201,7 +201,8 @@ function StatTile({
 
 async function compressImage(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file);
-  const max = 720;
+  // Keep tall flyers readable while capping payload size.
+  const max = 1400;
   const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
   const w = Math.max(1, Math.round(bitmap.width * scale));
   const h = Math.max(1, Math.round(bitmap.height * scale));
@@ -212,7 +213,7 @@ async function compressImage(file: File): Promise<string> {
   if (!ctx) throw new Error("Could not process image.");
   ctx.drawImage(bitmap, 0, 0, w, h);
   bitmap.close();
-  return canvas.toDataURL("image/jpeg", 0.72);
+  return canvas.toDataURL("image/jpeg", 0.82);
 }
 
 function Field({
@@ -1253,21 +1254,26 @@ export function Tournaments({
                   </Field>
                 </div>
                 <div className="sm:col-span-2">
-                  <Field label="Thumbnail">
+                  <Field label="Flyer / thumbnail">
                     <input
                       type="file"
                       accept="image/*"
                       onChange={onThumbnail}
-                      className="block w-full text-sm text-[var(--muted)] file:mr-3 file:rounded-full file:border-0 file:bg-[var(--felt)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+                      className="block w-full text-sm text-[var(--muted)] file:mr-3 file:rounded-[var(--radius)] file:border-0 file:bg-[var(--felt)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
                     />
+                    <p className="mt-1.5 text-[11px] text-[var(--muted)]">
+                      Tall flyers stay fully visible — nothing is cropped.
+                    </p>
                   </Field>
                   {form.thumbnailUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={form.thumbnailUrl}
-                      alt=""
-                      className="mt-2 h-28 w-full rounded-[var(--radius)] object-cover"
-                    />
+                    <div className="mt-2 overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={form.thumbnailUrl}
+                        alt="Tournament flyer preview"
+                        className="mx-auto max-h-[min(70dvh,40rem)] w-full object-contain"
+                      />
+                    </div>
                   ) : null}
                 </div>
                 <label className="flex items-center gap-2 text-sm text-[var(--ink)] sm:col-span-2">
@@ -1699,12 +1705,14 @@ export function Tournaments({
               <div className="space-y-4">
                 <SurfaceCard>
                   {t.thumbnailUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={t.thumbnailUrl}
-                      alt=""
-                      className="h-44 w-full object-cover sm:h-56"
-                    />
+                    <div className="bg-[var(--surface-2)]">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={t.thumbnailUrl}
+                        alt={`${t.title} flyer`}
+                        className="mx-auto max-h-[min(80dvh,48rem)] w-full object-contain"
+                      />
+                    </div>
                   ) : (
                     <div className="relative h-28 overflow-hidden bg-[linear-gradient(145deg,rgba(29,110,158,0.55),rgba(19,78,115,0.85))] sm:h-32">
                       <div
