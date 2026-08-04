@@ -216,7 +216,7 @@ export function MatchListCard({
       style={style}
       aria-label={`${label}: ${homeName} vs ${awayName}`}
       className={[
-        "group block w-full overflow-hidden rounded-xl border text-left transition",
+        "group block w-full overflow-hidden rounded-lg border text-left transition",
         isMyMatch
           ? "border-[color-mix(in_srgb,var(--felt)_70%,var(--line))] bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))]"
           : "border-[var(--line)] bg-[var(--surface)]",
