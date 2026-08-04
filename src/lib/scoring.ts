@@ -461,11 +461,21 @@ export type DraftBoardSummary = {
   teamOneRoundWins: number;
   teamTwoRoundWins: number;
   gamesScored: number;
+  /** Games with any points entered or a decided winner. */
+  gamesStarted: number;
   roundsStarted: number;
   updatedAt: string;
   submittedAt: string | null;
   status: "in_progress" | "submitted";
 };
+
+/** True when any game has points or a winner (used for night-board Live). */
+export function draftHasStartedPlay(draft: ScoringDraft | null | undefined): boolean {
+  if (!draft) return false;
+  return Object.values(draft.games).some(
+    (game) => gamePlayStatus(game) !== "not-started",
+  );
+}
 
 export function summarizeDraftForBoard(
   draft: ScoringDraft,
@@ -473,6 +483,9 @@ export function summarizeDraftForBoard(
 ): DraftBoardSummary {
   const games = tallyDraft(draft);
   const rounds = tallyDraftRounds(draft);
+  const gamesStarted = Object.values(draft.games).filter(
+    (game) => gamePlayStatus(game) !== "not-started",
+  ).length;
   return {
     matchId: draft.matchId,
     teamOneGameWins: games.teamOneWins,
@@ -480,6 +493,7 @@ export function summarizeDraftForBoard(
     teamOneRoundWins: rounds.teamOneRoundWins,
     teamTwoRoundWins: rounds.teamTwoRoundWins,
     gamesScored: games.scored,
+    gamesStarted,
     roundsStarted: rounds.roundsStarted,
     updatedAt: draft.updatedAt,
     submittedAt,

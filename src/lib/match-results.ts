@@ -229,6 +229,7 @@ export function summarizeLmsGamesForBoard(
     teamOneRoundWins: rounds.teamOneRoundWins,
     teamTwoRoundWins: rounds.teamTwoRoundWins,
     gamesScored,
+    gamesStarted: gamesScored,
     roundsStarted: rounds.roundsStarted,
     updatedAt: now,
     submittedAt: now,

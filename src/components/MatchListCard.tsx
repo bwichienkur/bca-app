@@ -120,22 +120,29 @@ function actionIcon(
   isMyMatch: boolean,
   ctaLabel: string | undefined,
 ): { icon: ReactNode; label: string } {
-  if (boardStatus === "complete") {
+  // Only your team scores; everyone else views.
+  if (hasBoardStatus(boardStatus) && isMyMatch && boardStatus !== "complete") {
+    return {
+      icon: <ScorePadIcon className="h-3.5 w-3.5" />,
+      label: ctaLabel ?? "Score",
+    };
+  }
+  if (boardStatus === "complete" || (hasBoardStatus(boardStatus) && !isMyMatch)) {
     return {
       icon: <EyeIcon className="h-3.5 w-3.5" />,
       label: ctaLabel ?? "View",
-    };
-  }
-  if (boardStatus === "in_progress" || (boardStatus != null && isMyMatch)) {
-    return {
-      icon: <ScorePadIcon className="h-3.5 w-3.5" />,
-      label: ctaLabel ?? (isMyMatch ? "Score" : "Open"),
     };
   }
   return {
     icon: <ChevronIcon className="h-3.5 w-3.5" />,
     label: ctaLabel ?? "Open",
   };
+}
+
+function hasBoardStatus(
+  status: MatchBoardStatus | undefined,
+): status is MatchBoardStatus {
+  return status != null;
 }
 
 function ScoreBox({

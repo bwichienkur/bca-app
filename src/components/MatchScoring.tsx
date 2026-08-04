@@ -23,6 +23,7 @@ import {
   applyRaceScore,
   buildVerticalMatchPayload,
   computeMatchHandicaps,
+  draftHasStartedPlay,
   emptyDraft,
   gameKey,
   gamePlayStatus,
@@ -147,10 +148,17 @@ function mergeBoardSummary(
 function boardStatusFor(
   match: ScoringMatchSummary,
   summary: DraftBoardSummary | null,
+  draft?: ScoringDraft | null,
 ): MatchBoardStatus {
   if (match.hasBeenPlayed || summary?.submittedAt) return "complete";
-  if (summary && summary.gamesScored > 0) return "in_progress";
-  if (summary?.status === "in_progress") return "in_progress";
+  // Live only when a game has points or a winner — empty drafts stay Not started.
+  if (draftHasStartedPlay(draft)) return "in_progress";
+  if (
+    summary &&
+    ((summary.gamesStarted ?? 0) > 0 || summary.gamesScored > 0)
+  ) {
+    return "in_progress";
+  }
   return "not_started";
 }
 
@@ -490,7 +498,9 @@ export function MatchScoring({
         }
       }
 
-      const locked = Boolean(data.match.hasBeenPlayed || submittedAt);
+      const canScore = data.match.mySide != null;
+      const submittedLocked = Boolean(data.match.hasBeenPlayed || submittedAt);
+      const locked = submittedLocked || !canScore;
       sheetLockedRef.current = locked;
       setRemoteSubmittedAt(submittedAt);
 
@@ -525,6 +535,7 @@ export function MatchScoring({
         }));
       } else {
         // Keep a local copy for the night board even when the sheet is locked.
+        // Don't push remote drafts for other teams' matches (view-only).
         saveDraft(nextDraft);
         setDraftSummaries((prev) => ({
           ...prev,
@@ -532,7 +543,9 @@ export function MatchScoring({
             prev[matchId] ??
             summarizeDraftForBoard(
               nextDraft,
-              submittedAt ?? new Date().toISOString(),
+              submittedLocked
+                ? (submittedAt ?? new Date().toISOString())
+                : null,
             ),
         }));
       }
@@ -739,6 +752,11 @@ export function MatchScoring({
 
   const submitMatch = async () => {
     if (!match || !draft || !user) return;
+    if (match.mySide == null) {
+      setSheetError("You can only submit scores for your team’s matches.");
+      setConfirmDialog(null);
+      return;
+    }
     if (sheetLockedRef.current || match.hasBeenPlayed) {
       setSheetError("This scoresheet is already submitted and locked.");
       setConfirmDialog(null);
@@ -856,7 +874,10 @@ export function MatchScoring({
 
   if (view.mode !== "list" && match && draft) {
     const reviewMode = view.mode === "review";
-    const sheetLocked = Boolean(match.hasBeenPlayed || remoteSubmittedAt);
+    const canScore = match.mySide != null;
+    const submittedLocked = Boolean(match.hasBeenPlayed || remoteSubmittedAt);
+    const viewOnly = !canScore;
+    const sheetLocked = submittedLocked || viewOnly;
     sheetLockedRef.current = sheetLocked;
     const actionBtnClass =
       "rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]";
@@ -1000,7 +1021,13 @@ export function MatchScoring({
           </p>
         ) : null}
 
-        {sheetLocked ? (
+        {viewOnly ? (
+          <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--muted)]">
+            View only — you can score matches for your team. Set{" "}
+            <span className="font-medium text-[var(--ink)]">My team</span> in
+            context if this should be yours.
+          </p>
+        ) : submittedLocked ? (
           <p className="rounded-[var(--radius)] border border-[var(--amber)]/35 bg-[color-mix(in_srgb,var(--amber)_12%,transparent)] px-3 py-2 text-sm text-[var(--amber)]">
             This scoresheet has been submitted
             {match.hasBeenPlayed ? " to LMS" : ""}. Editing is locked — you can
@@ -1345,7 +1372,9 @@ export function MatchScoring({
               <div className="flex flex-wrap gap-2 pt-1">
                 {sheetLocked ? (
                   <p className="text-sm text-[var(--muted)]">
-                    Scoresheet is locked after submit.
+                    {viewOnly
+                      ? "View only — scoring is for your team’s matches."
+                      : "Scoresheet is locked after submit."}
                   </p>
                 ) : (
                   <>
@@ -1476,11 +1505,12 @@ export function MatchScoring({
         ? `${nightVenues.length} venues`
         : null;
   const liveCount = nightMatches.filter((item) => {
+    const localDraft = loadDraft(item.id);
     const summary = mergeBoardSummary(
       draftSummaries[item.id],
-      loadDraft(item.id),
+      localDraft,
     );
-    return boardStatusFor(item, summary) === "in_progress";
+    return boardStatusFor(item, summary, localDraft) === "in_progress";
   }).length;
 
   return (
@@ -1601,11 +1631,12 @@ export function MatchScoring({
           ) : (
             <div className="space-y-2.5">
               {nightMatches.map((item, index) => {
+                const localDraft = loadDraft(item.id);
                 const summary = mergeBoardSummary(
                   draftSummaries[item.id],
-                  loadDraft(item.id),
+                  localDraft,
                 );
-                const boardStatus = boardStatusFor(item, summary);
+                const boardStatus = boardStatusFor(item, summary, localDraft);
                 const isMyMatch = item.mySide != null;
                 return (
                   <MatchListCard
