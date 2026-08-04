@@ -129,6 +129,18 @@ input::placeholder {
   }
 }
 
+@keyframes live-dot {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 @keyframes panel-in {
   from {
     opacity: 0;
@@ -158,6 +170,10 @@ input::placeholder {
 
 .loading-dot {
   animation: pulse-soft 1.2s ease-in-out infinite;
+}
+
+.live-dot {
+  animation: live-dot 1.4s ease-in-out infinite;
 }
 
 .loading-dot:nth-child(2) {

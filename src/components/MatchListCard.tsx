@@ -49,7 +49,7 @@ function statusTone(status: MatchBoardStatus): string {
     return "bg-black/25 text-white/75 ring-1 ring-white/15";
   }
   if (status === "in_progress") {
-    return "bg-[var(--amber)] text-[#1a140c]";
+    return "bg-[var(--amber)] text-[#1a140c] ring-1 ring-white/20";
   }
   return "bg-white/12 text-white/80 ring-1 ring-white/15";
 }
@@ -316,17 +316,23 @@ export function MatchListCard({
         <div className="relative flex items-center gap-2 px-3 py-1.5">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
             {isMyMatch ? (
-              <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--felt-soft)]">
+              <span className="rounded-[var(--radius)] bg-white px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--felt-soft)]">
                 My match
               </span>
             ) : null}
             {boardStatus ? (
               <span
                 className={[
-                  "rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
+                  "inline-flex items-center gap-1 rounded-[var(--radius)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
                   statusTone(boardStatus),
                 ].join(" ")}
               >
+                {boardStatus === "in_progress" ? (
+                  <span
+                    aria-hidden
+                    className="live-dot h-1.5 w-1.5 shrink-0 rounded-full bg-[#1a140c]"
+                  />
+                ) : null}
                 {statusLabel(boardStatus)}
               </span>
             ) : null}
