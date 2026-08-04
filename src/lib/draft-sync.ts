@@ -1,4 +1,4 @@
-import type { ScoringDraft } from "./scoring";
+import type { DraftBoardSummary, ScoringDraft } from "./scoring";
 
 export type RemoteDraftResponse = {
   shared: boolean;
@@ -84,6 +84,39 @@ export async function fetchRemoteDraftMatchIds(
   }
   return {
     shared: Boolean(payload.shared),
+    matchIds: payload.matchIds ?? [],
+  };
+}
+
+/** Fetch live board summaries (rounds/games + status) for many matches. */
+export async function fetchRemoteDraftSummaries(
+  matchIds: string[],
+): Promise<{
+  shared: boolean;
+  summaries: Record<string, DraftBoardSummary>;
+  matchIds: string[];
+}> {
+  if (matchIds.length === 0) {
+    return { shared: false, summaries: {}, matchIds: [] };
+  }
+  const response = await fetch(
+    `/api/scoring/drafts?ids=${encodeURIComponent(matchIds.join(","))}&summaries=1`,
+    { cache: "no-store" },
+  );
+  const payload = await parseJson<{
+    shared?: boolean;
+    summaries?: Record<string, DraftBoardSummary>;
+    matchIds?: string[];
+    error?: string;
+  }>(response);
+  if (!response.ok) {
+    throw new Error(
+      payload.error || `Draft summaries failed (${response.status})`,
+    );
+  }
+  return {
+    shared: Boolean(payload.shared),
+    summaries: payload.summaries ?? {},
     matchIds: payload.matchIds ?? [],
   };
 }

@@ -1,4 +1,8 @@
-import type { ScoringDraft } from "./scoring";
+import {
+  summarizeDraftForBoard,
+  type DraftBoardSummary,
+  type ScoringDraft,
+} from "./scoring";
 import { getRedis, isRedisConfigured } from "./redis";
 
 const KEY_PREFIX = "tableside:scoring:draft:v1:";
@@ -166,4 +170,25 @@ export async function whichSharedDraftsExist(
     if (record && !record.submittedAt) found.push(matchIds[i]!);
   }
   return found;
+}
+
+/** Load board summaries for many match ids (includes in-progress + submitted drafts). */
+export async function getSharedDraftSummaries(
+  matchIds: string[],
+): Promise<Record<string, DraftBoardSummary>> {
+  const redis = getRedis();
+  const out: Record<string, DraftBoardSummary> = {};
+  if (!redis || matchIds.length === 0) return out;
+
+  const keys = matchIds.map(draftKey);
+  const values = (await redis.mget(...keys)) as unknown as Array<
+    SharedDraftRecord | ScoringDraft | null
+  >;
+  for (let i = 0; i < matchIds.length; i++) {
+    const matchId = matchIds[i]!;
+    const record = normalizeRecord(values[i]);
+    if (!record) continue;
+    out[matchId] = summarizeDraftForBoard(record.draft, record.submittedAt);
+  }
+  return out;
 }
