@@ -23,8 +23,6 @@ type MatchListCardProps = {
   isMyMatch?: boolean;
   homeRounds?: number | null;
   awayRounds?: number | null;
-  homeGames?: number | null;
-  awayGames?: number | null;
   showScores?: boolean;
 };
 
@@ -54,16 +52,16 @@ function ScoreBox({
   return (
     <div
       className={[
-        "flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-2xl",
-        "bg-[color-mix(in_srgb,var(--felt)_18%,var(--surface-2))] ring-1",
+        "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+        "bg-black/25 ring-1",
         emphasize
-          ? "ring-[color-mix(in_srgb,var(--felt)_55%,var(--line))]"
-          : "ring-[var(--line-strong)]",
+          ? "ring-[color-mix(in_srgb,var(--felt)_60%,white)]"
+          : "ring-white/15",
       ].join(" ")}
     >
       <span
         className={[
-          "font-[family-name:var(--font-display)] text-2xl font-semibold tabular-nums leading-none",
+          "font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums leading-none",
           emphasize ? "text-[var(--felt-deep)]" : "text-[var(--ink)]",
         ].join(" ")}
       >
@@ -73,30 +71,30 @@ function ScoreBox({
   );
 }
 
-function TeamScoreRow({
+function TeamRow({
   name,
+  score,
   emphasize,
-  rounds,
-  showScores,
+  showScore,
 }: {
   name: string;
+  score: number;
   emphasize?: boolean;
-  rounds: number;
-  showScores: boolean;
+  showScore: boolean;
 }) {
   return (
-    <div className="flex min-w-0 items-center justify-between gap-3">
+    <div className="grid grid-cols-[minmax(0,1fr)_2.25rem] items-center gap-x-3">
       <p
         className={[
-          "min-w-0 flex-1 truncate font-[family-name:var(--font-display)] text-lg leading-snug",
+          "min-w-0 truncate font-[family-name:var(--font-display)] text-[15px] leading-tight",
           emphasize
             ? "font-semibold text-[var(--felt-deep)]"
-            : "text-[var(--ink)]",
+            : "font-medium text-[var(--ink)]",
         ].join(" ")}
       >
         {name}
       </p>
-      {showScores ? <ScoreBox value={rounds} emphasize={emphasize} /> : null}
+      {showScore ? <ScoreBox value={score} emphasize={emphasize} /> : <span />}
     </div>
   );
 }
@@ -117,8 +115,6 @@ export function MatchListCard({
   isMyMatch = false,
   homeRounds = null,
   awayRounds = null,
-  homeGames = null,
-  awayGames = null,
   showScores = false,
 }: MatchListCardProps) {
   const metaLine = [meta, location].filter(Boolean).join(" · ");
@@ -130,83 +126,71 @@ export function MatchListCard({
       onClick={onClick}
       style={style}
       className={[
-        "group block w-full rounded-2xl border text-left shadow-sm transition",
+        "group block w-full rounded-2xl border text-left transition",
         isMyMatch
           ? "border-[color-mix(in_srgb,var(--felt)_70%,var(--line))] bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))]"
           : "border-[var(--line)] bg-[var(--surface)]",
-        "px-4 py-3.5",
+        "px-3.5 py-2.5",
         "hover:border-[color-mix(in_srgb,var(--felt)_55%,var(--line))] hover:bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--felt-soft)]",
         className ?? "",
       ].join(" ")}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {isMyMatch ? (
-              <span className="rounded-full bg-[var(--felt)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
-                My match
-              </span>
-            ) : null}
-            {boardStatus ? (
-              <span
-                className={[
-                  "rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em]",
-                  statusTone(boardStatus),
-                ].join(" ")}
-              >
-                {statusLabel(boardStatus)}
-              </span>
-            ) : null}
-            {metaLine ? (
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--amber)]">
-                {metaLine}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="mt-2.5 space-y-2">
-            <TeamScoreRow
-              name={homeName}
-              emphasize={emphasizeHome}
-              rounds={homeRounds ?? 0}
-              showScores={showScores}
-            />
-            <TeamScoreRow
-              name={awayName}
-              emphasize={emphasizeAway}
-              rounds={awayRounds ?? 0}
-              showScores={showScores}
-            />
-          </div>
-
-          {showScores ? (
-            <p className="mt-2 text-[11px] text-[var(--muted)]">
-              Round wins
-              {homeGames != null && awayGames != null
-                ? ` · Games ${homeGames}–${awayGames}`
-                : ""}
+      <div className="flex min-h-7 items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+          {isMyMatch ? (
+            <span className="rounded-full bg-[var(--felt)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
+              My match
+            </span>
+          ) : null}
+          {boardStatus ? (
+            <span
+              className={[
+                "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
+                statusTone(boardStatus),
+              ].join(" ")}
+            >
+              {statusLabel(boardStatus)}
+            </span>
+          ) : null}
+          {metaLine ? (
+            <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--amber)]">
+              {metaLine}
             </p>
           ) : null}
-
-          {!hasBoard && status ? (
-            <p className="mt-2 text-xs text-[var(--muted)]">{status}</p>
-          ) : null}
         </div>
-
         {ctaLabel ? (
-          <span className="mt-1 shrink-0 rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white transition group-hover:bg-[var(--felt-soft)]">
+          <span className="inline-flex h-7 shrink-0 items-center justify-center rounded-full bg-[var(--felt)] px-3 text-[11px] font-semibold text-white transition group-hover:bg-[var(--felt-soft)]">
             {ctaLabel}
           </span>
         ) : (
           <span
-            className="mt-1 shrink-0 text-[var(--amber)] transition group-hover:translate-x-0.5"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-[var(--amber)] transition group-hover:translate-x-0.5"
             aria-hidden
           >
             →
           </span>
         )}
       </div>
+
+      <div className="mt-2 space-y-1.5">
+        <TeamRow
+          name={homeName}
+          score={homeRounds ?? 0}
+          emphasize={emphasizeHome}
+          showScore={showScores}
+        />
+        <TeamRow
+          name={awayName}
+          score={awayRounds ?? 0}
+          emphasize={emphasizeAway}
+          showScore={showScores}
+        />
+      </div>
+
+      {!hasBoard && status ? (
+        <p className="mt-1.5 text-xs text-[var(--muted)]">{status}</p>
+      ) : null}
     </button>
   );
 }
