@@ -286,14 +286,14 @@ export function SettingsScreen({
               type="button"
               onClick={save}
               disabled={!membership?.teams.length}
-              className="rounded-xl bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+              className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
             >
               Save defaults
             </button>
             <button
               type="button"
               onClick={onRefreshMembership}
-              className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 text-sm font-semibold text-[var(--muted)]"
+              className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 text-sm font-semibold text-[var(--muted)]"
             >
               Refresh my teams
             </button>
@@ -304,7 +304,7 @@ export function SettingsScreen({
       <button
         type="button"
         onClick={onSignOut}
-        className="rounded-xl border border-[var(--danger)]/35 bg-[var(--danger-bg)] px-4 py-3 text-sm font-semibold text-[var(--danger)]"
+        className="rounded-[var(--radius)] border border-[var(--danger)]/35 bg-[var(--danger-bg)] px-4 py-3 text-sm font-semibold text-[var(--danger)]"
       >
         Sign out
       </button>

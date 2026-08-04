@@ -117,7 +117,7 @@ export function SelectField<T extends string = string>({
             id={listId}
             role="listbox"
             style={menuStyle}
-            className="overflow-y-auto rounded-xl border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow)] [background-color:var(--surface-2)]"
+            className="overflow-y-auto rounded-[var(--radius)] border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow)] [background-color:var(--surface-2)]"
           >
             {options.length === 0 ? (
               <li className="px-3 py-2.5 text-sm text-[var(--muted)]">
@@ -205,7 +205,7 @@ export function SelectField<T extends string = string>({
           }
         }}
         className={[
-          "flex w-full min-w-0 items-center justify-between gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-left text-sm outline-none transition hover:border-[var(--line-strong)] focus:ring-2 focus:ring-[var(--felt-soft)] disabled:opacity-50",
+          "flex w-full min-w-0 items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-left text-sm outline-none transition hover:border-[var(--line-strong)] focus:ring-2 focus:ring-[var(--felt-soft)] disabled:opacity-50",
           selected ? "text-[var(--ink)]" : "text-[var(--muted)]",
           buttonClassName ?? "",
         ].join(" ")}

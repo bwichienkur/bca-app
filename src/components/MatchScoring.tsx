@@ -823,7 +823,7 @@ export function MatchScoring({
           <button
             type="button"
             onClick={onRequestLogin}
-            className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+            className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
           >
             Go to login
           </button>
@@ -841,7 +841,7 @@ export function MatchScoring({
           <button
             type="button"
             onClick={onRequestContext}
-            className="rounded-xl bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+            className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
           >
             Choose division
           </button>
@@ -926,7 +926,7 @@ export function MatchScoring({
         ) : null}
 
         {sheetError ? (
-          <div className="space-y-2 rounded-xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
+          <div className="space-y-2 rounded-[var(--radius)] border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
             <p>{sheetError}</p>
             {submitNeedsReview ? (
               <div className="flex flex-wrap gap-2">
@@ -955,7 +955,7 @@ export function MatchScoring({
         {submitMessage ? (
           <div
             className={[
-              "space-y-2 rounded-xl px-3 py-2 text-sm",
+              "space-y-2 rounded-[var(--radius)] px-3 py-2 text-sm",
               submitNeedsReview
                 ? "border border-[var(--amber)]/40 bg-[color-mix(in_srgb,var(--amber)_12%,transparent)] text-[var(--amber)]"
                 : "border border-[var(--felt)]/35 bg-[color-mix(in_srgb,var(--felt)_18%,transparent)] text-[var(--felt-deep)]",
@@ -995,13 +995,13 @@ export function MatchScoring({
           </div>
         ) : null}
         {syncNote ? (
-          <p className="rounded-xl border border-[var(--amber)]/35 bg-[color-mix(in_srgb,var(--amber)_12%,transparent)] px-3 py-2 text-sm text-[var(--amber)]">
+          <p className="rounded-[var(--radius)] border border-[var(--amber)]/35 bg-[color-mix(in_srgb,var(--amber)_12%,transparent)] px-3 py-2 text-sm text-[var(--amber)]">
             {syncNote}
           </p>
         ) : null}
 
         {sheetLocked ? (
-          <p className="rounded-xl border border-[var(--amber)]/35 bg-[color-mix(in_srgb,var(--amber)_12%,transparent)] px-3 py-2 text-sm text-[var(--amber)]">
+          <p className="rounded-[var(--radius)] border border-[var(--amber)]/35 bg-[color-mix(in_srgb,var(--amber)_12%,transparent)] px-3 py-2 text-sm text-[var(--amber)]">
             This scoresheet has been submitted
             {match.hasBeenPlayed ? " to LMS" : ""}. Editing is locked — you can
             still review lineups and scores.
@@ -1074,7 +1074,7 @@ export function MatchScoring({
               <div
                 role="tablist"
                 aria-label="Rounds"
-                className="grid gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+                className="grid gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
                 style={{
                   gridTemplateColumns: `repeat(${
                     rounds.length + (includeMatchPointsRound ? 1 : 0)
@@ -1119,7 +1119,7 @@ export function MatchScoring({
                         });
                       }}
                       className={[
-                        "min-w-0 rounded-lg px-1 py-1.5 text-center transition",
+                        "min-w-0 rounded-md px-1 py-1.5 text-center transition",
                         active
                           ? "bg-[var(--felt)] text-white shadow-sm"
                           : myWin
@@ -1155,7 +1155,7 @@ export function MatchScoring({
                       });
                     }}
                     className={[
-                      "min-w-0 rounded-lg px-1 py-1.5 text-center transition",
+                      "min-w-0 rounded-md px-1 py-1.5 text-center transition",
                       isMatchPointsRound
                         ? "bg-[var(--felt)] text-white shadow-sm"
                         : matchPointsTally.roundWinner === match.mySide
@@ -1204,7 +1204,7 @@ export function MatchScoring({
               ) : null}
 
               {isMatchPointsRound ? (
-                <p className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--muted)]">
+                <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--muted)]">
                   Round 6 is total points across all games (plus handicap). It
                   is only awarded when the other team can no longer catch up —
                   win ≤{match.maxScore || 10} pts / loss ≤
@@ -1244,7 +1244,7 @@ export function MatchScoring({
                         }}
                         disabled={sheetLocked}
                         className={[
-                          "w-full min-w-0 overflow-hidden rounded-xl border px-2.5 py-2 text-left transition sm:px-3",
+                          "w-full min-w-0 overflow-hidden rounded-[var(--radius)] border px-2.5 py-2 text-left transition sm:px-3",
                           sheetLocked ? "cursor-default opacity-95" : "",
                           selected
                             ? "border-[var(--felt)] ring-2 ring-[var(--felt)]/25"
@@ -1354,7 +1354,7 @@ export function MatchScoring({
                       onClick={() =>
                         setView({ mode: "review", matchId: match.id })
                       }
-                      className="rounded-xl bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white"
+                      className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white"
                     >
                       Review & submit
                     </button>
@@ -1364,7 +1364,7 @@ export function MatchScoring({
                         if (!match || sheetLocked) return;
                         setConfirmDialog("reset");
                       }}
-                      className="rounded-xl border border-[var(--danger-strong)]/55 bg-[var(--danger-strong)] px-4 py-3 text-sm font-semibold text-white shadow-[0_0_0_1px_rgba(214,69,61,0.25)] transition hover:brightness-110"
+                      className="rounded-[var(--radius)] border border-[var(--danger-strong)]/55 bg-[var(--danger-strong)] px-4 py-3 text-sm font-semibold text-white shadow-[0_0_0_1px_rgba(214,69,61,0.25)] transition hover:brightness-110"
                     >
                       Reset sheet
                     </button>
@@ -1517,18 +1517,18 @@ export function MatchScoring({
       />
 
       {listError ? (
-        <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
+        <p className="rounded-[var(--radius)] border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
           {listError}
         </p>
       ) : null}
       {submitMessage ? (
-        <p className="rounded-xl border border-[var(--felt)]/35 bg-[color-mix(in_srgb,var(--felt)_18%,transparent)] px-3 py-2 text-sm text-[var(--felt-deep)]">
+        <p className="rounded-[var(--radius)] border border-[var(--felt)]/35 bg-[color-mix(in_srgb,var(--felt)_18%,transparent)] px-3 py-2 text-sm text-[var(--felt-deep)]">
           {submitMessage}
         </p>
       ) : null}
 
       {!teamId ? (
-        <p className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--muted)]">
+        <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--muted)]">
           Set your team in context to highlight which match is yours.{" "}
           <button
             type="button"
@@ -1922,7 +1922,7 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
     return (
       <div
         className={[
-          "min-w-0 overflow-hidden rounded-xl px-2.5 py-2",
+          "min-w-0 overflow-hidden rounded-[var(--radius)] px-2.5 py-2",
           won
             ? "bg-[color-mix(in_srgb,var(--felt)_22%,var(--surface-2))]"
             : "bg-[var(--surface-2)]",
@@ -2188,7 +2188,7 @@ function LineupEditor({
                     aria-selected={selected}
                     onClick={() => setMobileSide(side.id)}
                     className={[
-                      "min-w-0 rounded-xl px-2.5 py-2.5 text-left transition",
+                      "min-w-0 rounded-[var(--radius)] px-2.5 py-2.5 text-left transition",
                       selected
                         ? "bg-[var(--felt)] text-white shadow-sm"
                         : "text-[var(--ink)] hover:bg-[var(--surface)]",
@@ -2384,7 +2384,7 @@ function RaceScoreSelect({
             role="listbox"
             aria-label={label}
             style={menuStyle}
-            className="overflow-y-auto rounded-xl border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow)]"
+            className="overflow-y-auto rounded-[var(--radius)] border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 shadow-[var(--shadow)]"
           >
             {options.map((option, index) => {
               const selected = option === value;
@@ -2443,7 +2443,7 @@ function RaceScoreSelect({
           }
         }}
         className={[
-          "relative w-full rounded-xl px-2 py-1 text-center outline-none ring-[var(--felt-soft)] transition focus-visible:ring-2",
+          "relative w-full rounded-[var(--radius)] px-2 py-1 text-center outline-none ring-[var(--felt-soft)] transition focus-visible:ring-2",
           emphasized
             ? "bg-[color-mix(in_srgb,var(--felt)_18%,transparent)]"
             : "hover:bg-[var(--surface-3)]/60",
@@ -2876,7 +2876,7 @@ function ScorePad({
               <div
                 role="group"
                 aria-label="Win adornment"
-                className="grid grid-cols-4 gap-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+                className="grid grid-cols-4 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
               >
                 {(
                   [
@@ -2937,7 +2937,7 @@ function ScorePad({
                   breakingTeam: local.breakingTeam === 1 ? 2 : 1,
                 })
               }
-              className="rounded-xl border border-[var(--amber)]/40 bg-[color-mix(in_srgb,var(--amber)_12%,var(--surface))] px-3 py-2.5 text-sm font-semibold text-[var(--amber)] transition hover:border-[var(--amber)]/65 hover:bg-[color-mix(in_srgb,var(--amber)_20%,var(--surface))]"
+              className="rounded-[var(--radius)] border border-[var(--amber)]/40 bg-[color-mix(in_srgb,var(--amber)_12%,var(--surface))] px-3 py-2.5 text-sm font-semibold text-[var(--amber)] transition hover:border-[var(--amber)]/65 hover:bg-[color-mix(in_srgb,var(--amber)_20%,var(--surface))]"
             >
               Swap break
             </button>
@@ -2952,7 +2952,7 @@ function ScorePad({
                   isWinZip: false,
                 })
               }
-              className="rounded-xl border border-[var(--danger)]/35 bg-[color-mix(in_srgb,var(--danger)_10%,var(--surface))] px-3 py-2.5 text-sm font-semibold text-[var(--danger)] transition hover:border-[var(--danger)]/55 hover:bg-[color-mix(in_srgb,var(--danger)_16%,var(--surface))]"
+              className="rounded-[var(--radius)] border border-[var(--danger)]/35 bg-[color-mix(in_srgb,var(--danger)_10%,var(--surface))] px-3 py-2.5 text-sm font-semibold text-[var(--danger)] transition hover:border-[var(--danger)]/55 hover:bg-[color-mix(in_srgb,var(--danger)_16%,var(--surface))]"
             >
               Reset 0–0
             </button>
@@ -2965,7 +2965,7 @@ function ScorePad({
             onClick={saveGame}
             disabled={!dirty}
             className={[
-              "w-full rounded-xl px-4 py-3.5 text-sm font-semibold transition enabled:active:scale-[0.99]",
+              "w-full rounded-[var(--radius)] px-4 py-3.5 text-sm font-semibold transition enabled:active:scale-[0.99]",
               dirty
                 ? "bg-[var(--felt)] text-white shadow-sm"
                 : "cursor-default border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]",
@@ -3067,7 +3067,7 @@ function ConfirmDialog({
             type="button"
             disabled={busy}
             onClick={onCancel}
-            className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
+            className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
           >
             Cancel
           </button>
@@ -3076,7 +3076,7 @@ function ConfirmDialog({
             disabled={busy}
             onClick={onConfirm}
             className={[
-              "rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50",
+              "rounded-[var(--radius)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50",
               confirmTone === "danger"
                 ? "border border-[var(--danger-strong)]/55 bg-[var(--danger-strong)] shadow-[0_0_0_1px_rgba(214,69,61,0.25)] transition hover:brightness-110"
                 : "bg-[var(--felt)]",
@@ -3183,7 +3183,7 @@ function ReviewPanel({
                   return (
                     <div
                       key={game.index}
-                      className="flex items-center justify-between gap-3 rounded-xl bg-[var(--surface-2)] px-3 py-2 text-sm"
+                      className="flex items-center justify-between gap-3 rounded-[var(--radius)] bg-[var(--surface-2)] px-3 py-2 text-sm"
                     >
                       <span className="min-w-0 truncate">
                         {p1 ? playerDisplayName(p1) : `H${game.playerOne.index}`}
@@ -3213,7 +3213,7 @@ function ReviewPanel({
         <button
           type="button"
           onClick={onEdit}
-          className="rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 text-sm font-semibold"
+          className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 text-sm font-semibold"
         >
           {locked ? "Back to sheet" : "Keep editing"}
         </button>
@@ -3222,7 +3222,7 @@ function ReviewPanel({
             type="button"
             disabled={submitting || incomplete}
             onClick={onSubmit}
-            className="rounded-xl bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+            className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
           >
             {submitting ? "Submitting…" : "Submit to LMS"}
           </button>

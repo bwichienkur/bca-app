@@ -75,7 +75,7 @@ export function LoginScreen({ onSuccess, onCancel }: LoginScreenProps) {
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-3 outline-none ring-[var(--felt)] focus:ring-2"
+            className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-3 outline-none ring-[var(--felt)] focus:ring-2"
           />
         </label>
         <label className="block space-y-1.5">
@@ -88,25 +88,25 @@ export function LoginScreen({ onSuccess, onCancel }: LoginScreenProps) {
             required
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-3 outline-none ring-[var(--felt)] focus:ring-2"
+            className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-3 outline-none ring-[var(--felt)] focus:ring-2"
           />
         </label>
         {error ? (
-          <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
+          <p className="rounded-[var(--radius)] border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
             {error}
           </p>
         ) : null}
         <button
           type="submit"
           disabled={loggingIn}
-          className="w-full rounded-xl bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--felt-soft)] disabled:opacity-60"
+          className="w-full rounded-[var(--radius)] bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--felt-soft)] disabled:opacity-60"
         >
           {loggingIn ? "Signing in…" : "Sign in"}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 text-sm font-semibold text-[var(--muted)]"
+          className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3 text-sm font-semibold text-[var(--muted)]"
         >
           Cancel
         </button>

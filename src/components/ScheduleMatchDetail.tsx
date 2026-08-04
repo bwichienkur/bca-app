@@ -120,7 +120,7 @@ function MatchTeamPanel({
             <h5 className="mb-2 text-sm font-semibold text-[var(--ink)]">
               Roster & ratings
             </h5>
-            <ul className="divide-y divide-[var(--line)] rounded-xl border border-[var(--line)] bg-[var(--surface-2)]">
+            <ul className="divide-y divide-[var(--line)] rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]">
               {team.players.map((player) => (
                 <li
                   key={player.id}
@@ -238,7 +238,7 @@ export function ScheduleMatchDetail({
                 aria-selected={selected}
                 onClick={() => setMobileSide(side.id)}
                 className={[
-                  "min-w-0 rounded-xl px-2.5 py-2.5 text-left transition",
+                  "min-w-0 rounded-[var(--radius)] px-2.5 py-2.5 text-left transition",
                   selected
                     ? "bg-[var(--felt)] text-white shadow-sm"
                     : "text-[var(--ink)] hover:bg-[var(--surface)]",

@@ -55,7 +55,7 @@ export function SearchField({
         className={[
           "w-full text-sm text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2",
           embedded
-            ? "rounded-xl border border-[var(--line)] bg-[var(--surface)] py-2"
+            ? "rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] py-2"
             : "rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] py-2.5",
           hasValue ? "pl-3.5 pr-20" : "px-3.5",
         ].join(" ")}

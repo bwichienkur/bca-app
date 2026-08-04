@@ -114,7 +114,7 @@ export function LoadLineupMenu({
             role="listbox"
             aria-label="Saved lineup templates"
             style={menuStyle}
-            className="overflow-hidden rounded-xl border border-[var(--line-strong)] bg-[var(--surface-2)] shadow-[var(--shadow)]"
+            className="overflow-hidden rounded-[var(--radius)] border border-[var(--line-strong)] bg-[var(--surface-2)] shadow-[var(--shadow)]"
           >
             {presets.length === 0 ? (
               <div className="px-3 py-3 text-sm text-[var(--muted)]">
