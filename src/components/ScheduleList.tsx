@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { normalizeTeamName } from "@/lib/matchups";
 import { isUpcomingScheduleDate, parseScheduleDate } from "@/lib/schedule";
+import { rankForTeam, teamRanksFromReport } from "@/lib/standings";
 import type { ScheduleDay, ScheduleMatch, TableReport } from "@/lib/types";
 import { EmptyState } from "./EmptyState";
 import { MatchListCard } from "./MatchListCard";
@@ -16,35 +17,6 @@ type ScheduleListProps = {
   teamReport?: TableReport | null;
   onMatchClick?: (match: ScheduleMatch, day: ScheduleDay) => void;
 };
-
-function isRankHeader(header: string): boolean {
-  const h = header.trim().toLowerCase();
-  return h === "#" || h === "rank" || h === "rk" || h === "pos";
-}
-
-function isNameHeader(header: string): boolean {
-  const h = header.trim().toLowerCase();
-  return h === "team" || h === "name";
-}
-
-/** Map normalized team name → standing rank string. */
-function ranksFromReport(report: TableReport | null | undefined): Map<string, string> {
-  const ranks = new Map<string, string>();
-  if (!report?.headers.length || !report.rows.length) return ranks;
-
-  const nameIndex = report.headers.findIndex(isNameHeader);
-  const rankIndex = report.headers.findIndex(isRankHeader);
-  if (nameIndex < 0) return ranks;
-
-  report.rows.forEach((row, rowIndex) => {
-    const name = normalizeTeamName(row[nameIndex] ?? "");
-    if (!name) return;
-    const raw =
-      rankIndex >= 0 ? (row[rankIndex] ?? "").trim() : String(rowIndex + 1);
-    if (raw) ranks.set(name, raw.replace(/^#/, ""));
-  });
-  return ranks;
-}
 
 type ScheduleView = "upcoming" | "past";
 
@@ -73,7 +45,10 @@ export function ScheduleList({
   onMatchClick,
 }: ScheduleListProps) {
   const [view, setView] = useState<ScheduleView>("upcoming");
-  const teamRanks = useMemo(() => ranksFromReport(teamReport), [teamReport]);
+  const teamRanks = useMemo(
+    () => teamRanksFromReport(teamReport),
+    [teamReport],
+  );
 
   const teamDays = useMemo(() => {
     if (!teamName) return days;
@@ -228,12 +203,8 @@ export function ScheduleList({
                 location={match.location || undefined}
                 ctaLabel="View"
                 isMyMatch={isMyMatch}
-                homeRank={
-                  teamRanks.get(normalizeTeamName(match.home)) ?? null
-                }
-                awayRank={
-                  teamRanks.get(normalizeTeamName(match.away)) ?? null
-                }
+                homeRank={rankForTeam(teamRanks, match.home)}
+                awayRank={rankForTeam(teamRanks, match.away)}
                 emphasizeHome={
                   Boolean(
                     myTeam && normalizeTeamName(match.home) === myTeam,

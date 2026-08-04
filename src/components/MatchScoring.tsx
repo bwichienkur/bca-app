@@ -56,7 +56,8 @@ import { MatchListCard, type MatchBoardStatus } from "./MatchListCard";
 import { SectionCard } from "./SectionCard";
 import { SelectField } from "./SelectField";
 import { loadTeamLineupPresets } from "@/lib/lineup-sync";
-import type { LineupPreset } from "@/lib/types";
+import { rankForTeam, teamRanksFromReport } from "@/lib/standings";
+import type { LineupPreset, TableReport } from "@/lib/types";
 
 type MatchScoringProps = {
   divisionId: string | null;
@@ -190,6 +191,7 @@ export function MatchScoring({
   const [matches, setMatches] = useState<ScoringMatchSummary[]>([]);
   const [loadingMatches, setLoadingMatches] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
+  const [teamReport, setTeamReport] = useState<TableReport | null>(null);
 
   const [view, setView] = useState<View>({ mode: "list" });
   const [match, setMatch] = useState<ScoringMatchDetail | null>(null);
@@ -332,6 +334,31 @@ export function MatchScoring({
       cancelled = true;
     };
   }, [user, divisionId, teamId]);
+
+  useEffect(() => {
+    if (!divisionId) {
+      setTeamReport(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchJson<TableReport>(
+      `/api/reports/teams?divisionId=${divisionId}`,
+    )
+      .then((data) => {
+        if (!cancelled) setTeamReport(data);
+      })
+      .catch(() => {
+        if (!cancelled) setTeamReport(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [divisionId]);
+
+  const teamRanks = useMemo(
+    () => teamRanksFromReport(teamReport),
+    [teamReport],
+  );
 
   const nightKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -1593,6 +1620,8 @@ export function MatchScoring({
                     isMyMatch={isMyMatch}
                     homeRounds={summary?.teamOneRoundWins ?? 0}
                     awayRounds={summary?.teamTwoRoundWins ?? 0}
+                    homeRank={rankForTeam(teamRanks, item.teamOneName)}
+                    awayRank={rankForTeam(teamRanks, item.teamTwoName)}
                     emphasizeHome={item.mySide === 1}
                     emphasizeAway={item.mySide === 2}
                     onClick={() => void openMatch(item.id)}
