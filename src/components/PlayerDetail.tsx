@@ -44,19 +44,19 @@ type MatchesPayload = {
   error?: string;
 };
 
-type DetailSection =
-  | "overview"
-  | "performance"
-  | "leagues"
-  | "matches"
-  | "opponents";
+type DetailSection = "stats" | "leagues" | "matches" | "opponents";
+type StatsSubTab = "overview" | "performance";
 
 const SECTIONS: Array<{ id: DetailSection; label: string }> = [
-  { id: "overview", label: "Overview" },
-  { id: "performance", label: "By Rating" },
+  { id: "stats", label: "Stats" },
   { id: "leagues", label: "Leagues" },
   { id: "matches", label: "Matches" },
   { id: "opponents", label: "Opponents" },
+];
+
+const STATS_SUBTABS: Array<{ id: StatsSubTab; label: string }> = [
+  { id: "overview", label: "Overview" },
+  { id: "performance", label: "By Rating" },
 ];
 
 type OpponentsPayload = {
@@ -92,7 +92,7 @@ function statusClass(status: FargoPlayerProfile["robustnessStatus"]): string {
 }
 
 function temporalLabel(temporalType: number): string {
-  return temporalType === 1 ? "Recent" : "All-time";
+  return temporalType === 1 ? "Recent" : "Past 12 months";
 }
 
 function formatDate(value: string | null): string {
@@ -209,7 +209,7 @@ function StatsWindowToggle({
     >
       {(
         [
-          [0, "All-time"],
+          [0, "12 months"],
           [1, "Recent"],
         ] as const
       ).map(([option, label]) => {
@@ -393,7 +393,8 @@ export function PlayerDetail({
   fallbackName,
   onBack,
 }: PlayerDetailProps) {
-  const [section, setSection] = useState<DetailSection>("overview");
+  const [section, setSection] = useState<DetailSection>("stats");
+  const [statsSubTab, setStatsSubTab] = useState<StatsSubTab>("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [player, setPlayer] = useState<FargoPlayerProfile | null>(null);
@@ -434,7 +435,8 @@ export function PlayerDetail({
     setError(null);
     setPlayer(null);
     setTeams([]);
-    setSection("overview");
+    setSection("stats");
+    setStatsSubTab("overview");
     setMatchQuery("");
     setDebouncedMatchQuery("");
     setMatchBucket(null);
@@ -736,7 +738,7 @@ export function PlayerDetail({
         <div
           role="tablist"
           aria-label="Player detail sections"
-          className="grid w-full grid-cols-5 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+          className="grid w-full grid-cols-4 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
         >
           {SECTIONS.map((item) => {
             const selected = section === item.id;
@@ -750,7 +752,7 @@ export function PlayerDetail({
                   startTransition(() => setSection(item.id))
                 }
                 className={[
-                  "min-w-0 rounded-md px-0.5 py-1.5 text-center text-[10px] font-semibold leading-tight transition sm:px-1.5 sm:text-xs",
+                  "min-w-0 rounded-md px-1 py-1.5 text-center text-[11px] font-semibold leading-tight transition sm:px-2 sm:text-sm",
                   selected
                     ? "bg-[var(--felt)] text-white shadow-sm"
                     : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
@@ -775,157 +777,198 @@ export function PlayerDetail({
         </div>
       ) : null}
 
-      {player && section === "overview" ? (
+      {player && section === "stats" ? (
         <div className="space-y-3">
-          <SectionCard
-            eyebrow="Record"
-            title="Overall"
-            description="Wins and losses from FargoRate."
-            badge={
-              overall
-                ? {
-                    label: "Win %",
-                    value: `${winPct(overall.wins, overall.loses)}%`,
-                  }
-                : undefined
-            }
+          <div
+            role="tablist"
+            aria-label="Stats views"
+            className="grid w-full grid-cols-2 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
           >
-            <StatsWindowToggle
-              value={statsWindow}
-              onChange={setStatsWindow}
-            />
-            {overall ? (
-              <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--line)]">
-                <div className="bg-[var(--surface)] px-3 py-3 sm:px-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                    Wins
-                  </p>
-                  <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl tabular-nums text-[var(--ink)]">
-                    {overall.wins}
-                  </p>
-                </div>
-                <div className="bg-[var(--surface)] px-3 py-3 sm:px-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                    Losses
-                  </p>
-                  <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl tabular-nums text-[var(--ink)]">
-                    {overall.loses}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-[var(--muted)]">
-                No overall stats available.
-              </p>
-            )}
-          </SectionCard>
+            {STATS_SUBTABS.map((item) => {
+              const selected = statsSubTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() =>
+                    startTransition(() => setStatsSubTab(item.id))
+                  }
+                  className={[
+                    "rounded-md px-2 py-1.5 text-center text-xs font-semibold transition sm:text-sm",
+                    selected
+                      ? "bg-[var(--felt)] text-white shadow-sm"
+                      : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
+                  ].join(" ")}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
 
-          <SectionCard
-            eyebrow="History"
-            title="Rating"
-            description="Monthly rating snapshots."
-            badge={
-              historyValues.length
-                ? {
-                    label: "Latest",
-                    value: String(
-                      Math.round(historyValues[historyValues.length - 1] ?? 0),
-                    ),
-                  }
-                : undefined
-            }
-            flush
-          >
-            {player.ratingHistory.length ? (
-              <>
-                <div className="flex items-end justify-between gap-3 px-3 py-3 sm:px-4">
-                  <RatingSparkline values={historyValues} />
-                  <div className="shrink-0 text-right text-xs text-[var(--muted)]">
-                    <p>
-                      {formatMonth(player.ratingHistory[0]!)} →{" "}
-                      {formatMonth(
-                        player.ratingHistory[player.ratingHistory.length - 1]!,
-                      )}
-                    </p>
-                    <p className="mt-1 tabular-nums">
-                      {Math.round(historyValues[0] ?? 0)} →{" "}
-                      {Math.round(
-                        historyValues[historyValues.length - 1] ?? 0,
-                      )}
-                    </p>
+          {statsSubTab === "overview" ? (
+            <>
+              <SectionCard
+                eyebrow="Record"
+                title="Overall"
+                description={`${temporalLabel(statsWindow)} wins and losses from FargoRate.`}
+                badge={
+                  overall
+                    ? {
+                        label: "Win %",
+                        value: `${winPct(overall.wins, overall.loses)}%`,
+                      }
+                    : undefined
+                }
+              >
+                <StatsWindowToggle
+                  value={statsWindow}
+                  onChange={setStatsWindow}
+                />
+                {overall ? (
+                  <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--line)]">
+                    <div className="bg-[var(--surface)] px-3 py-3 sm:px-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                        Wins
+                      </p>
+                      <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl tabular-nums text-[var(--ink)]">
+                        {overall.wins}
+                      </p>
+                    </div>
+                    <div className="bg-[var(--surface)] px-3 py-3 sm:px-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                        Losses
+                      </p>
+                      <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl tabular-nums text-[var(--ink)]">
+                        {overall.loses}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <ul className="max-h-48 divide-y divide-[var(--line)] overflow-y-auto border-t border-[var(--line)]">
-                  {[...player.ratingHistory].reverse().map((entry) => (
-                    <li
-                      key={entry.id}
-                      className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm sm:px-4"
-                    >
-                      <span className="text-[var(--muted)]">
-                        {formatMonth(entry)}
-                      </span>
-                      <span className="tabular-nums font-medium text-[var(--ink)]">
-                        {entry.rating.toFixed(1)}
-                        <span className="ml-2 text-xs font-normal text-[var(--muted)]">
-                          rob {Math.round(entry.robustness)}
-                        </span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : (
-              <p className="px-3 py-4 text-sm text-[var(--muted)] sm:px-4">
-                No rating history available.
-              </p>
-            )}
-          </SectionCard>
-        </div>
-      ) : null}
+                ) : (
+                  <p className="text-sm text-[var(--muted)]">
+                    No overall stats available.
+                  </p>
+                )}
+              </SectionCard>
 
-      {player && section === "performance" ? (
-        <SectionCard
-          eyebrow="Performance"
-          title="By rating"
-          description={`${temporalLabel(statsWindow)} results by opponent rating band.`}
-        >
-          <StatsWindowToggle value={statsWindow} onChange={setStatsWindow} />
-
-          {byRating?.buckets?.length ? (
-            <ul className="space-y-2">
-              {byRating.buckets.map((bucket) => {
-                const total = bucket.winLoss.wins + bucket.winLoss.loses;
-                const pct = winPct(bucket.winLoss.wins, bucket.winLoss.loses);
-                return (
-                  <li
-                    key={`${statsWindow}-${bucket.bucket}`}
-                    className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2.5"
-                  >
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <span className="font-semibold tabular-nums text-[var(--ink)]">
-                        {bucket.bucket}s
-                      </span>
-                      <span className="tabular-nums text-[var(--muted)]">
-                        {bucket.winLoss.wins}–{bucket.winLoss.loses}
-                        {total > 0 ? ` · ${pct}%` : ""}
-                      </span>
+              <SectionCard
+                eyebrow="History"
+                title="Rating"
+                description="Monthly rating snapshots."
+                badge={
+                  historyValues.length
+                    ? {
+                        label: "Latest",
+                        value: String(
+                          Math.round(
+                            historyValues[historyValues.length - 1] ?? 0,
+                          ),
+                        ),
+                      }
+                    : undefined
+                }
+                flush
+              >
+                {player.ratingHistory.length ? (
+                  <>
+                    <div className="flex items-end justify-between gap-3 px-3 py-3 sm:px-4">
+                      <RatingSparkline values={historyValues} />
+                      <div className="shrink-0 text-right text-xs text-[var(--muted)]">
+                        <p>
+                          {formatMonth(player.ratingHistory[0]!)} →{" "}
+                          {formatMonth(
+                            player.ratingHistory[
+                              player.ratingHistory.length - 1
+                            ]!,
+                          )}
+                        </p>
+                        <p className="mt-1 tabular-nums">
+                          {Math.round(historyValues[0] ?? 0)} →{" "}
+                          {Math.round(
+                            historyValues[historyValues.length - 1] ?? 0,
+                          )}
+                        </p>
+                      </div>
                     </div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)]">
-                      <div
-                        className="h-full rounded-full bg-[var(--felt)] transition-[width] duration-300"
-                        style={{ width: `${total > 0 ? pct : 0}%` }}
-                      />
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+                    <ul className="max-h-48 divide-y divide-[var(--line)] overflow-y-auto border-t border-[var(--line)]">
+                      {[...player.ratingHistory].reverse().map((entry) => (
+                        <li
+                          key={entry.id}
+                          className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm sm:px-4"
+                        >
+                          <span className="text-[var(--muted)]">
+                            {formatMonth(entry)}
+                          </span>
+                          <span className="tabular-nums font-medium text-[var(--ink)]">
+                            {entry.rating.toFixed(1)}
+                            <span className="ml-2 text-xs font-normal text-[var(--muted)]">
+                              rob {Math.round(entry.robustness)}
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : (
+                  <p className="px-3 py-4 text-sm text-[var(--muted)] sm:px-4">
+                    No rating history available.
+                  </p>
+                )}
+              </SectionCard>
+            </>
           ) : (
-            <p className="text-sm text-[var(--muted)]">
-              No rating-band stats available.
-            </p>
+            <SectionCard
+              eyebrow="Performance"
+              title="By rating"
+              description={`${temporalLabel(statsWindow)} results by opponent rating band.`}
+            >
+              <StatsWindowToggle
+                value={statsWindow}
+                onChange={setStatsWindow}
+              />
+
+              {byRating?.buckets?.length ? (
+                <ul className="space-y-2">
+                  {byRating.buckets.map((bucket) => {
+                    const total = bucket.winLoss.wins + bucket.winLoss.loses;
+                    const pct = winPct(
+                      bucket.winLoss.wins,
+                      bucket.winLoss.loses,
+                    );
+                    return (
+                      <li
+                        key={`${statsWindow}-${bucket.bucket}`}
+                        className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2.5"
+                      >
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <span className="font-semibold tabular-nums text-[var(--ink)]">
+                            {bucket.bucket}s
+                          </span>
+                          <span className="tabular-nums text-[var(--muted)]">
+                            {bucket.winLoss.wins}–{bucket.winLoss.loses}
+                            {total > 0 ? ` · ${pct}%` : ""}
+                          </span>
+                        </div>
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)]">
+                          <div
+                            className="h-full rounded-full bg-[var(--felt)] transition-[width] duration-300"
+                            style={{ width: `${total > 0 ? pct : 0}%` }}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="text-sm text-[var(--muted)]">
+                  No rating-band stats available.
+                </p>
+              )}
+            </SectionCard>
           )}
-        </SectionCard>
+        </div>
       ) : null}
 
       {player && section === "leagues" ? (
