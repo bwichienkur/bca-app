@@ -1504,20 +1504,11 @@ export function MatchScoring({
       : nightVenues.length > 1
         ? `${nightVenues.length} venues`
         : null;
-  const liveCount = nightMatches.filter((item) => {
-    const localDraft = loadDraft(item.id);
-    const summary = mergeBoardSummary(
-      draftSummaries[item.id],
-      localDraft,
-    );
-    return boardStatusFor(item, summary, localDraft) === "in_progress";
-  }).length;
-
   return (
     <section className="animate-rise space-y-3">
       <SectionCard
         eyebrow="Score"
-        title="Night board"
+        title="Night Board"
         description={
           <>
             Live scores for every match in{" "}
@@ -1540,7 +1531,7 @@ export function MatchScoring({
           loadingMatches
             ? undefined
             : {
-                label: liveCount > 0 ? "Live" : "Matches",
+                label: "Matches",
                 value: String(nightMatches.length),
               }
         }
