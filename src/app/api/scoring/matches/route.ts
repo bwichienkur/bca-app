@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fetchSchedule } from "@/lib/lms";
+import { parseScheduleDate } from "@/lib/schedule";
 import {
   lmsAuthFetch,
   requireScoringSession,
 } from "@/lib/scoring-auth";
-import { normalizeScoringPlayer, type ScoringMatchSummary } from "@/lib/scoring";
+import {
+  normalizeScoringPlayer,
+  type ScoringMatchSummary,
+} from "@/lib/scoring";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +20,8 @@ type RawMatch = {
   location: string;
   hasBeenPlayed: boolean;
   teamOneId: string;
-  teamOneName: string;
   teamTwoId: string;
+  teamOneName: string;
   teamTwoName: string;
   numberOfSets: number;
   minScore: number;
@@ -28,6 +33,71 @@ type RawMatch = {
   maximumAllowedHandicap?: number;
   matchWinCountsAsRound?: boolean;
 };
+
+/** How far past/future to backfill completed matches from the schedule. */
+const BOARD_WINDOW_DAYS = 28;
+
+function localDayKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function dayKeyFromValue(value: string): string | null {
+  const parsed = parseScheduleDate(value);
+  if (parsed) return localDayKey(parsed);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    const slice = value.slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(slice) ? slice : null;
+  }
+  return localDayKey(date);
+}
+
+function addDaysKey(base: Date, offset: number): string {
+  const date = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+  date.setDate(date.getDate() + offset);
+  return localDayKey(date);
+}
+
+function toSummary(
+  match: RawMatch,
+  mySide: 1 | 2 | null,
+): ScoringMatchSummary {
+  return {
+    id: match.id,
+    divisionId: match.divisionId,
+    divisionName: match.divisionName,
+    datePlayed: match.datePlayed,
+    location: match.location,
+    hasBeenPlayed: match.hasBeenPlayed,
+    teamOneId: match.teamOneId,
+    teamOneName: match.teamOneName.trim(),
+    teamTwoId: match.teamTwoId,
+    teamTwoName: match.teamTwoName.trim(),
+    numberOfSets: match.numberOfSets,
+    minScore: match.minScore,
+    maxScore: match.maxScore,
+    maxLosingScore: match.maxLosingScore,
+    pointsForWin: match.pointsForWin,
+    isHandicapped: match.isHandicapped,
+    handicapPercentage: match.handicapPercentage ?? 1,
+    maximumAllowedHandicap: match.maximumAllowedHandicap ?? 50,
+    matchWinCountsAsRound: match.matchWinCountsAsRound !== false,
+    mySide,
+  };
+}
+
+function sideForTeam(
+  match: Pick<RawMatch, "teamOneId" | "teamTwoId">,
+  teamId: string | null,
+): 1 | 2 | null {
+  if (!teamId) return null;
+  if (match.teamOneId === teamId) return 1;
+  if (match.teamTwoId === teamId) return 2;
+  return null;
+}
 
 async function teamIncludesPlayer(
   teamId: string,
@@ -46,6 +116,89 @@ async function teamIncludesPlayer(
   );
   cache.set(teamId, hit);
   return hit;
+}
+
+async function hydrateMatch(matchId: string): Promise<RawMatch | null> {
+  const response = await lmsAuthFetch(`/api/matches/${matchId}`);
+  if (!response.ok) return null;
+  const match = (await response.json()) as Record<string, unknown>;
+  const id = String(match.id ?? matchId);
+  if (!id) return null;
+  return {
+    id,
+    divisionId: String(match.divisionId ?? ""),
+    divisionName: String(match.divisionName ?? ""),
+    datePlayed: String(match.datePlayed ?? ""),
+    location: String(match.location ?? ""),
+    hasBeenPlayed: Boolean(match.hasBeenPlayed),
+    teamOneId: String(match.teamOneId ?? ""),
+    teamTwoId: String(match.teamTwoId ?? ""),
+    teamOneName: String(match.teamOneName ?? ""),
+    teamTwoName: String(match.teamTwoName ?? ""),
+    numberOfSets: Number(match.numberOfSets ?? 5),
+    minScore: Number(match.minScore ?? 0),
+    maxScore: Number(match.maxScore ?? 10),
+    maxLosingScore: Number(match.maxLosingScore ?? 7),
+    pointsForWin: Number(match.pointsForWin ?? 10),
+    isHandicapped: Boolean(match.isHandicapped),
+    handicapPercentage: Number(match.handicapPercentage ?? 1),
+    maximumAllowedHandicap: Number(match.maximumAllowedHandicap ?? 50),
+    matchWinCountsAsRound: match.matchWinCountsAsRound !== false,
+  };
+}
+
+/**
+ * LMS ScheduledMatchesForPlayerBCAPL drops matches once they are scored.
+ * For the division night board, backfill those from the public schedule.
+ */
+async function backfillFromSchedule(args: {
+  divisionId: string;
+  existing: ScoringMatchSummary[];
+  teamId: string | null;
+}): Promise<ScoringMatchSummary[]> {
+  const schedule = await fetchSchedule(args.divisionId);
+  const existingIds = new Set(args.existing.map((match) => match.id));
+  const tonight = localDayKey(new Date());
+  const nights = new Set<string>();
+  for (let offset = -BOARD_WINDOW_DAYS; offset <= BOARD_WINDOW_DAYS; offset += 1) {
+    nights.add(addDaysKey(new Date(), offset));
+  }
+  for (const match of args.existing) {
+    const key = dayKeyFromValue(match.datePlayed);
+    if (key) nights.add(key);
+  }
+  nights.add(tonight);
+
+  const missingIds: string[] = [];
+  for (const day of schedule) {
+    const dayKey = dayKeyFromValue(day.date);
+    if (!dayKey || !nights.has(dayKey)) continue;
+    for (const item of day.matches) {
+      if (!item.matchId || existingIds.has(item.matchId)) continue;
+      missingIds.push(item.matchId);
+      existingIds.add(item.matchId);
+    }
+  }
+
+  if (missingIds.length === 0) return [];
+
+  const hydrated = await Promise.all(
+    missingIds.map(async (matchId) => {
+      try {
+        return await hydrateMatch(matchId);
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  const extras: ScoringMatchSummary[] = [];
+  for (const match of hydrated) {
+    if (!match) continue;
+    if (match.divisionId && match.divisionId !== args.divisionId) continue;
+    extras.push(toSummary(match, sideForTeam(match, args.teamId)));
+  }
+  return extras;
 }
 
 export async function GET(request: NextRequest) {
@@ -74,8 +227,7 @@ export async function GET(request: NextRequest) {
     }
 
     const raw = (await response.json()) as RawMatch[];
-    const mineOnly =
-      request.nextUrl.searchParams.get("mine") !== "0";
+    const mineOnly = request.nextUrl.searchParams.get("mine") !== "0";
     const teamId = request.nextUrl.searchParams.get("teamId");
     const cache = new Map<string, boolean>();
     const matches: ScoringMatchSummary[] = [];
@@ -114,33 +266,24 @@ export async function GET(request: NextRequest) {
             );
         if (!onOne && !onTwo) continue;
         mySide = onOne ? 1 : 2;
-      } else if (teamId) {
-        if (match.teamOneId === teamId) mySide = 1;
-        else if (match.teamTwoId === teamId) mySide = 2;
+      } else {
+        mySide = sideForTeam(match, teamId);
       }
 
-      matches.push({
-        id: match.id,
-        divisionId: match.divisionId,
-        divisionName: match.divisionName,
-        datePlayed: match.datePlayed,
-        location: match.location,
-        hasBeenPlayed: match.hasBeenPlayed,
-        teamOneId: match.teamOneId,
-        teamOneName: match.teamOneName.trim(),
-        teamTwoId: match.teamTwoId,
-        teamTwoName: match.teamTwoName.trim(),
-        numberOfSets: match.numberOfSets,
-        minScore: match.minScore,
-        maxScore: match.maxScore,
-        maxLosingScore: match.maxLosingScore,
-        pointsForWin: match.pointsForWin,
-        isHandicapped: match.isHandicapped,
-        handicapPercentage: match.handicapPercentage ?? 1,
-        maximumAllowedHandicap: match.maximumAllowedHandicap ?? 50,
-        matchWinCountsAsRound: match.matchWinCountsAsRound !== false,
-        mySide,
-      });
+      matches.push(toSummary(match, mySide));
+    }
+
+    if (!mineOnly) {
+      try {
+        const extras = await backfillFromSchedule({
+          divisionId,
+          existing: matches,
+          teamId,
+        });
+        matches.push(...extras);
+      } catch {
+        // Night board still works with whatever LMS returned.
+      }
     }
 
     matches.sort((a, b) => {
