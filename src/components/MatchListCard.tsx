@@ -44,6 +44,35 @@ function statusLabel(status: MatchBoardStatus): string {
   return "Not started";
 }
 
+function ScoreBox({
+  value,
+  emphasize,
+}: {
+  value: number;
+  emphasize?: boolean;
+}) {
+  return (
+    <div
+      className={[
+        "flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-2xl",
+        "bg-[color-mix(in_srgb,var(--felt)_18%,var(--surface-2))] ring-1",
+        emphasize
+          ? "ring-[color-mix(in_srgb,var(--felt)_55%,var(--line))]"
+          : "ring-[var(--line-strong)]",
+      ].join(" ")}
+    >
+      <span
+        className={[
+          "font-[family-name:var(--font-display)] text-2xl font-semibold tabular-nums leading-none",
+          emphasize ? "text-[var(--felt-deep)]" : "text-[var(--ink)]",
+        ].join(" ")}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
 function TeamScoreRow({
   name,
   emphasize,
@@ -52,7 +81,7 @@ function TeamScoreRow({
 }: {
   name: string;
   emphasize?: boolean;
-  rounds: number | null;
+  rounds: number;
   showScores: boolean;
 }) {
   return (
@@ -67,16 +96,7 @@ function TeamScoreRow({
       >
         {name}
       </p>
-      {showScores ? (
-        <p
-          className={[
-            "shrink-0 font-[family-name:var(--font-display)] text-3xl font-semibold tabular-nums leading-none",
-            emphasize ? "text-[var(--felt-deep)]" : "text-[var(--ink)]",
-          ].join(" ")}
-        >
-          {rounds ?? "–"}
-        </p>
-      ) : null}
+      {showScores ? <ScoreBox value={rounds} emphasize={emphasize} /> : null}
     </div>
   );
 }
@@ -145,27 +165,28 @@ export function MatchListCard({
             ) : null}
           </div>
 
-          <div className="mt-2.5 space-y-1.5">
+          <div className="mt-2.5 space-y-2">
             <TeamScoreRow
               name={homeName}
               emphasize={emphasizeHome}
-              rounds={homeRounds}
+              rounds={homeRounds ?? 0}
               showScores={showScores}
             />
             <TeamScoreRow
               name={awayName}
               emphasize={emphasizeAway}
-              rounds={awayRounds}
+              rounds={awayRounds ?? 0}
               showScores={showScores}
             />
           </div>
 
-          {showScores && homeGames != null && awayGames != null ? (
+          {showScores ? (
             <p className="mt-2 text-[11px] text-[var(--muted)]">
-              Games {homeGames}–{awayGames}
+              Round wins
+              {homeGames != null && awayGames != null
+                ? ` · Games ${homeGames}–${awayGames}`
+                : ""}
             </p>
-          ) : showScores ? (
-            <p className="mt-2 text-[11px] text-[var(--muted)]">Round wins</p>
           ) : null}
 
           {!hasBoard && status ? (

@@ -434,11 +434,38 @@ export function MatchScoring({
         // Fall back to localStorage-only.
       }
 
+      let chosen = newerDraft(remoteDraft, local, "a");
+      const chosenScored = chosen ? tallyDraft(chosen).scored : 0;
+
+      // Completed matches with no Tableside draft: hydrate players + scores from LMS.
+      if (chosenScored === 0) {
+        try {
+          const lms = await fetchJson<{
+            draft: ScoringDraft | null;
+            summary?: DraftBoardSummary | null;
+          }>(`/api/scoring/matches/${matchId}/result`);
+          if (lms.draft && tallyDraft(lms.draft).scored > 0) {
+            chosen = lms.draft;
+            if (!submittedAt && data.match.hasBeenPlayed) {
+              submittedAt = lms.summary?.submittedAt ?? new Date().toISOString();
+              setSyncNote("Scores loaded from LMS.");
+            }
+            if (lms.summary) {
+              setDraftSummaries((prev) => ({
+                ...prev,
+                [matchId]: lms.summary!,
+              }));
+            }
+          }
+        } catch {
+          // Keep empty / local draft when LMS result is unavailable.
+        }
+      }
+
       const locked = Boolean(data.match.hasBeenPlayed || submittedAt);
       sheetLockedRef.current = locked;
       setRemoteSubmittedAt(submittedAt);
 
-      const chosen = newerDraft(remoteDraft, local, "a");
       const nextDraft = chosen
         ? syncLineupToGames(normalizeDraftScores(chosen), data.match)
         : emptyDraft(data.match);
@@ -467,6 +494,18 @@ export function MatchScoring({
         setDraftSummaries((prev) => ({
           ...prev,
           [matchId]: summarizeDraftForBoard(nextDraft, null),
+        }));
+      } else {
+        // Keep a local copy for the night board even when the sheet is locked.
+        saveDraft(nextDraft);
+        setDraftSummaries((prev) => ({
+          ...prev,
+          [matchId]:
+            prev[matchId] ??
+            summarizeDraftForBoard(
+              nextDraft,
+              submittedAt ?? new Date().toISOString(),
+            ),
         }));
       }
     } catch (err) {
@@ -1509,7 +1548,8 @@ export function MatchScoring({
                 const boardStatus = boardStatusFor(item, summary);
                 const isMyMatch = item.mySide != null;
                 const showScores =
-                  boardStatus !== "not_started" ||
+                  boardStatus === "complete" ||
+                  boardStatus === "in_progress" ||
                   (summary != null && summary.gamesScored > 0);
                 const ctaLabel =
                   boardStatus === "complete"
@@ -1530,18 +1570,10 @@ export function MatchScoring({
                     boardStatus={boardStatus}
                     isMyMatch={isMyMatch}
                     showScores={showScores}
-                    homeRounds={
-                      summary ? summary.teamOneRoundWins : null
-                    }
-                    awayRounds={
-                      summary ? summary.teamTwoRoundWins : null
-                    }
-                    homeGames={
-                      summary ? summary.teamOneGameWins : null
-                    }
-                    awayGames={
-                      summary ? summary.teamTwoGameWins : null
-                    }
+                    homeRounds={summary?.teamOneRoundWins ?? 0}
+                    awayRounds={summary?.teamTwoRoundWins ?? 0}
+                    homeGames={summary?.teamOneGameWins ?? null}
+                    awayGames={summary?.teamTwoGameWins ?? null}
                     ctaLabel={ctaLabel}
                     emphasizeHome={item.mySide === 1}
                     emphasizeAway={item.mySide === 2}
