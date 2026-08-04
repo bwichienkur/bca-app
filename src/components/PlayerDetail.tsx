@@ -16,6 +16,7 @@ import type {
   FargoStatsByRating,
   FargoStatsOverall,
 } from "@/lib/fargo-player";
+import { SearchField } from "./SearchField";
 
 type PlayerDetailProps = {
   playerId: string;
@@ -890,17 +891,13 @@ export function PlayerDetail({
           </div>
 
           <div className="space-y-2">
-            <label className="relative block min-w-0">
-              <span className="sr-only">Search matches</span>
-              <input
-                value={matchQuery}
-                onChange={(event) => setMatchQuery(event.target.value)}
-                placeholder="Search opponent or event…"
-                autoComplete="off"
-                spellCheck={false}
-                className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2"
-              />
-            </label>
+            <SearchField
+              value={matchQuery}
+              onChange={setMatchQuery}
+              label="Search matches"
+              placeholder="Search opponent or event…"
+              className="max-w-none"
+            />
 
             <div className="grid grid-cols-2 gap-2">
               <ThemedFilterSelect
