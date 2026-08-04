@@ -194,6 +194,127 @@ function RatingSparkline({ values }: { values: number[] }) {
   );
 }
 
+/** 270° arc gauge for win percentage, with W–L totals underneath. */
+function WinRecordGauge({
+  wins,
+  losses,
+}: {
+  wins: number;
+  losses: number;
+}) {
+  const pct = winPct(wins, losses);
+  const total = wins + losses;
+  const size = 168;
+  const cx = size / 2;
+  const cy = size / 2 + 4;
+  const radius = 58;
+  const stroke = 12;
+  const circumference = 2 * Math.PI * radius;
+  const arcFraction = 0.75; // 270°
+  const arcLength = circumference * arcFraction;
+  const progress = Math.max(0, Math.min(1, pct / 100)) * arcLength;
+  // Arc starts at bottom-left (135°) so the open gap faces down.
+  const startAngleDeg = 135;
+  const sweepDeg = 270 * (pct / 100);
+  const tipAngleRad = ((startAngleDeg + sweepDeg) * Math.PI) / 180;
+  const tipR = radius;
+  const tipX = cx + tipR * Math.cos(tipAngleRad);
+  const tipY = cy + tipR * Math.sin(tipAngleRad);
+  // Small triangular marker oriented along the tangent.
+  const tangent = tipAngleRad + Math.PI / 2;
+  const marker = 7;
+  const p1 = `${tipX + marker * Math.cos(tipAngleRad)},${tipY + marker * Math.sin(tipAngleRad)}`;
+  const p2 = `${tipX - marker * 0.55 * Math.cos(tangent)},${tipY - marker * 0.55 * Math.sin(tangent)}`;
+  const p3 = `${tipX + marker * 0.55 * Math.cos(tangent)},${tipY + marker * 0.55 * Math.sin(tangent)}`;
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <div className="relative w-full max-w-[13.5rem]">
+        <svg
+          viewBox={`0 0 ${size} ${size}`}
+          className="mx-auto h-auto w-full text-[var(--felt)]"
+          role="img"
+          aria-label={`Win percentage ${pct} percent from ${wins} wins and ${losses} losses`}
+        >
+          <circle
+            cx={cx}
+            cy={cy}
+            r={radius}
+            fill="none"
+            stroke="var(--surface-3)"
+            strokeWidth={stroke}
+            strokeDasharray={`${arcLength} ${circumference}`}
+            strokeLinecap="round"
+            transform={`rotate(${startAngleDeg} ${cx} ${cy})`}
+          />
+          <circle
+            cx={cx}
+            cy={cy}
+            r={radius}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={stroke}
+            strokeDasharray={`${progress} ${circumference}`}
+            strokeLinecap="round"
+            transform={`rotate(${startAngleDeg} ${cx} ${cy})`}
+            className="transition-[stroke-dasharray] duration-500 ease-out"
+          />
+          {total > 0 ? (
+            <polygon
+              points={`${p1} ${p2} ${p3}`}
+              fill="var(--ink)"
+              className="opacity-90"
+            />
+          ) : null}
+          <text
+            x={cx}
+            y={cy - 2}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill="var(--ink)"
+            fontSize="36"
+            fontWeight="600"
+            fontFamily="var(--font-display), system-ui, sans-serif"
+            className="tabular-nums"
+          >
+            {pct}%
+          </text>
+          <text
+            x={cx}
+            y={cy + 22}
+            textAnchor="middle"
+            fill="var(--muted)"
+            fontSize="11"
+            fontWeight="600"
+            letterSpacing="0.12em"
+          >
+            WIN %
+          </text>
+        </svg>
+      </div>
+
+      <div className="grid w-full grid-cols-2 gap-px overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--line)]">
+        <div className="bg-[var(--surface-2)] px-3 py-2.5 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+            Wins
+          </p>
+          <p className="mt-1 font-[family-name:var(--font-display)] text-xl tabular-nums text-[var(--felt-deep)]">
+            {wins}
+          </p>
+        </div>
+        <div className="bg-[var(--surface-2)] px-3 py-2.5 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+            Losses
+          </p>
+          <p className="mt-1 font-[family-name:var(--font-display)] text-xl tabular-nums text-[var(--ink)]">
+            {losses}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StatsWindowToggle({
   value,
   onChange,
@@ -817,8 +938,8 @@ export function PlayerDetail({
                 badge={
                   overall
                     ? {
-                        label: "Win %",
-                        value: `${winPct(overall.wins, overall.loses)}%`,
+                        label: "Games",
+                        value: String(overall.wins + overall.loses),
                       }
                     : undefined
                 }
@@ -828,24 +949,10 @@ export function PlayerDetail({
                   onChange={setStatsWindow}
                 />
                 {overall ? (
-                  <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--line)]">
-                    <div className="bg-[var(--surface)] px-3 py-3 sm:px-4">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                        Wins
-                      </p>
-                      <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl tabular-nums text-[var(--ink)]">
-                        {overall.wins}
-                      </p>
-                    </div>
-                    <div className="bg-[var(--surface)] px-3 py-3 sm:px-4">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                        Losses
-                      </p>
-                      <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl tabular-nums text-[var(--ink)]">
-                        {overall.loses}
-                      </p>
-                    </div>
-                  </div>
+                  <WinRecordGauge
+                    wins={overall.wins}
+                    losses={overall.loses}
+                  />
                 ) : (
                   <p className="text-sm text-[var(--muted)]">
                     No overall stats available.
