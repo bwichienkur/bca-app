@@ -1538,7 +1538,7 @@ export function MatchScoring({
                   }`,
                 }))}
                 buttonClassName={[
-                  "rounded-2xl border-[var(--line)] bg-[var(--surface)] px-3.5 py-2.5",
+                  "rounded-[var(--radius)] border-[var(--line)] bg-[var(--surface)] px-3.5 py-2.5",
                   "font-[family-name:var(--font-display)] text-[15px] font-semibold tracking-wide text-[var(--amber)]",
                   "hover:border-[color-mix(in_srgb,var(--felt)_55%,var(--line))] hover:bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]",
                 ].join(" ")}
@@ -1550,7 +1550,7 @@ export function MatchScoring({
               ) : null}
             </div>
           ) : nightLabel ? (
-            <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3.5 py-2.5">
+            <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3.5 py-2.5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
                 Match night
               </p>
@@ -1739,7 +1739,7 @@ const MatchScoreboard = memo(function MatchScoreboard({
   };
 
   return (
-    <div className="w-full overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.99))] px-3 py-3 text-white shadow-[var(--shadow)] sm:px-4 md:px-5 md:py-3.5">
+    <div className="w-full overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.99))] px-3 py-3 text-white shadow-[var(--shadow)] sm:px-4 md:px-5 md:py-3.5">
       <div className="flex items-start justify-between gap-3">
         <p className="min-w-0 text-[11px] uppercase tracking-[0.14em] text-white/60">
           {dateLabel}
@@ -1757,7 +1757,7 @@ const MatchScoreboard = memo(function MatchScoreboard({
         {teamHeader(2, teamTwoName, "right")}
       </div>
 
-      <div className="mt-3 rounded-2xl bg-black/30 px-2.5 py-2.5 ring-1 ring-white/10 sm:px-3.5 sm:py-3">
+      <div className="mt-3 rounded-[var(--radius)] bg-black/30 px-2.5 py-2.5 ring-1 ring-white/10 sm:px-3.5 sm:py-3">
         {metricRow({
           label: "Rounds",
           one: roundWins.teamOne,
@@ -1946,7 +1946,7 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
   return (
     <div
       className={[
-        "w-full min-w-0 overflow-hidden rounded-2xl border px-3 py-2.5 sm:px-4",
+        "w-full min-w-0 overflow-hidden rounded-[var(--radius)] border px-3 py-2.5 sm:px-4",
         tally.roundWinner
           ? tally.roundWinner === mySide
             ? "border-[var(--felt)]/45 bg-[color-mix(in_srgb,var(--felt)_12%,var(--surface))]"
@@ -2105,7 +2105,7 @@ function LineupEditor({
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        className="flex w-full min-w-0 items-center justify-between gap-3 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-3 py-3 text-left sm:px-4"
+        className="flex w-full min-w-0 items-center justify-between gap-3 overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-3 text-left sm:px-4"
       >
         <div className="min-w-0 flex-1 overflow-hidden">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
@@ -2130,7 +2130,7 @@ function LineupEditor({
             <div
               role="tablist"
               aria-label="Lineup teams"
-              className="grid grid-cols-2 gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-1"
+              className="grid grid-cols-2 gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-1"
             >
               {(
                 [
@@ -2528,7 +2528,7 @@ function ScorePad({
 
   if (!open || !game || !local || !baseline) {
     return (
-      <aside className="hidden rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)]/50 p-5 text-sm text-[var(--muted)] lg:block">
+      <aside className="hidden rounded-[var(--radius)] border border-dashed border-[var(--line)] bg-[var(--surface)]/50 p-5 text-sm text-[var(--muted)] lg:block">
         Tap a game to open the score pad.
       </aside>
     );
@@ -2705,7 +2705,7 @@ function ScorePad({
           <div
             ref={scoresRef}
             className={[
-              "overflow-hidden rounded-[1.35rem] border bg-[var(--surface)] shadow-sm",
+              "overflow-hidden rounded-[var(--radius)] border bg-[var(--surface)] shadow-sm",
               winner
                 ? "border-[var(--felt)]/40"
                 : "border-[var(--line)]",
@@ -2765,7 +2765,7 @@ function ScorePad({
                       "min-w-0",
                       side === 2 ? "col-start-3" : "",
                       meta.isWinner
-                        ? "rounded-2xl bg-[color-mix(in_srgb,var(--felt)_12%,transparent)]"
+                        ? "rounded-[var(--radius)] bg-[color-mix(in_srgb,var(--felt)_12%,transparent)]"
                         : "",
                     ].join(" ")}
                   >
@@ -2965,7 +2965,7 @@ function ScorePad({
 
   return (
     <>
-      <aside className="hidden rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface)]/50 p-5 text-sm text-[var(--muted)] lg:block">
+      <aside className="hidden rounded-[var(--radius)] border border-dashed border-[var(--line)] bg-[var(--surface)]/50 p-5 text-sm text-[var(--muted)] lg:block">
         Score pad open — use the full-screen editor.
       </aside>
       {mounted ? createPortal(sheet, document.body) : null}
@@ -3021,7 +3021,7 @@ function ConfirmDialog({
         aria-modal="true"
         aria-labelledby="score-confirm-title"
         aria-describedby="score-confirm-body"
-        className="w-full max-w-md rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 shadow-[var(--shadow)]"
+        className="w-full max-w-md rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-5 shadow-[var(--shadow)]"
         onClick={(event) => event.stopPropagation()}
       >
         <h4
@@ -3093,7 +3093,7 @@ function ReviewPanel({
   const hcTwo = roundTallies.reduce((sum, round) => sum + round.teamTwoHandicap, 0);
 
   return (
-    <div className="space-y-4 rounded-[1.4rem] border border-[var(--line)] bg-[var(--surface)] p-4 md:p-5">
+    <div className="space-y-4 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-4 md:p-5">
       <div>
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
           Review

@@ -177,7 +177,7 @@ export function SettingsScreen({
       {loadingMembership ? (
         <LoadingState label="Finding your leagues, divisions, and teams…" />
       ) : membershipError ? (
-        <div className="space-y-3 rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
+        <div className="space-y-3 rounded-[var(--radius)] border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
           <p>{membershipError}</p>
           <button
             type="button"
@@ -188,7 +188,7 @@ export function SettingsScreen({
           </button>
         </div>
       ) : (
-        <div className="space-y-4 rounded-[1.4rem] border border-[var(--line)] bg-[var(--surface)] p-4 md:p-5">
+        <div className="space-y-4 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-4 md:p-5">
           <Typeahead
             label="Default league"
             placeholder={

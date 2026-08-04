@@ -176,7 +176,7 @@ function StatPill({
   value: string | number;
 }) {
   return (
-    <div className="min-w-0 flex-1 rounded-2xl border border-[var(--line)] bg-[var(--surface)]/90 px-3 py-2.5">
+    <div className="min-w-0 flex-1 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]/90 px-3 py-2.5">
       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
         {label}
       </p>
@@ -266,7 +266,7 @@ function ThemedFilterSelect<T extends string | number | null>({
             setOpen(false);
           }
         }}
-        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-2.5 text-left text-sm text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition focus:ring-2"
+        className="flex w-full items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-4 py-2.5 text-left text-sm text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition focus:ring-2"
       >
         <span className="min-w-0 truncate font-medium">
           {selected?.label ?? emptyLabel}
@@ -286,7 +286,7 @@ function ThemedFilterSelect<T extends string | number | null>({
           id={listId}
           role="listbox"
           aria-label={ariaLabel}
-          className="absolute mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 text-[var(--ink)] shadow-[var(--shadow)] [background-color:var(--surface-2)]"
+          className="absolute mt-1 max-h-72 w-full overflow-y-auto rounded-[var(--radius)] border border-[var(--line-strong)] bg-[var(--surface-2)] py-1 text-[var(--ink)] shadow-[var(--shadow)] [background-color:var(--surface-2)]"
         >
           {options.map((option, index) => {
             const isSelected = option.value === value;
@@ -642,7 +642,7 @@ export function PlayerDetail({
       ) : null}
 
       {error ? (
-        <div className="rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
+        <div className="rounded-[var(--radius)] border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
           {error}
         </div>
       ) : null}
@@ -710,7 +710,7 @@ export function PlayerDetail({
             </div>
 
             {player.ratingHistory.length ? (
-              <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)]/80 px-4 py-3">
+              <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]/80 px-4 py-3">
                 <div className="flex items-end justify-between gap-3">
                   <RatingSparkline values={historyValues} />
                   <div className="shrink-0 text-right text-xs text-[var(--muted)]">
@@ -797,7 +797,7 @@ export function PlayerDetail({
                 return (
                   <li
                     key={`${statsWindow}-${bucket.bucket}`}
-                    className="rounded-2xl border border-[var(--line)] bg-[var(--surface)]/80 px-3 py-2.5"
+                    className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]/80 px-3 py-2.5"
                   >
                     <div className="flex items-center justify-between gap-3 text-sm">
                       <span className="font-semibold tabular-nums text-[var(--ink)]">
@@ -838,7 +838,7 @@ export function PlayerDetail({
           </div>
 
           {teams.length ? (
-            <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)]/90">
+            <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]/90">
               {teams.map((team) => (
                 <li
                   key={`${team.leagueId}-${team.divisionId}-${team.teamId}`}
@@ -898,7 +898,7 @@ export function PlayerDetail({
                 placeholder="Search opponent or event…"
                 autoComplete="off"
                 spellCheck={false}
-                className="w-full rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2"
+                className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-4 py-2.5 text-sm text-[var(--ink)] outline-none ring-[var(--felt-soft)] transition placeholder:text-[var(--muted)] focus:ring-2"
               />
             </label>
 
@@ -927,7 +927,7 @@ export function PlayerDetail({
           </div>
 
           {matchesError ? (
-            <div className="rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
+            <div className="rounded-[var(--radius)] border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
               {matchesError}
             </div>
           ) : null}
@@ -947,7 +947,7 @@ export function PlayerDetail({
           {matches.length ? (
             <ul
               className={[
-                "divide-y divide-[var(--line)] overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)]/90 transition-opacity",
+                "divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]/90 transition-opacity",
                 matchesLoading ? "opacity-60" : "opacity-100",
               ].join(" ")}
             >
@@ -1009,7 +1009,7 @@ export function PlayerDetail({
           {matchesTotalPages > 1 ? (
             <nav
               aria-label="Match history pages"
-              className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[var(--line)] bg-[var(--surface)]/80 px-2.5 py-2 sm:px-3"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]/80 px-2.5 py-2 sm:px-3"
             >
               <button
                 type="button"

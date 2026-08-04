@@ -181,7 +181,7 @@ export function PlayerSelect({
           "flex w-full min-w-0 items-center justify-between gap-2 border border-[var(--line)] bg-[var(--surface)] text-left text-sm text-[var(--ink)] outline-none transition hover:border-[var(--line-strong)] focus:ring-2 focus:ring-[var(--felt-soft)] disabled:opacity-50",
           compact
             ? "rounded-xl px-2.5 py-1.5"
-            : "rounded-2xl px-3 py-2",
+            : "rounded-[var(--radius)] px-3 py-2",
         ].join(" ")}
       >
         <span

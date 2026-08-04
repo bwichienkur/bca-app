@@ -159,7 +159,7 @@ export function Typeahead<T>({
           }}
           style={felt ? { backgroundColor: "var(--felt)" } : undefined}
           className={[
-            "w-full rounded-2xl border px-4 py-3 outline-none transition focus:ring-2 disabled:opacity-50",
+            "w-full rounded-[var(--radius)] border px-4 py-3 outline-none transition focus:ring-2 disabled:opacity-50",
             felt
               ? "border-white/20 text-white ring-white/35 placeholder:text-white/45"
               : "border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)] ring-[var(--felt-soft)] placeholder:text-[var(--muted)]",
@@ -220,7 +220,7 @@ export function Typeahead<T>({
               : { backgroundColor: "var(--surface-2)" }
           }
           className={[
-            "absolute z-[90] mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border py-1 shadow-[var(--shadow)]",
+            "absolute z-[90] mt-1 max-h-72 w-full overflow-y-auto rounded-[var(--radius)] border py-1 shadow-[var(--shadow)]",
             felt
               ? "border-white/20 text-white"
               : "border-[var(--line-strong)] text-[var(--ink)]",

@@ -185,7 +185,7 @@ function StatTile({
   return (
     <div
       className={[
-        "animate-rise min-w-0 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)]/70 px-3 py-3",
+        "animate-rise min-w-0 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/70 px-3 py-3",
         delayClass,
       ].join(" ")}
     >
@@ -240,7 +240,7 @@ function SurfaceCard({
   return (
     <section
       className={[
-        "overflow-hidden rounded-[1.35rem] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]",
+        "overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]",
         className,
       ].join(" ")}
     >
@@ -2439,7 +2439,7 @@ export function Tournaments({
               }
             />
           ) : (
-            <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[1.2rem] border border-[var(--line)]">
+            <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)]">
               {events.map((event) => (
                 <li key={event.id}>
                   <button

@@ -289,7 +289,7 @@ export function DraggableLineupList({
   const list = (
       <ol
         ref={listRef}
-        className="min-w-0 divide-y divide-[var(--line)] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface-2)]"
+        className="min-w-0 divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]"
       >
         {Array.from({ length: slots }).map((_, index) => {
           const player = previewPlayers[index];
@@ -438,7 +438,7 @@ export function DraggableLineupList({
   }
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-[1.3rem] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm sm:p-3.5">
+    <div className="min-w-0 overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm sm:p-3.5">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1 overflow-hidden">
           <h4 className="truncate font-[family-name:var(--font-display)] text-lg text-[var(--felt-deep)]">

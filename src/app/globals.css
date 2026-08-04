@@ -20,7 +20,7 @@
   --line-strong: rgba(231, 238, 244, 0.22);
   --glow: rgba(224, 163, 90, 0.2);
   --shadow: 0 22px 55px rgba(0, 0, 0, 0.45);
-  --radius: 18px;
+  --radius: 0.5rem; /* matches Tailwind rounded-lg */
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --danger: #f0a8a0;
   --danger-strong: #d6453d;
