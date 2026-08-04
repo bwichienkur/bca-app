@@ -45,6 +45,14 @@ function ChevronIcon({ className }: { className?: string }) {
   );
 }
 
+function displayName(player: PlayerSearchResult): string {
+  const ordered = [player.firstName, player.lastName]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(" ");
+  return ordered || player.name || "Unknown";
+}
+
 function pageNumbers(current: number, total: number): (number | "…")[] {
   if (total <= 5) {
     return Array.from({ length: total }, (_, index) => index + 1);
@@ -246,10 +254,11 @@ export function PlayerSearch() {
               ].join(" ")}
             >
               {pagePlayers.map((player) => {
+                const name = displayName(player);
+                const location = player.location?.trim() || null;
                 const meta = [
                   player.readableId ? `#${player.readableId}` : null,
                   player.membershipId,
-                  player.location,
                 ]
                   .filter(Boolean)
                   .join(" · ");
@@ -261,7 +270,7 @@ export function PlayerSearch() {
                         searchAnchor.mark();
                         setSelectedPlayer(player);
                       }}
-                      aria-label={`View stats: ${player.name}`}
+                      aria-label={`View stats: ${name}`}
                       className={[
                         "group block w-full overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] text-left transition",
                         "hover:border-[color-mix(in_srgb,var(--felt)_55%,var(--line))] hover:bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]",
@@ -277,10 +286,17 @@ export function PlayerSearch() {
                               "radial-gradient(120% 80% at 100% 0%, rgba(224,163,90,0.28), transparent 55%)",
                           }}
                         />
-                        <div className="relative flex min-w-0 items-center gap-2 px-3 py-1.5">
-                          <p className="min-w-0 flex-1 truncate font-[family-name:var(--font-display)] text-base font-semibold leading-tight tracking-tight text-white">
-                            {player.name}
-                          </p>
+                        <div className="relative flex min-w-0 items-center gap-2 px-3 py-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-[family-name:var(--font-display)] text-base font-semibold leading-tight tracking-tight text-white">
+                              {name}
+                            </p>
+                            {location ? (
+                              <p className="mt-0.5 truncate text-[11px] font-medium leading-tight text-[var(--chalk)]">
+                                {location}
+                              </p>
+                            ) : null}
+                          </div>
                           <p className="shrink-0 font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums leading-none text-white">
                             {player.effectiveRating ?? "—"}
                           </p>
