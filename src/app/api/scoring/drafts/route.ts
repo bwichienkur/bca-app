@@ -4,6 +4,7 @@ import {
   isDraftStoreConfigured,
   whichSharedDraftsExist,
 } from "@/lib/draft-store";
+import { fillBoardSummariesFromLms } from "@/lib/match-results";
 import { requireScoringSession } from "@/lib/scoring-auth";
 
 export const dynamic = "force-dynamic";
@@ -21,22 +22,27 @@ export async function GET(request: NextRequest) {
     const wantSummaries =
       request.nextUrl.searchParams.get("summaries") === "1";
 
-    if (!isDraftStoreConfigured()) {
-      return NextResponse.json({
-        shared: false,
-        matchIds: [] as string[],
-        summaries: {},
-      });
-    }
+    const shared = isDraftStoreConfigured();
 
     if (wantSummaries) {
-      const summaries = await getSharedDraftSummaries(ids);
+      const draftSummaries = shared
+        ? await getSharedDraftSummaries(ids)
+        : {};
+      const summaries = await fillBoardSummariesFromLms(ids, draftSummaries);
       return NextResponse.json({
-        shared: true,
+        shared,
         matchIds: Object.keys(summaries).filter(
           (id) => summaries[id]?.status === "in_progress",
         ),
         summaries,
+      });
+    }
+
+    if (!shared) {
+      return NextResponse.json({
+        shared: false,
+        matchIds: [] as string[],
+        summaries: {},
       });
     }
 
