@@ -224,68 +224,100 @@ export function PlayerSearch() {
 
             <ul
               className={[
-                "divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]/90 transition-opacity",
+                "space-y-2.5 transition-opacity",
                 loading ? "opacity-60" : "opacity-100",
               ].join(" ")}
             >
-              {pagePlayers.map((player) => (
-                <li key={player.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      searchAnchor.mark();
-                      setSelectedPlayer(player);
-                    }}
-                    className="flex w-full items-start justify-between gap-4 px-4 py-3.5 text-left transition hover:bg-[var(--surface-2)]/70 md:px-5"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium text-[var(--ink)]">
-                        {player.name}
-                      </p>
-                      <p className="mt-0.5 text-sm text-[var(--muted)]">
-                        {[
-                          player.readableId ? `#${player.readableId}` : null,
-                          player.membershipId,
-                          player.location,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                      <span
-                        className={[
-                          "mt-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]",
-                          statusClass(player.robustnessStatus),
-                        ].join(" ")}
-                      >
-                        {statusLabel(player.robustnessStatus)}
-                        {player.robustness != null
-                          ? ` · ${player.robustness}`
-                          : ""}
-                      </span>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="font-[family-name:var(--font-display)] text-2xl tabular-nums leading-none text-[var(--felt-deep)]">
-                        {player.effectiveRating ?? "—"}
-                      </p>
-                      <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                        View stats
-                      </p>
-                    </div>
-                  </button>
-                </li>
-              ))}
+              {pagePlayers.map((player) => {
+                const meta = [
+                  player.readableId ? `#${player.readableId}` : null,
+                  player.membershipId,
+                  player.location,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+                return (
+                  <li key={player.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        searchAnchor.mark();
+                        setSelectedPlayer(player);
+                      }}
+                      className={[
+                        "group block w-full overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] text-left shadow-[var(--shadow)] transition",
+                        "hover:border-[color-mix(in_srgb,var(--felt)_55%,var(--line))] hover:bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--felt-soft)]",
+                      ].join(" ")}
+                    >
+                      <div className="relative overflow-hidden bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] text-white">
+                        <div
+                          aria-hidden
+                          className="pointer-events-none absolute inset-0 opacity-40"
+                          style={{
+                            background:
+                              "radial-gradient(120% 80% at 100% 0%, rgba(224,163,90,0.28), transparent 55%)",
+                          }}
+                        />
+                        <div className="relative flex min-w-0 items-center justify-between gap-3 px-3 py-3 sm:px-4">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/65">
+                              Player
+                            </p>
+                            <p className="mt-1 truncate font-[family-name:var(--font-display)] text-lg font-semibold leading-tight tracking-tight text-white sm:text-xl">
+                              {player.name}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 flex-col items-center justify-center rounded-[var(--radius)] bg-black/25 px-3 py-2 text-center ring-1 ring-white/15">
+                            <p className="text-[10px] font-semibold uppercase leading-none tracking-[0.14em] text-white/65">
+                              Rating
+                            </p>
+                            <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl font-semibold tabular-nums leading-none">
+                              {player.effectiveRating ?? "—"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 sm:px-4">
+                        <div className="min-w-0">
+                          {meta ? (
+                            <p className="truncate text-xs text-[var(--muted)]">
+                              {meta}
+                            </p>
+                          ) : null}
+                          <span
+                            className={[
+                              "mt-1.5 inline-flex rounded-[var(--radius)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
+                              statusClass(player.robustnessStatus),
+                            ].join(" ")}
+                          >
+                            {statusLabel(player.robustnessStatus)}
+                            {player.robustness != null
+                              ? ` · ${player.robustness}`
+                              : ""}
+                          </span>
+                        </div>
+                        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)] transition group-hover:text-[var(--felt-deep)]">
+                          View stats →
+                        </span>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
 
             {totalPages > 1 ? (
               <nav
                 aria-label="Search results pages"
-                className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]/80 px-2.5 py-2 sm:px-3"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-2 shadow-[var(--shadow)] sm:px-3"
               >
                 <button
                   type="button"
                   onClick={() => goToPage(safePage - 1)}
                   disabled={safePage <= 1}
-                  className="rounded-full bg-[var(--surface-2)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
+                  className="rounded-[var(--radius)] bg-[var(--surface-2)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
                 >
                   Previous
                 </button>
@@ -308,7 +340,7 @@ export function PlayerSearch() {
                         aria-current={item === safePage ? "page" : undefined}
                         onClick={() => goToPage(item)}
                         className={[
-                          "min-w-9 rounded-full px-2.5 py-1.5 text-sm font-semibold tabular-nums transition",
+                          "min-w-9 rounded-[var(--radius)] px-2.5 py-1.5 text-sm font-semibold tabular-nums transition",
                           item === safePage
                             ? "bg-[var(--felt)] text-white shadow-sm"
                             : "bg-[var(--surface-2)] text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--ink)]",
@@ -324,7 +356,7 @@ export function PlayerSearch() {
                   type="button"
                   onClick={() => goToPage(safePage + 1)}
                   disabled={safePage >= totalPages}
-                  className="rounded-full bg-[var(--surface-2)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
+                  className="rounded-[var(--radius)] bg-[var(--surface-2)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
                 >
                   Next
                 </button>
