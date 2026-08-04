@@ -24,6 +24,8 @@ type SelectFieldProps<T extends string = string> = {
   required?: boolean;
   id?: string;
   "aria-label"?: string;
+  /** Extra classes for the closed trigger button. */
+  buttonClassName?: string;
 };
 
 export function SelectField<T extends string = string>({
@@ -35,6 +37,7 @@ export function SelectField<T extends string = string>({
   required,
   id,
   "aria-label": ariaLabel,
+  buttonClassName,
 }: SelectFieldProps<T>) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -204,6 +207,7 @@ export function SelectField<T extends string = string>({
         className={[
           "flex w-full min-w-0 items-center justify-between gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-left text-sm outline-none transition hover:border-[var(--line-strong)] focus:ring-2 focus:ring-[var(--felt-soft)] disabled:opacity-50",
           selected ? "text-[var(--ink)]" : "text-[var(--muted)]",
+          buttonClassName ?? "",
         ].join(" ")}
       >
         <span className="min-w-0 flex-1 truncate">
