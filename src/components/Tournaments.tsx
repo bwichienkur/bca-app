@@ -97,12 +97,12 @@ const labelClass =
 
 /** Compact icon actions for signup request rows. */
 const signupIconBtn =
-  "inline-flex h-8 w-12 shrink-0 items-center justify-center rounded-[var(--radius)] transition disabled:opacity-50";
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] transition disabled:opacity-50";
 const signupApproveBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--chalk)_45%,transparent)] bg-[color-mix(in_srgb,var(--chalk)_14%,var(--surface-2))] text-[var(--felt-deep)] hover:bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))]`;
 const signupWaitlistBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--amber)_55%,transparent)] bg-[color-mix(in_srgb,var(--amber)_18%,var(--surface-2))] text-[var(--amber)] hover:bg-[color-mix(in_srgb,var(--amber)_28%,var(--surface-2))]`;
 const signupRejectBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[var(--danger-bg)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_28%,var(--surface-2))]`;
 const signupInlineIconBtn =
-  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt-deep)] transition hover:bg-[color-mix(in_srgb,var(--chalk)_18%,transparent)] hover:text-[var(--chalk)]";
+  "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt-deep)] transition hover:bg-[color-mix(in_srgb,var(--chalk)_18%,transparent)] hover:text-[var(--chalk)]";
 const signupBulkBtn =
   "inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-[var(--radius)] px-2 text-xs font-semibold transition disabled:opacity-50 sm:flex-none sm:px-3";
 const signupBulkApproveBtn = `${signupBulkBtn} border border-[color-mix(in_srgb,var(--chalk)_45%,transparent)] bg-[color-mix(in_srgb,var(--chalk)_14%,var(--surface-2))] text-[var(--felt-deep)] hover:bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))]`;
@@ -389,16 +389,17 @@ function SignupMessageDialog({
   );
 }
 
-/** Compact date + time for signup submission lines. */
-function formatSignupSubmittedAt(iso: string): string {
+/** Compact date + time parts for the signup queue timestamp column. */
+function formatSignupSubmittedParts(iso: string): { date: string; time: string } {
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  if (Number.isNaN(d.getTime())) return { date: iso, time: "" };
+  return {
+    date: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+    time: d.toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    }),
+  };
 }
 
 /** Dense request row for organizer signup review. */
@@ -406,7 +407,8 @@ function SignupRequestRow({
   title,
   status,
   showStatus,
-  submittedLabel,
+  submittedDate,
+  submittedTime,
   rating,
   onOpenDetails,
   detailsLabel,
@@ -421,7 +423,8 @@ function SignupRequestRow({
   title: string;
   status: TournamentRegistration["status"];
   showStatus?: boolean;
-  submittedLabel: string;
+  submittedDate: string;
+  submittedTime: string;
   rating: number | null;
   onOpenDetails: () => void;
   detailsLabel: string;
@@ -453,9 +456,9 @@ function SignupRequestRow({
         selected ? "bg-[color-mix(in_srgb,var(--felt)_8%,transparent)]" : "",
       ].join(" ")}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         {selectable ? (
-          <label className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center self-center">
+          <label className="flex h-9 w-7 shrink-0 cursor-pointer items-center justify-center self-center">
             <input
               type="checkbox"
               checked={Boolean(selected)}
@@ -466,10 +469,16 @@ function SignupRequestRow({
           </label>
         ) : null}
 
+        {actions ? (
+          <div className="flex shrink-0 items-center gap-1 self-center">
+            {actions}
+          </div>
+        ) : null}
+
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-0.5 gap-y-0.5">
-            <p className="min-w-0 font-[family-name:var(--font-display)] text-[15px] font-semibold leading-snug tracking-tight text-[var(--ink)]">
-              <span className="break-words">{title}</span>
+          <div className="flex flex-wrap items-center gap-x-0.5 gap-y-0.5">
+            <p className="font-[family-name:var(--font-display)] text-[14px] font-semibold leading-snug tracking-tight text-[var(--ink)]">
+              <span className="break-words [overflow-wrap:anywhere]">{title}</span>
               <span className="mx-1.5 font-normal text-[var(--muted)]">·</span>
               <span className="tabular-nums text-[var(--felt-deep)]">
                 {rating ?? "—"}
@@ -496,25 +505,24 @@ function SignupRequestRow({
               </button>
             ) : null}
             {showStatus ? (
-              <span className="ml-1">{signupStatusBadge(status)}</span>
+              <span className="ml-0.5">{signupStatusBadge(status)}</span>
             ) : null}
           </div>
-
-          <p className="mt-0.5 text-[11px] leading-tight text-[var(--muted)]">
-            {submittedLabel}
-            {teammateHint ? (
-              <span className="block truncate sm:inline sm:before:content-['·_']">
-                {teammateHint}
-              </span>
-            ) : null}
-          </p>
+          {teammateHint ? (
+            <p className="mt-0.5 text-[11px] leading-tight text-[var(--muted)] [overflow-wrap:anywhere]">
+              {teammateHint}
+            </p>
+          ) : null}
         </div>
 
-        {actions ? (
-          <div className="flex shrink-0 items-center gap-1.5 self-center">
-            {actions}
-          </div>
-        ) : null}
+        <time
+          className="w-[3.75rem] shrink-0 self-center text-right text-[10px] font-medium leading-tight tabular-nums text-[var(--muted)]"
+          dateTime={`${submittedDate} ${submittedTime}`.trim()}
+          title={`${submittedDate} ${submittedTime}`.trim()}
+        >
+          <span className="block">{submittedDate}</span>
+          <span className="block">{submittedTime}</span>
+        </time>
       </div>
     </div>
   );
@@ -1259,8 +1267,8 @@ export function Tournaments({
     setSignupMessage({ name: reg.displayName, body });
   };
 
-  const signupSubmittedLabel = (reg: TournamentRegistration) =>
-    `Submitted ${formatSignupSubmittedAt(reg.createdAt)}`;
+  const signupSubmittedParts = (reg: TournamentRegistration) =>
+    formatSignupSubmittedParts(reg.createdAt);
 
   const setTournamentStatus = async (
     id: string,
@@ -2633,6 +2641,7 @@ export function Tournaments({
                     <ul className="divide-y divide-[var(--line)]">
                       {filteredSignups.map((reg) => {
                         const stats = statsForRegistration(reg);
+                        const submitted = signupSubmittedParts(reg);
                         const note = reg.noteToOrganizer?.trim() || null;
                         const actions =
                           reg.status === "pending" ? (
@@ -2719,7 +2728,8 @@ export function Tournaments({
                               title={registrationCardTitle(reg)}
                               status={reg.status}
                               showStatus={signupStatusFilter !== "pending"}
-                              submittedLabel={signupSubmittedLabel(reg)}
+                              submittedDate={submitted.date}
+                              submittedTime={submitted.time}
                               rating={stats.rating}
                               onOpenDetails={() => openSignupPlayer(reg)}
                               detailsLabel={
