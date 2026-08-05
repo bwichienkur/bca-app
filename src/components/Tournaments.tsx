@@ -95,13 +95,17 @@ const fieldClass =
 const labelClass =
   "mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]";
 
-/** Compact square icon actions for signup request rows. */
+/** Touch-friendly icon actions for signup request rows. */
 const signupIconBtn =
-  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] transition disabled:opacity-50";
+  "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius)] transition disabled:opacity-50";
 const signupApproveBtn = `${signupIconBtn} bg-[var(--felt)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] hover:bg-[var(--felt-soft)]`;
 const signupWaitlistBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--amber)_55%,transparent)] bg-[color-mix(in_srgb,var(--amber)_18%,var(--surface-2))] text-[var(--amber)] hover:bg-[color-mix(in_srgb,var(--amber)_28%,var(--surface-2))]`;
 const signupRejectBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[var(--danger-bg)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_28%,var(--surface-2))]`;
-const signupMessageBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--chalk)_40%,transparent)] bg-[color-mix(in_srgb,var(--chalk)_14%,var(--surface-2))] text-[var(--felt-deep)] hover:bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))]`;
+const signupBulkBtn =
+  "inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-[var(--radius)] px-2 text-xs font-semibold transition disabled:opacity-50 sm:flex-none sm:px-3";
+const signupBulkApproveBtn = `${signupBulkBtn} bg-[var(--felt)] text-white hover:bg-[var(--felt-soft)]`;
+const signupBulkWaitlistBtn = `${signupBulkBtn} border border-[color-mix(in_srgb,var(--amber)_55%,transparent)] bg-[color-mix(in_srgb,var(--amber)_18%,var(--surface-2))] text-[var(--amber)] hover:bg-[color-mix(in_srgb,var(--amber)_28%,var(--surface-2))]`;
+const signupBulkRejectBtn = `${signupBulkBtn} border border-[color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[var(--danger-bg)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_28%,var(--surface-2))]`;
 
 function statusTone(status: TournamentStatus): string {
   switch (status) {
@@ -374,10 +378,22 @@ function SignupMessageDialog({
   );
 }
 
+function formatSignupSubmittedAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 /** Dense request row for organizer signup review. */
 function SignupRequestRow({
   title,
   status,
+  showStatus,
   submittedLabel,
   rating,
   onOpenDetails,
@@ -386,9 +402,13 @@ function SignupRequestRow({
   actions,
   note,
   onShowNote,
+  selectable,
+  selected,
+  onToggleSelect,
 }: {
   title: string;
   status: TournamentRegistration["status"];
+  showStatus?: boolean;
   submittedLabel: string;
   rating: number | null;
   onOpenDetails: () => void;
@@ -397,6 +417,9 @@ function SignupRequestRow({
   actions?: ReactNode;
   note?: string | null;
   onShowNote?: () => void;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const teammateHint = teammates?.length
     ? teammates
@@ -411,53 +434,70 @@ function SignupRequestRow({
   return (
     <div
       className={[
-        "flex items-center gap-2.5 px-3 py-2.5 sm:gap-3 sm:px-4",
+        "px-3 py-3 sm:px-4",
         status === "pending"
           ? "bg-[color-mix(in_srgb,var(--amber)_7%,transparent)]"
           : "",
+        selected ? "bg-[color-mix(in_srgb,var(--felt)_8%,transparent)]" : "",
       ].join(" ")}
     >
-      <button
-        type="button"
-        onClick={onOpenDetails}
-        aria-label={detailsLabel}
-        className="min-w-0 flex-1 rounded-[var(--radius)] text-left transition hover:bg-[var(--surface-2)]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--felt-soft)]"
-      >
-        <div className="flex min-w-0 items-baseline gap-2">
-          <p className="truncate font-[family-name:var(--font-display)] text-[15px] font-semibold leading-tight tracking-tight text-[var(--ink)]">
-            {title}
-          </p>
-          {signupStatusBadge(status)}
-        </div>
-        <p className="mt-0.5 truncate text-[11px] leading-tight text-[var(--muted)]">
-          {submittedLabel}
-          {teammateHint ? ` · ${teammateHint}` : ""}
-        </p>
-      </button>
+      <div className="flex items-start gap-2.5">
+        {selectable ? (
+          <label className="mt-0.5 flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center">
+            <input
+              type="checkbox"
+              checked={Boolean(selected)}
+              onChange={onToggleSelect}
+              aria-label={`Select ${title}`}
+              className="h-5 w-5 accent-[var(--felt)]"
+            />
+          </label>
+        ) : null}
 
-      <p
-        className="w-10 shrink-0 text-right font-[family-name:var(--font-display)] text-base font-semibold tabular-nums leading-none text-[var(--ink)]"
-        title="Fargo rating"
-      >
-        {rating ?? "—"}
-      </p>
+        <div className="min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={onOpenDetails}
+            aria-label={detailsLabel}
+            className="w-full rounded-[var(--radius)] text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--felt-soft)]"
+          >
+            <p className="font-[family-name:var(--font-display)] text-[15px] font-semibold leading-snug tracking-tight text-[var(--ink)]">
+              <span className="break-words">{title}</span>
+              <span className="mx-1.5 font-normal text-[var(--muted)]">·</span>
+              <span className="tabular-nums text-[var(--felt-deep)]">
+                {rating ?? "—"}
+              </span>
+            </p>
+            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] leading-tight text-[var(--muted)]">
+              {showStatus ? signupStatusBadge(status) : null}
+              <span>{submittedLabel}</span>
+              {teammateHint ? <span>· {teammateHint}</span> : null}
+            </p>
+          </button>
 
-      {(actions || note) && (
-        <div className="flex shrink-0 items-center gap-1">
-          {actions}
           {note ? (
             <button
               type="button"
               onClick={onShowNote}
-              className={signupMessageBtn}
-              aria-label="View signup message"
-              title="Message"
+              className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--felt-deep)] underline decoration-[color-mix(in_srgb,var(--felt)_35%,transparent)] underline-offset-2 transition hover:text-[var(--felt)]"
             >
               <MessageIcon className="h-3.5 w-3.5" />
+              View message
             </button>
           ) : null}
         </div>
-      )}
+      </div>
+
+      {actions ? (
+        <div
+          className={[
+            "mt-2.5 flex items-center justify-end gap-2",
+            selectable ? "pl-11" : "",
+          ].join(" ")}
+        >
+          {actions}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -786,6 +826,9 @@ export function Tournaments({
   const [fieldQuery, setFieldQuery] = useState("");
   const [signupStatusFilter, setSignupStatusFilter] =
     useState<SignupStatusFilter>("pending");
+  const [signupSelectedIds, setSignupSelectedIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [inspectPlayer, setInspectPlayer] = useState<{
     id: string;
     name: string;
@@ -881,6 +924,7 @@ export function Tournaments({
     setFieldFilter("all");
     setFieldQuery("");
     setSignupStatusFilter("pending");
+    setSignupSelectedIds(new Set());
     try {
       const res = await fetch(`/api/tournaments/${id}`);
       const data = (await res.json()) as DetailPayload & { error?: string };
@@ -1074,9 +1118,57 @@ export function Tournaments({
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Update failed.");
+      setSignupSelectedIds((prev) => {
+        if (!prev.has(registrationId)) return prev;
+        const next = new Set(prev);
+        next.delete(registrationId);
+        return next;
+      });
       await refreshDetail();
     } catch (err) {
       setActionMsg(err instanceof Error ? err.message : "Update failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onBulkUpdateRegistrations = async (
+    registrationIds: string[],
+    patch: { status: TournamentRegistration["status"] },
+  ) => {
+    if (!selectedId || registrationIds.length === 0) return;
+    setSaving(true);
+    setActionMsg(null);
+    try {
+      const results = await Promise.all(
+        registrationIds.map(async (registrationId) => {
+          const res = await fetch(
+            `/api/tournaments/${selectedId}/registrations`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ registrationId, ...patch }),
+            },
+          );
+          const data = (await res.json()) as { error?: string };
+          if (!res.ok) throw new Error(data.error || "Update failed.");
+          return registrationId;
+        }),
+      );
+      setSignupSelectedIds(new Set());
+      await refreshDetail();
+      const verb =
+        patch.status === "approved"
+          ? "Approved"
+          : patch.status === "waitlisted"
+            ? "Waitlisted"
+            : patch.status === "rejected"
+              ? "Rejected"
+              : "Updated";
+      setActionMsg(`${verb} ${results.length} signup${results.length === 1 ? "" : "s"}.`);
+    } catch (err) {
+      setActionMsg(err instanceof Error ? err.message : "Bulk update failed.");
+      await refreshDetail();
     } finally {
       setSaving(false);
     }
@@ -1150,7 +1242,7 @@ export function Tournaments({
   };
 
   const signupSubmittedLabel = (reg: TournamentRegistration) =>
-    `Submitted ${formatStartsAt(reg.createdAt)}`;
+    `Submitted ${formatSignupSubmittedAt(reg.createdAt)}`;
 
 
   const setTournamentStatus = async (
@@ -1247,6 +1339,40 @@ export function Tournaments({
   const filteredSignups = useMemo(() => {
     return sortedRegistrations.filter((r) => r.status === signupStatusFilter);
   }, [signupStatusFilter, sortedRegistrations]);
+
+  const signupSelectable =
+    signupStatusFilter === "pending" || signupStatusFilter === "waitlisted";
+
+  const signupSelectedInView = useMemo(
+    () => filteredSignups.filter((r) => signupSelectedIds.has(r.id)),
+    [filteredSignups, signupSelectedIds],
+  );
+
+  const allVisibleSignupsSelected =
+    signupSelectable &&
+    filteredSignups.length > 0 &&
+    filteredSignups.every((r) => signupSelectedIds.has(r.id));
+
+  useEffect(() => {
+    setSignupSelectedIds(new Set());
+  }, [signupStatusFilter, selectedId]);
+
+  const toggleSignupSelected = (id: string) => {
+    setSignupSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllSignups = () => {
+    if (allVisibleSignupsSelected) {
+      setSignupSelectedIds(new Set());
+      return;
+    }
+    setSignupSelectedIds(new Set(filteredSignups.map((r) => r.id)));
+  };
 
   const loadedPlayerIdsRef = useRef(new Set<string>());
 
@@ -2387,19 +2513,90 @@ export function Tournaments({
                 ) : null}
 
                 <SurfaceCard>
-                  <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 sm:px-4">
-                    <div className="min-w-[10rem] flex-1">
-                      <SelectField
-                        aria-label="Signup status filter"
-                        value={signupStatusFilter}
-                        options={signupStatusOptions}
-                        onChange={setSignupStatusFilter}
-                      />
+                  <div className="sticky top-0 z-10 space-y-2 border-b border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 sm:px-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="min-w-[10rem] flex-1">
+                        <SelectField
+                          aria-label="Signup status filter"
+                          value={signupStatusFilter}
+                          options={signupStatusOptions}
+                          onChange={setSignupStatusFilter}
+                        />
+                      </div>
+                      <span className="shrink-0 text-[11px] font-semibold tabular-nums text-[var(--muted)]">
+                        {filteredSignups.length}
+                        {signupStatusFilter === "pending" ? " to review" : ""}
+                      </span>
                     </div>
-                    <span className="shrink-0 text-[11px] font-semibold tabular-nums text-[var(--muted)]">
-                      {filteredSignups.length}
-                      {signupStatusFilter === "pending" ? " to review" : ""}
-                    </span>
+
+                    {signupSelectable && filteredSignups.length > 0 ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="inline-flex items-center gap-2 text-[11px] font-semibold text-[var(--muted)]">
+                          <input
+                            type="checkbox"
+                            checked={allVisibleSignupsSelected}
+                            onChange={toggleSelectAllSignups}
+                            className="h-4 w-4 accent-[var(--felt)]"
+                            aria-label="Select all visible signups"
+                          />
+                          Select all
+                        </label>
+                        {signupSelectedInView.length > 0 ? (
+                          <span className="text-[11px] font-semibold tabular-nums text-[var(--felt-deep)]">
+                            {signupSelectedInView.length} selected
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {signupSelectedInView.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() =>
+                            void onBulkUpdateRegistrations(
+                              signupSelectedInView.map((r) => r.id),
+                              { status: "approved" },
+                            )
+                          }
+                          className={signupBulkApproveBtn}
+                        >
+                          <ApproveIcon className="h-3.5 w-3.5" />
+                          Approve
+                        </button>
+                        {signupStatusFilter === "pending" ? (
+                          <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() =>
+                              void onBulkUpdateRegistrations(
+                                signupSelectedInView.map((r) => r.id),
+                                { status: "waitlisted" },
+                              )
+                            }
+                            className={signupBulkWaitlistBtn}
+                          >
+                            <WaitlistIcon className="h-3.5 w-3.5" />
+                            Waitlist
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() =>
+                            void onBulkUpdateRegistrations(
+                              signupSelectedInView.map((r) => r.id),
+                              { status: "rejected" },
+                            )
+                          }
+                          className={signupBulkRejectBtn}
+                        >
+                          <RejectIcon className="h-3.5 w-3.5" />
+                          Reject
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
 
                   {filteredSignups.length === 0 ? (
@@ -2430,7 +2627,7 @@ export function Tournaments({
                                 aria-label={`Approve ${reg.displayName}`}
                                 title="Approve"
                               >
-                                <ApproveIcon className="h-3.5 w-3.5" />
+                                <ApproveIcon className="h-5 w-5" />
                               </button>
                               <button
                                 type="button"
@@ -2444,7 +2641,7 @@ export function Tournaments({
                                 aria-label={`Waitlist ${reg.displayName}`}
                                 title="Waitlist"
                               >
-                                <WaitlistIcon className="h-3.5 w-3.5" />
+                                <WaitlistIcon className="h-5 w-5" />
                               </button>
                               <button
                                 type="button"
@@ -2458,7 +2655,7 @@ export function Tournaments({
                                 aria-label={`Reject ${reg.displayName}`}
                                 title="Reject"
                               >
-                                <RejectIcon className="h-3.5 w-3.5" />
+                                <RejectIcon className="h-5 w-5" />
                               </button>
                             </>
                           ) : reg.status === "waitlisted" ? (
@@ -2475,7 +2672,7 @@ export function Tournaments({
                                 aria-label={`Approve ${reg.displayName}`}
                                 title="Approve"
                               >
-                                <ApproveIcon className="h-3.5 w-3.5" />
+                                <ApproveIcon className="h-5 w-5" />
                               </button>
                               <button
                                 type="button"
@@ -2489,7 +2686,7 @@ export function Tournaments({
                                 aria-label={`Reject ${reg.displayName}`}
                                 title="Reject"
                               >
-                                <RejectIcon className="h-3.5 w-3.5" />
+                                <RejectIcon className="h-5 w-5" />
                               </button>
                             </>
                           ) : undefined;
@@ -2499,6 +2696,7 @@ export function Tournaments({
                             <SignupRequestRow
                               title={registrationCardTitle(reg)}
                               status={reg.status}
+                              showStatus={signupStatusFilter !== "pending"}
                               submittedLabel={signupSubmittedLabel(reg)}
                               rating={stats.rating}
                               onOpenDetails={() => openSignupPlayer(reg)}
@@ -2511,6 +2709,11 @@ export function Tournaments({
                               onShowNote={() => openSignupMessage(reg)}
                               teammates={reg.teammates}
                               actions={actions}
+                              selectable={signupSelectable}
+                              selected={signupSelectedIds.has(reg.id)}
+                              onToggleSelect={() =>
+                                toggleSignupSelected(reg.id)
+                              }
                             />
                           </li>
                         );
