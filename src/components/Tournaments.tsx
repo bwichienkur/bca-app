@@ -206,31 +206,6 @@ function ManageTabIcon({ className }: { className?: string }) {
   );
 }
 
-function ApproveIcon({ className }: { className?: string }) {
-  return (
-    <TabIconShell className={className}>
-      <path d="m5 12 5 5L20 7" />
-    </TabIconShell>
-  );
-}
-
-function WaitlistIcon({ className }: { className?: string }) {
-  return (
-    <TabIconShell className={className}>
-      <circle cx="12" cy="12" r="8" />
-      <path d="M12 8v4l2.5 1.5" />
-    </TabIconShell>
-  );
-}
-
-function RejectIcon({ className }: { className?: string }) {
-  return (
-    <TabIconShell className={className}>
-      <path d="M6 6l12 12M18 6 6 18" />
-    </TabIconShell>
-  );
-}
-
 function MessageIcon({ className }: { className?: string }) {
   return (
     <TabIconShell className={className}>
