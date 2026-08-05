@@ -95,19 +95,19 @@ const fieldClass =
 const labelClass =
   "mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]";
 
-/** Compact icon actions for signup request rows. */
-const signupIconBtn =
-  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] transition disabled:opacity-50";
-const signupApproveBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--chalk)_45%,transparent)] bg-[color-mix(in_srgb,var(--chalk)_14%,var(--surface-2))] text-[var(--felt-deep)] hover:bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))]`;
-const signupWaitlistBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--amber)_55%,transparent)] bg-[color-mix(in_srgb,var(--amber)_18%,var(--surface-2))] text-[var(--amber)] hover:bg-[color-mix(in_srgb,var(--amber)_28%,var(--surface-2))]`;
-const signupRejectBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[var(--danger-bg)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_28%,var(--surface-2))]`;
+/** Solid text actions for signup request rows. */
+const signupActionBtn =
+  "inline-flex h-8 shrink-0 items-center justify-center rounded-[var(--radius)] px-2.5 text-xs font-semibold transition disabled:opacity-50";
+const signupApproveBtn = `${signupActionBtn} bg-[var(--felt)] text-white hover:bg-[var(--felt-soft)]`;
+const signupWaitlistBtn = `${signupActionBtn} bg-[var(--amber)] text-[#1a140c] hover:brightness-110`;
+const signupRejectBtn = `${signupActionBtn} bg-[var(--danger-strong)] text-white hover:brightness-110`;
 const signupInlineIconBtn =
   "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt-deep)] transition hover:bg-[color-mix(in_srgb,var(--chalk)_18%,transparent)] hover:text-[var(--chalk)]";
 const signupBulkBtn =
-  "inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-[var(--radius)] px-2 text-xs font-semibold transition disabled:opacity-50 sm:flex-none sm:px-3";
-const signupBulkApproveBtn = `${signupBulkBtn} border border-[color-mix(in_srgb,var(--chalk)_45%,transparent)] bg-[color-mix(in_srgb,var(--chalk)_14%,var(--surface-2))] text-[var(--felt-deep)] hover:bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))]`;
-const signupBulkWaitlistBtn = `${signupBulkBtn} border border-[color-mix(in_srgb,var(--amber)_55%,transparent)] bg-[color-mix(in_srgb,var(--amber)_18%,var(--surface-2))] text-[var(--amber)] hover:bg-[color-mix(in_srgb,var(--amber)_28%,var(--surface-2))]`;
-const signupBulkRejectBtn = `${signupBulkBtn} border border-[color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[var(--danger-bg)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_28%,var(--surface-2))]`;
+  "inline-flex h-9 flex-1 items-center justify-center rounded-[var(--radius)] px-3 text-xs font-semibold transition disabled:opacity-50 sm:flex-none";
+const signupBulkApproveBtn = `${signupBulkBtn} bg-[var(--felt)] text-white hover:bg-[var(--felt-soft)]`;
+const signupBulkWaitlistBtn = `${signupBulkBtn} bg-[var(--amber)] text-[#1a140c] hover:brightness-110`;
+const signupBulkRejectBtn = `${signupBulkBtn} bg-[var(--danger-strong)] text-white hover:brightness-110`;
 
 function statusTone(status: TournamentStatus): string {
   switch (status) {
@@ -202,31 +202,6 @@ function ManageTabIcon({ className }: { className?: string }) {
     <TabIconShell className={className}>
       <circle cx="12" cy="12" r="3" />
       <path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6" />
-    </TabIconShell>
-  );
-}
-
-function ApproveIcon({ className }: { className?: string }) {
-  return (
-    <TabIconShell className={className}>
-      <path d="m5 12 5 5L20 7" />
-    </TabIconShell>
-  );
-}
-
-function WaitlistIcon({ className }: { className?: string }) {
-  return (
-    <TabIconShell className={className}>
-      <circle cx="12" cy="12" r="8" />
-      <path d="M12 8v4l2.5 1.5" />
-    </TabIconShell>
-  );
-}
-
-function RejectIcon({ className }: { className?: string }) {
-  return (
-    <TabIconShell className={className}>
-      <path d="M6 6l12 12M18 6 6 18" />
     </TabIconShell>
   );
 }
@@ -456,9 +431,9 @@ function SignupRequestRow({
         selected ? "bg-[color-mix(in_srgb,var(--felt)_8%,transparent)]" : "",
       ].join(" ")}
     >
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-start gap-1.5">
         {selectable ? (
-          <label className="flex h-9 w-7 shrink-0 cursor-pointer items-center justify-center self-center">
+          <label className="mt-0.5 flex h-9 w-7 shrink-0 cursor-pointer items-center justify-center">
             <input
               type="checkbox"
               checked={Boolean(selected)}
@@ -467,12 +442,6 @@ function SignupRequestRow({
               className="h-4 w-4 accent-[var(--felt)]"
             />
           </label>
-        ) : null}
-
-        {actions ? (
-          <div className="flex shrink-0 items-center gap-1 self-center">
-            {actions}
-          </div>
         ) : null}
 
         <div className="min-w-0 flex-1">
@@ -513,10 +482,15 @@ function SignupRequestRow({
               {teammateHint}
             </p>
           ) : null}
+          {actions ? (
+            <div className="mt-1.5 flex items-center justify-start gap-1">
+              {actions}
+            </div>
+          ) : null}
         </div>
 
         <time
-          className="w-[3.75rem] shrink-0 self-center text-right text-[10px] font-medium leading-tight tabular-nums text-[var(--muted)]"
+          className="w-[3.75rem] shrink-0 pt-0.5 text-right text-[10px] font-medium leading-tight tabular-nums text-[var(--muted)]"
           dateTime={`${submittedDate} ${submittedTime}`.trim()}
           title={`${submittedDate} ${submittedTime}`.trim()}
         >
@@ -2592,7 +2566,6 @@ export function Tournaments({
                           }
                           className={signupBulkApproveBtn}
                         >
-                          <ApproveIcon className="h-3.5 w-3.5" />
                           Approve
                         </button>
                         {signupStatusFilter === "pending" ? (
@@ -2607,7 +2580,6 @@ export function Tournaments({
                             }
                             className={signupBulkWaitlistBtn}
                           >
-                            <WaitlistIcon className="h-3.5 w-3.5" />
                             Waitlist
                           </button>
                         ) : null}
@@ -2622,7 +2594,6 @@ export function Tournaments({
                           }
                           className={signupBulkRejectBtn}
                         >
-                          <RejectIcon className="h-3.5 w-3.5" />
                           Reject
                         </button>
                       </div>
@@ -2655,10 +2626,8 @@ export function Tournaments({
                                   })
                                 }
                                 className={signupApproveBtn}
-                                aria-label={`Approve ${reg.displayName}`}
-                                title="Approve"
                               >
-                                <ApproveIcon className="h-4 w-4" />
+                                Approve
                               </button>
                               <button
                                 type="button"
@@ -2669,10 +2638,8 @@ export function Tournaments({
                                   })
                                 }
                                 className={signupWaitlistBtn}
-                                aria-label={`Waitlist ${reg.displayName}`}
-                                title="Waitlist"
                               >
-                                <WaitlistIcon className="h-4 w-4" />
+                                Waitlist
                               </button>
                               <button
                                 type="button"
@@ -2683,10 +2650,8 @@ export function Tournaments({
                                   })
                                 }
                                 className={signupRejectBtn}
-                                aria-label={`Reject ${reg.displayName}`}
-                                title="Reject"
                               >
-                                <RejectIcon className="h-4 w-4" />
+                                Reject
                               </button>
                             </>
                           ) : reg.status === "waitlisted" ? (
@@ -2700,10 +2665,8 @@ export function Tournaments({
                                   })
                                 }
                                 className={signupApproveBtn}
-                                aria-label={`Approve ${reg.displayName}`}
-                                title="Approve"
                               >
-                                <ApproveIcon className="h-4 w-4" />
+                                Approve
                               </button>
                               <button
                                 type="button"
@@ -2714,10 +2677,8 @@ export function Tournaments({
                                   })
                                 }
                                 className={signupRejectBtn}
-                                aria-label={`Reject ${reg.displayName}`}
-                                title="Reject"
                               >
-                                <RejectIcon className="h-4 w-4" />
+                                Reject
                               </button>
                             </>
                           ) : undefined;
