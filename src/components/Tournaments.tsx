@@ -261,6 +261,16 @@ function ReopenRegistrationIcon({ className }: { className?: string }) {
   );
 }
 
+function DigitalPoolPushIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <path d="M12 3v12" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M5 21h14" />
+    </TabIconShell>
+  );
+}
+
 function RemoveEventIcon({ className }: { className?: string }) {
   return (
     <TabIconShell className={className}>
@@ -1429,6 +1439,52 @@ export function Tournaments({
     } catch (err) {
       setActionMsg(
         err instanceof Error ? err.message : "Could not update event.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const pushToDigitalPool = async (id: string, force = false) => {
+    setSaving(true);
+    setActionMsg(null);
+    try {
+      const res = await fetch(`/api/tournaments/${id}/digital-pool`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        digitalPool?: {
+          builderUrl?: string;
+          playerCount?: number;
+          matchCount?: number;
+          tableCount?: number;
+          slug?: string;
+        };
+      };
+      if (!res.ok) {
+        if (res.status === 409 && data.digitalPool?.builderUrl) {
+          setActionMsg(
+            data.error ||
+              "Already pushed. Open Digital Pool from the link below, or push again.",
+          );
+          await refreshDetail();
+          return;
+        }
+        throw new Error(data.error || "Could not push to Digital Pool.");
+      }
+      const dp = data.digitalPool;
+      setActionMsg(
+        dp
+          ? `Pushed to Digital Pool — ${dp.playerCount ?? 0} players, ${dp.tableCount ?? 0} tables, ${dp.matchCount ?? 0} first-round matches.`
+          : "Pushed to Digital Pool.",
+      );
+      await refreshDetail();
+    } catch (err) {
+      setActionMsg(
+        err instanceof Error ? err.message : "Could not push to Digital Pool.",
       );
     } finally {
       setSaving(false);
@@ -3363,6 +3419,12 @@ export function Tournaments({
 
             {activeTab === "manage" ? (
               <div className="space-y-3">
+                {actionMsg ? (
+                  <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
+                    {actionMsg}
+                  </p>
+                ) : null}
+
                 <section className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
                   <div className="border-b border-[var(--line)] px-3 py-3 sm:px-4">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
@@ -3370,7 +3432,7 @@ export function Tournaments({
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted)]">
                       {isOrganizer
-                        ? "Edit details, registration, or remove this event."
+                        ? "Edit details, push the bracket to Digital Pool, or remove this event."
                         : "Preview for feedback — only the organizer can make changes."}
                     </p>
                   </div>
@@ -3469,6 +3531,36 @@ export function Tournaments({
                       </div>
                     )}
 
+                    <button
+                      type="button"
+                      disabled={!isOrganizer || saving}
+                      onClick={() =>
+                        void pushToDigitalPool(
+                          t.id,
+                          Boolean(t.digitalPoolSlug),
+                        )
+                      }
+                      className={manageActionTile}
+                    >
+                      <span
+                        className={`${manageActionIcon} bg-[linear-gradient(180deg,#edc48a_0%,var(--amber)_48%,#c4893f_100%)] text-[#1a140c]`}
+                      >
+                        <DigitalPoolPushIcon className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-[var(--ink)]">
+                          {t.digitalPoolSlug
+                            ? "Push again to Digital Pool"
+                            : "Push to Digital Pool"}
+                        </span>
+                        <span className="mt-0.5 block text-[11px] text-[var(--muted)]">
+                          {user?.digitalPoolLinked
+                            ? "Create bracket from checked-in / paid field"
+                            : "Connect Digital Pool in Settings first"}
+                        </span>
+                      </span>
+                    </button>
+
                     {!confirmRemove ? (
                       <button
                         type="button"
@@ -3495,6 +3587,28 @@ export function Tournaments({
                       </button>
                     ) : null}
                   </div>
+
+                  {t.digitalPoolSlug ? (
+                    <div className="space-y-2 border-t border-[var(--line)] px-3 py-3 sm:px-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                        Digital Pool
+                      </p>
+                      <a
+                        href={`https://digitalpool.com/tournament-builder/${t.digitalPoolSlug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex text-sm font-semibold text-[var(--felt-deep)] underline-offset-2 hover:underline"
+                      >
+                        Open tournament builder
+                      </a>
+                      {t.digitalPoolPushedAt ? (
+                        <p className="text-xs text-[var(--muted)]">
+                          Last pushed{" "}
+                          {new Date(t.digitalPoolPushedAt).toLocaleString()}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   {confirmRemove ? (
                     <div className="space-y-3 border-t border-[var(--line)] px-3 py-3 sm:px-4">
