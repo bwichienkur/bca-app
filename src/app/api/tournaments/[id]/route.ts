@@ -88,7 +88,6 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       "rulesetPreset",
       "winnersRaceTo",
       "losersRaceTo",
-      "minFargo",
       "maxFargo",
       "minRobustnessStatus",
       "unratedPolicy",
@@ -96,6 +95,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       "teamSize",
       "entryFeeCents",
       "payMethod",
+      "venmoHandle",
+      "zelleHandle",
+      "cashAppHandle",
       "payoutNotes",
       "registrationMode",
       "reportedToFargo",
@@ -118,6 +120,17 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       const min = allowed.minRobustnessStatus;
       allowed.minRobustnessStatus =
         min === "preliminary" || min === "established" ? min : null;
+    }
+    // Min Fargo is no longer configurable — clear on any edit that touches Fargo.
+    if ("maxFargo" in allowed) {
+      allowed.minFargo = null;
+    }
+    for (const key of ["venmoHandle", "zelleHandle", "cashAppHandle"] as const) {
+      if (key in allowed) {
+        const value = allowed[key];
+        allowed[key] =
+          typeof value === "string" && value.trim() ? value.trim() : null;
+      }
     }
 
     const tournament = await updateTournament(id, allowed);
