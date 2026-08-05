@@ -97,12 +97,12 @@ const labelClass =
 
 /** Compact icon actions for signup request rows. */
 const signupIconBtn =
-  "inline-flex h-8 w-12 shrink-0 items-center justify-center rounded-[var(--radius)] transition disabled:opacity-50";
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] transition disabled:opacity-50";
 const signupApproveBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--chalk)_45%,transparent)] bg-[color-mix(in_srgb,var(--chalk)_14%,var(--surface-2))] text-[var(--felt-deep)] hover:bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))]`;
 const signupWaitlistBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--amber)_55%,transparent)] bg-[color-mix(in_srgb,var(--amber)_18%,var(--surface-2))] text-[var(--amber)] hover:bg-[color-mix(in_srgb,var(--amber)_28%,var(--surface-2))]`;
 const signupRejectBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[var(--danger-bg)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_28%,var(--surface-2))]`;
 const signupInlineIconBtn =
-  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt-deep)] transition hover:bg-[color-mix(in_srgb,var(--chalk)_18%,transparent)] hover:text-[var(--chalk)]";
+  "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt-deep)] transition hover:bg-[color-mix(in_srgb,var(--chalk)_18%,transparent)] hover:text-[var(--chalk)]";
 const signupBulkBtn =
   "inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-[var(--radius)] px-2 text-xs font-semibold transition disabled:opacity-50 sm:flex-none sm:px-3";
 const signupBulkApproveBtn = `${signupBulkBtn} border border-[color-mix(in_srgb,var(--chalk)_45%,transparent)] bg-[color-mix(in_srgb,var(--chalk)_14%,var(--surface-2))] text-[var(--felt-deep)] hover:bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))]`;
@@ -446,16 +446,17 @@ function SignupRequestRow({
   return (
     <div
       className={[
-        "px-3 py-2 sm:px-4",
+        "px-3 py-1.5 sm:px-4",
         status === "pending"
           ? "bg-[color-mix(in_srgb,var(--amber)_7%,transparent)]"
           : "",
         selected ? "bg-[color-mix(in_srgb,var(--felt)_8%,transparent)]" : "",
       ].join(" ")}
+      title={teammateHint ?? undefined}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         {selectable ? (
-          <label className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center self-center">
+          <label className="flex h-9 w-7 shrink-0 cursor-pointer items-center justify-center">
             <input
               type="checkbox"
               checked={Boolean(selected)}
@@ -466,52 +467,44 @@ function SignupRequestRow({
           </label>
         ) : null}
 
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-0.5 gap-y-0.5">
-            <p className="min-w-0 font-[family-name:var(--font-display)] text-[15px] font-semibold leading-snug tracking-tight text-[var(--ink)]">
-              <span className="break-words">{title}</span>
-              <span className="mx-1.5 font-normal text-[var(--muted)]">·</span>
-              <span className="tabular-nums text-[var(--felt-deep)]">
-                {rating ?? "—"}
-              </span>
-            </p>
+        <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden whitespace-nowrap">
+          <p className="flex min-w-0 items-baseline gap-1 font-[family-name:var(--font-display)] text-[14px] font-semibold leading-none tracking-tight text-[var(--ink)]">
+            <span className="min-w-0 truncate">{title}</span>
+            <span className="shrink-0 font-normal text-[var(--muted)]">·</span>
+            <span className="shrink-0 tabular-nums text-[var(--felt-deep)]">
+              {rating ?? "—"}
+            </span>
+          </p>
+          <button
+            type="button"
+            onClick={onOpenDetails}
+            className={signupInlineIconBtn}
+            aria-label={detailsLabel}
+            title="View player"
+          >
+            <EyeIcon className="h-3.5 w-3.5" />
+          </button>
+          {note ? (
             <button
               type="button"
-              onClick={onOpenDetails}
+              onClick={onShowNote}
               className={signupInlineIconBtn}
-              aria-label={detailsLabel}
-              title="View player"
+              aria-label="View signup message"
+              title="Message"
             >
-              <EyeIcon className="h-3.5 w-3.5" />
+              <MessageIcon className="h-3.5 w-3.5" />
             </button>
-            {note ? (
-              <button
-                type="button"
-                onClick={onShowNote}
-                className={signupInlineIconBtn}
-                aria-label="View signup message"
-                title="Message"
-              >
-                <MessageIcon className="h-3.5 w-3.5" />
-              </button>
-            ) : null}
-            {showStatus ? (
-              <span className="ml-1">{signupStatusBadge(status)}</span>
-            ) : null}
-          </div>
-
-          <p className="mt-0.5 text-[11px] leading-tight text-[var(--muted)]">
+          ) : null}
+          {showStatus ? (
+            <span className="shrink-0">{signupStatusBadge(status)}</span>
+          ) : null}
+          <span className="ml-0.5 shrink-0 text-[11px] leading-none tabular-nums text-[var(--muted)]">
             {submittedLabel}
-            {teammateHint ? (
-              <span className="block truncate sm:inline sm:before:content-['·_']">
-                {teammateHint}
-              </span>
-            ) : null}
-          </p>
+          </span>
         </div>
 
         {actions ? (
-          <div className="flex shrink-0 items-center gap-1.5 self-center">
+          <div className="flex shrink-0 items-center gap-1">
             {actions}
           </div>
         ) : null}
@@ -1260,7 +1253,7 @@ export function Tournaments({
   };
 
   const signupSubmittedLabel = (reg: TournamentRegistration) =>
-    `Submitted ${formatSignupSubmittedAt(reg.createdAt)}`;
+    formatSignupSubmittedAt(reg.createdAt);
 
   const setTournamentStatus = async (
     id: string,
