@@ -140,6 +140,15 @@ export const ORGANIZER_STATUS_OPTIONS: {
   { value: "canceled", label: "Cancelled" },
 ];
 
+/** Create-time choice: open for signups now, or keep as draft. */
+export const CREATE_STATUS_OPTIONS: {
+  value: Extract<TournamentStatus, "open" | "draft">;
+  label: string;
+}[] = [
+  { value: "open", label: "Open for registration" },
+  { value: "draft", label: "Draft (not open yet)" },
+];
+
 export const FL_REGIONS = [
   "Palm Beach",
   "Broward",

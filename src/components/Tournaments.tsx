@@ -14,6 +14,7 @@ import {
 import { createPortal } from "react-dom";
 import {
   BRACKET_FORMAT_OPTIONS,
+  CREATE_STATUS_OPTIONS,
   defaultTeamSize,
   entryNoun,
   EVENT_TYPE_OPTIONS,
@@ -1702,7 +1703,7 @@ export function Tournaments({
           description={
             isEdit
               ? "Update format, eligibility, venue, or close registration."
-              : "Set the format, Fargo band, entry, and venue. Players can browse and sign up from Events."
+              : "Set the format, eligibility, entry, and venue. Choose whether registration opens now or stays a draft."
           }
         />
 
@@ -1745,7 +1746,22 @@ export function Tournaments({
                       />
                     </Field>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="sm:col-span-2">
+                    <Field label="Registration open">
+                      <SelectField
+                        aria-label="Registration open"
+                        value={
+                          form.status === "draft" ? "draft" : "open"
+                        }
+                        options={CREATE_STATUS_OPTIONS}
+                        onChange={(status) =>
+                          setForm((p) => ({ ...p, status }))
+                        }
+                      />
+                    </Field>
+                  </div>
+                )}
                 <div className="sm:col-span-2">
                   <Field label="Event title">
                     <input
@@ -2135,10 +2151,14 @@ export function Tournaments({
                   {saving
                     ? isEdit
                       ? "Saving…"
-                      : "Publishing…"
+                      : form.status === "draft"
+                        ? "Saving draft…"
+                        : "Publishing…"
                     : isEdit
                       ? "Save changes"
-                      : "Publish event"}
+                      : form.status === "draft"
+                        ? "Save draft"
+                        : "Publish event"}
                 </button>
                 <button
                   type="button"
@@ -2242,6 +2262,17 @@ export function Tournaments({
                   ) : null}
                 </div>
               ) : null}
+            </div>
+          </SurfaceCard>
+        ) : t.status === "draft" ? (
+          <SurfaceCard>
+            <div className="space-y-1 p-3 sm:p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                Registration
+              </p>
+              <p className="text-sm text-[var(--ink)]">
+                Not open yet — this event is still a draft.
+              </p>
             </div>
           </SurfaceCard>
         ) : t.status === "open" ? (

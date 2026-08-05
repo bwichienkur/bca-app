@@ -199,7 +199,7 @@ export async function createTournament(
     organizerName: organizer.name,
     organizerEmail: organizer.email,
     organizerPhone: input.organizerPhone ?? null,
-    status: input.status ?? "open",
+    status: input.status === "draft" ? "draft" : "open",
     createdAt: now,
     updatedAt: now,
   };
@@ -484,8 +484,12 @@ export async function createRegistration(input: {
 }> {
   const tournament = await getTournament(input.tournamentId);
   if (!tournament) throw new Error("Event not found.");
-  if (tournament.status !== "open" && tournament.status !== "draft") {
-    throw new Error("Registration is closed for this event.");
+  if (tournament.status !== "open") {
+    throw new Error(
+      tournament.status === "draft"
+        ? "Registration is not open yet for this event."
+        : "Registration is closed for this event.",
+    );
   }
   if (tournament.registrationMode === "invite-only") {
     throw new Error("This event is invite-only.");
