@@ -95,19 +95,19 @@ const fieldClass =
 const labelClass =
   "mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]";
 
-/** Compact icon actions for signup request rows. */
-const signupIconBtn =
-  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] transition disabled:opacity-50";
-const signupApproveBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--chalk)_45%,transparent)] bg-[color-mix(in_srgb,var(--chalk)_14%,var(--surface-2))] text-[var(--felt-deep)] hover:bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))]`;
-const signupWaitlistBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--amber)_55%,transparent)] bg-[color-mix(in_srgb,var(--amber)_18%,var(--surface-2))] text-[var(--amber)] hover:bg-[color-mix(in_srgb,var(--amber)_28%,var(--surface-2))]`;
-const signupRejectBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[var(--danger-bg)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_28%,var(--surface-2))]`;
+/** Solid text actions for signup request rows. */
+const signupActionBtn =
+  "inline-flex h-8 shrink-0 items-center justify-center rounded-[var(--radius)] px-2.5 text-xs font-semibold transition disabled:opacity-50";
+const signupApproveBtn = `${signupActionBtn} bg-[var(--felt)] text-white hover:bg-[var(--felt-soft)]`;
+const signupWaitlistBtn = `${signupActionBtn} bg-[var(--amber)] text-[#1a140c] hover:brightness-110`;
+const signupRejectBtn = `${signupActionBtn} bg-[var(--danger-strong)] text-white hover:brightness-110`;
 const signupInlineIconBtn =
   "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt-deep)] transition hover:bg-[color-mix(in_srgb,var(--chalk)_18%,transparent)] hover:text-[var(--chalk)]";
 const signupBulkBtn =
-  "inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-[var(--radius)] px-2 text-xs font-semibold transition disabled:opacity-50 sm:flex-none sm:px-3";
-const signupBulkApproveBtn = `${signupBulkBtn} border border-[color-mix(in_srgb,var(--chalk)_45%,transparent)] bg-[color-mix(in_srgb,var(--chalk)_14%,var(--surface-2))] text-[var(--felt-deep)] hover:bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))]`;
-const signupBulkWaitlistBtn = `${signupBulkBtn} border border-[color-mix(in_srgb,var(--amber)_55%,transparent)] bg-[color-mix(in_srgb,var(--amber)_18%,var(--surface-2))] text-[var(--amber)] hover:bg-[color-mix(in_srgb,var(--amber)_28%,var(--surface-2))]`;
-const signupBulkRejectBtn = `${signupBulkBtn} border border-[color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[var(--danger-bg)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_28%,var(--surface-2))]`;
+  "inline-flex h-9 flex-1 items-center justify-center rounded-[var(--radius)] px-3 text-xs font-semibold transition disabled:opacity-50 sm:flex-none";
+const signupBulkApproveBtn = `${signupBulkBtn} bg-[var(--felt)] text-white hover:bg-[var(--felt-soft)]`;
+const signupBulkWaitlistBtn = `${signupBulkBtn} bg-[var(--amber)] text-[#1a140c] hover:brightness-110`;
+const signupBulkRejectBtn = `${signupBulkBtn} bg-[var(--danger-strong)] text-white hover:brightness-110`;
 
 function statusTone(status: TournamentStatus): string {
   switch (status) {
@@ -2591,7 +2591,6 @@ export function Tournaments({
                           }
                           className={signupBulkApproveBtn}
                         >
-                          <ApproveIcon className="h-3.5 w-3.5" />
                           Approve
                         </button>
                         {signupStatusFilter === "pending" ? (
@@ -2606,7 +2605,6 @@ export function Tournaments({
                             }
                             className={signupBulkWaitlistBtn}
                           >
-                            <WaitlistIcon className="h-3.5 w-3.5" />
                             Waitlist
                           </button>
                         ) : null}
@@ -2621,7 +2619,6 @@ export function Tournaments({
                           }
                           className={signupBulkRejectBtn}
                         >
-                          <RejectIcon className="h-3.5 w-3.5" />
                           Reject
                         </button>
                       </div>
@@ -2654,10 +2651,8 @@ export function Tournaments({
                                   })
                                 }
                                 className={signupApproveBtn}
-                                aria-label={`Approve ${reg.displayName}`}
-                                title="Approve"
                               >
-                                <ApproveIcon className="h-4 w-4" />
+                                Approve
                               </button>
                               <button
                                 type="button"
@@ -2668,10 +2663,8 @@ export function Tournaments({
                                   })
                                 }
                                 className={signupWaitlistBtn}
-                                aria-label={`Waitlist ${reg.displayName}`}
-                                title="Waitlist"
                               >
-                                <WaitlistIcon className="h-4 w-4" />
+                                Waitlist
                               </button>
                               <button
                                 type="button"
@@ -2682,10 +2675,8 @@ export function Tournaments({
                                   })
                                 }
                                 className={signupRejectBtn}
-                                aria-label={`Reject ${reg.displayName}`}
-                                title="Reject"
                               >
-                                <RejectIcon className="h-4 w-4" />
+                                Reject
                               </button>
                             </>
                           ) : reg.status === "waitlisted" ? (
@@ -2699,10 +2690,8 @@ export function Tournaments({
                                   })
                                 }
                                 className={signupApproveBtn}
-                                aria-label={`Approve ${reg.displayName}`}
-                                title="Approve"
                               >
-                                <ApproveIcon className="h-4 w-4" />
+                                Approve
                               </button>
                               <button
                                 type="button"
@@ -2713,10 +2702,8 @@ export function Tournaments({
                                   })
                                 }
                                 className={signupRejectBtn}
-                                aria-label={`Reject ${reg.displayName}`}
-                                title="Reject"
                               >
-                                <RejectIcon className="h-4 w-4" />
+                                Reject
                               </button>
                             </>
                           ) : undefined;
