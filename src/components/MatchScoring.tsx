@@ -836,7 +836,7 @@ export function MatchScoring({
     return (
       <EmptyState
         title="Sign in to score"
-        body="Use Login with your BCA / FargoRate account. That creates your Tableside account and unlocks scoring for your division night."
+        body="Sign in with FargoRate (or create a Tableside account and connect Fargo in Settings). Scoring submits to LMS for your division night."
         action={
           <button
             type="button"

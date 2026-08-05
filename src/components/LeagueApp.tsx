@@ -898,6 +898,11 @@ export function LeagueApp() {
             setUser(nextUser);
             setScreen("main");
             const basePrefs = prefs ?? loadPreferences();
+            if (!nextUser.lmsId) {
+              // Tableside-only account — Settings to connect Fargo / Digital Pool.
+              setScreen("settings");
+              return;
+            }
             void (async () => {
               // Prefer Redis/local cache; only scan the preferred league.
               const nextMembership = await loadMembership({
