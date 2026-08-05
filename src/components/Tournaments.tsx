@@ -1024,9 +1024,23 @@ export function Tournaments({
 
   const refreshDetail = useCallback(async () => {
     if (!selectedId) return;
-    await openDetail(selectedId);
-    await loadEvents();
-  }, [loadEvents, openDetail, selectedId]);
+    try {
+      const res = await fetch(`/api/tournaments/${selectedId}`);
+      const data = (await res.json()) as DetailPayload & { error?: string };
+      if (!res.ok) throw new Error(data.error || "Failed to load event.");
+      setDetail({
+        tournament: data.tournament,
+        registrations: data.registrations ?? [],
+        messages: data.messages ?? [],
+        isOrganizer: Boolean(data.isOrganizer),
+      });
+      await loadEvents();
+    } catch (err) {
+      setActionMsg(
+        err instanceof Error ? err.message : "Failed to refresh event.",
+      );
+    }
+  }, [loadEvents, selectedId]);
 
   const myRegistration = useMemo(() => {
     if (!user || !detail) return null;
