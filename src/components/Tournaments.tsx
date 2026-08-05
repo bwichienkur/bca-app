@@ -122,8 +122,7 @@ const fieldToggleBtn =
   "inline-flex h-7 shrink-0 items-center justify-center rounded-[var(--radius)] px-2.5 text-[11px] font-semibold transition disabled:opacity-50";
 const fieldToggleIdle = `${fieldToggleBtn} border border-[var(--line)] bg-[var(--surface-2)] text-[var(--muted)] hover:text-[var(--ink)]`;
 const fieldToggleCheckedIn = `${fieldToggleBtn} bg-[var(--felt)] text-white`;
-const fieldPaidBadge =
-  "inline-flex h-7 shrink-0 items-center justify-center rounded-[var(--radius)] bg-[var(--amber)] px-2.5 text-[11px] font-semibold text-[#1a140c]";
+const fieldTogglePaid = `${fieldToggleBtn} bg-[var(--amber)] text-[#1a140c]`;
 
 function statusTone(status: TournamentStatus): string {
   switch (status) {
@@ -2985,22 +2984,14 @@ export function Tournaments({
                         return (
                           <li key={reg.id} className="px-3 py-2 sm:px-4">
                             <div className="flex items-center gap-2">
+                              <div className="w-10 shrink-0 text-right font-[family-name:var(--font-display)] text-[14px] font-semibold tabular-nums leading-none text-[var(--felt-deep)]">
+                                {hasRating ? stats.rating : "—"}
+                              </div>
+
                               <div className="min-w-0 flex-1">
                                 <div className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5">
-                                  <p className="min-w-0 font-[family-name:var(--font-display)] text-[14px] font-semibold leading-snug tracking-tight text-[var(--ink)]">
-                                    <span className="break-words [overflow-wrap:anywhere]">
-                                      {title}
-                                    </span>
-                                    {hasRating ? (
-                                      <>
-                                        <span className="mx-1.5 font-normal text-[var(--muted)]">
-                                          ·
-                                        </span>
-                                        <span className="tabular-nums text-[var(--felt-deep)]">
-                                          {stats.rating}
-                                        </span>
-                                      </>
-                                    ) : null}
+                                  <p className="min-w-0 break-words font-[family-name:var(--font-display)] text-[14px] font-semibold leading-snug tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
+                                    {title}
                                   </p>
                                   {stats.playerId ? (
                                     <button
@@ -3050,24 +3041,26 @@ export function Tournaments({
                                 >
                                   {reg.checkedIn ? "In" : "Check in"}
                                 </button>
-                                {reg.paid ? (
-                                  <span className={fieldPaidBadge} title="Paid">
-                                    Paid
-                                  </span>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    disabled={saving}
-                                    onClick={() =>
-                                      void onUpdateRegistration(reg.id, {
-                                        paid: true,
-                                      })
-                                    }
-                                    className={fieldToggleIdle}
-                                  >
-                                    Pay
-                                  </button>
-                                )}
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  onClick={() =>
+                                    void onUpdateRegistration(reg.id, {
+                                      paid: !reg.paid,
+                                    })
+                                  }
+                                  className={
+                                    reg.paid ? fieldTogglePaid : fieldToggleIdle
+                                  }
+                                  aria-pressed={reg.paid}
+                                  aria-label={
+                                    reg.paid
+                                      ? `Mark ${reg.displayName} unpaid`
+                                      : `Mark ${reg.displayName} paid`
+                                  }
+                                >
+                                  {reg.paid ? "Paid" : "Pay"}
+                                </button>
                               </div>
                             </div>
                           </li>
