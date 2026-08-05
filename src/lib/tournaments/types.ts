@@ -17,6 +17,10 @@ export type UnratedPolicy = "cap-at-max" | "provisional" | "message-organizer";
 export type RobustnessStatus = "starter" | "preliminary" | "established";
 export type RegistrationMode = "open" | "approval" | "invite-only";
 export type PayMethod = "door" | "venmo" | "zelle" | "cashapp" | "in-app-later";
+/** Matches Digital Pool break_format options. */
+export type BreakFormat = "winner-break" | "loser-break" | "alternate-break";
+/** Matches Digital Pool draw_type options. */
+export type DrawType = "random" | "seeded" | "custom";
 export type TournamentStatus =
   | "draft"
   | "open"
@@ -39,6 +43,8 @@ export type Tournament = {
   gameType: GameType;
   eventType: EventType;
   bracketFormat: BracketFormat;
+  breakFormat: BreakFormat;
+  drawType: DrawType;
   handicapSystem: HandicapSystem;
   handicapNotes: string;
   rulesetPreset: RulesetPreset;
@@ -55,6 +61,8 @@ export type Tournament = {
   /** Players per entry, including the captain. Singles=1, scotch=2, teams configurable. */
   teamSize: number;
   entryFeeCents: number;
+  /** House / added money in cents (Digital Pool added_money). */
+  addedMoneyCents: number;
   payMethod: PayMethod;
   /** Where to send payment (optional handles). */
   venmoHandle: string | null;
@@ -127,6 +135,8 @@ export type CreateTournamentInput = {
   gameType: GameType;
   eventType: EventType;
   bracketFormat: BracketFormat;
+  breakFormat?: BreakFormat;
+  drawType?: DrawType;
   handicapSystem: HandicapSystem;
   handicapNotes?: string;
   rulesetPreset?: RulesetPreset;
@@ -139,6 +149,7 @@ export type CreateTournamentInput = {
   maxPlayers: number;
   teamSize?: number;
   entryFeeCents?: number;
+  addedMoneyCents?: number;
   payMethod?: PayMethod;
   venmoHandle?: string | null;
   zelleHandle?: string | null;
