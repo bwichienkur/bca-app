@@ -4,11 +4,16 @@ import {
   normalizeCalcutta,
   syncCalcuttaLots,
 } from "@/lib/tournaments/calcutta";
-import { defaultTeamSize } from "@/lib/tournaments/options";
+import {
+  defaultTeamSize,
+  meetsMinRobustness,
+  minRobustnessLabel,
+} from "@/lib/tournaments/options";
 import type {
   CreateTournamentInput,
   RegistrationStatus,
   RegistrationTeammate,
+  RobustnessStatus,
   Tournament,
   TournamentCalcutta,
   TournamentListItem,
@@ -167,6 +172,11 @@ export async function createTournament(
     losersRaceTo: input.losersRaceTo ?? null,
     minFargo: input.minFargo ?? null,
     maxFargo: input.maxFargo ?? null,
+    minRobustnessStatus:
+      input.minRobustnessStatus === "preliminary" ||
+      input.minRobustnessStatus === "established"
+        ? input.minRobustnessStatus
+        : null,
     unratedPolicy: input.unratedPolicy ?? "message-organizer",
     maxPlayers: Math.max(2, Math.floor(input.maxPlayers)),
     teamSize: Math.max(
@@ -299,6 +309,11 @@ function normalizeTournament(raw: Tournament): Tournament {
       typeof raw.teamSize === "number" && raw.teamSize >= 1
         ? raw.teamSize
         : defaultTeamSize(raw.eventType),
+    minRobustnessStatus:
+      raw.minRobustnessStatus === "preliminary" ||
+      raw.minRobustnessStatus === "established"
+        ? raw.minRobustnessStatus
+        : null,
   };
 }
 
@@ -419,6 +434,21 @@ function assertFargoInBand(
   }
 }
 
+function assertRobustnessRequirement(
+  status: RobustnessStatus | null | undefined,
+  tournament: Tournament,
+): void {
+  if (meetsMinRobustness(status, tournament.minRobustnessStatus)) return;
+  if (tournament.minRobustnessStatus === "established") {
+    throw new Error(
+      "This event requires established Fargo robustness to sign up.",
+    );
+  }
+  throw new Error(
+    `This event requires ${minRobustnessLabel(tournament.minRobustnessStatus).toLowerCase()} Fargo robustness.`,
+  );
+}
+
 function normalizeTeammates(
   raw: RegistrationTeammate[] | undefined,
 ): RegistrationTeammate[] {
@@ -507,6 +537,7 @@ export async function createRegistration(input: {
   }
 
   assertFargoInBand(input.ratingAtSignup, tournament, "You");
+  assertRobustnessRequirement(input.robustnessStatusAtSignup, tournament);
   for (const mate of teammates) {
     assertFargoInBand(mate.ratingAtSignup, tournament, mate.displayName);
   }

@@ -86,6 +86,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
             message.includes("invite") ||
             message.includes("requires") ||
             message.includes("needs") ||
+            message.includes("robustness") ||
             message.includes("Team name") ||
             message.includes("teammate") ||
             message.includes("partner") ||

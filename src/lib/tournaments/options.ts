@@ -5,10 +5,41 @@ import type {
   HandicapSystem,
   PayMethod,
   RegistrationMode,
+  RobustnessStatus,
   RulesetPreset,
   TournamentStatus,
   UnratedPolicy,
 } from "@/lib/tournaments/types";
+
+const ROBUSTNESS_RANK: Record<RobustnessStatus, number> = {
+  starter: 0,
+  preliminary: 1,
+  established: 2,
+};
+
+export function meetsMinRobustness(
+  status: RobustnessStatus | null | undefined,
+  min: RobustnessStatus | null | undefined,
+): boolean {
+  if (!min) return true;
+  const actual = status ?? "starter";
+  return ROBUSTNESS_RANK[actual] >= ROBUSTNESS_RANK[min];
+}
+
+export function robustnessStatusLabel(status: RobustnessStatus): string {
+  if (status === "established") return "Established";
+  if (status === "preliminary") return "Preliminary";
+  return "Starter";
+}
+
+export function minRobustnessLabel(
+  min: RobustnessStatus | null | undefined,
+): string {
+  if (!min) return "Any";
+  if (min === "established") return "Established only";
+  if (min === "preliminary") return "Preliminary or higher";
+  return "Any";
+}
 
 export const GAME_TYPE_OPTIONS: { value: GameType; label: string }[] = [
   { value: "8-ball", label: "8-Ball" },
@@ -46,6 +77,15 @@ export const UNRATED_POLICY_OPTIONS: { value: UnratedPolicy; label: string }[] =
   { value: "message-organizer", label: "Message organizer" },
   { value: "provisional", label: "Allow provisional / estimated" },
   { value: "cap-at-max", label: "Cap at max Fargo" },
+];
+
+export const MIN_ROBUSTNESS_OPTIONS: {
+  value: "" | RobustnessStatus;
+  label: string;
+}[] = [
+  { value: "", label: "Any robustness" },
+  { value: "preliminary", label: "Preliminary or higher" },
+  { value: "established", label: "Established only" },
 ];
 
 export const PAY_METHOD_OPTIONS: { value: PayMethod; label: string }[] = [

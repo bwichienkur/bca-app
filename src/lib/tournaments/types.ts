@@ -13,6 +13,8 @@ export type HandicapSystem =
   | "custom";
 export type RulesetPreset = "bca" | "wpa" | "house";
 export type UnratedPolicy = "cap-at-max" | "provisional" | "message-organizer";
+/** Minimum Fargo robustness required to sign up. null = any. */
+export type RobustnessStatus = "starter" | "preliminary" | "established";
 export type RegistrationMode = "open" | "approval" | "invite-only";
 export type PayMethod = "door" | "venmo" | "in-app-later";
 export type TournamentStatus =
@@ -44,6 +46,8 @@ export type Tournament = {
   losersRaceTo: number | null;
   minFargo: number | null;
   maxFargo: number | null;
+  /** null = any robustness; "preliminary" / "established" gate signup. */
+  minRobustnessStatus: RobustnessStatus | null;
   unratedPolicy: UnratedPolicy;
   /** Max entries (singles players, doubles pairs, or teams). */
   maxPlayers: number;
@@ -74,8 +78,6 @@ export type RegistrationTeammate = {
   displayName: string;
   ratingAtSignup: number | null;
 };
-
-export type RobustnessStatus = "starter" | "preliminary" | "established";
 
 export type TournamentRegistration = {
   id: string;
@@ -127,6 +129,7 @@ export type CreateTournamentInput = {
   losersRaceTo?: number | null;
   minFargo?: number | null;
   maxFargo?: number | null;
+  minRobustnessStatus?: RobustnessStatus | null;
   unratedPolicy?: UnratedPolicy;
   maxPlayers: number;
   teamSize?: number;
