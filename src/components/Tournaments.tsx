@@ -118,6 +118,164 @@ function robustnessClass(status: RobustnessStatus | null | undefined): string {
   return "bg-[var(--surface-2)] text-[var(--muted)]";
 }
 
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  );
+}
+
+function registrationCardTitle(reg: TournamentRegistration): string {
+  return reg.teamName?.trim() || reg.displayName;
+}
+
+function registrationCardSubtitle(reg: TournamentRegistration): string | null {
+  const team = reg.teamName?.trim();
+  if (team && team !== reg.displayName.trim()) return reg.displayName;
+  return reg.email?.trim() || null;
+}
+
+/** Player-search-style card for tournament signups. */
+function SignupPlayerCard({
+  title,
+  subtitle,
+  rating,
+  meta,
+  robustnessStatus,
+  robustness,
+  onOpenDetails,
+  note,
+  teammates,
+  actions,
+}: {
+  title: string;
+  subtitle?: string | null;
+  rating: number | null;
+  meta?: ReactNode;
+  robustnessStatus: RobustnessStatus;
+  robustness: number | null;
+  onOpenDetails?: (() => void) | null;
+  note?: string | null;
+  teammates?: TournamentRegistration["teammates"];
+  actions?: ReactNode;
+}) {
+  const header = (
+    <div className="relative overflow-hidden bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] text-white">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-40"
+        style={{
+          background:
+            "radial-gradient(120% 80% at 100% 0%, rgba(224,163,90,0.28), transparent 55%)",
+        }}
+      />
+      <div className="relative flex min-w-0 items-center gap-2 px-3 py-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-[family-name:var(--font-display)] text-base font-semibold leading-tight tracking-tight text-white">
+            {title}
+          </p>
+          {subtitle ? (
+            <p className="mt-0.5 truncate text-[11px] font-medium leading-tight text-[var(--chalk)]">
+              {subtitle}
+            </p>
+          ) : null}
+        </div>
+        <p className="shrink-0 font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums leading-none text-white">
+          {rating ?? "—"}
+        </p>
+        {onOpenDetails ? (
+          <span
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-black/25 text-white ring-1 ring-white/15 transition group-hover:bg-black/35"
+            aria-hidden
+          >
+            <ChevronIcon className="h-3.5 w-3.5" />
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+      {onOpenDetails ? (
+        <button
+          type="button"
+          onClick={onOpenDetails}
+          aria-label={`View stats: ${title}`}
+          className={[
+            "group block w-full text-left transition",
+            "hover:brightness-[1.03]",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--felt-soft)]",
+          ].join(" ")}
+        >
+          {header}
+        </button>
+      ) : (
+        header
+      )}
+
+      <div className="flex min-w-0 items-center gap-2 px-3 py-1.5">
+        {meta ? (
+          typeof meta === "string" ? (
+            <p className="min-w-0 flex-1 truncate text-[11px] text-[var(--muted)]">
+              {meta}
+            </p>
+          ) : (
+            <div className="min-w-0 flex-1 truncate">{meta}</div>
+          )
+        ) : (
+          <span className="min-w-0 flex-1" />
+        )}
+        <span
+          className={[
+            "inline-flex shrink-0 rounded-[var(--radius)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
+            robustnessClass(robustnessStatus),
+          ].join(" ")}
+        >
+          {robustnessLabel(robustnessStatus)}
+          {robustness != null ? ` · ${Math.round(robustness)}` : ""}
+        </span>
+      </div>
+
+      {teammates?.length ? (
+        <div className="flex flex-wrap gap-1.5 border-t border-[var(--line)] px-3 py-2">
+          {teammates.map((mate) => (
+            <span
+              key={`${title}-${mate.displayName}`}
+              className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/70 px-2 py-0.5 text-[11px] font-semibold text-[var(--ink)]"
+            >
+              {mate.displayName}
+              {mate.ratingAtSignup != null ? ` · ${mate.ratingAtSignup}` : ""}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {note ? (
+        <p className="border-t border-[var(--line)] px-3 py-2 text-xs text-[var(--ink)]">
+          {note}
+        </p>
+      ) : null}
+
+      {actions ? (
+        <div className="flex flex-wrap gap-2 border-t border-[var(--line)] px-3 py-2.5">
+          {actions}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 type PlayerLiveStats = {
   rating: number | null;
   robustness: number | null;
@@ -1995,86 +2153,31 @@ export function Tournaments({
                       </p>
                     </SurfaceCard>
                   ) : (
-                    <ul className="space-y-3">
+                    <ul className="space-y-2">
                       {pendingRegistrations.map((reg) => {
                         const stats = statsForRegistration(reg);
                         return (
-                          <li key={reg.id}>
-                            <SurfaceCard className="animate-rise">
-                              <div className="space-y-3 p-3 sm:p-4">
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0 flex-1">
-                                    <p className="font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight text-[var(--ink)]">
-                                      {reg.teamName || reg.displayName}
-                                    </p>
-                                    <p className="mt-0.5 text-sm text-[var(--muted)]">
-                                      {reg.displayName}
-                                      {reg.email ? ` · ${reg.email}` : ""}
-                                    </p>
-                                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                                      <span className="rounded-full bg-[var(--amber)] px-2.5 py-1 text-[11px] font-semibold text-[#1a140c]">
-                                        Pending
-                                      </span>
-                                      <span
-                                        className={[
-                                          "rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]",
-                                          robustnessClass(stats.robustnessStatus),
-                                        ].join(" ")}
-                                      >
-                                        {robustnessLabel(stats.robustnessStatus)}
-                                        {stats.robustness != null
-                                          ? ` · ${Math.round(stats.robustness)}`
-                                          : ""}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div className="shrink-0 text-right">
-                                    <p className="font-[family-name:var(--font-display)] text-3xl font-semibold tabular-nums leading-none text-[var(--felt-deep)]">
-                                      {stats.rating ?? "—"}
-                                    </p>
-                                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                                      Fargo
-                                    </p>
-                                  </div>
-                                </div>
-
-                                {reg.teammates?.length ? (
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {reg.teammates.map((mate) => (
-                                      <span
-                                        key={`${reg.id}-${mate.displayName}`}
-                                        className="rounded-full border border-[var(--line)] bg-[var(--surface-2)]/70 px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]"
-                                      >
-                                        {mate.displayName}
-                                        {mate.ratingAtSignup != null
-                                          ? ` · ${mate.ratingAtSignup}`
-                                          : ""}
-                                      </span>
-                                    ))}
-                                  </div>
-                                ) : null}
-
-                                {reg.noteToOrganizer ? (
-                                  <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/60 px-3 py-2 text-xs text-[var(--ink)]">
-                                    {reg.noteToOrganizer}
-                                  </p>
-                                ) : null}
-
-                                <div className="flex flex-wrap gap-2">
-                                  {stats.playerId ? (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setInspectPlayer({
-                                          id: stats.playerId!,
-                                          name: reg.displayName,
-                                        })
-                                      }
-                                      className="rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-2 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
-                                    >
-                                      Player details
-                                    </button>
-                                  ) : null}
+                          <li key={reg.id} className="animate-rise">
+                            <SignupPlayerCard
+                              title={registrationCardTitle(reg)}
+                              subtitle={registrationCardSubtitle(reg)}
+                              rating={stats.rating}
+                              meta="Pending"
+                              robustnessStatus={stats.robustnessStatus}
+                              robustness={stats.robustness}
+                              onOpenDetails={
+                                stats.playerId
+                                  ? () =>
+                                      setInspectPlayer({
+                                        id: stats.playerId!,
+                                        name: reg.displayName,
+                                      })
+                                  : null
+                              }
+                              note={reg.noteToOrganizer || null}
+                              teammates={reg.teammates}
+                              actions={
+                                <>
                                   <button
                                     type="button"
                                     disabled={saving}
@@ -2083,7 +2186,7 @@ export function Tournaments({
                                         status: "approved",
                                       })
                                     }
-                                    className="rounded-full bg-[var(--felt)] px-3.5 py-2 text-xs font-semibold text-white"
+                                    className="rounded-[var(--radius)] bg-[var(--felt)] px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50"
                                   >
                                     Approve
                                   </button>
@@ -2095,13 +2198,13 @@ export function Tournaments({
                                         status: "rejected",
                                       })
                                     }
-                                    className="rounded-full border border-[var(--line)] px-3.5 py-2 text-xs font-semibold text-[var(--danger)]"
+                                    className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-2 text-xs font-semibold text-[var(--danger)] disabled:opacity-50"
                                   >
                                     Reject
                                   </button>
-                                </div>
-                              </div>
-                            </SurfaceCard>
+                                </>
+                              }
+                            />
                           </li>
                         );
                       })}
@@ -2114,70 +2217,39 @@ export function Tournaments({
                     <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
                       Reviewed
                     </p>
-                    <SurfaceCard>
-                      <ul className="divide-y divide-[var(--line)]">
-                        {otherRegistrations.map((reg) => {
-                          const stats = statsForRegistration(reg);
-                          return (
-                            <li
-                              key={reg.id}
-                              className="flex flex-wrap items-start justify-between gap-3 px-3 py-3.5 sm:px-4"
-                            >
-                              <div className="min-w-0 flex-1">
-                                <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)]">
-                                  {reg.teamName || reg.displayName}
-                                </p>
-                                <p className="mt-0.5 text-xs text-[var(--muted)]">
-                                  {reg.displayName}
-                                  {stats.rating != null
-                                    ? ` · Fargo ${stats.rating}`
-                                    : " · Unrated"}
-                                  {stats.robustness != null
-                                    ? ` · Rob ${Math.round(stats.robustness)}`
-                                    : ""}
-                                </p>
-                                <div className="mt-2 flex flex-wrap gap-1.5">
-                                  <span
-                                    className={[
-                                      "rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize",
-                                      reg.status === "approved"
-                                        ? "bg-[var(--felt)] text-white"
-                                        : "bg-[var(--surface-2)] text-[var(--muted)]",
-                                    ].join(" ")}
-                                  >
-                                    {reg.status}
-                                  </span>
-                                  <span
-                                    className={[
-                                      "rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]",
-                                      robustnessClass(stats.robustnessStatus),
-                                    ].join(" ")}
-                                  >
-                                    {robustnessLabel(stats.robustnessStatus)}
-                                  </span>
-                                  {reg.status === "approved" ? (
-                                    <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
-                                      {reg.paid ? "Paid" : "Unpaid"}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              </div>
-                              <div className="flex flex-wrap gap-1.5">
-                                {stats.playerId ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
+                    <ul className="space-y-2">
+                      {otherRegistrations.map((reg) => {
+                        const stats = statsForRegistration(reg);
+                        const metaBits = [
+                          reg.status.charAt(0).toUpperCase() +
+                            reg.status.slice(1),
+                          reg.status === "approved"
+                            ? reg.paid
+                              ? "Paid"
+                              : "Unpaid"
+                            : null,
+                        ].filter(Boolean);
+                        return (
+                          <li key={reg.id}>
+                            <SignupPlayerCard
+                              title={registrationCardTitle(reg)}
+                              subtitle={registrationCardSubtitle(reg)}
+                              rating={stats.rating}
+                              meta={metaBits.join(" · ")}
+                              robustnessStatus={stats.robustnessStatus}
+                              robustness={stats.robustness}
+                              onOpenDetails={
+                                stats.playerId
+                                  ? () =>
                                       setInspectPlayer({
                                         id: stats.playerId!,
                                         name: reg.displayName,
                                       })
-                                    }
-                                    className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[11px] font-semibold text-[var(--ink)]"
-                                  >
-                                    Details
-                                  </button>
-                                ) : null}
-                                {reg.status === "approved" ? (
+                                  : null
+                              }
+                              teammates={reg.teammates}
+                              actions={
+                                reg.status === "approved" ? (
                                   <button
                                     type="button"
                                     disabled={saving}
@@ -2186,17 +2258,17 @@ export function Tournaments({
                                         paid: !reg.paid,
                                       })
                                     }
-                                    className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[11px] font-semibold text-[var(--ink)]"
+                                    className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-2 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
                                   >
                                     {reg.paid ? "Mark unpaid" : "Mark paid"}
                                   </button>
-                                ) : null}
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </SurfaceCard>
+                                ) : null
+                              }
+                            />
+                          </li>
+                        );
+                      })}
+                    </ul>
                   </div>
                 ) : null}
               </div>
