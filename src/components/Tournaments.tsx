@@ -97,13 +97,15 @@ const labelClass =
 
 /** Touch-friendly icon actions for signup request rows. */
 const signupIconBtn =
-  "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius)] transition disabled:opacity-50";
-const signupApproveBtn = `${signupIconBtn} bg-[var(--felt)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] hover:bg-[var(--felt-soft)]`;
+  "inline-flex h-11 w-14 shrink-0 items-center justify-center rounded-[var(--radius)] transition disabled:opacity-50";
+const signupApproveBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--chalk)_45%,transparent)] bg-[color-mix(in_srgb,var(--chalk)_14%,var(--surface-2))] text-[var(--felt-deep)] hover:bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))]`;
 const signupWaitlistBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--amber)_55%,transparent)] bg-[color-mix(in_srgb,var(--amber)_18%,var(--surface-2))] text-[var(--amber)] hover:bg-[color-mix(in_srgb,var(--amber)_28%,var(--surface-2))]`;
 const signupRejectBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[var(--danger-bg)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_28%,var(--surface-2))]`;
+const signupMessageBtn =
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] border border-[color-mix(in_srgb,var(--chalk)_40%,transparent)] bg-[color-mix(in_srgb,var(--chalk)_12%,var(--surface-2))] text-[var(--felt-deep)] transition hover:bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))]";
 const signupBulkBtn =
   "inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-[var(--radius)] px-2 text-xs font-semibold transition disabled:opacity-50 sm:flex-none sm:px-3";
-const signupBulkApproveBtn = `${signupBulkBtn} bg-[var(--felt)] text-white hover:bg-[var(--felt-soft)]`;
+const signupBulkApproveBtn = `${signupBulkBtn} border border-[color-mix(in_srgb,var(--chalk)_45%,transparent)] bg-[color-mix(in_srgb,var(--chalk)_14%,var(--surface-2))] text-[var(--felt-deep)] hover:bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))]`;
 const signupBulkWaitlistBtn = `${signupBulkBtn} border border-[color-mix(in_srgb,var(--amber)_55%,transparent)] bg-[color-mix(in_srgb,var(--amber)_18%,var(--surface-2))] text-[var(--amber)] hover:bg-[color-mix(in_srgb,var(--amber)_28%,var(--surface-2))]`;
 const signupBulkRejectBtn = `${signupBulkBtn} border border-[color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[var(--danger-bg)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_28%,var(--surface-2))]`;
 
@@ -441,9 +443,9 @@ function SignupRequestRow({
         selected ? "bg-[color-mix(in_srgb,var(--felt)_8%,transparent)]" : "",
       ].join(" ")}
     >
-      <div className="flex items-start gap-2.5">
+      <div className="flex items-center gap-2.5">
         {selectable ? (
-          <label className="mt-0.5 flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center">
+          <label className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center self-center">
             <input
               type="checkbox"
               checked={Boolean(selected)}
@@ -455,49 +457,47 @@ function SignupRequestRow({
         ) : null}
 
         <div className="min-w-0 flex-1">
-          <button
-            type="button"
-            onClick={onOpenDetails}
-            aria-label={detailsLabel}
-            className="w-full rounded-[var(--radius)] text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--felt-soft)]"
-          >
-            <p className="font-[family-name:var(--font-display)] text-[15px] font-semibold leading-snug tracking-tight text-[var(--ink)]">
-              <span className="break-words">{title}</span>
-              <span className="mx-1.5 font-normal text-[var(--muted)]">·</span>
-              <span className="tabular-nums text-[var(--felt-deep)]">
-                {rating ?? "—"}
-              </span>
-            </p>
-            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] leading-tight text-[var(--muted)]">
-              {showStatus ? signupStatusBadge(status) : null}
-              <span>{submittedLabel}</span>
-              {teammateHint ? <span>· {teammateHint}</span> : null}
-            </p>
-          </button>
-
-          {note ? (
+          <div className="flex items-start gap-2">
             <button
               type="button"
-              onClick={onShowNote}
-              className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--felt-deep)] underline decoration-[color-mix(in_srgb,var(--felt)_35%,transparent)] underline-offset-2 transition hover:text-[var(--felt)]"
+              onClick={onOpenDetails}
+              aria-label={detailsLabel}
+              className="min-w-0 flex-1 rounded-[var(--radius)] text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--felt-soft)]"
             >
-              <MessageIcon className="h-3.5 w-3.5" />
-              View message
+              <p className="font-[family-name:var(--font-display)] text-[15px] font-semibold leading-snug tracking-tight text-[var(--ink)]">
+                <span className="break-words">{title}</span>
+                <span className="mx-1.5 font-normal text-[var(--muted)]">·</span>
+                <span className="tabular-nums text-[var(--felt-deep)]">
+                  {rating ?? "—"}
+                </span>
+              </p>
+              <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] leading-tight text-[var(--muted)]">
+                {showStatus ? signupStatusBadge(status) : null}
+                <span>{submittedLabel}</span>
+                {teammateHint ? <span>· {teammateHint}</span> : null}
+              </p>
             </button>
+
+            {note ? (
+              <button
+                type="button"
+                onClick={onShowNote}
+                className={signupMessageBtn}
+                aria-label="View signup message"
+                title="Message"
+              >
+                <MessageIcon className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
+
+          {actions ? (
+            <div className="mt-2.5 flex items-center justify-start gap-2">
+              {actions}
+            </div>
           ) : null}
         </div>
       </div>
-
-      {actions ? (
-        <div
-          className={[
-            "mt-2.5 flex items-center justify-end gap-2",
-            selectable ? "pl-11" : "",
-          ].join(" ")}
-        >
-          {actions}
-        </div>
-      ) : null}
     </div>
   );
 }
