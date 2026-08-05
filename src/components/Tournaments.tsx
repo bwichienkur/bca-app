@@ -59,6 +59,7 @@ type SignupStatusFilter =
   | "approved"
   | "waitlisted"
   | "rejected";
+type SignupPendingSort = "oldest" | "fargo";
 
 const SIGNUP_STATUS_FILTERS: Array<{
   value: SignupStatusFilter;
@@ -68,6 +69,14 @@ const SIGNUP_STATUS_FILTERS: Array<{
   { value: "approved", label: "Approved" },
   { value: "waitlisted", label: "Waitlist" },
   { value: "rejected", label: "Rejected" },
+];
+
+const SIGNUP_PENDING_SORT_OPTIONS: Array<{
+  value: SignupPendingSort;
+  label: string;
+}> = [
+  { value: "oldest", label: "Oldest first" },
+  { value: "fargo", label: "Highest Fargo" },
 ];
 
 type EventFormState = Omit<CreateTournamentInput, "status"> & {
@@ -95,19 +104,19 @@ const fieldClass =
 const labelClass =
   "mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]";
 
-/** Solid text actions for signup request rows. */
+/** Premium solid text actions for signup request rows. */
 const signupActionBtn =
-  "inline-flex h-8 shrink-0 items-center justify-center rounded-[var(--radius)] px-2.5 text-xs font-semibold transition disabled:opacity-50";
-const signupApproveBtn = `${signupActionBtn} bg-[var(--felt)] text-white hover:bg-[var(--felt-soft)]`;
-const signupWaitlistBtn = `${signupActionBtn} bg-[var(--amber)] text-[#1a140c] hover:brightness-110`;
-const signupRejectBtn = `${signupActionBtn} bg-[var(--danger-strong)] text-white hover:brightness-110`;
+  "inline-flex h-8 shrink-0 items-center justify-center rounded-[var(--radius)] px-3 text-[11px] font-semibold tracking-[0.04em] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(0,0,0,0.35)] transition-[filter,transform] hover:brightness-110 active:translate-y-px disabled:opacity-50";
+const signupApproveBtn = `${signupActionBtn} bg-[linear-gradient(180deg,#2f8fc2_0%,var(--felt)_45%,var(--felt-soft)_100%)] text-white`;
+const signupWaitlistBtn = `${signupActionBtn} bg-[linear-gradient(180deg,#edc48a_0%,var(--amber)_48%,#c4893f_100%)] text-[#1a140c]`;
+const signupRejectBtn = `${signupActionBtn} bg-[linear-gradient(180deg,#e0726a_0%,#c44a42_48%,#9e342e_100%)] text-white`;
 const signupInlineIconBtn =
   "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt-deep)] transition hover:bg-[color-mix(in_srgb,var(--chalk)_18%,transparent)] hover:text-[var(--chalk)]";
 const signupBulkBtn =
-  "inline-flex h-9 flex-1 items-center justify-center rounded-[var(--radius)] px-3 text-xs font-semibold transition disabled:opacity-50 sm:flex-none";
-const signupBulkApproveBtn = `${signupBulkBtn} bg-[var(--felt)] text-white hover:bg-[var(--felt-soft)]`;
-const signupBulkWaitlistBtn = `${signupBulkBtn} bg-[var(--amber)] text-[#1a140c] hover:brightness-110`;
-const signupBulkRejectBtn = `${signupBulkBtn} bg-[var(--danger-strong)] text-white hover:brightness-110`;
+  "inline-flex h-9 flex-1 items-center justify-center rounded-[var(--radius)] px-3.5 text-[11px] font-semibold tracking-[0.04em] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(0,0,0,0.35)] transition-[filter,transform] hover:brightness-110 active:translate-y-px disabled:opacity-50 sm:flex-none";
+const signupBulkApproveBtn = `${signupBulkBtn} bg-[linear-gradient(180deg,#2f8fc2_0%,var(--felt)_45%,var(--felt-soft)_100%)] text-white`;
+const signupBulkWaitlistBtn = `${signupBulkBtn} bg-[linear-gradient(180deg,#edc48a_0%,var(--amber)_48%,#c4893f_100%)] text-[#1a140c]`;
+const signupBulkRejectBtn = `${signupBulkBtn} bg-[linear-gradient(180deg,#e0726a_0%,#c44a42_48%,#9e342e_100%)] text-white`;
 
 function statusTone(status: TournamentStatus): string {
   switch (status) {
@@ -826,6 +835,8 @@ export function Tournaments({
   const [fieldQuery, setFieldQuery] = useState("");
   const [signupStatusFilter, setSignupStatusFilter] =
     useState<SignupStatusFilter>("pending");
+  const [signupPendingSort, setSignupPendingSort] =
+    useState<SignupPendingSort>("oldest");
   const [signupSelectedIds, setSignupSelectedIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -1339,8 +1350,39 @@ export function Tournaments({
   );
 
   const filteredSignups = useMemo(() => {
-    return sortedRegistrations.filter((r) => r.status === signupStatusFilter);
-  }, [signupStatusFilter, sortedRegistrations]);
+    const list = sortedRegistrations.filter(
+      (r) => r.status === signupStatusFilter,
+    );
+    if (signupStatusFilter !== "pending" || signupPendingSort === "oldest") {
+      return list;
+    }
+
+    const ratingFor = (reg: TournamentRegistration) => {
+      const playerId = registrationPlayerId(reg);
+      const live = playerId ? playerStats[playerId] : undefined;
+      return live?.rating ?? reg.ratingAtSignup;
+    };
+
+    // Highest Fargo first; earliest submission breaks ties.
+    return [...list].sort((a, b) => {
+      const ratingA = ratingFor(a);
+      const ratingB = ratingFor(b);
+      const scoredA = ratingA != null;
+      const scoredB = ratingB != null;
+      if (scoredA && scoredB && ratingA !== ratingB) {
+        return ratingB - ratingA;
+      }
+      if (scoredA !== scoredB) return scoredA ? -1 : 1;
+      const byCreated = a.createdAt.localeCompare(b.createdAt);
+      if (byCreated !== 0) return byCreated;
+      return a.id.localeCompare(b.id);
+    });
+  }, [
+    playerStats,
+    signupPendingSort,
+    signupStatusFilter,
+    sortedRegistrations,
+  ]);
 
   const signupSelectable =
     signupStatusFilter === "pending" || signupStatusFilter === "waitlisted";
@@ -2517,7 +2559,7 @@ export function Tournaments({
                 <section className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
                   <div className="sticky top-0 z-10 space-y-2 border-b border-[var(--line)] bg-[var(--surface)]/95 px-3 py-2.5 backdrop-blur-sm sm:px-4">
                     <div className="flex flex-wrap items-center gap-2">
-                      <div className="min-w-[10rem] flex-1">
+                      <div className="min-w-[9.5rem] flex-1">
                         <SelectField
                           aria-label="Signup status filter"
                           value={signupStatusFilter}
@@ -2525,11 +2567,18 @@ export function Tournaments({
                           onChange={setSignupStatusFilter}
                         />
                       </div>
+                      {signupStatusFilter === "pending" ? (
+                        <div className="min-w-[8.5rem] flex-1">
+                          <SelectField
+                            aria-label="Pending signup sort order"
+                            value={signupPendingSort}
+                            options={SIGNUP_PENDING_SORT_OPTIONS}
+                            onChange={setSignupPendingSort}
+                          />
+                        </div>
+                      ) : null}
                       <span className="shrink-0 text-[11px] font-semibold tabular-nums text-[var(--muted)]">
                         {filteredSignups.length}
-                        {signupStatusFilter === "pending"
-                          ? " · oldest first"
-                          : ""}
                       </span>
                     </div>
 
