@@ -635,34 +635,17 @@ export async function createRegistration(input: {
   };
 }
 
-export async function updateRegistration(
-  tournamentId: string,
-  registrationId: string,
-  patch: Partial<
-    Pick<
-      TournamentRegistration,
-      "status" | "paid" | "checkedIn" | "noteToOrganizer" | "ratingAtSignup"
-    >
-  >,
-): Promise<{
-  registration: TournamentRegistration;
-  tournament: TournamentListItem;
-}> {
-  const regs = await getRegistrationsRaw(tournamentId);
-  const idx = regs.findIndex((r) => r.id === registrationId);
-  if (idx < 0) throw new Error("Registration not found.");
+type RegistrationPatch = Partial<
+  Pick<
+    TournamentRegistration,
+    "status" | "paid" | "checkedIn" | "noteToOrganizer" | "ratingAtSignup"
+  >
+>;
 
-  if (patch.status === "approved") {
-    const tournament = await getTournament(tournamentId);
-    if (!tournament) throw new Error("Event not found.");
-    const approved = regs.filter(
-      (r) => r.status === "approved" && r.id !== registrationId,
-    ).length;
-    if (approved >= tournament.maxPlayers) {
-      throw new Error("Event is full; cannot approve more players.");
-    }
-  }
-
+function applyRegistrationPatch(
+  existing: TournamentRegistration,
+  patch: RegistrationPatch,
+): TournamentRegistration {
   if (
     patch.ratingAtSignup !== undefined &&
     patch.ratingAtSignup !== null &&
@@ -673,7 +656,6 @@ export async function updateRegistration(
     throw new Error("Estimated Fargo must be between 0 and 900.");
   }
 
-  const existing = regs[idx]!;
   let checkedInAt = existing.checkedInAt;
   if (patch.checkedIn === true) {
     checkedInAt = existing.checkedInAt ?? new Date().toISOString();
@@ -683,14 +665,9 @@ export async function updateRegistration(
 
   const definedPatch = Object.fromEntries(
     Object.entries(patch).filter(([, value]) => value !== undefined),
-  ) as Partial<
-    Pick<
-      TournamentRegistration,
-      "status" | "paid" | "checkedIn" | "noteToOrganizer" | "ratingAtSignup"
-    >
-  >;
+  ) as RegistrationPatch;
 
-  const nextReg: TournamentRegistration = {
+  return {
     ...existing,
     ...definedPatch,
     ratingAtSignup:
@@ -702,13 +679,79 @@ export async function updateRegistration(
     checkedInAt,
     updatedAt: new Date().toISOString(),
   };
+}
+
+export async function updateRegistration(
+  tournamentId: string,
+  registrationId: string,
+  patch: RegistrationPatch,
+): Promise<{
+  registration: TournamentRegistration;
+  tournament: TournamentListItem;
+}> {
+  const result = await updateRegistrationsBulk(
+    tournamentId,
+    [registrationId],
+    patch,
+  );
+  const registration = result.registrations[0];
+  if (!registration) throw new Error("Registration not found.");
+  return { registration, tournament: result.tournament };
+}
+
+/** Atomically apply the same patch to many registrations (avoids Redis races). */
+export async function updateRegistrationsBulk(
+  tournamentId: string,
+  registrationIds: string[],
+  patch: RegistrationPatch,
+): Promise<{
+  registrations: TournamentRegistration[];
+  tournament: TournamentListItem;
+}> {
+  const ids = [...new Set(registrationIds.map((id) => id.trim()).filter(Boolean))];
+  if (ids.length === 0) throw new Error("registrationId is required.");
+
+  const regs = await getRegistrationsRaw(tournamentId);
+  const indexes = ids.map((id) => {
+    const idx = regs.findIndex((r) => r.id === id);
+    if (idx < 0) throw new Error(`Registration not found (${id}).`);
+    return idx;
+  });
+
+  if (patch.status === "approved") {
+    const tournament = await getTournament(tournamentId);
+    if (!tournament) throw new Error("Event not found.");
+    const idSet = new Set(ids);
+    const alreadyApproved = regs.filter(
+      (r) => r.status === "approved" && !idSet.has(r.id),
+    ).length;
+    if (alreadyApproved + ids.length > tournament.maxPlayers) {
+      const spots = Math.max(0, tournament.maxPlayers - alreadyApproved);
+      throw new Error(
+        spots === 0
+          ? "Event is full; cannot approve more players."
+          : `Only ${spots} spot${spots === 1 ? "" : "s"} left; select fewer players to approve.`,
+      );
+    }
+  }
+
   const next = [...regs];
-  next[idx] = nextReg;
+  const updatedRegs: TournamentRegistration[] = [];
+  const now = new Date().toISOString();
+  for (const idx of indexes) {
+    const existing = next[idx]!;
+    const nextReg = applyRegistrationPatch(existing, patch);
+    // Keep a shared timestamp for the bulk batch.
+    nextReg.updatedAt = now;
+    next[idx] = nextReg;
+    updatedRegs.push(nextReg);
+  }
+
   await saveRegistrations(tournamentId, next);
   const updated = await syncStatusFromRegs(tournamentId, next);
   if (!updated) throw new Error("Failed to update event.");
   return {
-    registration: nextReg,
+    registrations: updatedRegs,
     tournament: toListItem(updated, next),
   };
 }

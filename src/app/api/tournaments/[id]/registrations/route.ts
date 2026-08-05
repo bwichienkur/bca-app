@@ -6,6 +6,7 @@ import {
   getTournamentDetail,
   tournamentStoreMode,
   updateRegistration,
+  updateRegistrationsBulk,
 } from "@/lib/tournaments/store";
 import type { RegistrationTeammate } from "@/lib/tournaments/types";
 
@@ -112,13 +113,25 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     const body = (await request.json()) as {
       registrationId?: string;
+      registrationIds?: string[];
       status?: "pending" | "approved" | "rejected" | "withdrawn" | "waitlisted";
       paid?: boolean;
       checkedIn?: boolean;
       noteToOrganizer?: string;
       ratingAtSignup?: number | null;
     };
-    if (!body.registrationId) {
+
+    const registrationIds = [
+      ...new Set(
+        [
+          ...(Array.isArray(body.registrationIds) ? body.registrationIds : []),
+          ...(body.registrationId ? [body.registrationId] : []),
+        ]
+          .map((value) => (typeof value === "string" ? value.trim() : ""))
+          .filter(Boolean),
+      ),
+    ];
+    if (registrationIds.length === 0) {
       return NextResponse.json(
         { error: "registrationId is required." },
         { status: 400 },
@@ -141,7 +154,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       }
     }
 
-    const result = await updateRegistration(id, body.registrationId, {
+    const patch = {
       ...(body.status !== undefined ? { status: body.status } : {}),
       ...(body.paid !== undefined ? { paid: body.paid } : {}),
       ...(body.checkedIn !== undefined ? { checkedIn: body.checkedIn } : {}),
@@ -149,9 +162,20 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         ? { noteToOrganizer: body.noteToOrganizer }
         : {}),
       ...(ratingAtSignup !== undefined ? { ratingAtSignup } : {}),
-    });
+    };
 
-    return NextResponse.json({ ...result, store: tournamentStoreMode() });
+    if (registrationIds.length === 1) {
+      const result = await updateRegistration(id, registrationIds[0]!, patch);
+      return NextResponse.json({ ...result, store: tournamentStoreMode() });
+    }
+
+    const result = await updateRegistrationsBulk(id, registrationIds, patch);
+    return NextResponse.json({
+      registrations: result.registrations,
+      registration: result.registrations[0] ?? null,
+      tournament: result.tournament,
+      store: tournamentStoreMode(),
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to update registration.";
@@ -161,7 +185,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         ? 403
         : message.includes("not found")
           ? 404
-          : message.includes("full")
+          : message.includes("full") ||
+              message.includes("spot") ||
+              message.includes("select fewer")
             ? 400
             : 502;
     return NextResponse.json({ error: message }, { status });
