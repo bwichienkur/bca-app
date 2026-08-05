@@ -95,19 +95,19 @@ const fieldClass =
 const labelClass =
   "mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]";
 
-/** Solid text actions for signup request rows. */
+/** Premium solid text actions for signup request rows. */
 const signupActionBtn =
-  "inline-flex h-8 shrink-0 items-center justify-center rounded-[var(--radius)] px-2.5 text-xs font-semibold transition disabled:opacity-50";
-const signupApproveBtn = `${signupActionBtn} bg-[var(--felt)] text-white hover:bg-[var(--felt-soft)]`;
-const signupWaitlistBtn = `${signupActionBtn} bg-[var(--amber)] text-[#1a140c] hover:brightness-110`;
-const signupRejectBtn = `${signupActionBtn} bg-[var(--danger-strong)] text-white hover:brightness-110`;
+  "inline-flex h-8 shrink-0 items-center justify-center rounded-[var(--radius)] px-3 text-[11px] font-semibold tracking-[0.04em] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(0,0,0,0.35)] transition-[filter,transform] hover:brightness-110 active:translate-y-px disabled:opacity-50";
+const signupApproveBtn = `${signupActionBtn} bg-[linear-gradient(180deg,#2f8fc2_0%,var(--felt)_45%,var(--felt-soft)_100%)] text-white`;
+const signupWaitlistBtn = `${signupActionBtn} bg-[linear-gradient(180deg,#edc48a_0%,var(--amber)_48%,#c4893f_100%)] text-[#1a140c]`;
+const signupRejectBtn = `${signupActionBtn} bg-[linear-gradient(180deg,#e0726a_0%,#c44a42_48%,#9e342e_100%)] text-white`;
 const signupInlineIconBtn =
   "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt-deep)] transition hover:bg-[color-mix(in_srgb,var(--chalk)_18%,transparent)] hover:text-[var(--chalk)]";
 const signupBulkBtn =
-  "inline-flex h-9 flex-1 items-center justify-center rounded-[var(--radius)] px-3 text-xs font-semibold transition disabled:opacity-50 sm:flex-none";
-const signupBulkApproveBtn = `${signupBulkBtn} bg-[var(--felt)] text-white hover:bg-[var(--felt-soft)]`;
-const signupBulkWaitlistBtn = `${signupBulkBtn} bg-[var(--amber)] text-[#1a140c] hover:brightness-110`;
-const signupBulkRejectBtn = `${signupBulkBtn} bg-[var(--danger-strong)] text-white hover:brightness-110`;
+  "inline-flex h-9 flex-1 items-center justify-center rounded-[var(--radius)] px-3.5 text-[11px] font-semibold tracking-[0.04em] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(0,0,0,0.35)] transition-[filter,transform] hover:brightness-110 active:translate-y-px disabled:opacity-50 sm:flex-none";
+const signupBulkApproveBtn = `${signupBulkBtn} bg-[linear-gradient(180deg,#2f8fc2_0%,var(--felt)_45%,var(--felt-soft)_100%)] text-white`;
+const signupBulkWaitlistBtn = `${signupBulkBtn} bg-[linear-gradient(180deg,#edc48a_0%,var(--amber)_48%,#c4893f_100%)] text-[#1a140c]`;
+const signupBulkRejectBtn = `${signupBulkBtn} bg-[linear-gradient(180deg,#e0726a_0%,#c44a42_48%,#9e342e_100%)] text-white`;
 
 function statusTone(status: TournamentStatus): string {
   switch (status) {
