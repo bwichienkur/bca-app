@@ -2124,7 +2124,7 @@ export function Tournaments({
               <div
                 role="tablist"
                 aria-label="Event organizer sections"
-                className="grid grid-cols-5 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+                className="flex gap-0.5 overflow-x-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               >
                 {(
                   [
@@ -2155,7 +2155,7 @@ export function Tournaments({
                         })
                       }
                       className={[
-                        "rounded-md px-0.5 py-1.5 text-center text-[10px] font-semibold leading-tight transition sm:px-1.5 sm:text-xs",
+                        "shrink-0 rounded-md px-3 py-2 text-xs font-semibold transition",
                         selected
                           ? "bg-[var(--felt)] text-white shadow-sm"
                           : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
