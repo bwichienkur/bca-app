@@ -80,6 +80,18 @@ function mapRuleFormat(preset: Tournament["rulesetPreset"]): string {
   return "bca";
 }
 
+function mapBreakFormat(format: Tournament["breakFormat"]): string {
+  if (format === "loser-break") return "loser_break";
+  if (format === "alternate-break") return "alternate_break";
+  return "winner_break";
+}
+
+function mapDrawType(drawType: Tournament["drawType"]): string {
+  if (drawType === "random") return "random";
+  if (drawType === "custom") return "custom";
+  return "seeded";
+}
+
 function mapTableSize(size: Tournament["tableSize"]): string | null {
   if (size === "7ft") return "7 Foot";
   if (size === "8ft") return "8 Foot";
@@ -237,6 +249,9 @@ export async function pushTournamentToDigitalPool(input: {
     tournament.entryFeeCents > 0
       ? String(Math.round(tournament.entryFeeCents / 100))
       : "";
+  const addedMoney = String(
+    Math.max(0, Math.round((tournament.addedMoneyCents ?? 0) / 100)),
+  );
 
   const created = await digitalPoolGraphql<{
     insert_tournaments: {
@@ -268,15 +283,15 @@ export async function pushTournamentToDigitalPool(input: {
           players_ranked_by: "match_wins",
           handicap_format: mapHandicap(tournament.handicapSystem),
           rule_format: mapRuleFormat(tournament.rulesetPreset),
-          break_format: "winner_break",
+          break_format: mapBreakFormat(tournament.breakFormat),
           game_type: mapGameType(tournament.gameType),
           max_players: bracketSize,
           max_tables: tableCount,
           rebuys_allowed: false,
           entry_fee: entryFee,
-          added_money: "0",
+          added_money: addedMoney,
           payout_type: "custom",
-          draw_type: "seeded",
+          draw_type: mapDrawType(tournament.drawType),
           rating_system: "fargo",
           use_text_messaging: false,
           is_public: false,
