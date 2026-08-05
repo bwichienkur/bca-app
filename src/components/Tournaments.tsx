@@ -59,6 +59,7 @@ type SignupStatusFilter =
   | "approved"
   | "waitlisted"
   | "rejected";
+type SignupPendingSort = "oldest" | "fargo";
 
 const SIGNUP_STATUS_FILTERS: Array<{
   value: SignupStatusFilter;
@@ -68,6 +69,14 @@ const SIGNUP_STATUS_FILTERS: Array<{
   { value: "approved", label: "Approved" },
   { value: "waitlisted", label: "Waitlist" },
   { value: "rejected", label: "Rejected" },
+];
+
+const SIGNUP_PENDING_SORT_OPTIONS: Array<{
+  value: SignupPendingSort;
+  label: string;
+}> = [
+  { value: "oldest", label: "Oldest first" },
+  { value: "fargo", label: "Highest Fargo" },
 ];
 
 type EventFormState = Omit<CreateTournamentInput, "status"> & {
@@ -826,6 +835,8 @@ export function Tournaments({
   const [fieldQuery, setFieldQuery] = useState("");
   const [signupStatusFilter, setSignupStatusFilter] =
     useState<SignupStatusFilter>("pending");
+  const [signupPendingSort, setSignupPendingSort] =
+    useState<SignupPendingSort>("oldest");
   const [signupSelectedIds, setSignupSelectedIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -1339,8 +1350,39 @@ export function Tournaments({
   );
 
   const filteredSignups = useMemo(() => {
-    return sortedRegistrations.filter((r) => r.status === signupStatusFilter);
-  }, [signupStatusFilter, sortedRegistrations]);
+    const list = sortedRegistrations.filter(
+      (r) => r.status === signupStatusFilter,
+    );
+    if (signupStatusFilter !== "pending" || signupPendingSort === "oldest") {
+      return list;
+    }
+
+    const ratingFor = (reg: TournamentRegistration) => {
+      const playerId = registrationPlayerId(reg);
+      const live = playerId ? playerStats[playerId] : undefined;
+      return live?.rating ?? reg.ratingAtSignup;
+    };
+
+    // Highest Fargo first; earliest submission breaks ties.
+    return [...list].sort((a, b) => {
+      const ratingA = ratingFor(a);
+      const ratingB = ratingFor(b);
+      const scoredA = ratingA != null;
+      const scoredB = ratingB != null;
+      if (scoredA && scoredB && ratingA !== ratingB) {
+        return ratingB - ratingA;
+      }
+      if (scoredA !== scoredB) return scoredA ? -1 : 1;
+      const byCreated = a.createdAt.localeCompare(b.createdAt);
+      if (byCreated !== 0) return byCreated;
+      return a.id.localeCompare(b.id);
+    });
+  }, [
+    playerStats,
+    signupPendingSort,
+    signupStatusFilter,
+    sortedRegistrations,
+  ]);
 
   const signupSelectable =
     signupStatusFilter === "pending" || signupStatusFilter === "waitlisted";
@@ -2517,7 +2559,7 @@ export function Tournaments({
                 <section className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
                   <div className="sticky top-0 z-10 space-y-2 border-b border-[var(--line)] bg-[var(--surface)]/95 px-3 py-2.5 backdrop-blur-sm sm:px-4">
                     <div className="flex flex-wrap items-center gap-2">
-                      <div className="min-w-[10rem] flex-1">
+                      <div className="min-w-[9.5rem] flex-1">
                         <SelectField
                           aria-label="Signup status filter"
                           value={signupStatusFilter}
@@ -2525,11 +2567,18 @@ export function Tournaments({
                           onChange={setSignupStatusFilter}
                         />
                       </div>
+                      {signupStatusFilter === "pending" ? (
+                        <div className="min-w-[8.5rem] flex-1">
+                          <SelectField
+                            aria-label="Pending signup sort order"
+                            value={signupPendingSort}
+                            options={SIGNUP_PENDING_SORT_OPTIONS}
+                            onChange={setSignupPendingSort}
+                          />
+                        </div>
+                      ) : null}
                       <span className="shrink-0 text-[11px] font-semibold tabular-nums text-[var(--muted)]">
                         {filteredSignups.length}
-                        {signupStatusFilter === "pending"
-                          ? " · oldest first"
-                          : ""}
                       </span>
                     </div>
 
