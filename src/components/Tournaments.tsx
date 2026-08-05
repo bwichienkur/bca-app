@@ -95,16 +95,16 @@ const fieldClass =
 const labelClass =
   "mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]";
 
-/** Touch-friendly icon actions for signup request rows. */
+/** Compact icon actions for signup request rows. */
 const signupIconBtn =
-  "inline-flex h-11 w-14 shrink-0 items-center justify-center rounded-[var(--radius)] transition disabled:opacity-50";
+  "inline-flex h-8 w-12 shrink-0 items-center justify-center rounded-[var(--radius)] transition disabled:opacity-50";
 const signupApproveBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--chalk)_45%,transparent)] bg-[color-mix(in_srgb,var(--chalk)_14%,var(--surface-2))] text-[var(--felt-deep)] hover:bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))]`;
 const signupWaitlistBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--amber)_55%,transparent)] bg-[color-mix(in_srgb,var(--amber)_18%,var(--surface-2))] text-[var(--amber)] hover:bg-[color-mix(in_srgb,var(--amber)_28%,var(--surface-2))]`;
 const signupRejectBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[var(--danger-bg)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_28%,var(--surface-2))]`;
-const signupMessageBtn =
-  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] border border-[color-mix(in_srgb,var(--chalk)_40%,transparent)] bg-[color-mix(in_srgb,var(--chalk)_12%,var(--surface-2))] text-[var(--felt-deep)] transition hover:bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))]";
+const signupInlineIconBtn =
+  "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt-deep)] transition hover:bg-[color-mix(in_srgb,var(--chalk)_18%,transparent)] hover:text-[var(--chalk)]";
 const signupBulkBtn =
-  "inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-[var(--radius)] px-2 text-xs font-semibold transition disabled:opacity-50 sm:flex-none sm:px-3";
+  "inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-[var(--radius)] px-2 text-xs font-semibold transition disabled:opacity-50 sm:flex-none sm:px-3";
 const signupBulkApproveBtn = `${signupBulkBtn} border border-[color-mix(in_srgb,var(--chalk)_45%,transparent)] bg-[color-mix(in_srgb,var(--chalk)_14%,var(--surface-2))] text-[var(--felt-deep)] hover:bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))]`;
 const signupBulkWaitlistBtn = `${signupBulkBtn} border border-[color-mix(in_srgb,var(--amber)_55%,transparent)] bg-[color-mix(in_srgb,var(--amber)_18%,var(--surface-2))] text-[var(--amber)] hover:bg-[color-mix(in_srgb,var(--amber)_28%,var(--surface-2))]`;
 const signupBulkRejectBtn = `${signupBulkBtn} border border-[color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[var(--danger-bg)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_28%,var(--surface-2))]`;
@@ -235,6 +235,16 @@ function MessageIcon({ className }: { className?: string }) {
   return (
     <TabIconShell className={className}>
       <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4 3v-3H6.5A2.5 2.5 0 0 1 4 13.5v-7z" />
+    </TabIconShell>
+  );
+}
+
+function InfoIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 10.5V17" />
+      <path d="M12 7.5h.01" />
     </TabIconShell>
   );
 }
@@ -380,15 +390,21 @@ function SignupMessageDialog({
   );
 }
 
+/** Compact relative/short timestamp for signup queue scanning. */
 function formatSignupSubmittedAt(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const diffMs = Date.now() - d.getTime();
+  if (diffMs < 0) {
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 60) return `${Math.max(1, mins)}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 /** Dense request row for organizer signup review. */
@@ -397,6 +413,7 @@ function SignupRequestRow({
   status,
   showStatus,
   submittedLabel,
+  submittedTitle,
   rating,
   onOpenDetails,
   detailsLabel,
@@ -412,6 +429,7 @@ function SignupRequestRow({
   status: TournamentRegistration["status"];
   showStatus?: boolean;
   submittedLabel: string;
+  submittedTitle?: string;
   rating: number | null;
   onOpenDetails: () => void;
   detailsLabel: string;
@@ -436,67 +454,77 @@ function SignupRequestRow({
   return (
     <div
       className={[
-        "px-3 py-3 sm:px-4",
+        "px-3 py-2 sm:px-4",
         status === "pending"
           ? "bg-[color-mix(in_srgb,var(--amber)_7%,transparent)]"
           : "",
         selected ? "bg-[color-mix(in_srgb,var(--felt)_8%,transparent)]" : "",
       ].join(" ")}
     >
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2">
         {selectable ? (
-          <label className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center self-center">
+          <label className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center self-center">
             <input
               type="checkbox"
               checked={Boolean(selected)}
               onChange={onToggleSelect}
               aria-label={`Select ${title}`}
-              className="h-5 w-5 accent-[var(--felt)]"
+              className="h-4 w-4 accent-[var(--felt)]"
             />
           </label>
         ) : null}
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-2">
-            <button
-              type="button"
-              onClick={onOpenDetails}
-              aria-label={detailsLabel}
-              className="min-w-0 flex-1 rounded-[var(--radius)] text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--felt-soft)]"
-            >
-              <p className="font-[family-name:var(--font-display)] text-[15px] font-semibold leading-snug tracking-tight text-[var(--ink)]">
-                <span className="break-words">{title}</span>
-                <span className="mx-1.5 font-normal text-[var(--muted)]">·</span>
-                <span className="tabular-nums text-[var(--felt-deep)]">
-                  {rating ?? "—"}
-                </span>
-              </p>
-              <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] leading-tight text-[var(--muted)]">
-                {showStatus ? signupStatusBadge(status) : null}
-                <span>{submittedLabel}</span>
-                {teammateHint ? <span>· {teammateHint}</span> : null}
-              </p>
-            </button>
-
+          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+            <p className="min-w-0 font-[family-name:var(--font-display)] text-[15px] font-semibold leading-snug tracking-tight text-[var(--ink)]">
+              <span className="break-words">{title}</span>
+              <span className="mx-1.5 font-normal text-[var(--muted)]">·</span>
+              <span className="tabular-nums text-[var(--felt-deep)]">
+                {rating ?? "—"}
+              </span>
+            </p>
             {note ? (
               <button
                 type="button"
                 onClick={onShowNote}
-                className={signupMessageBtn}
+                className={signupInlineIconBtn}
                 aria-label="View signup message"
                 title="Message"
               >
-                <MessageIcon className="h-4 w-4" />
+                <MessageIcon className="h-3.5 w-3.5" />
               </button>
             ) : null}
+            <span
+              className="text-[11px] font-medium tabular-nums text-[var(--muted)]"
+              title={submittedTitle ?? submittedLabel}
+            >
+              {submittedLabel}
+            </span>
+            {showStatus ? signupStatusBadge(status) : null}
           </div>
 
+          {teammateHint ? (
+            <p className="mt-0.5 truncate text-[11px] leading-tight text-[var(--muted)]">
+              {teammateHint}
+            </p>
+          ) : null}
+
           {actions ? (
-            <div className="mt-2.5 flex items-center justify-start gap-2">
+            <div className="mt-1.5 flex items-center justify-start gap-1.5">
               {actions}
             </div>
           ) : null}
         </div>
+
+        <button
+          type="button"
+          onClick={onOpenDetails}
+          className={`${signupInlineIconBtn} self-center`}
+          aria-label={detailsLabel}
+          title="Player details"
+        >
+          <InfoIcon className="h-4 w-4" />
+        </button>
       </div>
     </div>
   );
@@ -1242,7 +1270,19 @@ export function Tournaments({
   };
 
   const signupSubmittedLabel = (reg: TournamentRegistration) =>
-    `Submitted ${formatSignupSubmittedAt(reg.createdAt)}`;
+    formatSignupSubmittedAt(reg.createdAt);
+
+  const signupSubmittedTitle = (reg: TournamentRegistration) => {
+    const d = new Date(reg.createdAt);
+    if (Number.isNaN(d.getTime())) return reg.createdAt;
+    return d.toLocaleString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
 
 
   const setTournamentStatus = async (
@@ -1300,10 +1340,13 @@ export function Tournaments({
       if (status === "waitlisted") return 2;
       return 3;
     };
+    // Oldest first within each status for first-come, first-served review.
     return [...regs].sort((a, b) => {
       const byStatus = rank(a.status) - rank(b.status);
       if (byStatus !== 0) return byStatus;
-      return a.createdAt.localeCompare(b.createdAt);
+      const byCreated = a.createdAt.localeCompare(b.createdAt);
+      if (byCreated !== 0) return byCreated;
+      return a.id.localeCompare(b.id);
     });
   }, [detail?.registrations]);
 
@@ -2512,8 +2555,8 @@ export function Tournaments({
                   </p>
                 ) : null}
 
-                <SurfaceCard>
-                  <div className="sticky top-0 z-10 space-y-2 border-b border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 sm:px-4">
+                <section className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+                  <div className="sticky top-0 z-10 space-y-2 border-b border-[var(--line)] bg-[var(--surface)]/95 px-3 py-2.5 backdrop-blur-sm sm:px-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="min-w-[10rem] flex-1">
                         <SelectField
@@ -2525,7 +2568,9 @@ export function Tournaments({
                       </div>
                       <span className="shrink-0 text-[11px] font-semibold tabular-nums text-[var(--muted)]">
                         {filteredSignups.length}
-                        {signupStatusFilter === "pending" ? " to review" : ""}
+                        {signupStatusFilter === "pending"
+                          ? " · oldest first"
+                          : ""}
                       </span>
                     </div>
 
@@ -2608,7 +2653,7 @@ export function Tournaments({
                           : "No signups in this status."}
                     </p>
                   ) : (
-                    <ul className="max-h-[min(70vh,36rem)] divide-y divide-[var(--line)] overflow-y-auto overscroll-contain">
+                    <ul className="divide-y divide-[var(--line)]">
                       {filteredSignups.map((reg) => {
                         const stats = statsForRegistration(reg);
                         const note = reg.noteToOrganizer?.trim() || null;
@@ -2627,7 +2672,7 @@ export function Tournaments({
                                 aria-label={`Approve ${reg.displayName}`}
                                 title="Approve"
                               >
-                                <ApproveIcon className="h-5 w-5" />
+                                <ApproveIcon className="h-4 w-4" />
                               </button>
                               <button
                                 type="button"
@@ -2641,7 +2686,7 @@ export function Tournaments({
                                 aria-label={`Waitlist ${reg.displayName}`}
                                 title="Waitlist"
                               >
-                                <WaitlistIcon className="h-5 w-5" />
+                                <WaitlistIcon className="h-4 w-4" />
                               </button>
                               <button
                                 type="button"
@@ -2655,7 +2700,7 @@ export function Tournaments({
                                 aria-label={`Reject ${reg.displayName}`}
                                 title="Reject"
                               >
-                                <RejectIcon className="h-5 w-5" />
+                                <RejectIcon className="h-4 w-4" />
                               </button>
                             </>
                           ) : reg.status === "waitlisted" ? (
@@ -2672,7 +2717,7 @@ export function Tournaments({
                                 aria-label={`Approve ${reg.displayName}`}
                                 title="Approve"
                               >
-                                <ApproveIcon className="h-5 w-5" />
+                                <ApproveIcon className="h-4 w-4" />
                               </button>
                               <button
                                 type="button"
@@ -2686,7 +2731,7 @@ export function Tournaments({
                                 aria-label={`Reject ${reg.displayName}`}
                                 title="Reject"
                               >
-                                <RejectIcon className="h-5 w-5" />
+                                <RejectIcon className="h-4 w-4" />
                               </button>
                             </>
                           ) : undefined;
@@ -2698,6 +2743,7 @@ export function Tournaments({
                               status={reg.status}
                               showStatus={signupStatusFilter !== "pending"}
                               submittedLabel={signupSubmittedLabel(reg)}
+                              submittedTitle={signupSubmittedTitle(reg)}
                               rating={stats.rating}
                               onOpenDetails={() => openSignupPlayer(reg)}
                               detailsLabel={
@@ -2720,7 +2766,7 @@ export function Tournaments({
                       })}
                     </ul>
                   )}
-                </SurfaceCard>
+                </section>
               </div>
             ) : null}
 
