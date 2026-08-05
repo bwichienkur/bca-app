@@ -123,6 +123,10 @@ const fieldToggleBtn =
 const fieldToggleIdle = `${fieldToggleBtn} border border-[var(--line)] bg-[var(--surface-2)] text-[var(--muted)] hover:text-[var(--ink)]`;
 const fieldToggleCheckedIn = `${fieldToggleBtn} bg-[var(--felt)] text-white`;
 const fieldTogglePaid = `${fieldToggleBtn} bg-[var(--amber)] text-[#1a140c]`;
+const manageActionTile =
+  "flex w-full items-center gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-3 text-left transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-50";
+const manageActionIcon =
+  "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius)] shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]";
 
 function statusTone(status: TournamentStatus): string {
   switch (status) {
@@ -217,6 +221,44 @@ function ManageTabIcon({ className }: { className?: string }) {
     <TabIconShell className={className}>
       <circle cx="12" cy="12" r="3" />
       <path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6" />
+    </TabIconShell>
+  );
+}
+
+function EditEventIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </TabIconShell>
+  );
+}
+
+function CloseRegistrationIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </TabIconShell>
+  );
+}
+
+function ReopenRegistrationIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 7.5-2" />
+      <path d="M16 4v3h3" />
+    </TabIconShell>
+  );
+}
+
+function RemoveEventIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <path d="M4 7h16" />
+      <path d="M9 7V5h6v2" />
+      <path d="M7 7l1 13h8l1-13" />
     </TabIconShell>
   );
 }
@@ -2084,7 +2126,24 @@ export function Tournaments({
   if (view === "detail") {
     const t = detail?.tournament;
     const isOrganizer = Boolean(detail?.isOrganizer);
-    const activeTab: DetailSubTab = isOrganizer ? detailSubTab : "overview";
+    // Temporarily allow everyone to open Manage for feedback; other ops tabs stay organizer-only.
+    const activeTab: DetailSubTab = isOrganizer
+      ? detailSubTab
+      : detailSubTab === "manage"
+        ? "manage"
+        : "overview";
+    const detailTabs = isOrganizer
+      ? ([
+          { id: "overview" as const, label: "Overview" },
+          { id: "signups" as const, label: "Signups" },
+          { id: "field" as const, label: "Field" },
+          { id: "calcutta" as const, label: "Calcutta" },
+          { id: "manage" as const, label: "Manage" },
+        ] as const)
+      : ([
+          { id: "overview" as const, label: "Overview" },
+          { id: "manage" as const, label: "Manage" },
+        ] as const);
     const gameLabel = t ? gameTypeLabel(t.gameType) : "";
     const formatLabel =
       t
@@ -2418,72 +2477,67 @@ export function Tournaments({
               }}
             />
 
-            {isOrganizer ? (
-              <div
-                role="tablist"
-                aria-label="Event organizer sections"
-                className="grid grid-cols-5 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
-              >
-                {(
-                  [
-                    { id: "overview" as const, label: "Overview" },
-                    { id: "signups" as const, label: "Signups" },
-                    { id: "field" as const, label: "Field" },
-                    { id: "calcutta" as const, label: "Calcutta" },
-                    { id: "manage" as const, label: "Manage" },
-                  ] as const
-                ).map((item) => {
-                  const selected = activeTab === item.id;
-                  const Icon = ORGANIZER_TAB_ICONS[item.id];
-                  const pending =
-                    item.id === "signups" && t.pendingCount > 0
-                      ? t.pendingCount
-                      : 0;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={selected}
-                      aria-label={
-                        pending > 0
-                          ? `${item.label}, ${pending} pending`
-                          : item.label
-                      }
-                      onClick={() =>
-                        startDetailTransition(() => {
-                          if (item.id !== "manage") setConfirmRemove(false);
-                          setDetailSubTab(item.id);
-                        })
-                      }
-                      className={[
-                        "relative flex flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 transition",
-                        selected
-                          ? "bg-[var(--felt)] text-white shadow-sm"
-                          : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
-                      ].join(" ")}
-                    >
-                      <Icon className="h-4 w-4" />
-                      <span className="text-[9px] font-semibold leading-none tracking-wide sm:text-[10px]">
-                        {item.label}
+            <div
+              role="tablist"
+              aria-label={
+                isOrganizer ? "Event organizer sections" : "Event sections"
+              }
+              className={[
+                "grid gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5",
+                isOrganizer ? "grid-cols-5" : "grid-cols-2",
+              ].join(" ")}
+            >
+              {detailTabs.map((item) => {
+                const selected = activeTab === item.id;
+                const Icon = ORGANIZER_TAB_ICONS[item.id];
+                const pending =
+                  isOrganizer && item.id === "signups" && t.pendingCount > 0
+                    ? t.pendingCount
+                    : 0;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    aria-label={
+                      pending > 0
+                        ? `${item.label}, ${pending} pending`
+                        : item.label
+                    }
+                    onClick={() =>
+                      startDetailTransition(() => {
+                        if (item.id !== "manage") setConfirmRemove(false);
+                        setDetailSubTab(item.id);
+                      })
+                    }
+                    className={[
+                      "relative flex flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 transition",
+                      selected
+                        ? "bg-[var(--felt)] text-white shadow-sm"
+                        : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
+                    ].join(" ")}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span className="text-[9px] font-semibold leading-none tracking-wide sm:text-[10px]">
+                      {item.label}
+                    </span>
+                    {pending > 0 ? (
+                      <span
+                        className={[
+                          "absolute right-0.5 top-0.5 inline-flex min-w-3.5 items-center justify-center rounded-full px-1 text-[9px] font-bold leading-none",
+                          selected
+                            ? "bg-white text-[var(--felt)]"
+                            : "bg-[var(--amber)] text-[#1a140c]",
+                        ].join(" ")}
+                      >
+                        {pending > 9 ? "9+" : pending}
                       </span>
-                      {pending > 0 ? (
-                        <span
-                          className={[
-                            "absolute right-0.5 top-0.5 inline-flex min-w-3.5 items-center justify-center rounded-full px-1 text-[9px] font-bold leading-none",
-                            selected
-                              ? "bg-white text-[var(--felt)]"
-                              : "bg-[var(--amber)] text-[#1a140c]",
-                          ].join(" ")}
-                        >
-                          {pending > 9 ? "9+" : pending}
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
 
             {activeTab === "overview" ? (
               <div className="space-y-4">
@@ -3081,21 +3135,46 @@ export function Tournaments({
               />
             ) : null}
 
-            {isOrganizer && activeTab === "manage" ? (
+            {activeTab === "manage" ? (
               <div className="space-y-3">
-                <SurfaceCard>
-                  <div className="flex flex-wrap gap-2 p-3 sm:p-4">
+                <section className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+                  <div className="border-b border-[var(--line)] px-3 py-3 sm:px-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                      Tournament settings
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      {isOrganizer
+                        ? "Edit details, registration, or remove this event."
+                        : "Preview for feedback — only the organizer can make changes."}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-3 sm:p-4">
                     <button
                       type="button"
+                      disabled={!isOrganizer || saving}
                       onClick={() => startEdit(t)}
-                      className="rounded-full bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--felt-soft)]"
+                      className={manageActionTile}
                     >
-                      Edit event
+                      <span
+                        className={`${manageActionIcon} bg-[linear-gradient(180deg,#2f8fc2_0%,var(--felt)_45%,var(--felt-soft)_100%)] text-white`}
+                      >
+                        <EditEventIcon className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-[var(--ink)]">
+                          Edit event
+                        </span>
+                        <span className="mt-0.5 block text-[11px] text-[var(--muted)]">
+                          Details, fees, and rules
+                        </span>
+                      </span>
                     </button>
+
                     {t.status === "open" || t.status === "full" ? (
                       <button
                         type="button"
-                        disabled={saving}
+                        disabled={!isOrganizer || saving}
                         onClick={() =>
                           void setTournamentStatus(
                             t.id,
@@ -3103,14 +3182,26 @@ export function Tournaments({
                             "Registration closed.",
                           )
                         }
-                        className="rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
+                        className={manageActionTile}
                       >
-                        Close registration
+                        <span
+                          className={`${manageActionIcon} bg-[linear-gradient(180deg,#3d4b58_0%,#2a3540_48%,#222b35_100%)] text-[var(--chalk)]`}
+                        >
+                          <CloseRegistrationIcon className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-[var(--ink)]">
+                            Close registration
+                          </span>
+                          <span className="mt-0.5 block text-[11px] text-[var(--muted)]">
+                            Stop new signups
+                          </span>
+                        </span>
                       </button>
                     ) : t.status === "closed" || t.status === "draft" ? (
                       <button
                         type="button"
-                        disabled={saving}
+                        disabled={!isOrganizer || saving}
                         onClick={() =>
                           void setTournamentStatus(
                             t.id,
@@ -3118,25 +3209,67 @@ export function Tournaments({
                             "Registration reopened.",
                           )
                         }
-                        className="rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
+                        className={manageActionTile}
                       >
-                        Reopen registration
+                        <span
+                          className={`${manageActionIcon} bg-[linear-gradient(180deg,#2f8fc2_0%,var(--felt)_45%,var(--felt-soft)_100%)] text-white`}
+                        >
+                          <ReopenRegistrationIcon className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-[var(--ink)]">
+                            Reopen registration
+                          </span>
+                          <span className="mt-0.5 block text-[11px] text-[var(--muted)]">
+                            Accept signups again
+                          </span>
+                        </span>
                       </button>
-                    ) : null}
+                    ) : (
+                      <div className={`${manageActionTile} opacity-60`}>
+                        <span
+                          className={`${manageActionIcon} bg-[var(--surface-3)] text-[var(--muted)]`}
+                        >
+                          <CloseRegistrationIcon className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-[var(--ink)]">
+                            Registration locked
+                          </span>
+                          <span className="mt-0.5 block text-[11px] text-[var(--muted)]">
+                            Status: {STATUS_LABELS[t.status] ?? t.status}
+                          </span>
+                        </span>
+                      </div>
+                    )}
+
                     {!confirmRemove ? (
                       <button
                         type="button"
-                        disabled={saving}
+                        disabled={!isOrganizer || saving}
                         onClick={() => {
                           setActionMsg(null);
                           setConfirmRemove(true);
                         }}
-                        className="rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-semibold text-[var(--danger)] disabled:opacity-50"
+                        className={manageActionTile}
                       >
-                        Remove event
+                        <span
+                          className={`${manageActionIcon} bg-[linear-gradient(180deg,#e0726a_0%,#c44a42_48%,#9e342e_100%)] text-white`}
+                        >
+                          <RemoveEventIcon className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-[var(--ink)]">
+                            Remove event
+                          </span>
+                          <span className="mt-0.5 block text-[11px] text-[var(--muted)]">
+                            Delete permanently
+                          </span>
+                        </span>
                       </button>
                     ) : null}
                   </div>
+
                   {confirmRemove ? (
                     <div className="space-y-3 border-t border-[var(--line)] px-3 py-3 sm:px-4">
                       <p className="text-sm text-[var(--ink)]">
@@ -3145,27 +3278,27 @@ export function Tournaments({
                         permanently deletes the event, signups, messages, and
                         Calcutta data. This cannot be undone.
                       </p>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
-                          disabled={saving}
+                          disabled={!isOrganizer || saving}
                           onClick={() => void removeTournament(t.id)}
-                          className="rounded-full bg-[var(--danger-strong)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                          className="rounded-[var(--radius)] bg-[linear-gradient(180deg,#e0726a_0%,#c44a42_48%,#9e342e_100%)] px-4 py-2.5 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] disabled:opacity-50"
                         >
-                          {saving ? "Removing…" : "Yes, remove event"}
+                          {saving ? "Removing…" : "Yes, remove"}
                         </button>
                         <button
                           type="button"
                           disabled={saving}
                           onClick={() => setConfirmRemove(false)}
-                          className="rounded-full border border-[var(--line)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
+                          className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
                         >
                           Keep event
                         </button>
                       </div>
                     </div>
                   ) : null}
-                </SurfaceCard>
+                </section>
 
                 {actionMsg ? (
                   <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
@@ -3192,7 +3325,9 @@ export function Tournaments({
                   </div>
                   {detail.messages.length === 0 ? (
                     <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">
-                      No messages yet.
+                      {isOrganizer
+                        ? "No messages yet."
+                        : "Messages are visible to the organizer only."}
                     </p>
                   ) : (
                     <ul className="divide-y divide-[var(--line)]">
