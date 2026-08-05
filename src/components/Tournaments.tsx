@@ -59,7 +59,7 @@ type SignupStatusFilter =
   | "approved"
   | "waitlisted"
   | "rejected";
-type SignupPendingSort = "oldest" | "fargo";
+type SignupQueueSort = "oldest" | "fargo";
 
 const SIGNUP_STATUS_FILTERS: Array<{
   value: SignupStatusFilter;
@@ -71,8 +71,8 @@ const SIGNUP_STATUS_FILTERS: Array<{
   { value: "rejected", label: "Rejected" },
 ];
 
-const SIGNUP_PENDING_SORT_OPTIONS: Array<{
-  value: SignupPendingSort;
+const SIGNUP_QUEUE_SORT_OPTIONS: Array<{
+  value: SignupQueueSort;
   label: string;
 }> = [
   { value: "oldest", label: "Oldest first" },
@@ -110,6 +110,7 @@ const signupActionBtn =
 const signupApproveBtn = `${signupActionBtn} bg-[linear-gradient(180deg,#2f8fc2_0%,var(--felt)_45%,var(--felt-soft)_100%)] text-white`;
 const signupWaitlistBtn = `${signupActionBtn} bg-[linear-gradient(180deg,#edc48a_0%,var(--amber)_48%,#c4893f_100%)] text-[#1a140c]`;
 const signupRejectBtn = `${signupActionBtn} bg-[linear-gradient(180deg,#e0726a_0%,#c44a42_48%,#9e342e_100%)] text-white`;
+const signupRevertBtn = `${signupActionBtn} bg-[linear-gradient(180deg,#3d4b58_0%,#2a3540_48%,#222b35_100%)] text-[var(--ink)]`;
 const signupInlineIconBtn =
   "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt-deep)] transition hover:bg-[color-mix(in_srgb,var(--chalk)_18%,transparent)] hover:text-[var(--chalk)]";
 const signupBulkBtn =
@@ -835,8 +836,8 @@ export function Tournaments({
   const [fieldQuery, setFieldQuery] = useState("");
   const [signupStatusFilter, setSignupStatusFilter] =
     useState<SignupStatusFilter>("pending");
-  const [signupPendingSort, setSignupPendingSort] =
-    useState<SignupPendingSort>("oldest");
+  const [signupQueueSort, setSignupQueueSort] =
+    useState<SignupQueueSort>("oldest");
   const [signupSelectedIds, setSignupSelectedIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -1349,11 +1350,14 @@ export function Tournaments({
     [signupStatusCounts],
   );
 
+  const signupQueueSortable =
+    signupStatusFilter === "pending" || signupStatusFilter === "waitlisted";
+
   const filteredSignups = useMemo(() => {
     const list = sortedRegistrations.filter(
       (r) => r.status === signupStatusFilter,
     );
-    if (signupStatusFilter !== "pending" || signupPendingSort === "oldest") {
+    if (!signupQueueSortable || signupQueueSort === "oldest") {
       return list;
     }
 
@@ -1379,7 +1383,8 @@ export function Tournaments({
     });
   }, [
     playerStats,
-    signupPendingSort,
+    signupQueueSort,
+    signupQueueSortable,
     signupStatusFilter,
     sortedRegistrations,
   ]);
@@ -2567,19 +2572,16 @@ export function Tournaments({
                           onChange={setSignupStatusFilter}
                         />
                       </div>
-                      {signupStatusFilter === "pending" ? (
+                      {signupQueueSortable ? (
                         <div className="min-w-[8.5rem] flex-1">
                           <SelectField
-                            aria-label="Pending signup sort order"
-                            value={signupPendingSort}
-                            options={SIGNUP_PENDING_SORT_OPTIONS}
-                            onChange={setSignupPendingSort}
+                            aria-label="Signup sort order"
+                            value={signupQueueSort}
+                            options={SIGNUP_QUEUE_SORT_OPTIONS}
+                            onChange={setSignupQueueSort}
                           />
                         </div>
                       ) : null}
-                      <span className="shrink-0 text-[11px] font-semibold tabular-nums text-[var(--muted)]">
-                        {filteredSignups.length}
-                      </span>
                     </div>
 
                     {signupSelectable && filteredSignups.length > 0 ? (
@@ -2730,6 +2732,32 @@ export function Tournaments({
                                 Reject
                               </button>
                             </>
+                          ) : reg.status === "approved" ? (
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() =>
+                                void onUpdateRegistration(reg.id, {
+                                  status: "pending",
+                                })
+                              }
+                              className={signupRevertBtn}
+                            >
+                              Unapprove
+                            </button>
+                          ) : reg.status === "rejected" ? (
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() =>
+                                void onUpdateRegistration(reg.id, {
+                                  status: "pending",
+                                })
+                              }
+                              className={signupRevertBtn}
+                            >
+                              Unreject
+                            </button>
                           ) : undefined;
 
                         return (
