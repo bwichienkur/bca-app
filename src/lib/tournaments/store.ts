@@ -201,6 +201,9 @@ export async function createTournament(
     organizerName: organizer.name,
     organizerEmail: organizer.email,
     organizerPhone: input.organizerPhone ?? null,
+    digitalPoolTournamentId: null,
+    digitalPoolSlug: null,
+    digitalPoolPushedAt: null,
     status: input.status === "draft" ? "draft" : "open",
     createdAt: now,
     updatedAt: now,
@@ -327,6 +330,19 @@ function normalizeTournament(raw: Tournament): Tournament {
     cashAppHandle:
       typeof raw.cashAppHandle === "string" && raw.cashAppHandle.trim()
         ? raw.cashAppHandle.trim()
+        : null,
+    digitalPoolTournamentId:
+      typeof raw.digitalPoolTournamentId === "number" &&
+      Number.isFinite(raw.digitalPoolTournamentId)
+        ? raw.digitalPoolTournamentId
+        : null,
+    digitalPoolSlug:
+      typeof raw.digitalPoolSlug === "string" && raw.digitalPoolSlug.trim()
+        ? raw.digitalPoolSlug.trim()
+        : null,
+    digitalPoolPushedAt:
+      typeof raw.digitalPoolPushedAt === "string" && raw.digitalPoolPushedAt
+        ? raw.digitalPoolPushedAt
         : null,
   };
 }

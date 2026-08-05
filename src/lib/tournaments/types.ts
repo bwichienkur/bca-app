@@ -74,6 +74,10 @@ export type Tournament = {
   organizerName: string;
   organizerEmail: string | null;
   organizerPhone: string | null;
+  /** Linked Digital Pool tournament after a successful push. */
+  digitalPoolTournamentId: number | null;
+  digitalPoolSlug: string | null;
+  digitalPoolPushedAt: string | null;
   status: TournamentStatus;
   createdAt: string;
   updatedAt: string;
