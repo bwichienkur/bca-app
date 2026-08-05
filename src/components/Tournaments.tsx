@@ -145,16 +145,6 @@ function registrationCardSubtitle(reg: TournamentRegistration): string | null {
   return reg.email?.trim() || null;
 }
 
-function registrationStatusTone(status: TournamentRegistration["status"]): string {
-  if (status === "pending") return "bg-[var(--amber)] text-[#1a140c]";
-  if (status === "approved") return "bg-[var(--felt)]/20 text-[var(--felt-deep)]";
-  if (status === "waitlisted") return "bg-[var(--surface-2)] text-[var(--muted)]";
-  if (status === "rejected" || status === "withdrawn") {
-    return "bg-[var(--danger-bg)] text-[var(--danger)]";
-  }
-  return "bg-[var(--surface-2)] text-[var(--muted)]";
-}
-
 /** Player-search-style card for tournament signups. */
 function SignupPlayerCard({
   title,
