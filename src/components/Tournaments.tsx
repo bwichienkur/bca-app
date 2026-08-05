@@ -456,9 +456,9 @@ function SignupRequestRow({
         selected ? "bg-[color-mix(in_srgb,var(--felt)_8%,transparent)]" : "",
       ].join(" ")}
     >
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-start gap-1.5">
         {selectable ? (
-          <label className="flex h-9 w-7 shrink-0 cursor-pointer items-center justify-center self-center">
+          <label className="mt-0.5 flex h-9 w-7 shrink-0 cursor-pointer items-center justify-center">
             <input
               type="checkbox"
               checked={Boolean(selected)}
@@ -467,12 +467,6 @@ function SignupRequestRow({
               className="h-4 w-4 accent-[var(--felt)]"
             />
           </label>
-        ) : null}
-
-        {actions ? (
-          <div className="flex shrink-0 items-center gap-1 self-center">
-            {actions}
-          </div>
         ) : null}
 
         <div className="min-w-0 flex-1">
@@ -513,10 +507,15 @@ function SignupRequestRow({
               {teammateHint}
             </p>
           ) : null}
+          {actions ? (
+            <div className="mt-1.5 flex items-center justify-start gap-1">
+              {actions}
+            </div>
+          ) : null}
         </div>
 
         <time
-          className="w-[3.75rem] shrink-0 self-center text-right text-[10px] font-medium leading-tight tabular-nums text-[var(--muted)]"
+          className="w-[3.75rem] shrink-0 pt-0.5 text-right text-[10px] font-medium leading-tight tabular-nums text-[var(--muted)]"
           dateTime={`${submittedDate} ${submittedTime}`.trim()}
           title={`${submittedDate} ${submittedTime}`.trim()}
         >
