@@ -80,14 +80,16 @@ const fieldClass =
 const labelClass =
   "mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]";
 
-/** Compact equal-width signup action buttons (one row). */
+/**
+ * Signup actions sit in a fixed 4-column grid so each control keeps the same
+ * width whether 1 or 4 buttons are shown.
+ */
 const signupActionBtn =
-  "min-w-0 flex-1 rounded-[var(--radius)] px-1.5 py-2 text-center text-[11px] font-semibold leading-tight transition disabled:opacity-50 sm:px-2 sm:text-xs";
+  "min-w-0 rounded-[var(--radius)] px-1 py-2 text-center text-[11px] font-semibold leading-tight transition disabled:opacity-50 sm:px-1.5 sm:text-xs";
 const signupApproveBtn = `${signupActionBtn} bg-[var(--felt)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]`;
 const signupWaitlistBtn = `${signupActionBtn} border border-[color-mix(in_srgb,var(--amber)_55%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--amber)_28%,var(--surface-2)),color-mix(in_srgb,var(--amber)_12%,var(--surface)))] text-[var(--amber)]`;
 const signupRejectBtn = `${signupActionBtn} border border-[color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--danger)_22%,var(--surface-2)),var(--danger-bg))] text-[var(--danger)]`;
 const signupMessageBtn = `${signupActionBtn} border border-[color-mix(in_srgb,var(--chalk)_40%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--chalk)_18%,var(--surface-2)),color-mix(in_srgb,var(--felt)_10%,var(--surface)))] text-[var(--felt-deep)]`;
-const signupMessageBtnOpen = `${signupActionBtn} border border-[var(--chalk)]/55 bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))] text-[var(--felt-deep)]`;
 const signupSecondaryBtn = `${signupActionBtn} border border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)]`;
 
 function statusTone(status: TournamentStatus): string {
@@ -193,6 +195,87 @@ function signupStatusBadge(
   return null;
 }
 
+function SignupMessageDialog({
+  name,
+  body,
+  onClose,
+}: {
+  name: string;
+  body: string;
+  onClose: () => void;
+}) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  if (!mounted || typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[120] flex items-end justify-center bg-black/55 p-4 sm:items-center"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="signup-message-title"
+        className="w-full max-w-md overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="relative overflow-hidden bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] px-4 py-3 text-white">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-40"
+            style={{
+              background:
+                "radial-gradient(120% 80% at 100% 0%, rgba(224,163,90,0.28), transparent 55%)",
+            }}
+          />
+          <div className="relative flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--chalk)]">
+                Signup message
+              </p>
+              <h4
+                id="signup-message-title"
+                className="mt-0.5 truncate font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight"
+              >
+                {name}
+              </h4>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="shrink-0 rounded-[var(--radius)] bg-black/25 px-3 py-1.5 text-xs font-semibold text-white ring-1 ring-white/20 transition hover:bg-black/35"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+        <div className="px-4 py-4">
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--ink)]">
+            {body}
+          </p>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 /** Player-search-style card for tournament signups. */
 function SignupPlayerCard({
   title,
@@ -206,8 +289,7 @@ function SignupPlayerCard({
   teammates,
   actions,
   note,
-  noteOpen,
-  onToggleNote,
+  onShowNote,
 }: {
   title: string;
   statusBadge?: ReactNode;
@@ -220,8 +302,7 @@ function SignupPlayerCard({
   teammates?: TournamentRegistration["teammates"];
   actions?: ReactNode;
   note?: string | null;
-  noteOpen?: boolean;
-  onToggleNote?: () => void;
+  onShowNote?: () => void;
 }) {
   const hasActions = Boolean(actions) || Boolean(note);
 
@@ -299,25 +380,18 @@ function SignupPlayerCard({
       ) : null}
 
       {hasActions ? (
-        <div className="flex flex-nowrap items-stretch gap-1.5 border-t border-[var(--line)] px-2.5 py-2">
+        <div className="grid grid-cols-4 gap-1.5 border-t border-[var(--line)] px-2.5 py-2">
           {actions}
           {note ? (
             <button
               type="button"
-              onClick={onToggleNote}
-              aria-expanded={Boolean(noteOpen)}
-              className={noteOpen ? signupMessageBtnOpen : signupMessageBtn}
+              onClick={onShowNote}
+              className={signupMessageBtn}
             >
               Message
             </button>
           ) : null}
         </div>
-      ) : null}
-
-      {note && noteOpen ? (
-        <p className="border-t border-[var(--line)] bg-[var(--surface-2)]/50 px-3 py-2.5 text-xs leading-relaxed text-[var(--ink)]">
-          {note}
-        </p>
       ) : null}
     </div>
   );
@@ -649,7 +723,10 @@ export function Tournaments({
     id: string;
     name: string;
   } | null>(null);
-  const [openNoteIds, setOpenNoteIds] = useState<Record<string, boolean>>({});
+  const [signupMessage, setSignupMessage] = useState<{
+    name: string;
+    body: string;
+  } | null>(null);
   const [flyerPreview, setFlyerPreview] = useState<{
     src: string;
     title: string;
@@ -998,8 +1075,10 @@ export function Tournaments({
     onFindPlayer?.(reg.displayName.trim());
   };
 
-  const toggleSignupNote = (regId: string) => {
-    setOpenNoteIds((prev) => ({ ...prev, [regId]: !prev[regId] }));
+  const openSignupMessage = (reg: TournamentRegistration) => {
+    const body = reg.noteToOrganizer?.trim();
+    if (!body) return;
+    setSignupMessage({ name: reg.displayName, body });
   };
 
   const signupSubmittedLabel = (reg: TournamentRegistration) => {
@@ -2241,8 +2320,7 @@ export function Tournaments({
                                   : `Search players for ${reg.displayName}`
                               }
                               note={note}
-                              noteOpen={Boolean(openNoteIds[reg.id])}
-                              onToggleNote={() => toggleSignupNote(reg.id)}
+                              onShowNote={() => openSignupMessage(reg)}
                               teammates={reg.teammates}
                               actions={
                                 <>
@@ -2317,54 +2395,50 @@ export function Tournaments({
                                   : `Search players for ${reg.displayName}`
                               }
                               note={note}
-                              noteOpen={Boolean(openNoteIds[reg.id])}
-                              onToggleNote={() => toggleSignupNote(reg.id)}
+                              onShowNote={() => openSignupMessage(reg)}
                               teammates={reg.teammates}
                               actions={
-                                <>
-                                  {reg.status === "approved" ? (
+                                reg.status === "approved" ? (
+                                  <button
+                                    type="button"
+                                    disabled={saving}
+                                    onClick={() =>
+                                      void onUpdateRegistration(reg.id, {
+                                        paid: !reg.paid,
+                                      })
+                                    }
+                                    className={signupSecondaryBtn}
+                                  >
+                                    {reg.paid ? "Mark unpaid" : "Mark paid"}
+                                  </button>
+                                ) : reg.status === "waitlisted" ? (
+                                  <>
                                     <button
                                       type="button"
                                       disabled={saving}
                                       onClick={() =>
                                         void onUpdateRegistration(reg.id, {
-                                          paid: !reg.paid,
+                                          status: "approved",
                                         })
                                       }
-                                      className={signupSecondaryBtn}
+                                      className={signupApproveBtn}
                                     >
-                                      {reg.paid ? "Mark unpaid" : "Mark paid"}
+                                      Approve
                                     </button>
-                                  ) : null}
-                                  {reg.status === "waitlisted" ? (
-                                    <>
-                                      <button
-                                        type="button"
-                                        disabled={saving}
-                                        onClick={() =>
-                                          void onUpdateRegistration(reg.id, {
-                                            status: "approved",
-                                          })
-                                        }
-                                        className={signupApproveBtn}
-                                      >
-                                        Approve
-                                      </button>
-                                      <button
-                                        type="button"
-                                        disabled={saving}
-                                        onClick={() =>
-                                          void onUpdateRegistration(reg.id, {
-                                            status: "rejected",
-                                          })
-                                        }
-                                        className={signupRejectBtn}
-                                      >
-                                        Reject
-                                      </button>
-                                    </>
-                                  ) : null}
-                                </>
+                                    <button
+                                      type="button"
+                                      disabled={saving}
+                                      onClick={() =>
+                                        void onUpdateRegistration(reg.id, {
+                                          status: "rejected",
+                                        })
+                                      }
+                                      className={signupRejectBtn}
+                                    >
+                                      Reject
+                                    </button>
+                                  </>
+                                ) : undefined
                               }
                             />
                           </li>
@@ -2700,6 +2774,14 @@ export function Tournaments({
             src={flyerPreview.src}
             title={flyerPreview.title}
             onClose={closeFlyerPreview}
+          />
+        ) : null}
+
+        {signupMessage ? (
+          <SignupMessageDialog
+            name={signupMessage.name}
+            body={signupMessage.body}
+            onClose={() => setSignupMessage(null)}
           />
         ) : null}
       </div>
