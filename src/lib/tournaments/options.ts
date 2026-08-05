@@ -1,5 +1,7 @@
 import type {
   BracketFormat,
+  BreakFormat,
+  DrawType,
   EventType,
   GameType,
   HandicapSystem,
@@ -59,6 +61,20 @@ export const BRACKET_FORMAT_OPTIONS: { value: BracketFormat; label: string }[] =
   { value: "double-elimination", label: "Double Elimination" },
   { value: "round-robin", label: "Round Robin" },
   { value: "group-then-elim", label: "Groups → Elimination" },
+];
+
+/** Digital Pool break_format options. */
+export const BREAK_FORMAT_OPTIONS: { value: BreakFormat; label: string }[] = [
+  { value: "winner-break", label: "Winner break" },
+  { value: "loser-break", label: "Loser break" },
+  { value: "alternate-break", label: "Alternate break" },
+];
+
+/** Digital Pool draw_type options. */
+export const DRAW_TYPE_OPTIONS: { value: DrawType; label: string }[] = [
+  { value: "random", label: "Random" },
+  { value: "seeded", label: "Seeded" },
+  { value: "custom", label: "Custom" },
 ];
 
 export const HANDICAP_SYSTEM_OPTIONS: {

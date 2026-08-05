@@ -83,6 +83,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       "gameType",
       "eventType",
       "bracketFormat",
+      "breakFormat",
+      "drawType",
       "handicapSystem",
       "handicapNotes",
       "rulesetPreset",
@@ -94,6 +96,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       "maxPlayers",
       "teamSize",
       "entryFeeCents",
+      "addedMoneyCents",
       "payMethod",
       "venmoHandle",
       "zelleHandle",
@@ -120,6 +123,23 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       const min = allowed.minRobustnessStatus;
       allowed.minRobustnessStatus =
         min === "preliminary" || min === "established" ? min : null;
+    }
+    if ("breakFormat" in allowed) {
+      const value = allowed.breakFormat;
+      allowed.breakFormat =
+        value === "loser-break" || value === "alternate-break"
+          ? value
+          : "winner-break";
+    }
+    if ("drawType" in allowed) {
+      const value = allowed.drawType;
+      allowed.drawType =
+        value === "random" || value === "custom" ? value : "seeded";
+    }
+    if ("addedMoneyCents" in allowed) {
+      const n = Number(allowed.addedMoneyCents);
+      allowed.addedMoneyCents =
+        Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
     }
     // Min Fargo is no longer configurable — clear on any edit that touches Fargo.
     if ("maxFargo" in allowed) {

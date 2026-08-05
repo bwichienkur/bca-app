@@ -14,8 +14,10 @@ import {
 import { createPortal } from "react-dom";
 import {
   BRACKET_FORMAT_OPTIONS,
+  BREAK_FORMAT_OPTIONS,
   CREATE_STATUS_OPTIONS,
   defaultTeamSize,
+  DRAW_TYPE_OPTIONS,
   entryNoun,
   EVENT_TYPE_OPTIONS,
   FL_REGIONS,
@@ -631,9 +633,9 @@ function registrationPlayerId(reg: TournamentRegistration): string | null {
   return reg.fargoPlayerId?.trim() || null;
 }
 
-/** Max Fargo cap — "Open" when uncapped. */
+/** Overview badge: just the Fargo number, or "Open" when uncapped. */
 function fargoCapText(t: Pick<TournamentListItem, "maxFargo">): string {
-  return t.maxFargo != null ? `Cap ${t.maxFargo}` : "Open";
+  return t.maxFargo != null ? String(t.maxFargo) : "Open";
 }
 
 function gameTypeLabel(gameType: GameType): string {
@@ -828,6 +830,8 @@ const emptyForm = (): EventFormState => ({
   gameType: "9-ball",
   eventType: "singles",
   bracketFormat: "double-elimination",
+  breakFormat: "winner-break",
+  drawType: "seeded",
   handicapSystem: "fargo-medium",
   handicapNotes: "",
   rulesetPreset: "bca",
@@ -840,6 +844,7 @@ const emptyForm = (): EventFormState => ({
   maxPlayers: 32,
   teamSize: 1,
   entryFeeCents: 2000,
+  addedMoneyCents: 0,
   payMethod: "door",
   venmoHandle: null,
   zelleHandle: null,
@@ -881,6 +886,8 @@ function tournamentToForm(t: TournamentListItem): EventFormState {
     gameType: t.gameType,
     eventType: t.eventType,
     bracketFormat: t.bracketFormat,
+    breakFormat: t.breakFormat ?? "winner-break",
+    drawType: t.drawType ?? "seeded",
     handicapSystem: t.handicapSystem,
     handicapNotes: t.handicapNotes,
     rulesetPreset: t.rulesetPreset,
@@ -893,6 +900,7 @@ function tournamentToForm(t: TournamentListItem): EventFormState {
     maxPlayers: t.maxPlayers,
     teamSize: t.teamSize,
     entryFeeCents: t.entryFeeCents,
+    addedMoneyCents: t.addedMoneyCents ?? 0,
     payMethod: t.payMethod,
     venmoHandle: t.venmoHandle ?? null,
     zelleHandle: t.zelleHandle ?? null,
@@ -1118,6 +1126,7 @@ export function Tournaments({
     venueName: form.venueName.trim(),
     city: form.city.trim(),
     entryFeeCents: Math.round(Number(form.entryFeeCents) || 0),
+    addedMoneyCents: Math.max(0, Math.round(Number(form.addedMoneyCents) || 0)),
     maxPlayers: Math.max(2, Math.floor(Number(form.maxPlayers) || 2)),
     teamSize: Math.max(1, Math.floor(Number(form.teamSize) || 1)),
     startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : "",
@@ -1127,6 +1136,15 @@ export function Tournaments({
       form.maxFargo === null || form.maxFargo === ("" as unknown as number)
         ? null
         : Number(form.maxFargo),
+    breakFormat:
+      form.breakFormat === "loser-break" ||
+      form.breakFormat === "alternate-break"
+        ? form.breakFormat
+        : "winner-break",
+    drawType:
+      form.drawType === "random" || form.drawType === "custom"
+        ? form.drawType
+        : "seeded",
     venmoHandle: form.venmoHandle?.trim() || null,
     zelleHandle: form.zelleHandle?.trim() || null,
     cashAppHandle: form.cashAppHandle?.trim() || null,
@@ -1821,6 +1839,26 @@ export function Tournaments({
                     }
                   />
                 </Field>
+                <Field label="Break format">
+                  <SelectField
+                    aria-label="Break format"
+                    value={form.breakFormat ?? "winner-break"}
+                    options={BREAK_FORMAT_OPTIONS}
+                    onChange={(breakFormat) =>
+                      setForm((p) => ({ ...p, breakFormat }))
+                    }
+                  />
+                </Field>
+                <Field label="Draw type">
+                  <SelectField
+                    aria-label="Draw type"
+                    value={form.drawType ?? "seeded"}
+                    options={DRAW_TYPE_OPTIONS}
+                    onChange={(drawType) =>
+                      setForm((p) => ({ ...p, drawType }))
+                    }
+                  />
+                </Field>
                 <Field label="Handicap">
                   <SelectField
                     aria-label="Handicap"
@@ -1957,6 +1995,23 @@ export function Tournaments({
                       setForm((p) => ({
                         ...p,
                         entryFeeCents: Math.round(Number(e.target.value) * 100),
+                      }))
+                    }
+                  />
+                </Field>
+                <Field label="Added money ($)">
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    className={fieldClass}
+                    value={(form.addedMoneyCents ?? 0) / 100}
+                    onChange={(e) =>
+                      setForm((p) => ({
+                        ...p,
+                        addedMoneyCents: Math.round(
+                          Number(e.target.value) * 100,
+                        ),
                       }))
                     }
                   />
@@ -2244,6 +2299,25 @@ export function Tournaments({
         ? (RULESET_OPTIONS.find((o) => o.value === t.rulesetPreset)?.label ??
           t.rulesetPreset)
         : "";
+    const breakLabel =
+      t
+        ? (BREAK_FORMAT_OPTIONS.find((o) => o.value === t.breakFormat)?.label ??
+          t.breakFormat ??
+          "Winner break")
+        : "";
+    const drawLabel =
+      t
+        ? (DRAW_TYPE_OPTIONS.find((o) => o.value === t.drawType)?.label ??
+          t.drawType ??
+          "Seeded")
+        : "";
+    const addedMoneyLabel = t
+      ? (() => {
+          const cents = t.addedMoneyCents ?? 0;
+          if (cents <= 0) return "$0";
+          return `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
+        })()
+      : "";
 
     const overviewSignup = t ? (
       <>
@@ -2758,6 +2832,9 @@ export function Tournaments({
                             : []),
                           ["Entry", entryShapeText(t)],
                           ["Tables", `${tableSizeLabel}`],
+                          ["Break", breakLabel],
+                          ["Draw", drawLabel],
+                          ["Added money", addedMoneyLabel],
                           [
                             "Robustness",
                             minRobustnessLabel(t.minRobustnessStatus),

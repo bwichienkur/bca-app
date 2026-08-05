@@ -164,6 +164,15 @@ export async function createTournament(
     gameType: input.gameType,
     eventType: input.eventType,
     bracketFormat: input.bracketFormat,
+    breakFormat:
+      input.breakFormat === "loser-break" ||
+      input.breakFormat === "alternate-break"
+        ? input.breakFormat
+        : "winner-break",
+    drawType:
+      input.drawType === "random" || input.drawType === "custom"
+        ? input.drawType
+        : "seeded",
     handicapSystem: input.handicapSystem,
     handicapNotes: (input.handicapNotes ?? "").trim(),
     rulesetPreset: input.rulesetPreset ?? "bca",
@@ -183,6 +192,7 @@ export async function createTournament(
       Math.floor(input.teamSize ?? defaultTeamSize(input.eventType)),
     ),
     entryFeeCents: Math.max(0, Math.floor(input.entryFeeCents ?? 0)),
+    addedMoneyCents: Math.max(0, Math.floor(input.addedMoneyCents ?? 0)),
     payMethod: input.payMethod ?? "door",
     venmoHandle: (input.venmoHandle ?? "").trim() || null,
     zelleHandle: (input.zelleHandle ?? "").trim() || null,
@@ -311,6 +321,19 @@ function normalizeTournament(raw: Tournament): Tournament {
       typeof raw.teamSize === "number" && raw.teamSize >= 1
         ? raw.teamSize
         : defaultTeamSize(raw.eventType),
+    breakFormat:
+      raw.breakFormat === "loser-break" ||
+      raw.breakFormat === "alternate-break"
+        ? raw.breakFormat
+        : "winner-break",
+    drawType:
+      raw.drawType === "random" || raw.drawType === "custom"
+        ? raw.drawType
+        : "seeded",
+    addedMoneyCents:
+      typeof raw.addedMoneyCents === "number" && raw.addedMoneyCents >= 0
+        ? Math.floor(raw.addedMoneyCents)
+        : 0,
     minRobustnessStatus:
       raw.minRobustnessStatus === "preliminary" ||
       raw.minRobustnessStatus === "established"
