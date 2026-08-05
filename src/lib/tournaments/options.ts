@@ -91,8 +91,34 @@ export const MIN_ROBUSTNESS_OPTIONS: {
 export const PAY_METHOD_OPTIONS: { value: PayMethod; label: string }[] = [
   { value: "door", label: "Pay at door" },
   { value: "venmo", label: "Venmo" },
+  { value: "zelle", label: "Zelle" },
+  { value: "cashapp", label: "Cash App" },
   { value: "in-app-later", label: "In-app later (coming soon)" },
 ];
+
+export function formatPaymentLines(t: {
+  payMethod: PayMethod;
+  venmoHandle?: string | null;
+  zelleHandle?: string | null;
+  cashAppHandle?: string | null;
+}): string[] {
+  const lines: string[] = [];
+  const venmo = t.venmoHandle?.trim();
+  const zelle = t.zelleHandle?.trim();
+  const cashApp = t.cashAppHandle?.trim();
+  if (venmo) lines.push(`Venmo ${venmo.startsWith("@") ? venmo : `@${venmo}`}`);
+  if (zelle) lines.push(`Zelle ${zelle}`);
+  if (cashApp) {
+    const tag = cashApp.startsWith("$") ? cashApp : `$${cashApp.replace(/^\$/, "")}`;
+    lines.push(`Cash App ${tag}`);
+  }
+  if (t.payMethod === "door" || lines.length === 0) {
+    lines.push("Pay at door");
+  } else if (t.payMethod === "in-app-later") {
+    lines.push("In-app later");
+  }
+  return lines;
+}
 
 export const REGISTRATION_MODE_OPTIONS: {
   value: RegistrationMode;

@@ -81,7 +81,6 @@ function matchesFilters(t: Tournament, filters: TournamentFilters): boolean {
   if (filters.status && t.status !== filters.status) return false;
   if (filters.eligibleForFargo != null) {
     const f = filters.eligibleForFargo;
-    if (t.minFargo != null && f < t.minFargo) return false;
     if (t.maxFargo != null && f > t.maxFargo) return false;
   }
   if (filters.q) {
@@ -170,7 +169,7 @@ export async function createTournament(
     rulesetPreset: input.rulesetPreset ?? "bca",
     winnersRaceTo: input.winnersRaceTo ?? null,
     losersRaceTo: input.losersRaceTo ?? null,
-    minFargo: input.minFargo ?? null,
+    minFargo: null,
     maxFargo: input.maxFargo ?? null,
     minRobustnessStatus:
       input.minRobustnessStatus === "preliminary" ||
@@ -185,10 +184,13 @@ export async function createTournament(
     ),
     entryFeeCents: Math.max(0, Math.floor(input.entryFeeCents ?? 0)),
     payMethod: input.payMethod ?? "door",
+    venmoHandle: (input.venmoHandle ?? "").trim() || null,
+    zelleHandle: (input.zelleHandle ?? "").trim() || null,
+    cashAppHandle: (input.cashAppHandle ?? "").trim() || null,
     payoutNotes: (input.payoutNotes ?? "").trim(),
     registrationMode: input.registrationMode ?? "approval",
     reportedToFargo: Boolean(input.reportedToFargo),
-    tableSize: input.tableSize ?? "7ft",
+    tableSize: input.tableSize ?? "9ft",
     venueName: input.venueName.trim(),
     venueAddress: (input.venueAddress ?? "").trim(),
     city: input.city.trim(),
@@ -314,6 +316,18 @@ function normalizeTournament(raw: Tournament): Tournament {
       raw.minRobustnessStatus === "established"
         ? raw.minRobustnessStatus
         : null,
+    venmoHandle:
+      typeof raw.venmoHandle === "string" && raw.venmoHandle.trim()
+        ? raw.venmoHandle.trim()
+        : null,
+    zelleHandle:
+      typeof raw.zelleHandle === "string" && raw.zelleHandle.trim()
+        ? raw.zelleHandle.trim()
+        : null,
+    cashAppHandle:
+      typeof raw.cashAppHandle === "string" && raw.cashAppHandle.trim()
+        ? raw.cashAppHandle.trim()
+        : null,
   };
 }
 
@@ -422,11 +436,6 @@ function assertFargoInBand(
   who: string,
 ): void {
   if (rating == null || Number.isNaN(rating)) return;
-  if (tournament.minFargo != null && rating < tournament.minFargo) {
-    throw new Error(
-      `${who} needs a Fargo of at least ${tournament.minFargo}.`,
-    );
-  }
   if (tournament.maxFargo != null && rating > tournament.maxFargo) {
     throw new Error(
       `${who} needs a Fargo of at most ${tournament.maxFargo}.`,

@@ -16,7 +16,7 @@ export type UnratedPolicy = "cap-at-max" | "provisional" | "message-organizer";
 /** Minimum Fargo robustness required to sign up. null = any. */
 export type RobustnessStatus = "starter" | "preliminary" | "established";
 export type RegistrationMode = "open" | "approval" | "invite-only";
-export type PayMethod = "door" | "venmo" | "in-app-later";
+export type PayMethod = "door" | "venmo" | "zelle" | "cashapp" | "in-app-later";
 export type TournamentStatus =
   | "draft"
   | "open"
@@ -44,6 +44,7 @@ export type Tournament = {
   rulesetPreset: RulesetPreset;
   winnersRaceTo: number | null;
   losersRaceTo: number | null;
+  /** @deprecated Prefer maxFargo only; kept for older events. */
   minFargo: number | null;
   maxFargo: number | null;
   /** null = any robustness; "preliminary" / "established" gate signup. */
@@ -55,6 +56,10 @@ export type Tournament = {
   teamSize: number;
   entryFeeCents: number;
   payMethod: PayMethod;
+  /** Where to send payment (optional handles). */
+  venmoHandle: string | null;
+  zelleHandle: string | null;
+  cashAppHandle: string | null;
   payoutNotes: string;
   registrationMode: RegistrationMode;
   reportedToFargo: boolean;
@@ -135,6 +140,9 @@ export type CreateTournamentInput = {
   teamSize?: number;
   entryFeeCents?: number;
   payMethod?: PayMethod;
+  venmoHandle?: string | null;
+  zelleHandle?: string | null;
+  cashAppHandle?: string | null;
   payoutNotes?: string;
   registrationMode?: RegistrationMode;
   reportedToFargo?: boolean;

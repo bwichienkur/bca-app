@@ -20,6 +20,7 @@ import {
   EVENT_TYPE_OPTIONS,
   FL_REGIONS,
   formatEntryFee,
+  formatPaymentLines,
   formatStartsAt,
   GAME_TYPE_OPTIONS,
   HANDICAP_SYSTEM_OPTIONS,
@@ -630,14 +631,9 @@ function registrationPlayerId(reg: TournamentRegistration): string | null {
   return reg.fargoPlayerId?.trim() || null;
 }
 
-function fargoBandText(t: TournamentListItem): string {
-  if (t.minFargo == null && t.maxFargo == null) return "Open";
-  return `${t.minFargo ?? "—"} – ${t.maxFargo ?? "—"}`;
-}
-
-/** Max Fargo cap for headers — "Open" when uncapped. */
+/** Max Fargo cap — "Open" when uncapped. */
 function fargoCapText(t: Pick<TournamentListItem, "maxFargo">): string {
-  return t.maxFargo != null ? String(t.maxFargo) : "Open";
+  return t.maxFargo != null ? `Cap ${t.maxFargo}` : "Open";
 }
 
 function gameTypeLabel(gameType: GameType): string {
@@ -660,7 +656,7 @@ function eventKeyFacts(t: Pick<
   return [
     gameTypeLabel(t.gameType),
     handicapShort(t.handicapSystem),
-    t.maxFargo != null ? `Cap ${t.maxFargo}` : "Open Fargo",
+    t.maxFargo != null ? `Fargo cap ${t.maxFargo}` : "Open Fargo",
   ].join(" · ");
 }
 
@@ -845,10 +841,13 @@ const emptyForm = (): EventFormState => ({
   teamSize: 1,
   entryFeeCents: 2000,
   payMethod: "door",
+  venmoHandle: null,
+  zelleHandle: null,
+  cashAppHandle: null,
   payoutNotes: "",
   registrationMode: "approval",
   reportedToFargo: false,
-  tableSize: "7ft",
+  tableSize: "9ft",
   venueName: "",
   venueAddress: "",
   city: "",
@@ -887,7 +886,7 @@ function tournamentToForm(t: TournamentListItem): EventFormState {
     rulesetPreset: t.rulesetPreset,
     winnersRaceTo: t.winnersRaceTo,
     losersRaceTo: t.losersRaceTo,
-    minFargo: t.minFargo,
+    minFargo: null,
     maxFargo: t.maxFargo,
     minRobustnessStatus: t.minRobustnessStatus ?? null,
     unratedPolicy: t.unratedPolicy,
@@ -895,6 +894,9 @@ function tournamentToForm(t: TournamentListItem): EventFormState {
     teamSize: t.teamSize,
     entryFeeCents: t.entryFeeCents,
     payMethod: t.payMethod,
+    venmoHandle: t.venmoHandle ?? null,
+    zelleHandle: t.zelleHandle ?? null,
+    cashAppHandle: t.cashAppHandle ?? null,
     payoutNotes: t.payoutNotes,
     registrationMode: t.registrationMode,
     reportedToFargo: t.reportedToFargo,
@@ -943,7 +945,6 @@ export function Tournaments({
   const [messageBody, setMessageBody] = useState("");
   const [messageName, setMessageName] = useState("");
   const [detailSubTab, setDetailSubTab] = useState<DetailSubTab>("overview");
-  const [houseRulesOpen, setHouseRulesOpen] = useState(false);
   const [fieldFilter, setFieldFilter] = useState<FieldBoardFilter>("all");
   const [fieldQuery, setFieldQuery] = useState("");
   const [signupStatusFilter, setSignupStatusFilter] =
@@ -1052,7 +1053,6 @@ export function Tournaments({
     setRegNote("");
     setTeamName("");
     setDetailSubTab("overview");
-    setHouseRulesOpen(false);
     setFieldFilter("all");
     setFieldQuery("");
     setSignupStatusFilter("pending");
@@ -1122,14 +1122,14 @@ export function Tournaments({
     teamSize: Math.max(1, Math.floor(Number(form.teamSize) || 1)),
     startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : "",
     checkInAt: form.checkInAt ? new Date(form.checkInAt).toISOString() : null,
-    minFargo:
-      form.minFargo === null || form.minFargo === ("" as unknown as number)
-        ? null
-        : Number(form.minFargo),
+    minFargo: null,
     maxFargo:
       form.maxFargo === null || form.maxFargo === ("" as unknown as number)
         ? null
         : Number(form.maxFargo),
+    venmoHandle: form.venmoHandle?.trim() || null,
+    zelleHandle: form.zelleHandle?.trim() || null,
+    cashAppHandle: form.cashAppHandle?.trim() || null,
   });
 
   const startEdit = (tournament: TournamentListItem) => {
@@ -1864,23 +1864,7 @@ export function Tournaments({
                     }
                   />
                 </Field>
-                <Field label="Min Fargo">
-                  <input
-                    type="number"
-                    min={0}
-                    className={fieldClass}
-                    value={form.minFargo ?? ""}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        minFargo:
-                          e.target.value === "" ? null : Number(e.target.value),
-                      }))
-                    }
-                    placeholder="Optional"
-                  />
-                </Field>
-                <Field label="Max Fargo">
+                <Field label="Fargo cap">
                   <input
                     type="number"
                     min={0}
@@ -1893,7 +1877,7 @@ export function Tournaments({
                           e.target.value === "" ? null : Number(e.target.value),
                       }))
                     }
-                    placeholder="Optional"
+                    placeholder="Open if blank"
                   />
                 </Field>
                 <Field label="Min robustness">
@@ -1977,14 +1961,56 @@ export function Tournaments({
                     }
                   />
                 </Field>
-                <Field label="Payment">
+                <Field label="Primary payment">
                   <SelectField
-                    aria-label="Payment"
+                    aria-label="Primary payment"
                     value={form.payMethod ?? "door"}
                     options={PAY_METHOD_OPTIONS}
                     onChange={(payMethod) =>
                       setForm((p) => ({ ...p, payMethod }))
                     }
+                  />
+                </Field>
+                <Field label="Venmo">
+                  <input
+                    className={fieldClass}
+                    value={form.venmoHandle ?? ""}
+                    onChange={(e) =>
+                      setForm((p) => ({
+                        ...p,
+                        venmoHandle: e.target.value || null,
+                      }))
+                    }
+                    placeholder="@handle"
+                    autoComplete="off"
+                  />
+                </Field>
+                <Field label="Zelle">
+                  <input
+                    className={fieldClass}
+                    value={form.zelleHandle ?? ""}
+                    onChange={(e) =>
+                      setForm((p) => ({
+                        ...p,
+                        zelleHandle: e.target.value || null,
+                      }))
+                    }
+                    placeholder="Email or phone"
+                    autoComplete="off"
+                  />
+                </Field>
+                <Field label="Cash App">
+                  <input
+                    className={fieldClass}
+                    value={form.cashAppHandle ?? ""}
+                    onChange={(e) =>
+                      setForm((p) => ({
+                        ...p,
+                        cashAppHandle: e.target.value || null,
+                      }))
+                    }
+                    placeholder="$cashtag"
+                    autoComplete="off"
                   />
                 </Field>
                 <Field label="Registration">
@@ -2010,7 +2036,7 @@ export function Tournaments({
                 <Field label="Table size">
                   <SelectField
                     aria-label="Table size"
-                    value={form.tableSize ?? "7ft"}
+                    value={form.tableSize ?? "9ft"}
                     options={TABLE_SIZE_OPTIONS}
                     onChange={(tableSize) =>
                       setForm((p) => ({ ...p, tableSize }))
@@ -2202,10 +2228,21 @@ export function Tournaments({
         ? (BRACKET_FORMAT_OPTIONS.find((o) => o.value === t.bracketFormat)
             ?.label ?? t.bracketFormat)
         : "";
-    const paymentLabel =
+    const paymentLines = t ? formatPaymentLines(t) : [];
+    const tableSizeLabel =
       t
-        ? (PAY_METHOD_OPTIONS.find((o) => o.value === t.payMethod)?.label ??
-          t.payMethod)
+        ? (TABLE_SIZE_OPTIONS.find((o) => o.value === t.tableSize)?.label ??
+          t.tableSize)
+        : "";
+    const registrationLabel =
+      t
+        ? (REGISTRATION_MODE_OPTIONS.find((o) => o.value === t.registrationMode)
+            ?.label ?? t.registrationMode)
+        : "";
+    const rulesetLabel =
+      t
+        ? (RULESET_OPTIONS.find((o) => o.value === t.rulesetPreset)?.label ??
+          t.rulesetPreset)
         : "";
 
     const overviewSignup = t ? (
@@ -2288,9 +2325,7 @@ export function Tournaments({
                 </p>
                 <p className="mt-1 text-xs text-[var(--muted)]">
                   {entryShapeText(t)}
-                  {t.minFargo != null || t.maxFargo != null
-                    ? ` · Fargo ${fargoBandText(t)}`
-                    : ""}
+                  {` · Fargo ${fargoCapText(t)}`}
                   {t.minRobustnessStatus
                     ? ` · ${minRobustnessLabel(t.minRobustnessStatus)}`
                     : ""}
@@ -2675,36 +2710,109 @@ export function Tournaments({
                       </div>
                     </div>
                   )}
-                  <div className="space-y-3 p-3 sm:p-4">
-                    <p className="text-sm text-[var(--muted)]">
+
+                  <div className="space-y-4 border-t border-[var(--line)] p-3 sm:p-4">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span
                         className={[
-                          "mr-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                          "inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold",
                           statusTone(t.status),
                         ].join(" ")}
                       >
                         {STATUS_LABELS[t.status]}
                       </span>
-                      {formatEntryFee(t.entryFeeCents)}
-                      {" · "}
-                      {t.approvedCount}/{t.maxPlayers}{" "}
-                      {entryNoun(t.eventType)} in
-                    </p>
+                      <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]">
+                        {formatEntryFee(t.entryFeeCents)}
+                      </span>
+                      <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
+                        {t.approvedCount}/{t.maxPlayers}{" "}
+                        {entryNoun(t.eventType)} in
+                      </span>
+                      <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
+                        Fargo {fargoCapText(t)}
+                      </span>
+                    </div>
+
                     {t.description ? (
                       <p className="text-sm leading-relaxed text-[var(--ink)]">
                         {t.description}
                       </p>
                     ) : null}
-                    <p className="text-xs text-[var(--muted)]">
-                      {entryShapeText(t)}
-                      {" · "}
-                      Fargo {fargoBandText(t)}
-                      {t.minRobustnessStatus
-                        ? ` · ${minRobustnessLabel(t.minRobustnessStatus)}`
-                        : ""}
-                      {" · "}
-                      {t.tableSize} tables
-                    </p>
+
+                    <dl className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-3">
+                      {(
+                        [
+                          ["When", formatStartsAt(t.startsAt)],
+                          [
+                            "Check-in",
+                            t.checkInAt
+                              ? formatStartsAt(t.checkInAt)
+                              : "At start",
+                          ],
+                          [
+                            "Venue",
+                            [t.venueName, t.city].filter(Boolean).join(" · "),
+                          ],
+                          ...(t.venueAddress
+                            ? ([["Address", t.venueAddress]] as const)
+                            : []),
+                          ["Entry", entryShapeText(t)],
+                          ["Tables", `${tableSizeLabel}`],
+                          [
+                            "Robustness",
+                            minRobustnessLabel(t.minRobustnessStatus),
+                          ],
+                          ["Registration", registrationLabel],
+                          ["Ruleset", rulesetLabel],
+                          ["Organizer", t.organizerName],
+                          ...(t.organizerPhone
+                            ? ([["Phone", t.organizerPhone]] as const)
+                            : []),
+                        ] as Array<[string, string]>
+                      ).map(([label, value]) => (
+                        <div key={label} className="min-w-0">
+                          <dt className={labelClass}>{label}</dt>
+                          <dd className="truncate text-sm font-medium text-[var(--ink)]">
+                            {value}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+
+                    <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/70 px-3 py-3">
+                      <p className={labelClass}>Pay here</p>
+                      <ul className="mt-1 space-y-1">
+                        {paymentLines.map((line) => (
+                          <li
+                            key={line}
+                            className="text-sm font-semibold text-[var(--ink)]"
+                          >
+                            {line}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {t.payoutNotes || t.handicapNotes ? (
+                      <div className="space-y-2">
+                        {t.payoutNotes ? (
+                          <div>
+                            <p className={labelClass}>Payouts</p>
+                            <p className="text-sm leading-relaxed text-[var(--ink)]">
+                              {t.payoutNotes}
+                            </p>
+                          </div>
+                        ) : null}
+                        {t.handicapNotes ? (
+                          <div>
+                            <p className={labelClass}>Handicap notes</p>
+                            <p className="text-sm leading-relaxed text-[var(--ink)]">
+                              {t.handicapNotes}
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 </SurfaceCard>
 
@@ -2731,66 +2839,6 @@ export function Tournaments({
                     />
                   </div>
                 </div>
-
-                <SurfaceCard>
-                  <button
-                    type="button"
-                    onClick={() => setHouseRulesOpen((open) => !open)}
-                    className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left sm:px-4"
-                  >
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                        House rules
-                      </p>
-                      <p className="mt-1 text-sm text-[var(--ink)]">
-                        Payment, tables, organizer
-                      </p>
-                    </div>
-                    <span className="text-[var(--muted)]" aria-hidden>
-                      {houseRulesOpen ? "▴" : "▾"}
-                    </span>
-                  </button>
-                  {houseRulesOpen ? (
-                    <div className="space-y-3 border-t border-[var(--line)] px-3 py-3 sm:px-4">
-                      <dl className="grid gap-3 sm:grid-cols-2">
-                        {[
-                          ["Fargo band", fargoBandText(t)],
-                          [
-                            "Robustness",
-                            minRobustnessLabel(t.minRobustnessStatus),
-                          ],
-                          ["Tables", t.tableSize],
-                          ["Payment", paymentLabel],
-                          ["Organizer", t.organizerName],
-                          [
-                            "Registration",
-                            REGISTRATION_MODE_OPTIONS.find(
-                              (o) => o.value === t.registrationMode,
-                            )?.label ?? t.registrationMode,
-                          ],
-                          [
-                            "Ruleset",
-                            RULESET_OPTIONS.find(
-                              (o) => o.value === t.rulesetPreset,
-                            )?.label ?? t.rulesetPreset,
-                          ],
-                        ].map(([label, value]) => (
-                          <div key={label}>
-                            <dt className={labelClass}>{label}</dt>
-                            <dd className="text-sm text-[var(--ink)]">
-                              {value}
-                            </dd>
-                          </div>
-                        ))}
-                      </dl>
-                      {t.payoutNotes ? (
-                        <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--muted)]">
-                          {t.payoutNotes}
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </SurfaceCard>
 
                 {overviewSignup}
 
@@ -3485,7 +3533,7 @@ export function Tournaments({
       <SectionCard
         eyebrow="Events"
         title="Tournaments"
-        description="Browse local brackets by venue and Fargo band, or create your own night."
+        description="Browse local brackets by venue and Fargo cap, or create your own night."
       />
 
       <SurfaceCard>
