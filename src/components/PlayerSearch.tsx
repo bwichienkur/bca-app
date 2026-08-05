@@ -69,8 +69,12 @@ function pageNumbers(current: number, total: number): (number | "…")[] {
   return out;
 }
 
-export function PlayerSearch() {
-  const [query, setQuery] = useState("");
+export function PlayerSearch({
+  initialQuery = "",
+}: {
+  initialQuery?: string;
+} = {}) {
+  const [query, setQuery] = useState(initialQuery);
   const [players, setPlayers] = useState<PlayerSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +85,12 @@ export function PlayerSearch() {
   const requestId = useRef(0);
   const searchAnchor = useViewportAnchor<HTMLDivElement>();
   const markSearchAnchor = searchAnchor.mark;
+
+  useEffect(() => {
+    const next = initialQuery.trim();
+    if (!next) return;
+    setQuery(next);
+  }, [initialQuery]);
 
   useEffect(() => {
     const q = query.trim();

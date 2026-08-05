@@ -145,6 +145,7 @@ export function LeagueApp() {
   const [selectedDivision, setSelectedDivision] =
     useState<DivisionSummary | null>(null);
   const [tab, setTab] = useState<ReportTab>("standings");
+  const [playerSearchQuery, setPlayerSearchQuery] = useState("");
   const [screen, setScreen] = useState<AppScreen>("main");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -995,7 +996,10 @@ export function LeagueApp() {
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <button
               type="button"
-              onClick={() => startTransition(() => setTab("search"))}
+              onClick={() => {
+                setPlayerSearchQuery("");
+                startTransition(() => setTab("search"));
+              }}
               title="Search players"
               aria-label="Search players"
               aria-current={tab === "search" ? "page" : undefined}
@@ -1257,7 +1261,7 @@ export function LeagueApp() {
           ].join(" ")}
         >
           {tab === "search" ? (
-            <PlayerSearch />
+            <PlayerSearch initialQuery={playerSearchQuery} />
           ) : tab === "events" ? (
             <Tournaments
               user={user}
@@ -1269,6 +1273,10 @@ export function LeagueApp() {
                   : null
               }
               onRequestLogin={() => setScreen("login")}
+              onFindPlayer={(name) => {
+                setPlayerSearchQuery(name);
+                startTransition(() => setTab("search"));
+              }}
             />
           ) : tab === "score" ? (
             <MatchScoring
