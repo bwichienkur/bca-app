@@ -62,13 +62,21 @@ type SignupStatusFilter =
 type SignupPaidMode = "paid" | "unpaid";
 
 const SIGNUP_STATUS_FILTERS: Array<{
-  id: SignupStatusFilter;
+  value: SignupStatusFilter;
   label: string;
 }> = [
-  { id: "pending", label: "Pending" },
-  { id: "approved", label: "Approved" },
-  { id: "waitlisted", label: "Waitlist" },
-  { id: "rejected", label: "Rejected" },
+  { value: "pending", label: "Pending" },
+  { value: "approved", label: "Approved" },
+  { value: "waitlisted", label: "Waitlist" },
+  { value: "rejected", label: "Rejected" },
+];
+
+const SIGNUP_PAID_FILTERS: Array<{
+  value: SignupPaidMode;
+  label: string;
+}> = [
+  { value: "unpaid", label: "Unpaid" },
+  { value: "paid", label: "Paid" },
 ];
 
 type EventFormState = Omit<CreateTournamentInput, "status"> & {
@@ -1173,6 +1181,35 @@ export function Tournaments({
 
   const showApprovedPaidFilters = signupStatusFilter === "approved";
 
+  const signupStatusCounts = useMemo(() => {
+    const counts: Record<SignupStatusFilter, number> = {
+      pending: 0,
+      approved: 0,
+      waitlisted: 0,
+      rejected: 0,
+    };
+    for (const r of sortedRegistrations) {
+      if (
+        r.status === "pending" ||
+        r.status === "approved" ||
+        r.status === "waitlisted" ||
+        r.status === "rejected"
+      ) {
+        counts[r.status] += 1;
+      }
+    }
+    return counts;
+  }, [sortedRegistrations]);
+
+  const signupStatusOptions = useMemo(
+    () =>
+      SIGNUP_STATUS_FILTERS.map((item) => ({
+        value: item.value,
+        label: `${item.label} (${signupStatusCounts[item.value]})`,
+      })),
+    [signupStatusCounts],
+  );
+
   const filteredSignups = useMemo(() => {
     return sortedRegistrations.filter((r) => {
       if (r.status !== signupStatusFilter) return false;
@@ -2087,7 +2124,7 @@ export function Tournaments({
               <div
                 role="tablist"
                 aria-label="Event organizer sections"
-                className="grid grid-cols-5 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+                className="flex gap-0.5 overflow-x-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               >
                 {(
                   [
@@ -2118,7 +2155,7 @@ export function Tournaments({
                         })
                       }
                       className={[
-                        "rounded-md px-0.5 py-1.5 text-center text-[10px] font-semibold leading-tight transition sm:px-1.5 sm:text-xs",
+                        "shrink-0 rounded-md px-3 py-2 text-xs font-semibold transition",
                         selected
                           ? "bg-[var(--felt)] text-white shadow-sm"
                           : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
@@ -2312,67 +2349,30 @@ export function Tournaments({
                 ) : null}
 
                 <SurfaceCard>
-                  <div className="space-y-3 px-3 py-3 sm:px-4">
-                    <div
-                      role="radiogroup"
-                      aria-label="Signup status filter"
-                      className="grid grid-cols-4 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
-                    >
-                      {SIGNUP_STATUS_FILTERS.map((item) => {
-                        const selected = signupStatusFilter === item.id;
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            role="radio"
-                            aria-checked={selected}
-                            onClick={() => setSignupStatusFilter(item.id)}
-                            className={[
-                              "rounded-md px-1 py-1.5 text-center text-[11px] font-semibold transition sm:text-xs",
-                              selected
-                                ? "bg-[var(--felt)] text-white shadow-sm"
-                                : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
-                            ].join(" ")}
-                          >
-                            {item.label}
-                          </button>
-                        );
-                      })}
+                  <div
+                    className={[
+                      "grid gap-3 px-3 py-3 sm:px-4",
+                      showApprovedPaidFilters ? "sm:grid-cols-2" : "",
+                    ].join(" ")}
+                  >
+                    <div>
+                      <p className={labelClass}>Status</p>
+                      <SelectField
+                        aria-label="Signup status filter"
+                        value={signupStatusFilter}
+                        options={signupStatusOptions}
+                        onChange={setSignupStatusFilter}
+                      />
                     </div>
                     {showApprovedPaidFilters ? (
-                      <div
-                        role="radiogroup"
-                        aria-label="Approved payment filter"
-                        className="grid grid-cols-2 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
-                      >
-                        <button
-                          type="button"
-                          role="radio"
-                          aria-checked={signupPaidMode === "paid"}
-                          onClick={() => setSignupPaidMode("paid")}
-                          className={[
-                            "rounded-md px-2 py-1.5 text-center text-xs font-semibold transition",
-                            signupPaidMode === "paid"
-                              ? "bg-[var(--felt)] text-white shadow-sm"
-                              : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
-                          ].join(" ")}
-                        >
-                          Paid
-                        </button>
-                        <button
-                          type="button"
-                          role="radio"
-                          aria-checked={signupPaidMode === "unpaid"}
-                          onClick={() => setSignupPaidMode("unpaid")}
-                          className={[
-                            "rounded-md px-2 py-1.5 text-center text-xs font-semibold transition",
-                            signupPaidMode === "unpaid"
-                              ? "bg-[var(--felt)] text-white shadow-sm"
-                              : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
-                          ].join(" ")}
-                        >
-                          Unpaid
-                        </button>
+                      <div>
+                        <p className={labelClass}>Payment</p>
+                        <SelectField
+                          aria-label="Approved payment filter"
+                          value={signupPaidMode}
+                          options={SIGNUP_PAID_FILTERS}
+                          onChange={setSignupPaidMode}
+                        />
                       </div>
                     ) : null}
                   </div>
