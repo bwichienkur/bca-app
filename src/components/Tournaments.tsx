@@ -54,6 +54,28 @@ import { TournamentCalcuttaPanel } from "./TournamentCalcutta";
 type View = "browse" | "create" | "edit" | "detail";
 type DetailSubTab = "overview" | "signups" | "field" | "calcutta" | "manage";
 type FieldBoardFilter = "all" | "not-checked-in" | "unpaid";
+type SignupStatusFilter =
+  | "pending"
+  | "approved"
+  | "waitlisted"
+  | "rejected";
+
+const SIGNUP_STATUS_FILTERS: Array<{
+  id: SignupStatusFilter;
+  label: string;
+}> = [
+  { id: "pending", label: "Pending" },
+  { id: "approved", label: "Approved" },
+  { id: "waitlisted", label: "Waitlist" },
+  { id: "rejected", label: "Rejected" },
+];
+
+const DEFAULT_SIGNUP_STATUS_FILTERS: SignupStatusFilter[] = [
+  "pending",
+  "approved",
+  "waitlisted",
+  "rejected",
+];
 
 type EventFormState = Omit<CreateTournamentInput, "status"> & {
   status: TournamentStatus;
@@ -719,6 +741,11 @@ export function Tournaments({
   const [houseRulesOpen, setHouseRulesOpen] = useState(false);
   const [fieldFilter, setFieldFilter] = useState<FieldBoardFilter>("all");
   const [fieldQuery, setFieldQuery] = useState("");
+  const [signupStatusFilters, setSignupStatusFilters] = useState<
+    SignupStatusFilter[]
+  >(DEFAULT_SIGNUP_STATUS_FILTERS);
+  const [signupPaidFilter, setSignupPaidFilter] = useState(true);
+  const [signupUnpaidFilter, setSignupUnpaidFilter] = useState(true);
   const [inspectPlayer, setInspectPlayer] = useState<{
     id: string;
     name: string;
@@ -813,6 +840,9 @@ export function Tournaments({
     setHouseRulesOpen(false);
     setFieldFilter("all");
     setFieldQuery("");
+    setSignupStatusFilters(DEFAULT_SIGNUP_STATUS_FILTERS);
+    setSignupPaidFilter(true);
+    setSignupUnpaidFilter(true);
     try {
       const res = await fetch(`/api/tournaments/${id}`);
       const data = (await res.json()) as DetailPayload & { error?: string };
@@ -1149,14 +1179,41 @@ export function Tournaments({
     });
   }, [detail?.registrations]);
 
-  const pendingRegistrations = useMemo(
-    () => sortedRegistrations.filter((r) => r.status === "pending"),
-    [sortedRegistrations],
+  const signupStatusFilterSet = useMemo(
+    () => new Set(signupStatusFilters),
+    [signupStatusFilters],
   );
-  const otherRegistrations = useMemo(
-    () => sortedRegistrations.filter((r) => r.status !== "pending"),
-    [sortedRegistrations],
-  );
+  const showApprovedPaidFilters = signupStatusFilterSet.has("approved");
+
+  const filteredSignups = useMemo(() => {
+    return sortedRegistrations.filter((r) => {
+      if (
+        r.status !== "pending" &&
+        r.status !== "approved" &&
+        r.status !== "waitlisted" &&
+        r.status !== "rejected"
+      ) {
+        return false;
+      }
+      if (!signupStatusFilterSet.has(r.status)) return false;
+      if (r.status === "approved") {
+        if (r.paid && !signupPaidFilter) return false;
+        if (!r.paid && !signupUnpaidFilter) return false;
+      }
+      return true;
+    });
+  }, [
+    signupPaidFilter,
+    signupStatusFilterSet,
+    signupUnpaidFilter,
+    sortedRegistrations,
+  ]);
+
+  const toggleSignupStatusFilter = (id: SignupStatusFilter) => {
+    setSignupStatusFilters((prev) =>
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
+    );
+  };
 
   const loadedPlayerIdsRef = useRef(new Set<string>());
 
@@ -2274,10 +2331,10 @@ export function Tournaments({
                 <SectionCard
                   eyebrow="Organizer"
                   title="Signups"
-                  description="Review Fargo and robustness, open player stats, then approve or reject."
+                  description="Filter by status (and paid state), review Fargo, then approve or reject."
                   badge={{
-                    label: "Pending",
-                    value: String(t.pendingCount),
+                    label: "Showing",
+                    value: String(filteredSignups.length),
                   }}
                 />
                 {actionMsg ? (
@@ -2286,167 +2343,190 @@ export function Tournaments({
                   </p>
                 ) : null}
 
-                <div>
-                  <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                    Requests
-                    {pendingRegistrations.length
-                      ? ` · ${pendingRegistrations.length}`
-                      : ""}
-                  </p>
-                  {pendingRegistrations.length === 0 ? (
-                    <SurfaceCard>
-                      <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">
-                        No pending requests.
-                      </p>
-                    </SurfaceCard>
-                  ) : (
-                    <ul className="space-y-2">
-                      {pendingRegistrations.map((reg) => {
-                        const stats = statsForRegistration(reg);
-                        const note = reg.noteToOrganizer?.trim() || null;
+                <SurfaceCard>
+                  <div className="space-y-3 px-3 py-3 sm:px-4">
+                    <div
+                      role="group"
+                      aria-label="Signup status filters"
+                      className="grid grid-cols-4 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+                    >
+                      {SIGNUP_STATUS_FILTERS.map((item) => {
+                        const selected = signupStatusFilterSet.has(item.id);
                         return (
-                          <li key={reg.id} className="animate-rise">
-                            <SignupPlayerCard
-                              title={registrationCardTitle(reg)}
-                              statusBadge={signupStatusBadge(reg.status)}
-                              submittedLabel={signupSubmittedLabel(reg)}
-                              rating={stats.rating}
-                              robustnessStatus={stats.robustnessStatus}
-                              robustness={stats.robustness}
-                              onOpenDetails={() => openSignupPlayer(reg)}
-                              detailsLabel={
-                                stats.playerId
-                                  ? `View player: ${reg.displayName}`
-                                  : `Search players for ${reg.displayName}`
-                              }
-                              note={note}
-                              onShowNote={() => openSignupMessage(reg)}
-                              teammates={reg.teammates}
-                              actions={
-                                <>
-                                  <button
-                                    type="button"
-                                    disabled={saving}
-                                    onClick={() =>
-                                      void onUpdateRegistration(reg.id, {
-                                        status: "approved",
-                                      })
-                                    }
-                                    className={signupApproveBtn}
-                                  >
-                                    Approve
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={saving}
-                                    onClick={() =>
-                                      void onUpdateRegistration(reg.id, {
-                                        status: "waitlisted",
-                                      })
-                                    }
-                                    className={signupWaitlistBtn}
-                                  >
-                                    Waitlist
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={saving}
-                                    onClick={() =>
-                                      void onUpdateRegistration(reg.id, {
-                                        status: "rejected",
-                                      })
-                                    }
-                                    className={signupRejectBtn}
-                                  >
-                                    Reject
-                                  </button>
-                                </>
-                              }
-                            />
-                          </li>
+                          <button
+                            key={item.id}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() => toggleSignupStatusFilter(item.id)}
+                            className={[
+                              "rounded-md px-1 py-1.5 text-center text-[11px] font-semibold transition sm:text-xs",
+                              selected
+                                ? "bg-[var(--felt)] text-white shadow-sm"
+                                : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
+                            ].join(" ")}
+                          >
+                            {item.label}
+                          </button>
                         );
                       })}
-                    </ul>
-                  )}
-                </div>
-
-                {otherRegistrations.length > 0 ? (
-                  <div>
-                    <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                      Reviewed
-                    </p>
-                    <ul className="space-y-2">
-                      {otherRegistrations.map((reg) => {
-                        const stats = statsForRegistration(reg);
-                        const note = reg.noteToOrganizer?.trim() || null;
-                        return (
-                          <li key={reg.id}>
-                            <SignupPlayerCard
-                              title={registrationCardTitle(reg)}
-                              statusBadge={signupStatusBadge(reg.status)}
-                              submittedLabel={signupSubmittedLabel(reg)}
-                              rating={stats.rating}
-                              robustnessStatus={stats.robustnessStatus}
-                              robustness={stats.robustness}
-                              onOpenDetails={() => openSignupPlayer(reg)}
-                              detailsLabel={
-                                stats.playerId
-                                  ? `View player: ${reg.displayName}`
-                                  : `Search players for ${reg.displayName}`
-                              }
-                              note={note}
-                              onShowNote={() => openSignupMessage(reg)}
-                              teammates={reg.teammates}
-                              actions={
-                                reg.status === "approved" ? (
-                                  <button
-                                    type="button"
-                                    disabled={saving}
-                                    onClick={() =>
-                                      void onUpdateRegistration(reg.id, {
-                                        paid: !reg.paid,
-                                      })
-                                    }
-                                    className={signupSecondaryBtn}
-                                  >
-                                    {reg.paid ? "Mark unpaid" : "Mark paid"}
-                                  </button>
-                                ) : reg.status === "waitlisted" ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      disabled={saving}
-                                      onClick={() =>
-                                        void onUpdateRegistration(reg.id, {
-                                          status: "approved",
-                                        })
-                                      }
-                                      className={signupApproveBtn}
-                                    >
-                                      Approve
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={saving}
-                                      onClick={() =>
-                                        void onUpdateRegistration(reg.id, {
-                                          status: "rejected",
-                                        })
-                                      }
-                                      className={signupRejectBtn}
-                                    >
-                                      Reject
-                                    </button>
-                                  </>
-                                ) : undefined
-                              }
-                            />
-                          </li>
-                        );
-                      })}
-                    </ul>
+                    </div>
+                    {showApprovedPaidFilters ? (
+                      <div
+                        role="group"
+                        aria-label="Approved payment filters"
+                        className="grid grid-cols-2 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+                      >
+                        <button
+                          type="button"
+                          aria-pressed={signupPaidFilter}
+                          onClick={() => setSignupPaidFilter((v) => !v)}
+                          className={[
+                            "rounded-md px-2 py-1.5 text-center text-xs font-semibold transition",
+                            signupPaidFilter
+                              ? "bg-[var(--felt)] text-white shadow-sm"
+                              : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
+                          ].join(" ")}
+                        >
+                          Paid
+                        </button>
+                        <button
+                          type="button"
+                          aria-pressed={signupUnpaidFilter}
+                          onClick={() => setSignupUnpaidFilter((v) => !v)}
+                          className={[
+                            "rounded-md px-2 py-1.5 text-center text-xs font-semibold transition",
+                            signupUnpaidFilter
+                              ? "bg-[var(--felt)] text-white shadow-sm"
+                              : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
+                          ].join(" ")}
+                        >
+                          Unpaid
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
+                </SurfaceCard>
+
+                {filteredSignups.length === 0 ? (
+                  <SurfaceCard>
+                    <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">
+                      {sortedRegistrations.length === 0
+                        ? "No signups yet."
+                        : "No signups match these filters."}
+                    </p>
+                  </SurfaceCard>
+                ) : (
+                  <ul className="space-y-2">
+                    {filteredSignups.map((reg) => {
+                      const stats = statsForRegistration(reg);
+                      const note = reg.noteToOrganizer?.trim() || null;
+                      const actions =
+                        reg.status === "pending" ? (
+                          <>
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() =>
+                                void onUpdateRegistration(reg.id, {
+                                  status: "approved",
+                                })
+                              }
+                              className={signupApproveBtn}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() =>
+                                void onUpdateRegistration(reg.id, {
+                                  status: "waitlisted",
+                                })
+                              }
+                              className={signupWaitlistBtn}
+                            >
+                              Waitlist
+                            </button>
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() =>
+                                void onUpdateRegistration(reg.id, {
+                                  status: "rejected",
+                                })
+                              }
+                              className={signupRejectBtn}
+                            >
+                              Reject
+                            </button>
+                          </>
+                        ) : reg.status === "approved" ? (
+                          <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() =>
+                              void onUpdateRegistration(reg.id, {
+                                paid: !reg.paid,
+                              })
+                            }
+                            className={signupSecondaryBtn}
+                          >
+                            {reg.paid ? "Mark unpaid" : "Mark paid"}
+                          </button>
+                        ) : reg.status === "waitlisted" ? (
+                          <>
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() =>
+                                void onUpdateRegistration(reg.id, {
+                                  status: "approved",
+                                })
+                              }
+                              className={signupApproveBtn}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() =>
+                                void onUpdateRegistration(reg.id, {
+                                  status: "rejected",
+                                })
+                              }
+                              className={signupRejectBtn}
+                            >
+                              Reject
+                            </button>
+                          </>
+                        ) : undefined;
+
+                      return (
+                        <li key={reg.id} className="animate-rise">
+                          <SignupPlayerCard
+                            title={registrationCardTitle(reg)}
+                            statusBadge={signupStatusBadge(reg.status)}
+                            submittedLabel={signupSubmittedLabel(reg)}
+                            rating={stats.rating}
+                            robustnessStatus={stats.robustnessStatus}
+                            robustness={stats.robustness}
+                            onOpenDetails={() => openSignupPlayer(reg)}
+                            detailsLabel={
+                              stats.playerId
+                                ? `View player: ${reg.displayName}`
+                                : `Search players for ${reg.displayName}`
+                            }
+                            note={note}
+                            onShowNote={() => openSignupMessage(reg)}
+                            teammates={reg.teammates}
+                            actions={actions}
+                          />
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </div>
             ) : null}
 
