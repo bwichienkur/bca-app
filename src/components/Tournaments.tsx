@@ -1315,21 +1315,17 @@ export function Tournaments({
     setSaving(true);
     setActionMsg(null);
     try {
-      const results = await Promise.all(
-        registrationIds.map(async (registrationId) => {
-          const res = await fetch(
-            `/api/tournaments/${selectedId}/registrations`,
-            {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ registrationId, ...patch }),
-            },
-          );
-          const data = (await res.json()) as { error?: string };
-          if (!res.ok) throw new Error(data.error || "Update failed.");
-          return registrationId;
-        }),
-      );
+      const res = await fetch(`/api/tournaments/${selectedId}/registrations`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ registrationIds, ...patch }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        registrations?: TournamentRegistration[];
+      };
+      if (!res.ok) throw new Error(data.error || "Bulk update failed.");
+      const count = data.registrations?.length ?? registrationIds.length;
       setSignupSelectedIds(new Set());
       await refreshDetail();
       const verb =
@@ -1340,7 +1336,7 @@ export function Tournaments({
             : patch.status === "rejected"
               ? "Rejected"
               : "Updated";
-      setActionMsg(`${verb} ${results.length} signup${results.length === 1 ? "" : "s"}.`);
+      setActionMsg(`${verb} ${count} signup${count === 1 ? "" : "s"}.`);
     } catch (err) {
       setActionMsg(err instanceof Error ? err.message : "Bulk update failed.");
       await refreshDetail();
