@@ -1,12 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   formatCalcuttaMoney,
   lotLabel,
   summarizeCalcutta,
 } from "@/lib/tournaments/calcutta";
 import type {
+  CalcuttaLot,
   CalcuttaStatus,
   TournamentCalcutta,
   TournamentRegistration,
@@ -23,6 +30,8 @@ type TournamentCalcuttaPanelProps = {
   variant?: "board" | "manage";
 };
 
+type LotFilter = "unsold" | "sold" | "all";
+
 function dollarsInput(cents: number | null): string {
   if (cents == null) return "";
   const dollars = cents / 100;
@@ -35,6 +44,10 @@ function parseDollars(value: string): number | null {
   const n = Number(trimmed);
   if (!Number.isFinite(n) || n < 0) return null;
   return Math.round(n * 100);
+}
+
+function isLotSold(lot: CalcuttaLot): boolean {
+  return lot.soldPriceCents != null && lot.soldPriceCents > 0;
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -56,6 +69,12 @@ const STATUS_OPTIONS: Array<{ id: CalcuttaStatus; label: string }> = [
   { id: "settled", label: "Settled" },
 ];
 
+const fieldClass =
+  "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none focus:ring-2 focus:ring-[var(--felt-soft)]";
+
+const compactFieldClass =
+  "w-full rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1.5 text-sm text-[var(--ink)] outline-none focus:ring-2 focus:ring-[var(--felt-soft)]";
+
 export function TournamentCalcuttaPanel({
   tournamentId,
   registrations,
@@ -67,6 +86,13 @@ export function TournamentCalcuttaPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [lotFilter, setLotFilter] = useState<LotFilter>("unsold");
+  const [activeLotId, setActiveLotId] = useState<string | null>(null);
+  const [draftBuyer, setDraftBuyer] = useState("");
+  const [draftPrice, setDraftPrice] = useState("");
+  const [expandedLotId, setExpandedLotId] = useState<string | null>(null);
+  const priceInputRef = useRef<HTMLInputElement | null>(null);
+  const buyerInputRef = useRef<HTMLInputElement | null>(null);
 
   const approved = useMemo(
     () => registrations.filter((reg) => reg.status === "approved"),
@@ -108,8 +134,57 @@ export function TournamentCalcuttaPanel({
     [calcutta],
   );
 
-  const save = async (next: TournamentCalcutta, successMsg?: string) => {
-    if (!isOrganizer) return;
+  const unsoldLots = useMemo(
+    () => (calcutta ? calcutta.lots.filter((lot) => !isLotSold(lot)) : []),
+    [calcutta],
+  );
+
+  const filteredLots = useMemo(() => {
+    if (!calcutta) return [];
+    if (lotFilter === "unsold") return calcutta.lots.filter((lot) => !isLotSold(lot));
+    if (lotFilter === "sold") return calcutta.lots.filter((lot) => isLotSold(lot));
+    return calcutta.lots;
+  }, [calcutta, lotFilter]);
+
+  const activeLot = useMemo(() => {
+    if (!calcutta || !activeLotId) return null;
+    return (
+      calcutta.lots.find((lot) => lot.registrationId === activeLotId) ?? null
+    );
+  }, [activeLotId, calcutta]);
+
+  const syncDraftFromLot = useCallback((lot: CalcuttaLot | null) => {
+    if (!lot) {
+      setDraftBuyer("");
+      setDraftPrice("");
+      return;
+    }
+    setDraftBuyer(lot.buyerName);
+    setDraftPrice(dollarsInput(lot.soldPriceCents));
+  }, []);
+
+  // Keep an active lot for the call strip: current selection, else first unsold.
+  useEffect(() => {
+    if (!calcutta) return;
+    if (
+      activeLotId &&
+      calcutta.lots.some((lot) => lot.registrationId === activeLotId)
+    ) {
+      return;
+    }
+    const nextId = unsoldLots[0]?.registrationId ?? calcutta.lots[0]?.registrationId ?? null;
+    setActiveLotId(nextId);
+  }, [activeLotId, calcutta, unsoldLots]);
+
+  useEffect(() => {
+    syncDraftFromLot(activeLot);
+  }, [activeLot, syncDraftFromLot]);
+
+  const save = async (
+    next: TournamentCalcutta,
+    successMsg?: string,
+  ): Promise<TournamentCalcutta | null> => {
+    if (!isOrganizer) return null;
     setSaving(true);
     setError(null);
     setNote(null);
@@ -127,13 +202,95 @@ export function TournamentCalcuttaPanel({
         error?: string;
       };
       if (!res.ok) throw new Error(data.error || "Failed to save Calcutta.");
-      if (data.calcutta) setCalcutta(data.calcutta);
+      if (data.calcutta) {
+        setCalcutta(data.calcutta);
+        setNote(successMsg ?? "Calcutta saved.");
+        return data.calcutta;
+      }
+      setCalcutta(next);
       setNote(successMsg ?? "Calcutta saved.");
+      return next;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save Calcutta.");
+      return null;
     } finally {
       setSaving(false);
     }
+  };
+
+  const patchLot = (
+    registrationId: string,
+    patch: Partial<CalcuttaLot>,
+  ): TournamentCalcutta | null => {
+    if (!calcutta) return null;
+    const lots = calcutta.lots.map((row) =>
+      row.registrationId === registrationId ? { ...row, ...patch } : row,
+    );
+    const next = { ...calcutta, lots };
+    setCalcutta(next);
+    return next;
+  };
+
+  const selectLot = (registrationId: string) => {
+    setActiveLotId(registrationId);
+    setLotFilter((prev) => (prev === "sold" ? "all" : prev));
+    requestAnimationFrame(() => {
+      priceInputRef.current?.focus();
+      priceInputRef.current?.select();
+    });
+  };
+
+  const markSold = async () => {
+    if (!calcutta || !activeLot) return;
+    const cents = parseDollars(draftPrice);
+    if (cents == null || cents <= 0) {
+      setError("Enter a sold price.");
+      priceInputRef.current?.focus();
+      return;
+    }
+    const buyerName = draftBuyer.trim();
+    if (!buyerName) {
+      setError("Enter the buyer name.");
+      buyerInputRef.current?.focus();
+      return;
+    }
+
+    const lots = calcutta.lots.map((row) =>
+      row.registrationId === activeLot.registrationId
+        ? { ...row, buyerName, soldPriceCents: cents }
+        : row,
+    );
+    const next = { ...calcutta, lots, status: "live" as const };
+    setCalcutta(next);
+    const saved = await save(
+      next,
+      `Sold ${lotLabel(regById.get(activeLot.registrationId), activeLot.registrationId)} · ${formatCalcuttaMoney(cents)}`,
+    );
+    const source = saved ?? next;
+    const nextUnsold = source.lots.find(
+      (lot) =>
+        lot.registrationId !== activeLot.registrationId && !isLotSold(lot),
+    );
+    if (nextUnsold) {
+      setActiveLotId(nextUnsold.registrationId);
+      setLotFilter("unsold");
+      requestAnimationFrame(() => {
+        priceInputRef.current?.focus();
+      });
+    } else {
+      setLotFilter("sold");
+    }
+  };
+
+  const clearSale = async (registrationId: string) => {
+    const next = patchLot(registrationId, {
+      soldPriceCents: null,
+      buyerName: "",
+    });
+    if (!next) return;
+    await save(next, "Sale cleared.");
+    setActiveLotId(registrationId);
+    setLotFilter("unsold");
   };
 
   if (loading) {
@@ -205,7 +362,7 @@ export function TournamentCalcuttaPanel({
               </li>
             ) : (
               calcutta.lots.map((lot) => {
-                const sold = lot.soldPriceCents != null;
+                const sold = isLotSold(lot);
                 return (
                   <li
                     key={lot.registrationId}
@@ -213,7 +370,10 @@ export function TournamentCalcuttaPanel({
                   >
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-[var(--ink)]">
-                        {lotLabel(regById.get(lot.registrationId), lot.registrationId)}
+                        {lotLabel(
+                          regById.get(lot.registrationId),
+                          lot.registrationId,
+                        )}
                       </p>
                       <p className="mt-0.5 text-xs text-[var(--muted)]">
                         {sold
@@ -287,13 +447,18 @@ export function TournamentCalcuttaPanel({
     );
   }
 
-  // Organizer manage view
+  const activeReg = activeLot
+    ? regById.get(activeLot.registrationId)
+    : undefined;
+  const settingsOpenByDefault = calcutta.status === "setup";
+
+  // Organizer manage view — live call sheet
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <SectionCard
         eyebrow="Side pot"
         title="Calcutta"
-        description="Organizer ledger for the player/team auction. Record hammer prices, buy-backs, and finishing places — pot payouts update live."
+        description="Call the auction here — enter buyer and hammer price, tap Sold, move on."
         badge={{
           label: "Pot",
           value: formatCalcuttaMoney(summary?.netPotCents ?? 0).replace(
@@ -303,17 +468,13 @@ export function TournamentCalcuttaPanel({
         }}
       />
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-3 gap-2">
         <Stat
-          label="Gross pot"
+          label="Gross"
           value={formatCalcuttaMoney(summary?.grossPotCents ?? 0)}
         />
         <Stat
-          label="House cut"
-          value={formatCalcuttaMoney(summary?.houseCutCents ?? 0)}
-        />
-        <Stat
-          label="Net pot"
+          label="Net"
           value={formatCalcuttaMoney(summary?.netPotCents ?? 0)}
         />
         <Stat
@@ -322,147 +483,167 @@ export function TournamentCalcuttaPanel({
         />
       </div>
 
-      <section className="space-y-3 overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-[var(--shadow)] sm:p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <label className="flex items-center gap-2 text-sm font-semibold text-[var(--ink)]">
-            <input
-              type="checkbox"
-              checked={calcutta.enabled}
-              onChange={(event) =>
-                setCalcutta({ ...calcutta, enabled: event.target.checked })
-              }
-            />
-            Calcutta enabled (public board)
-          </label>
-          <div
-            role="group"
-            aria-label="Calcutta status"
-            className="inline-flex gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
-          >
-            {STATUS_OPTIONS.map((item) => {
-              const selected = calcutta.status === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setCalcutta({ ...calcutta, status: item.id })}
-                  className={[
-                    "rounded-md px-2.5 py-1 text-xs font-semibold transition",
-                    selected
-                      ? "bg-[var(--felt)] text-white"
-                      : "text-[var(--muted)] hover:text-[var(--ink)]",
-                  ].join(" ")}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="grid gap-2 sm:grid-cols-3">
-          <label className="block min-w-0 text-sm">
-            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-              Min bid ($)
-            </span>
-            <input
-              inputMode="decimal"
-              value={dollarsInput(calcutta.minBidCents)}
-              onChange={(event) => {
-                const cents = parseDollars(event.target.value);
-                setCalcutta({
-                  ...calcutta,
-                  minBidCents: cents ?? 0,
-                });
-              }}
-              className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none focus:ring-2 focus:ring-[var(--felt-soft)]"
-            />
-          </label>
-          <label className="block min-w-0 text-sm">
-            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-              House cut (%)
-            </span>
-            <input
-              inputMode="decimal"
-              value={String(calcutta.houseCutPercent)}
-              onChange={(event) => {
-                const n = Number(event.target.value);
-                setCalcutta({
-                  ...calcutta,
-                  houseCutPercent: Number.isFinite(n)
-                    ? Math.min(100, Math.max(0, n))
-                    : 0,
-                });
-              }}
-              className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none focus:ring-2 focus:ring-[var(--felt-soft)]"
-            />
-          </label>
-          <label className="flex items-end gap-2 pb-2 text-sm font-semibold text-[var(--ink)]">
-            <input
-              type="checkbox"
-              checked={calcutta.allowBuyBackHalf}
-              onChange={(event) =>
-                setCalcutta({
-                  ...calcutta,
-                  allowBuyBackHalf: event.target.checked,
-                })
-              }
-            />
-            Allow buy-back half
-          </label>
-        </div>
-
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-            Payout % by place
-          </p>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {calcutta.payoutTiers.map((tier, index) => (
-              <label key={tier.place} className="block min-w-0 text-sm">
-                <span className="mb-1 block text-[11px] text-[var(--muted)]">
-                  {tier.place}
-                  {tier.place === 1
-                    ? "st"
-                    : tier.place === 2
-                      ? "nd"
-                      : tier.place === 3
-                        ? "rd"
-                        : "th"}{" "}
-                  (%)
-                </span>
-                <input
-                  inputMode="decimal"
-                  value={String(tier.percent)}
-                  onChange={(event) => {
-                    const n = Number(event.target.value);
-                    const payoutTiers = calcutta.payoutTiers.map((row, i) =>
-                      i === index
-                        ? {
-                            ...row,
-                            percent: Number.isFinite(n)
-                              ? Math.max(0, n)
-                              : 0,
-                          }
-                        : row,
-                    );
-                    setCalcutta({ ...calcutta, payoutTiers });
-                  }}
-                  className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none focus:ring-2 focus:ring-[var(--felt-soft)]"
-                />
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() => void save(calcutta, "Settings saved.")}
-          className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div
+          role="group"
+          aria-label="Calcutta status"
+          className="inline-flex gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
         >
-          {saving ? "Saving…" : "Save settings"}
-        </button>
-      </section>
+          {STATUS_OPTIONS.map((item) => {
+            const selected = calcutta.status === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  const next = { ...calcutta, status: item.id };
+                  setCalcutta(next);
+                  void save(next, `Status: ${item.label}.`);
+                }}
+                className={[
+                  "rounded-md px-2.5 py-1 text-xs font-semibold transition",
+                  selected
+                    ? "bg-[var(--felt)] text-white"
+                    : "text-[var(--muted)] hover:text-[var(--ink)]",
+                ].join(" ")}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+        <label className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--ink)]">
+          <input
+            type="checkbox"
+            checked={calcutta.enabled}
+            onChange={(event) => {
+              const next = { ...calcutta, enabled: event.target.checked };
+              setCalcutta(next);
+              void save(
+                next,
+                event.target.checked
+                  ? "Public board on."
+                  : "Public board off.",
+              );
+            }}
+          />
+          Public board
+        </label>
+      </div>
+
+      <details
+        className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]"
+        open={settingsOpenByDefault}
+      >
+        <summary className="cursor-pointer list-none border-b border-[var(--line)] px-3 py-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)] sm:px-4 [&::-webkit-details-marker]:hidden">
+          Settings · min {formatCalcuttaMoney(calcutta.minBidCents)} · house{" "}
+          {calcutta.houseCutPercent}%
+        </summary>
+        <div className="space-y-3 p-3 sm:p-4">
+          <div className="grid gap-2 sm:grid-cols-3">
+            <label className="block min-w-0 text-sm">
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                Min bid ($)
+              </span>
+              <input
+                inputMode="decimal"
+                value={dollarsInput(calcutta.minBidCents)}
+                onChange={(event) => {
+                  const cents = parseDollars(event.target.value);
+                  setCalcutta({
+                    ...calcutta,
+                    minBidCents: cents ?? 0,
+                  });
+                }}
+                className={fieldClass}
+              />
+            </label>
+            <label className="block min-w-0 text-sm">
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                House cut (%)
+              </span>
+              <input
+                inputMode="decimal"
+                value={String(calcutta.houseCutPercent)}
+                onChange={(event) => {
+                  const n = Number(event.target.value);
+                  setCalcutta({
+                    ...calcutta,
+                    houseCutPercent: Number.isFinite(n)
+                      ? Math.min(100, Math.max(0, n))
+                      : 0,
+                  });
+                }}
+                className={fieldClass}
+              />
+            </label>
+            <label className="flex items-end gap-2 pb-2 text-sm font-semibold text-[var(--ink)]">
+              <input
+                type="checkbox"
+                checked={calcutta.allowBuyBackHalf}
+                onChange={(event) =>
+                  setCalcutta({
+                    ...calcutta,
+                    allowBuyBackHalf: event.target.checked,
+                  })
+                }
+              />
+              Allow buy-back half
+            </label>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+              Payout % by place
+            </p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {calcutta.payoutTiers.map((tier, index) => (
+                <label key={tier.place} className="block min-w-0 text-sm">
+                  <span className="mb-1 block text-[11px] text-[var(--muted)]">
+                    {tier.place}
+                    {tier.place === 1
+                      ? "st"
+                      : tier.place === 2
+                        ? "nd"
+                        : tier.place === 3
+                          ? "rd"
+                          : "th"}{" "}
+                    (%)
+                  </span>
+                  <input
+                    inputMode="decimal"
+                    value={String(tier.percent)}
+                    onChange={(event) => {
+                      const n = Number(event.target.value);
+                      const payoutTiers = calcutta.payoutTiers.map((row, i) =>
+                        i === index
+                          ? {
+                              ...row,
+                              percent: Number.isFinite(n)
+                                ? Math.max(0, n)
+                                : 0,
+                            }
+                          : row,
+                      );
+                      setCalcutta({ ...calcutta, payoutTiers });
+                    }}
+                    className={fieldClass}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => void save(calcutta, "Settings saved.")}
+            className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save settings"}
+          </button>
+        </div>
+      </details>
 
       {note ? (
         <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
@@ -475,209 +656,388 @@ export function TournamentCalcuttaPanel({
         </p>
       ) : null}
 
-      <section className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] px-3 py-3 sm:px-4">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-              Auction ledger
-            </p>
-            <p className="mt-0.5 text-xs text-[var(--muted)]">
-              One lot per approved entry. Record hammer price and settlement.
-            </p>
-          </div>
-          <button
-            type="button"
-            disabled={saving || approved.length === 0}
-            onClick={() => void save(calcutta, "Ledger saved.")}
-            className="rounded-[var(--radius)] bg-[var(--felt)] px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "Save ledger"}
-          </button>
-        </div>
+      {approved.length === 0 ? (
+        <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-4 py-6 text-center text-sm text-[var(--muted)] shadow-[var(--shadow)]">
+          Approve signups first — Calcutta lots follow the field board.
+        </p>
+      ) : (
+        <>
+          {activeLot ? (
+            <section className="sticky top-0 z-20 space-y-3 rounded-[var(--radius)] border border-[var(--felt)]/35 bg-[linear-gradient(180deg,rgba(29,110,158,0.08),var(--surface)_40%)] p-3 shadow-[var(--shadow)] sm:p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--felt-deep)]">
+                    Now selling
+                    {unsoldLots.length > 0
+                      ? ` · ${unsoldLots.length} left`
+                      : " · all sold"}
+                  </p>
+                  <p className="mt-0.5 font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight text-[var(--ink)]">
+                    {lotLabel(activeReg, activeLot.registrationId)}
+                  </p>
+                  <p className="mt-0.5 text-xs text-[var(--muted)]">
+                    {activeReg?.ratingAtSignup != null
+                      ? `Fargo ${activeReg.ratingAtSignup}`
+                      : "No Fargo on file"}
+                    {isLotSold(activeLot)
+                      ? ` · currently ${formatCalcuttaMoney(activeLot.soldPriceCents ?? 0)}`
+                      : ""}
+                  </p>
+                </div>
+                <p className="text-xs tabular-nums text-[var(--muted)]">
+                  Min {formatCalcuttaMoney(calcutta.minBidCents)}
+                </p>
+              </div>
 
-        {approved.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">
-            Approve signups first — Calcutta lots follow the field board.
-          </p>
-        ) : (
-          <ul className="divide-y divide-[var(--line)]">
-            {calcutta.lots.map((lot, index) => {
-              const reg = regById.get(lot.registrationId);
-              return (
-                <li key={lot.registrationId} className="space-y-2.5 px-3 py-3.5 sm:px-4">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)]">
-                        {lotLabel(reg, lot.registrationId)}
-                      </p>
-                      {reg ? (
-                        <p className="mt-0.5 text-xs text-[var(--muted)]">
-                          {reg.displayName}
-                          {reg.ratingAtSignup != null
-                            ? ` · Fargo ${reg.ratingAtSignup}`
-                            : ""}
-                        </p>
+              <form
+                className="grid grid-cols-[1fr_5.5rem_auto] items-end gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void markSold();
+                }}
+              >
+                <label className="block min-w-0">
+                  <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                    Buyer
+                  </span>
+                  <input
+                    ref={buyerInputRef}
+                    value={draftBuyer}
+                    onChange={(event) => setDraftBuyer(event.target.value)}
+                    placeholder="Buyer name"
+                    autoComplete="off"
+                    className={compactFieldClass}
+                  />
+                </label>
+                <label className="block min-w-0">
+                  <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                    Sold $
+                  </span>
+                  <input
+                    ref={priceInputRef}
+                    inputMode="decimal"
+                    value={draftPrice}
+                    onChange={(event) => setDraftPrice(event.target.value)}
+                    placeholder={dollarsInput(calcutta.minBidCents) || "0"}
+                    className={`${compactFieldClass} tabular-nums`}
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-[var(--radius)] bg-[linear-gradient(180deg,#2f8fc2_0%,var(--felt)_45%,var(--felt-soft)_100%)] px-3.5 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {saving ? "…" : "Sold"}
+                </button>
+              </form>
+            </section>
+          ) : null}
+
+          <section className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] px-3 py-2.5 sm:px-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                Lots
+              </p>
+              <div
+                role="group"
+                aria-label="Lot filter"
+                className="inline-flex gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+              >
+                {(
+                  [
+                    ["unsold", `Unsold ${unsoldLots.length}`],
+                    [
+                      "sold",
+                      `Sold ${summary?.soldCount ?? 0}`,
+                    ],
+                    ["all", `All ${calcutta.lots.length}`],
+                  ] as const
+                ).map(([id, label]) => {
+                  const selected = lotFilter === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setLotFilter(id)}
+                      className={[
+                        "rounded-md px-2 py-1 text-[11px] font-semibold transition",
+                        selected
+                          ? "bg-[var(--ink)] text-white"
+                          : "text-[var(--muted)] hover:text-[var(--ink)]",
+                      ].join(" ")}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {filteredLots.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">
+                {lotFilter === "unsold"
+                  ? "Every lot is sold."
+                  : lotFilter === "sold"
+                    ? "No sales recorded yet."
+                    : "No lots yet."}
+              </p>
+            ) : (
+              <ul className="divide-y divide-[var(--line)]">
+                {filteredLots.map((lot) => {
+                  const reg = regById.get(lot.registrationId);
+                  const sold = isLotSold(lot);
+                  const active = lot.registrationId === activeLotId;
+                  const expanded = lot.registrationId === expandedLotId;
+                  const lotIndex =
+                    calcutta.lots.findIndex(
+                      (row) => row.registrationId === lot.registrationId,
+                    ) + 1;
+                  return (
+                    <li
+                      key={lot.registrationId}
+                      className={[
+                        "px-3 py-2 sm:px-4",
+                        active
+                          ? "bg-[color-mix(in_srgb,var(--felt)_10%,transparent)]"
+                          : "",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => selectLot(lot.registrationId)}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <div className="flex items-baseline justify-between gap-2">
+                            <p className="truncate font-[family-name:var(--font-display)] text-sm font-semibold text-[var(--ink)]">
+                              <span className="mr-1.5 text-[10px] font-semibold tabular-nums text-[var(--muted)]">
+                                {lotIndex}
+                              </span>
+                              {lotLabel(reg, lot.registrationId)}
+                              {reg?.ratingAtSignup != null ? (
+                                <span className="ml-1.5 font-normal tabular-nums text-[var(--muted)]">
+                                  {reg.ratingAtSignup}
+                                </span>
+                              ) : null}
+                            </p>
+                            <p
+                              className={[
+                                "shrink-0 text-sm font-semibold tabular-nums",
+                                sold
+                                  ? "text-[var(--felt-deep)]"
+                                  : "text-[var(--muted)]",
+                              ].join(" ")}
+                            >
+                              {sold
+                                ? formatCalcuttaMoney(lot.soldPriceCents ?? 0)
+                                : "—"}
+                            </p>
+                          </div>
+                          <p className="mt-0.5 truncate text-[11px] text-[var(--muted)]">
+                            {sold
+                              ? lot.buyerName || "Buyer not named"
+                              : active
+                                ? "Up next — tap to load"
+                                : "Unsold — tap to sell"}
+                            {lot.buyBackHalf ? " · ½ buy-back" : ""}
+                            {lot.place != null ? ` · P${lot.place}` : ""}
+                          </p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedLotId(
+                              expanded ? null : lot.registrationId,
+                            )
+                          }
+                          className="shrink-0 rounded-md border border-[var(--line)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--muted)] hover:text-[var(--ink)]"
+                          aria-expanded={expanded}
+                        >
+                          {expanded ? "Less" : "More"}
+                        </button>
+                      </div>
+
+                      {expanded ? (
+                        <div className="mt-2 space-y-2 border-t border-[var(--line)] pt-2">
+                          <div className="grid grid-cols-[1fr_5.5rem] gap-2">
+                            <label className="block min-w-0">
+                              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                                Buyer
+                              </span>
+                              <input
+                                value={lot.buyerName}
+                                onChange={(event) => {
+                                  patchLot(lot.registrationId, {
+                                    buyerName: event.target.value,
+                                  });
+                                }}
+                                onBlur={(event) => {
+                                  const next = patchLot(lot.registrationId, {
+                                    buyerName: event.target.value,
+                                  });
+                                  if (next) void save(next);
+                                }}
+                                className={compactFieldClass}
+                              />
+                            </label>
+                            <label className="block min-w-0">
+                              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                                Sold $
+                              </span>
+                              <input
+                                inputMode="decimal"
+                                value={dollarsInput(lot.soldPriceCents)}
+                                onChange={(event) => {
+                                  patchLot(lot.registrationId, {
+                                    soldPriceCents: parseDollars(
+                                      event.target.value,
+                                    ),
+                                  });
+                                }}
+                                onBlur={(event) => {
+                                  const next = patchLot(lot.registrationId, {
+                                    soldPriceCents: parseDollars(
+                                      event.target.value,
+                                    ),
+                                  });
+                                  if (next) void save(next);
+                                }}
+                                className={`${compactFieldClass} tabular-nums`}
+                              />
+                            </label>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <label className="block min-w-0">
+                              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                                Place
+                              </span>
+                              <input
+                                inputMode="numeric"
+                                value={
+                                  lot.place == null ? "" : String(lot.place)
+                                }
+                                onChange={(event) => {
+                                  const raw = event.target.value.trim();
+                                  const place =
+                                    raw === ""
+                                      ? null
+                                      : Math.max(
+                                          1,
+                                          Math.floor(Number(raw)) || 1,
+                                        );
+                                  patchLot(lot.registrationId, { place });
+                                }}
+                                onBlur={(event) => {
+                                  const raw = event.target.value.trim();
+                                  const place =
+                                    raw === ""
+                                      ? null
+                                      : Math.max(
+                                          1,
+                                          Math.floor(Number(raw)) || 1,
+                                        );
+                                  const next = patchLot(lot.registrationId, {
+                                    place,
+                                  });
+                                  if (next) void save(next);
+                                }}
+                                className={compactFieldClass}
+                              />
+                            </label>
+                            <label className="block min-w-0">
+                              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                                Notes
+                              </span>
+                              <input
+                                value={lot.notes}
+                                onChange={(event) => {
+                                  patchLot(lot.registrationId, {
+                                    notes: event.target.value,
+                                  });
+                                }}
+                                onBlur={(event) => {
+                                  const next = patchLot(lot.registrationId, {
+                                    notes: event.target.value,
+                                  });
+                                  if (next) void save(next);
+                                }}
+                                className={compactFieldClass}
+                              />
+                            </label>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-[var(--ink)]">
+                            {calcutta.allowBuyBackHalf ? (
+                              <label className="inline-flex items-center gap-1.5">
+                                <input
+                                  type="checkbox"
+                                  checked={lot.buyBackHalf}
+                                  onChange={(event) => {
+                                    const next = patchLot(lot.registrationId, {
+                                      buyBackHalf: event.target.checked,
+                                    });
+                                    if (next) void save(next);
+                                  }}
+                                />
+                                Buy-back half
+                              </label>
+                            ) : null}
+                            <label className="inline-flex items-center gap-1.5">
+                              <input
+                                type="checkbox"
+                                checked={lot.buyerPaid}
+                                onChange={(event) => {
+                                  const next = patchLot(lot.registrationId, {
+                                    buyerPaid: event.target.checked,
+                                  });
+                                  if (next) void save(next);
+                                }}
+                              />
+                              Buyer paid
+                            </label>
+                            {calcutta.allowBuyBackHalf && lot.buyBackHalf ? (
+                              <label className="inline-flex items-center gap-1.5">
+                                <input
+                                  type="checkbox"
+                                  checked={lot.playerPaidBuyBack}
+                                  onChange={(event) => {
+                                    const next = patchLot(lot.registrationId, {
+                                      playerPaidBuyBack: event.target.checked,
+                                    });
+                                    if (next) void save(next);
+                                  }}
+                                />
+                                Player paid half
+                              </label>
+                            ) : null}
+                            {sold ? (
+                              <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() =>
+                                  void clearSale(lot.registrationId)
+                                }
+                                className="text-[var(--danger)]"
+                              >
+                                Clear sale
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
                       ) : null}
-                    </div>
-                    <p className="text-xs tabular-nums text-[var(--muted)]">
-                      Lot {index + 1}
-                    </p>
-                  </div>
-
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <label className="block min-w-0 text-sm">
-                      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                        Buyer
-                      </span>
-                      <input
-                        value={lot.buyerName}
-                        onChange={(event) => {
-                          const lots = calcutta.lots.map((row) =>
-                            row.registrationId === lot.registrationId
-                              ? { ...row, buyerName: event.target.value }
-                              : row,
-                          );
-                          setCalcutta({ ...calcutta, lots });
-                        }}
-                        placeholder="Buyer name"
-                        className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none focus:ring-2 focus:ring-[var(--felt-soft)]"
-                      />
-                    </label>
-                    <label className="block min-w-0 text-sm">
-                      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                        Sold price ($)
-                      </span>
-                      <input
-                        inputMode="decimal"
-                        value={dollarsInput(lot.soldPriceCents)}
-                        onChange={(event) => {
-                          const cents = parseDollars(event.target.value);
-                          const lots = calcutta.lots.map((row) =>
-                            row.registrationId === lot.registrationId
-                              ? { ...row, soldPriceCents: cents }
-                              : row,
-                          );
-                          setCalcutta({ ...calcutta, lots });
-                        }}
-                        placeholder={dollarsInput(calcutta.minBidCents)}
-                        className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none focus:ring-2 focus:ring-[var(--felt-soft)]"
-                      />
-                    </label>
-                    <label className="block min-w-0 text-sm">
-                      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                        Finish place
-                      </span>
-                      <input
-                        inputMode="numeric"
-                        value={lot.place == null ? "" : String(lot.place)}
-                        onChange={(event) => {
-                          const raw = event.target.value.trim();
-                          const place =
-                            raw === ""
-                              ? null
-                              : Math.max(1, Math.floor(Number(raw)) || 1);
-                          const lots = calcutta.lots.map((row) =>
-                            row.registrationId === lot.registrationId
-                              ? { ...row, place }
-                              : row,
-                          );
-                          setCalcutta({ ...calcutta, lots });
-                        }}
-                        placeholder="—"
-                        className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none focus:ring-2 focus:ring-[var(--felt-soft)]"
-                      />
-                    </label>
-                    <label className="block min-w-0 text-sm">
-                      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                        Notes
-                      </span>
-                      <input
-                        value={lot.notes}
-                        onChange={(event) => {
-                          const lots = calcutta.lots.map((row) =>
-                            row.registrationId === lot.registrationId
-                              ? { ...row, notes: event.target.value }
-                              : row,
-                          );
-                          setCalcutta({ ...calcutta, lots });
-                        }}
-                        placeholder="Optional"
-                        className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none focus:ring-2 focus:ring-[var(--felt-soft)]"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="flex flex-wrap gap-3 text-xs font-semibold text-[var(--ink)]">
-                    {calcutta.allowBuyBackHalf ? (
-                      <label className="inline-flex items-center gap-1.5">
-                        <input
-                          type="checkbox"
-                          checked={lot.buyBackHalf}
-                          onChange={(event) => {
-                            const lots = calcutta.lots.map((row) =>
-                              row.registrationId === lot.registrationId
-                                ? {
-                                    ...row,
-                                    buyBackHalf: event.target.checked,
-                                  }
-                                : row,
-                            );
-                            setCalcutta({ ...calcutta, lots });
-                          }}
-                        />
-                        Buy-back half
-                      </label>
-                    ) : null}
-                    <label className="inline-flex items-center gap-1.5">
-                      <input
-                        type="checkbox"
-                        checked={lot.buyerPaid}
-                        onChange={(event) => {
-                          const lots = calcutta.lots.map((row) =>
-                            row.registrationId === lot.registrationId
-                              ? { ...row, buyerPaid: event.target.checked }
-                              : row,
-                          );
-                          setCalcutta({ ...calcutta, lots });
-                        }}
-                      />
-                      Buyer paid
-                    </label>
-                    {calcutta.allowBuyBackHalf && lot.buyBackHalf ? (
-                      <label className="inline-flex items-center gap-1.5">
-                        <input
-                          type="checkbox"
-                          checked={lot.playerPaidBuyBack}
-                          onChange={(event) => {
-                            const lots = calcutta.lots.map((row) =>
-                              row.registrationId === lot.registrationId
-                                ? {
-                                    ...row,
-                                    playerPaidBuyBack: event.target.checked,
-                                  }
-                                : row,
-                            );
-                            setCalcutta({ ...calcutta, lots });
-                          }}
-                        />
-                        Player paid half
-                      </label>
-                    ) : null}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        </>
+      )}
 
       {summary && summary.payouts.length ? (
-        <section className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
-          <div className="border-b border-[var(--line)] px-3 py-2.5 sm:px-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-              Projected payouts
-            </p>
-          </div>
+        <details className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+          <summary className="cursor-pointer list-none border-b border-[var(--line)] px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)] sm:px-4 [&::-webkit-details-marker]:hidden">
+            Projected payouts
+          </summary>
           <ul className="divide-y divide-[var(--line)]">
             {summary.payouts.map((row) => (
               <li
@@ -702,7 +1062,7 @@ export function TournamentCalcuttaPanel({
               </li>
             ))}
           </ul>
-        </section>
+        </details>
       ) : null}
     </div>
   );
