@@ -141,10 +141,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
 
     const result = await updateRegistration(id, body.registrationId, {
-      status: body.status,
-      paid: body.paid,
-      checkedIn: body.checkedIn,
-      noteToOrganizer: body.noteToOrganizer,
+      ...(body.status !== undefined ? { status: body.status } : {}),
+      ...(body.paid !== undefined ? { paid: body.paid } : {}),
+      ...(body.checkedIn !== undefined ? { checkedIn: body.checkedIn } : {}),
+      ...(body.noteToOrganizer !== undefined
+        ? { noteToOrganizer: body.noteToOrganizer }
+        : {}),
       ...(ratingAtSignup !== undefined ? { ratingAtSignup } : {}),
     });
 

@@ -243,8 +243,21 @@ export async function deleteTournament(id: string): Promise<boolean> {
 function normalizeRegistration(
   raw: TournamentRegistration,
 ): TournamentRegistration {
+  const validStatus =
+    raw.status === "pending" ||
+    raw.status === "approved" ||
+    raw.status === "rejected" ||
+    raw.status === "withdrawn" ||
+    raw.status === "waitlisted";
+
   return {
     ...raw,
+    // Recover rows wiped by older PATCH payloads that spread `status: undefined`.
+    status: validStatus
+      ? raw.status
+      : raw.paid || raw.checkedIn
+        ? "approved"
+        : "pending",
     teamName: raw.teamName ?? null,
     teammates: Array.isArray(raw.teammates)
       ? raw.teammates
@@ -585,14 +598,23 @@ export async function updateRegistration(
     checkedInAt = null;
   }
 
+  const definedPatch = Object.fromEntries(
+    Object.entries(patch).filter(([, value]) => value !== undefined),
+  ) as Partial<
+    Pick<
+      TournamentRegistration,
+      "status" | "paid" | "checkedIn" | "noteToOrganizer" | "ratingAtSignup"
+    >
+  >;
+
   const nextReg: TournamentRegistration = {
     ...existing,
-    ...patch,
+    ...definedPatch,
     ratingAtSignup:
-      patch.ratingAtSignup !== undefined
-        ? patch.ratingAtSignup == null
+      definedPatch.ratingAtSignup !== undefined
+        ? definedPatch.ratingAtSignup == null
           ? null
-          : Math.round(patch.ratingAtSignup)
+          : Math.round(definedPatch.ratingAtSignup)
         : existing.ratingAtSignup,
     checkedInAt,
     updatedAt: new Date().toISOString(),
