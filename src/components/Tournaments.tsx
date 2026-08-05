@@ -102,7 +102,7 @@ const signupApproveBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(
 const signupWaitlistBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--amber)_55%,transparent)] bg-[color-mix(in_srgb,var(--amber)_18%,var(--surface-2))] text-[var(--amber)] hover:bg-[color-mix(in_srgb,var(--amber)_28%,var(--surface-2))]`;
 const signupRejectBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[var(--danger-bg)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_28%,var(--surface-2))]`;
 const signupInlineIconBtn =
-  "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt-deep)] transition hover:bg-[color-mix(in_srgb,var(--chalk)_18%,transparent)] hover:text-[var(--chalk)]";
+  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt-deep)] transition hover:bg-[color-mix(in_srgb,var(--chalk)_18%,transparent)] hover:text-[var(--chalk)]";
 const signupBulkBtn =
   "inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-[var(--radius)] px-2 text-xs font-semibold transition disabled:opacity-50 sm:flex-none sm:px-3";
 const signupBulkApproveBtn = `${signupBulkBtn} border border-[color-mix(in_srgb,var(--chalk)_45%,transparent)] bg-[color-mix(in_srgb,var(--chalk)_14%,var(--surface-2))] text-[var(--felt-deep)] hover:bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))]`;
@@ -239,12 +239,11 @@ function MessageIcon({ className }: { className?: string }) {
   );
 }
 
-function InfoIcon({ className }: { className?: string }) {
+function EyeIcon({ className }: { className?: string }) {
   return (
     <TabIconShell className={className}>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 10.5V17" />
-      <path d="M12 7.5h.01" />
+      <path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" />
+      <circle cx="12" cy="12" r="2.5" />
     </TabIconShell>
   );
 }
@@ -390,21 +389,16 @@ function SignupMessageDialog({
   );
 }
 
-/** Compact relative/short timestamp for signup queue scanning. */
+/** Compact date + time for signup submission lines. */
 function formatSignupSubmittedAt(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  const diffMs = Date.now() - d.getTime();
-  if (diffMs < 0) {
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  }
-  const mins = Math.floor(diffMs / 60_000);
-  if (mins < 60) return `${Math.max(1, mins)}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 /** Dense request row for organizer signup review. */
@@ -413,7 +407,6 @@ function SignupRequestRow({
   status,
   showStatus,
   submittedLabel,
-  submittedTitle,
   rating,
   onOpenDetails,
   detailsLabel,
@@ -429,7 +422,6 @@ function SignupRequestRow({
   status: TournamentRegistration["status"];
   showStatus?: boolean;
   submittedLabel: string;
-  submittedTitle?: string;
   rating: number | null;
   onOpenDetails: () => void;
   detailsLabel: string;
@@ -475,7 +467,7 @@ function SignupRequestRow({
         ) : null}
 
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-0.5 gap-y-0.5">
             <p className="min-w-0 font-[family-name:var(--font-display)] text-[15px] font-semibold leading-snug tracking-tight text-[var(--ink)]">
               <span className="break-words">{title}</span>
               <span className="mx-1.5 font-normal text-[var(--muted)]">·</span>
@@ -483,6 +475,15 @@ function SignupRequestRow({
                 {rating ?? "—"}
               </span>
             </p>
+            <button
+              type="button"
+              onClick={onOpenDetails}
+              className={signupInlineIconBtn}
+              aria-label={detailsLabel}
+              title="View player"
+            >
+              <EyeIcon className="h-3.5 w-3.5" />
+            </button>
             {note ? (
               <button
                 type="button"
@@ -494,37 +495,26 @@ function SignupRequestRow({
                 <MessageIcon className="h-3.5 w-3.5" />
               </button>
             ) : null}
-            <span
-              className="text-[11px] font-medium tabular-nums text-[var(--muted)]"
-              title={submittedTitle ?? submittedLabel}
-            >
-              {submittedLabel}
-            </span>
-            {showStatus ? signupStatusBadge(status) : null}
+            {showStatus ? (
+              <span className="ml-1">{signupStatusBadge(status)}</span>
+            ) : null}
           </div>
 
-          {teammateHint ? (
-            <p className="mt-0.5 truncate text-[11px] leading-tight text-[var(--muted)]">
-              {teammateHint}
-            </p>
-          ) : null}
-
-          {actions ? (
-            <div className="mt-1.5 flex items-center justify-start gap-1.5">
-              {actions}
-            </div>
-          ) : null}
+          <p className="mt-0.5 text-[11px] leading-tight text-[var(--muted)]">
+            {submittedLabel}
+            {teammateHint ? (
+              <span className="block truncate sm:inline sm:before:content-['·_']">
+                {teammateHint}
+              </span>
+            ) : null}
+          </p>
         </div>
 
-        <button
-          type="button"
-          onClick={onOpenDetails}
-          className={`${signupInlineIconBtn} self-center`}
-          aria-label={detailsLabel}
-          title="Player details"
-        >
-          <InfoIcon className="h-4 w-4" />
-        </button>
+        {actions ? (
+          <div className="flex shrink-0 items-center gap-1.5 self-center">
+            {actions}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -1270,20 +1260,7 @@ export function Tournaments({
   };
 
   const signupSubmittedLabel = (reg: TournamentRegistration) =>
-    formatSignupSubmittedAt(reg.createdAt);
-
-  const signupSubmittedTitle = (reg: TournamentRegistration) => {
-    const d = new Date(reg.createdAt);
-    if (Number.isNaN(d.getTime())) return reg.createdAt;
-    return d.toLocaleString(undefined, {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  };
-
+    `Submitted ${formatSignupSubmittedAt(reg.createdAt)}`;
 
   const setTournamentStatus = async (
     id: string,
@@ -2743,7 +2720,6 @@ export function Tournaments({
                               status={reg.status}
                               showStatus={signupStatusFilter !== "pending"}
                               submittedLabel={signupSubmittedLabel(reg)}
-                              submittedTitle={signupSubmittedTitle(reg)}
                               rating={stats.rating}
                               onOpenDetails={() => openSignupPlayer(reg)}
                               detailsLabel={
