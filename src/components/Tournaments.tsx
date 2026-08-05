@@ -122,7 +122,8 @@ const fieldToggleBtn =
   "inline-flex h-7 shrink-0 items-center justify-center rounded-[var(--radius)] px-2.5 text-[11px] font-semibold transition disabled:opacity-50";
 const fieldToggleIdle = `${fieldToggleBtn} border border-[var(--line)] bg-[var(--surface-2)] text-[var(--muted)] hover:text-[var(--ink)]`;
 const fieldToggleCheckedIn = `${fieldToggleBtn} bg-[var(--felt)] text-white`;
-const fieldTogglePaid = `${fieldToggleBtn} bg-[var(--amber)] text-[#1a140c]`;
+const fieldPaidBadge =
+  "inline-flex h-7 shrink-0 items-center justify-center rounded-[var(--radius)] bg-[var(--amber)] px-2.5 text-[11px] font-semibold text-[#1a140c]";
 
 function statusTone(status: TournamentStatus): string {
   switch (status) {
@@ -3031,23 +3032,28 @@ export function Tournaments({
                                       ? fieldToggleCheckedIn
                                       : fieldToggleIdle
                                   }
+                                  aria-pressed={reg.checkedIn}
                                 >
                                   {reg.checkedIn ? "In" : "Check in"}
                                 </button>
-                                <button
-                                  type="button"
-                                  disabled={saving}
-                                  onClick={() =>
-                                    void onUpdateRegistration(reg.id, {
-                                      paid: !reg.paid,
-                                    })
-                                  }
-                                  className={
-                                    reg.paid ? fieldTogglePaid : fieldToggleIdle
-                                  }
-                                >
-                                  {reg.paid ? "Paid" : "Pay"}
-                                </button>
+                                {reg.paid ? (
+                                  <span className={fieldPaidBadge} title="Paid">
+                                    Paid
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled={saving}
+                                    onClick={() =>
+                                      void onUpdateRegistration(reg.id, {
+                                        paid: true,
+                                      })
+                                    }
+                                    className={fieldToggleIdle}
+                                  >
+                                    Pay
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </li>
