@@ -14,6 +14,7 @@ import {
 import { createPortal } from "react-dom";
 import {
   BRACKET_FORMAT_OPTIONS,
+  CREATE_STATUS_OPTIONS,
   defaultTeamSize,
   entryNoun,
   EVENT_TYPE_OPTIONS,
@@ -23,9 +24,13 @@ import {
   GAME_TYPE_OPTIONS,
   HANDICAP_SYSTEM_OPTIONS,
   maxEntriesLabel,
+  meetsMinRobustness,
+  MIN_ROBUSTNESS_OPTIONS,
+  minRobustnessLabel,
   ORGANIZER_STATUS_OPTIONS,
   PAY_METHOD_OPTIONS,
   REGISTRATION_MODE_OPTIONS,
+  robustnessStatusLabel,
   RULESET_OPTIONS,
   STATUS_LABELS,
   TABLE_SIZE_OPTIONS,
@@ -834,6 +839,7 @@ const emptyForm = (): EventFormState => ({
   losersRaceTo: 5,
   minFargo: null,
   maxFargo: null,
+  minRobustnessStatus: null,
   unratedPolicy: "message-organizer",
   maxPlayers: 32,
   teamSize: 1,
@@ -883,6 +889,7 @@ function tournamentToForm(t: TournamentListItem): EventFormState {
     losersRaceTo: t.losersRaceTo,
     minFargo: t.minFargo,
     maxFargo: t.maxFargo,
+    minRobustnessStatus: t.minRobustnessStatus ?? null,
     unratedPolicy: t.unratedPolicy,
     maxPlayers: t.maxPlayers,
     teamSize: t.teamSize,
@@ -930,6 +937,8 @@ export function Tournaments({
   const [teamName, setTeamName] = useState("");
   const [teammates, setTeammates] = useState<TeammateDraft[]>([]);
   const [resolvedFargo, setResolvedFargo] = useState<number | null>(playerFargo);
+  const [resolvedRobustnessStatus, setResolvedRobustnessStatus] =
+    useState<RobustnessStatus | null>(null);
   const [fargoLoading, setFargoLoading] = useState(false);
   const [messageBody, setMessageBody] = useState("");
   const [messageName, setMessageName] = useState("");
@@ -965,6 +974,7 @@ export function Tournaments({
   useEffect(() => {
     if (!user) {
       setResolvedFargo(null);
+      setResolvedRobustnessStatus(null);
       setFargoLoading(false);
       return;
     }
@@ -978,12 +988,19 @@ export function Tournaments({
       try {
         const res = await fetch(`/api/players/${encodeURIComponent(lookupId)}`);
         const data = (await res.json()) as {
-          player?: { effectiveRating?: number | null; provisionalRating?: number | null };
+          player?: {
+            effectiveRating?: number | null;
+            provisionalRating?: number | null;
+            robustnessStatus?: RobustnessStatus;
+          };
         };
         if (cancelled || !res.ok) return;
         const rating =
           data.player?.effectiveRating ?? data.player?.provisionalRating ?? null;
         if (rating != null) setResolvedFargo(rating);
+        if (data.player?.robustnessStatus) {
+          setResolvedRobustnessStatus(data.player.robustnessStatus);
+        }
       } catch {
         /* keep roster fallback */
       } finally {
@@ -1686,7 +1703,7 @@ export function Tournaments({
           description={
             isEdit
               ? "Update format, eligibility, venue, or close registration."
-              : "Set the format, Fargo band, entry, and venue. Players can browse and sign up from Events."
+              : "Set the format, eligibility, entry, and venue. Choose whether registration opens now or stays a draft."
           }
         />
 
@@ -1729,7 +1746,22 @@ export function Tournaments({
                       />
                     </Field>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="sm:col-span-2">
+                    <Field label="Registration open">
+                      <SelectField
+                        aria-label="Registration open"
+                        value={
+                          form.status === "draft" ? "draft" : "open"
+                        }
+                        options={CREATE_STATUS_OPTIONS}
+                        onChange={(status) =>
+                          setForm((p) => ({ ...p, status }))
+                        }
+                      />
+                    </Field>
+                  </div>
+                )}
                 <div className="sm:col-span-2">
                   <Field label="Event title">
                     <input
@@ -1862,6 +1894,22 @@ export function Tournaments({
                       }))
                     }
                     placeholder="Optional"
+                  />
+                </Field>
+                <Field label="Min robustness">
+                  <SelectField
+                    aria-label="Min robustness"
+                    value={form.minRobustnessStatus ?? ""}
+                    options={MIN_ROBUSTNESS_OPTIONS}
+                    onChange={(value) =>
+                      setForm((p) => ({
+                        ...p,
+                        minRobustnessStatus:
+                          value === "preliminary" || value === "established"
+                            ? value
+                            : null,
+                      }))
+                    }
                   />
                 </Field>
                 <Field label="Unrated players">
@@ -2103,10 +2151,14 @@ export function Tournaments({
                   {saving
                     ? isEdit
                       ? "Saving…"
-                      : "Publishing…"
+                      : form.status === "draft"
+                        ? "Saving draft…"
+                        : "Publishing…"
                     : isEdit
                       ? "Save changes"
-                      : "Publish event"}
+                      : form.status === "draft"
+                        ? "Save draft"
+                        : "Publish event"}
                 </button>
                 <button
                   type="button"
@@ -2212,6 +2264,17 @@ export function Tournaments({
               ) : null}
             </div>
           </SurfaceCard>
+        ) : t.status === "draft" ? (
+          <SurfaceCard>
+            <div className="space-y-1 p-3 sm:p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                Registration
+              </p>
+              <p className="text-sm text-[var(--ink)]">
+                Not open yet — this event is still a draft.
+              </p>
+            </div>
+          </SurfaceCard>
         ) : t.status === "open" ? (
           <SurfaceCard>
             <div className="space-y-3 p-3 sm:p-4">
@@ -2227,6 +2290,9 @@ export function Tournaments({
                   {entryShapeText(t)}
                   {t.minFargo != null || t.maxFargo != null
                     ? ` · Fargo ${fargoBandText(t)}`
+                    : ""}
+                  {t.minRobustnessStatus
+                    ? ` · ${minRobustnessLabel(t.minRobustnessStatus)}`
                     : ""}
                 </p>
               </div>
@@ -2248,11 +2314,31 @@ export function Tournaments({
                         : resolvedFargo != null
                           ? resolvedFargo
                           : "Unrated"}
+                      {!fargoLoading && resolvedRobustnessStatus
+                        ? ` · ${robustnessStatusLabel(resolvedRobustnessStatus)}`
+                        : ""}
                     </p>
                     <p className="mt-1 text-[11px] text-[var(--muted)]">
                       From your FargoRate account — locked at signup.
                     </p>
                   </div>
+
+                  {t.minRobustnessStatus &&
+                  !fargoLoading &&
+                  !meetsMinRobustness(
+                    resolvedRobustnessStatus,
+                    t.minRobustnessStatus,
+                  ) ? (
+                    <p className="text-xs text-[var(--danger)]">
+                      This event requires{" "}
+                      {minRobustnessLabel(t.minRobustnessStatus).toLowerCase()}{" "}
+                      robustness
+                      {resolvedRobustnessStatus
+                        ? ` (yours is ${robustnessStatusLabel(resolvedRobustnessStatus).toLowerCase()})`
+                        : ""}
+                      .
+                    </p>
+                  ) : null}
 
                   {resolvedFargo == null && !fargoLoading ? (
                     <p className="text-xs text-[var(--muted)]">
@@ -2369,7 +2455,15 @@ export function Tournaments({
                   </Field>
                   <button
                     type="button"
-                    disabled={saving || fargoLoading}
+                    disabled={
+                      saving ||
+                      fargoLoading ||
+                      (Boolean(t.minRobustnessStatus) &&
+                        !meetsMinRobustness(
+                          resolvedRobustnessStatus,
+                          t.minRobustnessStatus,
+                        ))
+                    }
                     onClick={() => void onRegister()}
                     className="rounded-full bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                   >
@@ -2605,6 +2699,9 @@ export function Tournaments({
                       {entryShapeText(t)}
                       {" · "}
                       Fargo {fargoBandText(t)}
+                      {t.minRobustnessStatus
+                        ? ` · ${minRobustnessLabel(t.minRobustnessStatus)}`
+                        : ""}
                       {" · "}
                       {t.tableSize} tables
                     </p>
@@ -2658,6 +2755,10 @@ export function Tournaments({
                       <dl className="grid gap-3 sm:grid-cols-2">
                         {[
                           ["Fargo band", fargoBandText(t)],
+                          [
+                            "Robustness",
+                            minRobustnessLabel(t.minRobustnessStatus),
+                          ],
                           ["Tables", t.tableSize],
                           ["Payment", paymentLabel],
                           ["Organizer", t.organizerName],

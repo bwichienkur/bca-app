@@ -90,6 +90,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       "losersRaceTo",
       "minFargo",
       "maxFargo",
+      "minRobustnessStatus",
       "unratedPolicy",
       "maxPlayers",
       "teamSize",
@@ -112,6 +113,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       if (key in body) {
         (allowed as Record<string, unknown>)[key] = body[key];
       }
+    }
+    if ("minRobustnessStatus" in allowed) {
+      const min = allowed.minRobustnessStatus;
+      allowed.minRobustnessStatus =
+        min === "preliminary" || min === "established" ? min : null;
     }
 
     const tournament = await updateTournament(id, allowed);
