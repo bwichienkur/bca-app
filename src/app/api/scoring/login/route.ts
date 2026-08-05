@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  toPublicAuthUser,
+  upsertAppUserFromFargo,
+  writeAppSession,
+} from "@/lib/app-auth";
+import {
   loginWithPassword,
   writeScoringSession,
 } from "@/lib/scoring-auth";
@@ -25,17 +30,23 @@ export async function POST(request: NextRequest) {
     const session = await loginWithPassword(username, password);
     await writeScoringSession(session);
 
+    // Fargo login always creates or updates the Tableside account.
+    const appUser = await upsertAppUserFromFargo(session, {
+      password,
+      emailFallback: username,
+    });
+    await writeAppSession(appUser.id);
+
     return NextResponse.json({
-      user: {
-        lmsId: session.lmsId,
-        readableId: session.readableId,
-        name: session.name,
-        email: session.email,
-      },
+      user: toPublicAuthUser(appUser, true),
     });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Login failed.";
-    return NextResponse.json({ error: message }, { status: 401 });
+    const status =
+      message.includes("Tableside") || message.includes("email was returned")
+        ? 400
+        : 401;
+    return NextResponse.json({ error: message }, { status });
   }
 }
