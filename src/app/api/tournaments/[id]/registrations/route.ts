@@ -115,6 +115,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       paid?: boolean;
       checkedIn?: boolean;
       noteToOrganizer?: string;
+      ratingAtSignup?: number | null;
     };
     if (!body.registrationId) {
       return NextResponse.json(
@@ -123,11 +124,28 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       );
     }
 
+    let ratingAtSignup: number | null | undefined;
+    if ("ratingAtSignup" in body) {
+      if (body.ratingAtSignup == null) {
+        ratingAtSignup = null;
+      } else {
+        const parsed = Number(body.ratingAtSignup);
+        if (!Number.isFinite(parsed)) {
+          return NextResponse.json(
+            { error: "ratingAtSignup must be a number." },
+            { status: 400 },
+          );
+        }
+        ratingAtSignup = parsed;
+      }
+    }
+
     const result = await updateRegistration(id, body.registrationId, {
       status: body.status,
       paid: body.paid,
       checkedIn: body.checkedIn,
       noteToOrganizer: body.noteToOrganizer,
+      ...(ratingAtSignup !== undefined ? { ratingAtSignup } : {}),
     });
 
     return NextResponse.json({ ...result, store: tournamentStoreMode() });
