@@ -545,7 +545,7 @@ export async function updateRegistration(
   patch: Partial<
     Pick<
       TournamentRegistration,
-      "status" | "paid" | "checkedIn" | "noteToOrganizer"
+      "status" | "paid" | "checkedIn" | "noteToOrganizer" | "ratingAtSignup"
     >
   >,
 ): Promise<{
@@ -567,6 +567,16 @@ export async function updateRegistration(
     }
   }
 
+  if (
+    patch.ratingAtSignup !== undefined &&
+    patch.ratingAtSignup !== null &&
+    (!Number.isFinite(patch.ratingAtSignup) ||
+      patch.ratingAtSignup < 0 ||
+      patch.ratingAtSignup > 900)
+  ) {
+    throw new Error("Estimated Fargo must be between 0 and 900.");
+  }
+
   const existing = regs[idx]!;
   let checkedInAt = existing.checkedInAt;
   if (patch.checkedIn === true) {
@@ -578,6 +588,12 @@ export async function updateRegistration(
   const nextReg: TournamentRegistration = {
     ...existing,
     ...patch,
+    ratingAtSignup:
+      patch.ratingAtSignup !== undefined
+        ? patch.ratingAtSignup == null
+          ? null
+          : Math.round(patch.ratingAtSignup)
+        : existing.ratingAtSignup,
     checkedInAt,
     updatedAt: new Date().toISOString(),
   };

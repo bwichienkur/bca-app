@@ -118,6 +118,11 @@ const signupBulkBtn =
 const signupBulkApproveBtn = `${signupBulkBtn} bg-[linear-gradient(180deg,#2f8fc2_0%,var(--felt)_45%,var(--felt-soft)_100%)] text-white`;
 const signupBulkWaitlistBtn = `${signupBulkBtn} bg-[linear-gradient(180deg,#edc48a_0%,var(--amber)_48%,#c4893f_100%)] text-[#1a140c]`;
 const signupBulkRejectBtn = `${signupBulkBtn} bg-[linear-gradient(180deg,#e0726a_0%,#c44a42_48%,#9e342e_100%)] text-white`;
+const fieldToggleBtn =
+  "inline-flex h-7 shrink-0 items-center justify-center rounded-[var(--radius)] px-2.5 text-[11px] font-semibold transition disabled:opacity-50";
+const fieldToggleIdle = `${fieldToggleBtn} border border-[var(--line)] bg-[var(--surface-2)] text-[var(--muted)] hover:text-[var(--ink)]`;
+const fieldToggleCheckedIn = `${fieldToggleBtn} bg-[var(--felt)] text-white`;
+const fieldTogglePaid = `${fieldToggleBtn} bg-[var(--amber)] text-[#1a140c]`;
 
 function statusTone(status: TournamentStatus): string {
   switch (status) {
@@ -230,6 +235,62 @@ function EyeIcon({ className }: { className?: string }) {
       <path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" />
       <circle cx="12" cy="12" r="2.5" />
     </TabIconShell>
+  );
+}
+
+function FieldEstimatedFargoInput({
+  disabled,
+  onSave,
+}: {
+  disabled?: boolean;
+  onSave: (rating: number) => void | Promise<void>;
+}) {
+  const [value, setValue] = useState("");
+  const [savingLocal, setSavingLocal] = useState(false);
+
+  const submit = async () => {
+    const parsed = Number(value.trim());
+    if (!Number.isFinite(parsed)) return;
+    const rounded = Math.round(parsed);
+    if (rounded < 0 || rounded > 900) return;
+    setSavingLocal(true);
+    try {
+      await onSave(rounded);
+      setValue("");
+    } finally {
+      setSavingLocal(false);
+    }
+  };
+
+  return (
+    <form
+      className="flex items-center gap-1"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submit();
+      }}
+    >
+      <input
+        type="number"
+        inputMode="numeric"
+        min={0}
+        max={900}
+        step={1}
+        value={value}
+        disabled={disabled || savingLocal}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder="Est."
+        aria-label="Estimated Fargo"
+        className="h-7 w-14 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-1.5 text-center text-[11px] font-semibold tabular-nums text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)] disabled:opacity-50"
+      />
+      <button
+        type="submit"
+        disabled={disabled || savingLocal || value.trim() === ""}
+        className="h-7 rounded-[var(--radius)] bg-[var(--surface-3)] px-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--ink)] transition hover:bg-[var(--felt)] hover:text-white disabled:opacity-40"
+      >
+        Set
+      </button>
+    </form>
   );
 }
 
@@ -1117,6 +1178,7 @@ export function Tournaments({
       status?: TournamentRegistration["status"];
       paid?: boolean;
       checkedIn?: boolean;
+      ratingAtSignup?: number | null;
     },
   ) => {
     if (!selectedId) return;
@@ -1426,7 +1488,12 @@ export function Tournaments({
   const loadedPlayerIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
-    if (!detail?.isOrganizer || detailSubTab !== "signups") return;
+    if (
+      !detail?.isOrganizer ||
+      (detailSubTab !== "signups" && detailSubTab !== "field")
+    ) {
+      return;
+    }
     const ids = [
       ...new Set(
         detail.registrations
@@ -1488,6 +1555,12 @@ export function Tournaments({
       (r) => r.status === "approved",
     );
     const q = fieldQuery.trim().toLowerCase();
+    const ratingFor = (reg: TournamentRegistration) => {
+      const playerId = registrationPlayerId(reg);
+      const live = playerId ? playerStats[playerId] : undefined;
+      return live?.rating ?? reg.ratingAtSignup;
+    };
+
     return approved
       .filter((r) => {
         if (fieldFilter === "not-checked-in" && r.checkedIn) return false;
@@ -1503,11 +1576,19 @@ export function Tournaments({
         return hay.includes(q);
       })
       .sort((a, b) => {
+        const ratingA = ratingFor(a);
+        const ratingB = ratingFor(b);
+        const scoredA = ratingA != null;
+        const scoredB = ratingB != null;
+        if (scoredA && scoredB && ratingA !== ratingB) {
+          return ratingB - ratingA;
+        }
+        if (scoredA !== scoredB) return scoredA ? -1 : 1;
         const aKey = (a.teamName || a.displayName).toLowerCase();
         const bKey = (b.teamName || b.displayName).toLowerCase();
         return aKey.localeCompare(bKey);
       });
-  }, [detail?.registrations, fieldFilter, fieldQuery]);
+  }, [detail?.registrations, fieldFilter, fieldQuery, playerStats]);
 
   const fieldStats = useMemo(() => {
     const approved = (detail?.registrations ?? []).filter(
@@ -2797,39 +2878,39 @@ export function Tournaments({
             {isOrganizer && activeTab === "field" ? (
               <div className="space-y-3">
                 <div className="grid grid-cols-3 gap-1.5">
-                  <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2 py-2 text-center">
+                  <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2 py-1.5 text-center">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
                       Field
                     </p>
-                    <p className="mt-0.5 font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--ink)]">
+                    <p className="font-[family-name:var(--font-display)] text-base font-semibold tabular-nums text-[var(--ink)]">
                       {fieldStats.approved}
                     </p>
                   </div>
-                  <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2 py-2 text-center">
+                  <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2 py-1.5 text-center">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
                       In
                     </p>
-                    <p className="mt-0.5 font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--ink)]">
+                    <p className="font-[family-name:var(--font-display)] text-base font-semibold tabular-nums text-[var(--ink)]">
                       {fieldStats.checkedIn}
                     </p>
                   </div>
-                  <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2 py-2 text-center">
+                  <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2 py-1.5 text-center">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
                       Paid
                     </p>
-                    <p className="mt-0.5 font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--ink)]">
+                    <p className="font-[family-name:var(--font-display)] text-base font-semibold tabular-nums text-[var(--ink)]">
                       {fieldStats.paid}
                     </p>
                   </div>
                 </div>
 
-                <SurfaceCard>
-                  <div className="space-y-3 border-b border-[var(--line)] px-3 py-3 sm:px-4">
+                <section className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+                  <div className="space-y-2 border-b border-[var(--line)] px-3 py-2.5 sm:px-4">
                     <SearchField
                       embedded
                       value={fieldQuery}
                       onChange={setFieldQuery}
-                      placeholder="Find entry or player…"
+                      placeholder="Find player…"
                       label="Search field board"
                     />
                     <div
@@ -2868,7 +2949,7 @@ export function Tournaments({
                   </div>
 
                   {actionMsg ? (
-                    <p className="mx-3 mt-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)] sm:mx-4">
+                    <p className="mx-3 mt-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)] sm:mx-4">
                       {actionMsg}
                     </p>
                   ) : null}
@@ -2881,81 +2962,100 @@ export function Tournaments({
                           : "No entries match this filter."}
                       </li>
                     ) : (
-                      fieldEntries.map((reg) => (
-                        <li
-                          key={reg.id}
-                          className="space-y-3 px-3 py-3.5 sm:px-4"
-                        >
-                          <div className="min-w-0">
-                            <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)]">
-                              {reg.teamName || reg.displayName}
-                            </p>
-                            <p className="mt-0.5 text-xs text-[var(--muted)]">
-                              {reg.displayName}
-                              {reg.ratingAtSignup != null
-                                ? ` · ${reg.ratingAtSignup}`
-                                : ""}
-                              {reg.checkedInAt
-                                ? ` · In ${formatStartsAt(reg.checkedInAt)}`
-                                : ""}
-                            </p>
-                            {reg.teammates?.length ? (
-                              <div className="mt-2 flex flex-wrap gap-1.5">
-                                {reg.teammates.map((mate) => (
-                                  <span
-                                    key={`${reg.id}-field-${mate.displayName}`}
-                                    className="rounded-full border border-[var(--line)] bg-[var(--surface-2)]/70 px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]"
-                                  >
-                                    {mate.displayName}
-                                    {mate.ratingAtSignup != null
-                                      ? ` · ${mate.ratingAtSignup}`
-                                      : ""}
-                                  </span>
-                                ))}
+                      fieldEntries.map((reg) => {
+                        const stats = statsForRegistration(reg);
+                        const title = registrationCardTitle(reg);
+                        const hasRating = stats.rating != null;
+
+                        return (
+                          <li key={reg.id} className="px-3 py-2 sm:px-4">
+                            <div className="flex items-center gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5">
+                                  <p className="min-w-0 font-[family-name:var(--font-display)] text-[14px] font-semibold leading-snug tracking-tight text-[var(--ink)]">
+                                    <span className="break-words [overflow-wrap:anywhere]">
+                                      {title}
+                                    </span>
+                                    {hasRating ? (
+                                      <>
+                                        <span className="mx-1.5 font-normal text-[var(--muted)]">
+                                          ·
+                                        </span>
+                                        <span className="tabular-nums text-[var(--felt-deep)]">
+                                          {stats.rating}
+                                        </span>
+                                      </>
+                                    ) : null}
+                                  </p>
+                                  {stats.playerId ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => openSignupPlayer(reg)}
+                                      className={signupInlineIconBtn}
+                                      aria-label={`View player history: ${reg.displayName}`}
+                                      title="Player history"
+                                    >
+                                      <EyeIcon className="h-3.5 w-3.5" />
+                                    </button>
+                                  ) : null}
+                                  {!hasRating ? (
+                                    <FieldEstimatedFargoInput
+                                      disabled={saving}
+                                      onSave={(rating) =>
+                                        onUpdateRegistration(reg.id, {
+                                          ratingAtSignup: rating,
+                                        })
+                                      }
+                                    />
+                                  ) : null}
+                                </div>
+                                {reg.teamName &&
+                                reg.teamName.trim() !== reg.displayName.trim() ? (
+                                  <p className="mt-0.5 truncate text-[11px] text-[var(--muted)]">
+                                    {reg.displayName}
+                                  </p>
+                                ) : null}
                               </div>
-                            ) : null}
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              disabled={saving}
-                              onClick={() =>
-                                void onUpdateRegistration(reg.id, {
-                                  checkedIn: !reg.checkedIn,
-                                })
-                              }
-                              className={[
-                                "rounded-[var(--radius)] px-3 py-2.5 text-sm font-semibold transition disabled:opacity-50",
-                                reg.checkedIn
-                                  ? "bg-[var(--felt)] text-white"
-                                  : "border border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)]",
-                              ].join(" ")}
-                            >
-                              {reg.checkedIn ? "Checked in" : "Check in"}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={saving}
-                              onClick={() =>
-                                void onUpdateRegistration(reg.id, {
-                                  paid: !reg.paid,
-                                })
-                              }
-                              className={[
-                                "rounded-[var(--radius)] px-3 py-2.5 text-sm font-semibold transition disabled:opacity-50",
-                                reg.paid
-                                  ? "bg-[var(--amber)] text-[#1a140c]"
-                                  : "border border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)]",
-                              ].join(" ")}
-                            >
-                              {reg.paid ? "Paid" : "Mark paid"}
-                            </button>
-                          </div>
-                        </li>
-                      ))
+
+                              <div className="flex shrink-0 items-center gap-1">
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  onClick={() =>
+                                    void onUpdateRegistration(reg.id, {
+                                      checkedIn: !reg.checkedIn,
+                                    })
+                                  }
+                                  className={
+                                    reg.checkedIn
+                                      ? fieldToggleCheckedIn
+                                      : fieldToggleIdle
+                                  }
+                                >
+                                  {reg.checkedIn ? "In" : "Check in"}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  onClick={() =>
+                                    void onUpdateRegistration(reg.id, {
+                                      paid: !reg.paid,
+                                    })
+                                  }
+                                  className={
+                                    reg.paid ? fieldTogglePaid : fieldToggleIdle
+                                  }
+                                >
+                                  {reg.paid ? "Paid" : "Pay"}
+                                </button>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })
                     )}
                   </ul>
-                </SurfaceCard>
+                </section>
               </div>
             ) : null}
 
