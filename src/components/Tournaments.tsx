@@ -59,7 +59,6 @@ type SignupStatusFilter =
   | "approved"
   | "waitlisted"
   | "rejected";
-type SignupPaidMode = "paid" | "unpaid";
 
 const SIGNUP_STATUS_FILTERS: Array<{
   value: SignupStatusFilter;
@@ -69,14 +68,6 @@ const SIGNUP_STATUS_FILTERS: Array<{
   { value: "approved", label: "Approved" },
   { value: "waitlisted", label: "Waitlist" },
   { value: "rejected", label: "Rejected" },
-];
-
-const SIGNUP_PAID_FILTERS: Array<{
-  value: SignupPaidMode;
-  label: string;
-}> = [
-  { value: "unpaid", label: "Unpaid" },
-  { value: "paid", label: "Paid" },
 ];
 
 type EventFormState = Omit<CreateTournamentInput, "status"> & {
@@ -104,14 +95,13 @@ const fieldClass =
 const labelClass =
   "mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]";
 
-/** Compact square icon actions for signup cards. */
+/** Compact square icon actions for signup request rows. */
 const signupIconBtn =
-  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] transition disabled:opacity-50";
+  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] transition disabled:opacity-50";
 const signupApproveBtn = `${signupIconBtn} bg-[var(--felt)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] hover:bg-[var(--felt-soft)]`;
 const signupWaitlistBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--amber)_55%,transparent)] bg-[color-mix(in_srgb,var(--amber)_18%,var(--surface-2))] text-[var(--amber)] hover:bg-[color-mix(in_srgb,var(--amber)_28%,var(--surface-2))]`;
 const signupRejectBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[var(--danger-bg)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_28%,var(--surface-2))]`;
 const signupMessageBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--chalk)_40%,transparent)] bg-[color-mix(in_srgb,var(--chalk)_14%,var(--surface-2))] text-[var(--felt-deep)] hover:bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))]`;
-const signupSecondaryBtn = `${signupIconBtn} border border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)] hover:bg-[var(--surface-3)]`;
 
 function statusTone(status: TournamentStatus): string {
   switch (status) {
@@ -134,40 +124,6 @@ function statusTone(status: TournamentStatus): string {
 function handicapLabel(value: string): string {
   return (
     HANDICAP_SYSTEM_OPTIONS.find((o) => o.value === value)?.label ?? value
-  );
-}
-
-function robustnessLabel(status: RobustnessStatus | null | undefined): string {
-  if (status === "established") return "Established";
-  if (status === "preliminary") return "Preliminary";
-  return "Starter";
-}
-
-/** Robustness chip for the blue signup header. */
-function robustnessBadgeOnFelt(status: RobustnessStatus | null | undefined): string {
-  if (status === "established") {
-    return "bg-white/20 text-white ring-1 ring-white/25";
-  }
-  if (status === "preliminary") {
-    return "bg-[var(--amber)] text-[#1a140c]";
-  }
-  return "bg-white/15 text-[var(--chalk)] ring-1 ring-white/20";
-}
-
-function ChevronIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.25"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden
-    >
-      <path d="m9 6 6 6-6 6" />
-    </svg>
   );
 }
 
@@ -277,15 +233,6 @@ function MessageIcon({ className }: { className?: string }) {
   );
 }
 
-function PaidIcon({ className }: { className?: string }) {
-  return (
-    <TabIconShell className={className}>
-      <circle cx="12" cy="12" r="8" />
-      <path d="M12 7.5v9M14.2 9.2c-.5-.7-1.2-1-2.2-1-1.3 0-2.2.8-2.2 1.8 0 2.2 4.4 1.1 4.4 3.5 0 1.1-.9 2-2.4 2-1.1 0-2-.4-2.5-1.2" />
-    </TabIconShell>
-  );
-}
-
 const ORGANIZER_TAB_ICONS: Record<
   DetailSubTab,
   (props: { className?: string }) => ReactNode
@@ -306,35 +253,39 @@ function signupStatusBadge(
 ): ReactNode {
   if (status === "pending") {
     return (
-      <span className="inline-flex shrink-0 rounded-md bg-[var(--amber)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#1a140c]">
+      <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--amber)]">
+        <span
+          className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--amber)]"
+          aria-hidden
+        />
         Pending
       </span>
     );
   }
   if (status === "approved") {
     return (
-      <span className="inline-flex shrink-0 rounded-md bg-white/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-white ring-1 ring-white/25">
+      <span className="inline-flex shrink-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--felt)]">
         Approved
       </span>
     );
   }
   if (status === "waitlisted") {
     return (
-      <span className="inline-flex shrink-0 rounded-md bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--chalk)] ring-1 ring-white/20">
+      <span className="inline-flex shrink-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--amber)]">
         Waitlist
       </span>
     );
   }
   if (status === "rejected") {
     return (
-      <span className="inline-flex shrink-0 rounded-md bg-[var(--danger-bg)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--danger)] ring-1 ring-white/10">
+      <span className="inline-flex shrink-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--danger)]">
         Rejected
       </span>
     );
   }
   if (status === "withdrawn") {
     return (
-      <span className="inline-flex shrink-0 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--chalk)] ring-1 ring-white/15">
+      <span className="inline-flex shrink-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">
         Withdrawn
       </span>
     );
@@ -423,12 +374,10 @@ function SignupMessageDialog({
   );
 }
 
-/** Player-search-style card for tournament signups. */
-function SignupPlayerCard({
+/** Dense request row for organizer signup review. */
+function SignupRequestRow({
   title,
-  statusBadge,
-  robustnessStatus,
-  robustness,
+  status,
   submittedLabel,
   rating,
   onOpenDetails,
@@ -439,9 +388,7 @@ function SignupPlayerCard({
   onShowNote,
 }: {
   title: string;
-  statusBadge?: ReactNode;
-  robustnessStatus: RobustnessStatus;
-  robustness: number | null;
+  status: TournamentRegistration["status"];
   submittedLabel: string;
   rating: number | null;
   onOpenDetails: () => void;
@@ -451,83 +398,52 @@ function SignupPlayerCard({
   note?: string | null;
   onShowNote?: () => void;
 }) {
-  const hasActions = Boolean(actions) || Boolean(note);
+  const teammateHint = teammates?.length
+    ? teammates
+        .map((mate) =>
+          mate.ratingAtSignup != null
+            ? `${mate.displayName} · ${mate.ratingAtSignup}`
+            : mate.displayName,
+        )
+        .join(", ")
+    : null;
 
   return (
-    <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+    <div
+      className={[
+        "flex items-center gap-2.5 px-3 py-2.5 sm:gap-3 sm:px-4",
+        status === "pending"
+          ? "bg-[color-mix(in_srgb,var(--amber)_7%,transparent)]"
+          : "",
+      ].join(" ")}
+    >
       <button
         type="button"
         onClick={onOpenDetails}
         aria-label={detailsLabel}
-        className={[
-          "group block w-full text-left transition",
-          "hover:brightness-[1.03]",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--felt-soft)]",
-        ].join(" ")}
+        className="min-w-0 flex-1 rounded-[var(--radius)] text-left transition hover:bg-[var(--surface-2)]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--felt-soft)]"
       >
-        <div className="relative overflow-hidden bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] text-white">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-40"
-            style={{
-              background:
-                "radial-gradient(120% 80% at 100% 0%, rgba(224,163,90,0.28), transparent 55%)",
-            }}
-          />
-          <div className="relative flex min-w-0 items-start gap-2 px-3 py-2">
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-[family-name:var(--font-display)] text-[15px] font-semibold leading-tight tracking-tight text-white">
-                {title}
-              </p>
-              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
-                {statusBadge}
-                <span
-                  className={[
-                    "inline-flex shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]",
-                    robustnessBadgeOnFelt(robustnessStatus),
-                  ].join(" ")}
-                >
-                  {robustnessLabel(robustnessStatus)}
-                  {robustness != null && robustness > 0
-                    ? ` · ${Math.round(robustness)}`
-                    : ""}
-                </span>
-              </div>
-              <p className="mt-0.5 truncate text-[11px] font-medium leading-tight text-[var(--chalk)]">
-                {submittedLabel}
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
-              <p className="font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums leading-none text-white">
-                {rating ?? "—"}
-              </p>
-              <span
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-black/25 text-white ring-1 ring-white/15 transition group-hover:bg-black/35"
-                aria-hidden
-              >
-                <ChevronIcon className="h-3.5 w-3.5" />
-              </span>
-            </div>
-          </div>
+        <div className="flex min-w-0 items-baseline gap-2">
+          <p className="truncate font-[family-name:var(--font-display)] text-[15px] font-semibold leading-tight tracking-tight text-[var(--ink)]">
+            {title}
+          </p>
+          {signupStatusBadge(status)}
         </div>
+        <p className="mt-0.5 truncate text-[11px] leading-tight text-[var(--muted)]">
+          {submittedLabel}
+          {teammateHint ? ` · ${teammateHint}` : ""}
+        </p>
       </button>
 
-      {teammates?.length ? (
-        <div className="flex flex-wrap gap-1.5 border-t border-[var(--line)] px-3 py-2">
-          {teammates.map((mate) => (
-            <span
-              key={`${title}-${mate.displayName}`}
-              className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/70 px-2 py-0.5 text-[11px] font-semibold text-[var(--ink)]"
-            >
-              {mate.displayName}
-              {mate.ratingAtSignup != null ? ` · ${mate.ratingAtSignup}` : ""}
-            </span>
-          ))}
-        </div>
-      ) : null}
+      <p
+        className="w-10 shrink-0 text-right font-[family-name:var(--font-display)] text-base font-semibold tabular-nums leading-none text-[var(--ink)]"
+        title="Fargo rating"
+      >
+        {rating ?? "—"}
+      </p>
 
-      {hasActions ? (
-        <div className="flex items-center justify-end gap-1.5 border-t border-[var(--line)] px-2.5 py-1.5">
+      {(actions || note) && (
+        <div className="flex shrink-0 items-center gap-1">
           {actions}
           {note ? (
             <button
@@ -537,11 +453,11 @@ function SignupPlayerCard({
               aria-label="View signup message"
               title="Message"
             >
-              <MessageIcon className="h-4 w-4" />
+              <MessageIcon className="h-3.5 w-3.5" />
             </button>
           ) : null}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -870,8 +786,6 @@ export function Tournaments({
   const [fieldQuery, setFieldQuery] = useState("");
   const [signupStatusFilter, setSignupStatusFilter] =
     useState<SignupStatusFilter>("pending");
-  const [signupPaidMode, setSignupPaidMode] =
-    useState<SignupPaidMode>("unpaid");
   const [inspectPlayer, setInspectPlayer] = useState<{
     id: string;
     name: string;
@@ -967,7 +881,6 @@ export function Tournaments({
     setFieldFilter("all");
     setFieldQuery("");
     setSignupStatusFilter("pending");
-    setSignupPaidMode("unpaid");
     try {
       const res = await fetch(`/api/tournaments/${id}`);
       const data = (await res.json()) as DetailPayload & { error?: string };
@@ -1236,11 +1149,9 @@ export function Tournaments({
     setSignupMessage({ name: reg.displayName, body });
   };
 
-  const signupSubmittedLabel = (reg: TournamentRegistration) => {
-    const base = `Submitted ${formatStartsAt(reg.createdAt)}`;
-    if (reg.status !== "approved") return base;
-    return `${base} · ${reg.paid ? "Paid" : "Unpaid"}`;
-  };
+  const signupSubmittedLabel = (reg: TournamentRegistration) =>
+    `Submitted ${formatStartsAt(reg.createdAt)}`;
+
 
   const setTournamentStatus = async (
     id: string,
@@ -1304,8 +1215,6 @@ export function Tournaments({
     });
   }, [detail?.registrations]);
 
-  const showApprovedPaidFilters = signupStatusFilter === "approved";
-
   const signupStatusCounts = useMemo(() => {
     const counts: Record<SignupStatusFilter, number> = {
       pending: 0,
@@ -1336,14 +1245,8 @@ export function Tournaments({
   );
 
   const filteredSignups = useMemo(() => {
-    return sortedRegistrations.filter((r) => {
-      if (r.status !== signupStatusFilter) return false;
-      if (r.status === "approved") {
-        return signupPaidMode === "paid" ? r.paid : !r.paid;
-      }
-      return true;
-    });
-  }, [signupPaidMode, signupStatusFilter, sortedRegistrations]);
+    return sortedRegistrations.filter((r) => r.status === signupStatusFilter);
+  }, [signupStatusFilter, sortedRegistrations]);
 
   const loadedPlayerIdsRef = useRef(new Set<string>());
 
@@ -2483,166 +2386,138 @@ export function Tournaments({
                   </p>
                 ) : null}
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="min-w-[9.5rem] flex-1">
-                    <SelectField
-                      aria-label="Signup status filter"
-                      value={signupStatusFilter}
-                      options={signupStatusOptions}
-                      onChange={setSignupStatusFilter}
-                    />
-                  </div>
-                  {showApprovedPaidFilters ? (
-                    <div className="min-w-[7.5rem] flex-1">
+                <SurfaceCard>
+                  <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 sm:px-4">
+                    <div className="min-w-[10rem] flex-1">
                       <SelectField
-                        aria-label="Approved payment filter"
-                        value={signupPaidMode}
-                        options={SIGNUP_PAID_FILTERS}
-                        onChange={setSignupPaidMode}
+                        aria-label="Signup status filter"
+                        value={signupStatusFilter}
+                        options={signupStatusOptions}
+                        onChange={setSignupStatusFilter}
                       />
                     </div>
-                  ) : null}
-                  <span className="shrink-0 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-2 text-[11px] font-semibold tabular-nums text-[var(--muted)]">
-                    {filteredSignups.length}
-                  </span>
-                </div>
+                    <span className="shrink-0 text-[11px] font-semibold tabular-nums text-[var(--muted)]">
+                      {filteredSignups.length}
+                      {signupStatusFilter === "pending" ? " to review" : ""}
+                    </span>
+                  </div>
 
-                {filteredSignups.length === 0 ? (
-                  <SurfaceCard>
-                    <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">
+                  {filteredSignups.length === 0 ? (
+                    <p className="px-4 py-8 text-center text-sm text-[var(--muted)]">
                       {sortedRegistrations.length === 0
                         ? "No signups yet."
-                        : "No signups match these filters."}
+                        : signupStatusFilter === "pending"
+                          ? "No pending requests."
+                          : "No signups in this status."}
                     </p>
-                  </SurfaceCard>
-                ) : (
-                  <ul className="space-y-2">
-                    {filteredSignups.map((reg) => {
-                      const stats = statsForRegistration(reg);
-                      const note = reg.noteToOrganizer?.trim() || null;
-                      const actions =
-                        reg.status === "pending" ? (
-                          <>
-                            <button
-                              type="button"
-                              disabled={saving}
-                              onClick={() =>
-                                void onUpdateRegistration(reg.id, {
-                                  status: "approved",
-                                })
-                              }
-                              className={signupApproveBtn}
-                              aria-label={`Approve ${reg.displayName}`}
-                              title="Approve"
-                            >
-                              <ApproveIcon className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={saving}
-                              onClick={() =>
-                                void onUpdateRegistration(reg.id, {
-                                  status: "waitlisted",
-                                })
-                              }
-                              className={signupWaitlistBtn}
-                              aria-label={`Waitlist ${reg.displayName}`}
-                              title="Waitlist"
-                            >
-                              <WaitlistIcon className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={saving}
-                              onClick={() =>
-                                void onUpdateRegistration(reg.id, {
-                                  status: "rejected",
-                                })
-                              }
-                              className={signupRejectBtn}
-                              aria-label={`Reject ${reg.displayName}`}
-                              title="Reject"
-                            >
-                              <RejectIcon className="h-4 w-4" />
-                            </button>
-                          </>
-                        ) : reg.status === "approved" ? (
-                          <button
-                            type="button"
-                            disabled={saving}
-                            onClick={() =>
-                              void onUpdateRegistration(reg.id, {
-                                paid: !reg.paid,
-                              })
-                            }
-                            className={signupSecondaryBtn}
-                            aria-label={
-                              reg.paid
-                                ? `Mark ${reg.displayName} unpaid`
-                                : `Mark ${reg.displayName} paid`
-                            }
-                            title={reg.paid ? "Mark unpaid" : "Mark paid"}
-                          >
-                            <PaidIcon className="h-4 w-4" />
-                          </button>
-                        ) : reg.status === "waitlisted" ? (
-                          <>
-                            <button
-                              type="button"
-                              disabled={saving}
-                              onClick={() =>
-                                void onUpdateRegistration(reg.id, {
-                                  status: "approved",
-                                })
-                              }
-                              className={signupApproveBtn}
-                              aria-label={`Approve ${reg.displayName}`}
-                              title="Approve"
-                            >
-                              <ApproveIcon className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={saving}
-                              onClick={() =>
-                                void onUpdateRegistration(reg.id, {
-                                  status: "rejected",
-                                })
-                              }
-                              className={signupRejectBtn}
-                              aria-label={`Reject ${reg.displayName}`}
-                              title="Reject"
-                            >
-                              <RejectIcon className="h-4 w-4" />
-                            </button>
-                          </>
-                        ) : undefined;
+                  ) : (
+                    <ul className="max-h-[min(70vh,36rem)] divide-y divide-[var(--line)] overflow-y-auto overscroll-contain">
+                      {filteredSignups.map((reg) => {
+                        const stats = statsForRegistration(reg);
+                        const note = reg.noteToOrganizer?.trim() || null;
+                        const actions =
+                          reg.status === "pending" ? (
+                            <>
+                              <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() =>
+                                  void onUpdateRegistration(reg.id, {
+                                    status: "approved",
+                                  })
+                                }
+                                className={signupApproveBtn}
+                                aria-label={`Approve ${reg.displayName}`}
+                                title="Approve"
+                              >
+                                <ApproveIcon className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() =>
+                                  void onUpdateRegistration(reg.id, {
+                                    status: "waitlisted",
+                                  })
+                                }
+                                className={signupWaitlistBtn}
+                                aria-label={`Waitlist ${reg.displayName}`}
+                                title="Waitlist"
+                              >
+                                <WaitlistIcon className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() =>
+                                  void onUpdateRegistration(reg.id, {
+                                    status: "rejected",
+                                  })
+                                }
+                                className={signupRejectBtn}
+                                aria-label={`Reject ${reg.displayName}`}
+                                title="Reject"
+                              >
+                                <RejectIcon className="h-3.5 w-3.5" />
+                              </button>
+                            </>
+                          ) : reg.status === "waitlisted" ? (
+                            <>
+                              <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() =>
+                                  void onUpdateRegistration(reg.id, {
+                                    status: "approved",
+                                  })
+                                }
+                                className={signupApproveBtn}
+                                aria-label={`Approve ${reg.displayName}`}
+                                title="Approve"
+                              >
+                                <ApproveIcon className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() =>
+                                  void onUpdateRegistration(reg.id, {
+                                    status: "rejected",
+                                  })
+                                }
+                                className={signupRejectBtn}
+                                aria-label={`Reject ${reg.displayName}`}
+                                title="Reject"
+                              >
+                                <RejectIcon className="h-3.5 w-3.5" />
+                              </button>
+                            </>
+                          ) : undefined;
 
-                      return (
-                        <li key={reg.id} className="animate-rise">
-                          <SignupPlayerCard
-                            title={registrationCardTitle(reg)}
-                            statusBadge={signupStatusBadge(reg.status)}
-                            submittedLabel={signupSubmittedLabel(reg)}
-                            rating={stats.rating}
-                            robustnessStatus={stats.robustnessStatus}
-                            robustness={stats.robustness}
-                            onOpenDetails={() => openSignupPlayer(reg)}
-                            detailsLabel={
-                              stats.playerId
-                                ? `View player: ${reg.displayName}`
-                                : `Search players for ${reg.displayName}`
-                            }
-                            note={note}
-                            onShowNote={() => openSignupMessage(reg)}
-                            teammates={reg.teammates}
-                            actions={actions}
-                          />
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
+                        return (
+                          <li key={reg.id}>
+                            <SignupRequestRow
+                              title={registrationCardTitle(reg)}
+                              status={reg.status}
+                              submittedLabel={signupSubmittedLabel(reg)}
+                              rating={stats.rating}
+                              onOpenDetails={() => openSignupPlayer(reg)}
+                              detailsLabel={
+                                stats.playerId
+                                  ? `View player: ${reg.displayName}`
+                                  : `Search players for ${reg.displayName}`
+                              }
+                              note={note}
+                              onShowNote={() => openSignupMessage(reg)}
+                              teammates={reg.teammates}
+                              actions={actions}
+                            />
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </SurfaceCard>
               </div>
             ) : null}
 
