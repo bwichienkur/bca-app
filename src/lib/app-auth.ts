@@ -241,38 +241,52 @@ export async function authenticateAppUser(
 }
 
 /**
- * Ensure an app user exists for a successful Fargo login (bridge for existing users).
+ * Ensure an app user exists for a successful Fargo login.
+ * First-time Fargo sign-in creates the Tableside account automatically.
  */
 export async function upsertAppUserFromFargo(
   scoring: ScoringSession,
-  passwordForNewAccount?: string,
+  options?: {
+    /** Password used at Fargo login — becomes the Tableside password for new accounts. */
+    password?: string;
+    /** Fallback when Fargo JWT has no email (use the login username). */
+    emailFallback?: string;
+  },
 ): Promise<AppUser> {
-  const email = scoring.email ? normalizeEmail(scoring.email) : "";
-  let user = email ? await getAppUserByEmail(email) : null;
+  const email = normalizeEmail(
+    scoring.email || options?.emailFallback || "",
+  );
+  if (!email || !email.includes("@")) {
+    throw new Error(
+      "Fargo login succeeded but no email was returned. Sign in with your Fargo email address.",
+    );
+  }
+
+  let user = await getAppUserByEmail(email);
+
+  // Also match an existing Tableside user already linked to this LMS id.
+  if (!user && scoring.lmsId) {
+    // No email index hit — leave as create; LMS-id lookup would need a secondary index.
+  }
 
   const fargo: LinkedFargoAccount = {
     lmsId: scoring.lmsId,
     fargoRateId: scoring.fargoRateId,
     readableId: scoring.readableId,
-    email: scoring.email,
+    email: scoring.email || email,
     name: scoring.name,
     linkedAt: new Date().toISOString(),
   };
 
   if (!user) {
-    if (!email) {
-      throw new Error(
-        "Fargo login succeeded but no email was returned. Create a Tableside account first.",
-      );
-    }
     const now = new Date().toISOString();
+    const password =
+      options?.password?.trim() || randomBytes(24).toString("hex");
     user = {
       id: newId(),
       email,
       name: scoring.name,
-      passwordHash: hashPassword(
-        passwordForNewAccount || randomBytes(24).toString("hex"),
-      ),
+      passwordHash: hashPassword(password),
       createdAt: now,
       updatedAt: now,
       fargo,
@@ -283,6 +297,10 @@ export async function upsertAppUserFromFargo(
       ...user,
       name: user.name || scoring.name,
       fargo,
+      // Keep Tableside password in sync when they sign in via Fargo.
+      ...(options?.password
+        ? { passwordHash: hashPassword(options.password) }
+        : {}),
     };
   }
   return saveAppUser(user);

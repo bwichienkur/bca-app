@@ -45,10 +45,12 @@ export async function GET() {
       }
     }
 
-    // Legacy bridge: Fargo scoring cookie only → provision/link app user.
+    // Legacy bridge: Fargo scoring cookie only → create/link Tableside account.
     if (scoring) {
       try {
-        const user = await upsertAppUserFromFargo(scoring);
+        const user = await upsertAppUserFromFargo(scoring, {
+          emailFallback: scoring.email ?? undefined,
+        });
         await writeAppSession(user.id);
         return NextResponse.json({
           user: toPublicAuthUser(user, true),

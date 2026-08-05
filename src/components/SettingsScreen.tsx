@@ -249,7 +249,8 @@ export function SettingsScreen({
             <span className="font-medium text-[var(--ink)]">
               {user.name ?? user.email ?? "Player"}
             </span>
-            . Connect FargoRate for Score and Digital Pool for brackets.
+            . Your Tableside account was created from FargoRate login. Connect
+            Digital Pool here when you want bracket push.
           </p>
         </div>
         <button
@@ -267,8 +268,8 @@ export function SettingsScreen({
             Connected accounts
           </p>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            Tableside is your app login. Link providers for Score and Digital
-            Pool brackets.
+            FargoRate creates your Tableside account on sign-in. Link Digital
+            Pool for brackets; reconnect Fargo if Score expires.
           </p>
         </div>
 
