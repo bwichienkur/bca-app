@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type {
   DivisionSummary,
   LeagueSummary,
@@ -22,6 +22,7 @@ type SettingsScreenProps = {
   onRefreshMembership: () => void;
   onSignOut: () => void;
   onClose: () => void;
+  onUserUpdate?: (user: AuthUser) => void;
 };
 
 export function SettingsScreen({
@@ -34,6 +35,7 @@ export function SettingsScreen({
   onRefreshMembership,
   onSignOut,
   onClose,
+  onUserUpdate,
 }: SettingsScreenProps) {
   const [leagueId, setLeagueId] = useState(prefs.leagueId);
   const [divisionId, setDivisionId] = useState(prefs.divisionId);
@@ -44,6 +46,17 @@ export function SettingsScreen({
   );
   const [publicLeagues, setPublicLeagues] = useState<LeagueSummary[]>([]);
   const [loadingLeagues, setLoadingLeagues] = useState(false);
+  const [linkProvider, setLinkProvider] = useState<
+    null | "fargo" | "digital-pool"
+  >(null);
+  const [linkEmail, setLinkEmail] = useState("");
+  const [linkPassword, setLinkPassword] = useState("");
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
+
+  const fargoLinked = Boolean(user.fargoLinked ?? user.lmsId);
+  const digitalPoolLinked = Boolean(user.digitalPoolLinked);
+  const scoringReady = Boolean(user.scoringReady ?? user.lmsId);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -131,6 +144,10 @@ export function SettingsScreen({
       setStatus("Choose a league from your memberships.");
       return;
     }
+    if (!user.lmsId) {
+      setStatus("Connect FargoRate before saving Score defaults.");
+      return;
+    }
     const next: UserPreferences = {
       ...prefs,
       leagueId: selectedLeague.id,
@@ -144,6 +161,77 @@ export function SettingsScreen({
     };
     onSave(next);
     setStatus("Defaults saved.");
+  };
+
+  const submitLink = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!linkProvider) return;
+    setLinkBusy(true);
+    setLinkError(null);
+    try {
+      const endpoint =
+        linkProvider === "fargo"
+          ? "/api/auth/link/fargo"
+          : "/api/auth/link/digital-pool";
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: linkEmail,
+          password: linkPassword,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        user?: AuthUser;
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.user) {
+        throw new Error(payload?.error || "Could not link account.");
+      }
+      onUserUpdate?.(payload.user);
+      setLinkProvider(null);
+      setLinkEmail("");
+      setLinkPassword("");
+      setStatus(
+        linkProvider === "fargo"
+          ? "FargoRate connected."
+          : "Digital Pool connected.",
+      );
+      if (linkProvider === "fargo") onRefreshMembership();
+    } catch (err) {
+      setLinkError(err instanceof Error ? err.message : "Could not link.");
+    } finally {
+      setLinkBusy(false);
+    }
+  };
+
+  const unlink = async (provider: "fargo" | "digital-pool") => {
+    setLinkBusy(true);
+    setLinkError(null);
+    try {
+      const response = await fetch("/api/auth/unlink", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        user?: AuthUser;
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.user) {
+        throw new Error(payload?.error || "Could not unlink account.");
+      }
+      onUserUpdate?.(payload.user);
+      setStatus(
+        provider === "fargo"
+          ? "FargoRate disconnected."
+          : "Digital Pool disconnected.",
+      );
+    } catch (err) {
+      setLinkError(err instanceof Error ? err.message : "Could not unlink.");
+    } finally {
+      setLinkBusy(false);
+    }
   };
 
   return (
@@ -161,8 +249,7 @@ export function SettingsScreen({
             <span className="font-medium text-[var(--ink)]">
               {user.name ?? user.email ?? "Player"}
             </span>
-            . Defaults apply when you open Tableside and limit Score to your
-            team.
+            . Connect FargoRate for Score and Digital Pool for brackets.
           </p>
         </div>
         <button
@@ -174,7 +261,171 @@ export function SettingsScreen({
         </button>
       </div>
 
-      {loadingMembership ? (
+      <div className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-4 md:p-5">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+            Connected accounts
+          </p>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Tableside is your app login. Link providers for Score and Digital
+            Pool brackets.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/60 px-3 py-2.5">
+            <div>
+              <p className="text-sm font-semibold text-[var(--ink)]">
+                FargoRate / LMS
+              </p>
+              <p className="text-xs text-[var(--muted)]">
+                {fargoLinked
+                  ? scoringReady
+                    ? "Connected · Score ready"
+                    : "Linked · reconnect to unlock Score"
+                  : "Required for Score and event registration"}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {fargoLinked && !scoringReady ? (
+                <button
+                  type="button"
+                  disabled={linkBusy}
+                  onClick={() => {
+                    setLinkProvider("fargo");
+                    setLinkError(null);
+                  }}
+                  className="rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  Reconnect
+                </button>
+              ) : null}
+              {fargoLinked ? (
+                <button
+                  type="button"
+                  disabled={linkBusy}
+                  onClick={() => void unlink("fargo")}
+                  className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)] disabled:opacity-50"
+                >
+                  Disconnect
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={linkBusy}
+                  onClick={() => {
+                    setLinkProvider("fargo");
+                    setLinkError(null);
+                  }}
+                  className="rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  Connect
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/60 px-3 py-2.5">
+            <div>
+              <p className="text-sm font-semibold text-[var(--ink)]">
+                Digital Pool
+              </p>
+              <p className="text-xs text-[var(--muted)]">
+                {digitalPoolLinked
+                  ? "Connected · ready for bracket push"
+                  : "Optional · push brackets after check-in"}
+              </p>
+            </div>
+            {digitalPoolLinked ? (
+              <button
+                type="button"
+                disabled={linkBusy}
+                onClick={() => void unlink("digital-pool")}
+                className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)] disabled:opacity-50"
+              >
+                Disconnect
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={linkBusy}
+                onClick={() => {
+                  setLinkProvider("digital-pool");
+                  setLinkError(null);
+                }}
+                className="rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+              >
+                Connect
+              </button>
+            )}
+          </div>
+        </div>
+
+        {linkProvider ? (
+          <form onSubmit={submitLink} className="space-y-3 border-t border-[var(--line)] pt-3">
+            <p className="text-sm font-semibold text-[var(--ink)]">
+              {linkProvider === "fargo"
+                ? "Connect FargoRate"
+                : "Connect Digital Pool"}
+            </p>
+            <label className="block space-y-1">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                Email
+              </span>
+              <input
+                type="email"
+                required
+                autoComplete="username"
+                value={linkEmail}
+                onChange={(e) => setLinkEmail(e.target.value)}
+                className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2.5 text-sm outline-none ring-[var(--felt)] focus:ring-2"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                Password
+              </span>
+              <input
+                type="password"
+                required
+                autoComplete="current-password"
+                value={linkPassword}
+                onChange={(e) => setLinkPassword(e.target.value)}
+                className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2.5 text-sm outline-none ring-[var(--felt)] focus:ring-2"
+              />
+            </label>
+            {linkError ? (
+              <p className="text-sm text-[var(--danger)]">{linkError}</p>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="submit"
+                disabled={linkBusy}
+                className="rounded-full bg-[var(--felt)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {linkBusy ? "Connecting…" : "Save connection"}
+              </button>
+              <button
+                type="button"
+                disabled={linkBusy}
+                onClick={() => {
+                  setLinkProvider(null);
+                  setLinkError(null);
+                }}
+                className="rounded-full border border-[var(--line)] px-4 py-2 text-sm font-semibold text-[var(--muted)]"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : null}
+      </div>
+
+      {!fargoLinked ? (
+        <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/60 px-4 py-3 text-sm text-[var(--muted)]">
+          Connect FargoRate above to set Score defaults and load your teams.
+        </p>
+      ) : loadingMembership ? (
         <LoadingState label="Finding your leagues, divisions, and teams…" />
       ) : membershipError ? (
         <div className="space-y-3 rounded-[var(--radius)] border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">

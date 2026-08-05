@@ -836,7 +836,7 @@ export function MatchScoring({
     return (
       <EmptyState
         title="Sign in to score"
-        body="Use Login at the top of the page with your BCA / FargoRate account. Scoring submits to LMS and shows live scores for your division night."
+        body="Sign in to Tableside, then connect your FargoRate account in Settings. Scoring submits to LMS and shows live scores for your division night."
         action={
           <button
             type="button"
@@ -846,6 +846,15 @@ export function MatchScoring({
             Go to login
           </button>
         }
+      />
+    );
+  }
+
+  if (!user.lmsId || user.scoringReady === false) {
+    return (
+      <EmptyState
+        title="Connect FargoRate to score"
+        body="Your Tableside account is signed in, but Score needs a linked FargoRate / LMS session. Open Settings → Connected accounts."
       />
     );
   }

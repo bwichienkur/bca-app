@@ -280,7 +280,7 @@ export function LeagueApp() {
   };
 
   const signOut = async () => {
-    await fetch("/api/scoring/logout", { method: "POST" });
+    await fetch("/api/auth/logout", { method: "POST" });
     setUser(null);
     setMembership(null);
     setMembershipError(null);
@@ -345,14 +345,15 @@ export function LeagueApp() {
       setError(null);
       try {
         const sessionData = await fetchJson<{ user: AuthUser | null }>(
-          "/api/scoring/session",
+          "/api/auth/session",
         );
         if (cancelled) return;
         setUser(sessionData.user);
         setAuthLoading(false);
 
         let effectivePrefs = saved;
-        if (sessionData.user) {
+        const hasFargo = Boolean(sessionData.user?.lmsId);
+        if (sessionData.user && hasFargo) {
           const shared = await fetchSharedPreferences();
           if (cancelled) return;
           if (shared) {
@@ -377,9 +378,10 @@ export function LeagueApp() {
         }
 
         // Instant filter from last successful membership scan.
-        const cachedMembership = sessionData.user
-          ? loadStoredMembership(sessionData.user.lmsId)
-          : null;
+        const cachedMembership =
+          sessionData.user?.lmsId
+            ? loadStoredMembership(sessionData.user.lmsId)
+            : null;
         if (sessionData.user && cachedMembership?.teams.length) {
           setMembership(cachedMembership);
           applyMembershipDefaults(
@@ -896,6 +898,11 @@ export function LeagueApp() {
             setUser(nextUser);
             setScreen("main");
             const basePrefs = prefs ?? loadPreferences();
+            if (!nextUser.lmsId) {
+              // App-only account — send them to Settings to connect Fargo/Digital Pool.
+              setScreen("settings");
+              return;
+            }
             void (async () => {
               // Prefer Redis/local cache; only scan the preferred league.
               const nextMembership = await loadMembership({
@@ -933,7 +940,11 @@ export function LeagueApp() {
           loadingMembership={loadingMembership}
           membershipError={membershipError}
           onClose={() => setScreen("main")}
+          onUserUpdate={(nextUser) => {
+            setUser(nextUser);
+          }}
           onRefreshMembership={() => {
+            if (!user.lmsId) return;
             void loadMembership({
               fresh: true,
               prefsOverride: prefs,
