@@ -104,17 +104,14 @@ const fieldClass =
 const labelClass =
   "mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]";
 
-/**
- * Signup actions sit in a fixed 4-column grid so each control keeps the same
- * width whether 1 or 4 buttons are shown.
- */
-const signupActionBtn =
-  "min-w-0 rounded-[var(--radius)] px-1 py-2 text-center text-[11px] font-semibold leading-tight transition disabled:opacity-50 sm:px-1.5 sm:text-xs";
-const signupApproveBtn = `${signupActionBtn} bg-[var(--felt)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]`;
-const signupWaitlistBtn = `${signupActionBtn} border border-[color-mix(in_srgb,var(--amber)_55%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--amber)_28%,var(--surface-2)),color-mix(in_srgb,var(--amber)_12%,var(--surface)))] text-[var(--amber)]`;
-const signupRejectBtn = `${signupActionBtn} border border-[color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--danger)_22%,var(--surface-2)),var(--danger-bg))] text-[var(--danger)]`;
-const signupMessageBtn = `${signupActionBtn} border border-[color-mix(in_srgb,var(--chalk)_40%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--chalk)_18%,var(--surface-2)),color-mix(in_srgb,var(--felt)_10%,var(--surface)))] text-[var(--felt-deep)]`;
-const signupSecondaryBtn = `${signupActionBtn} border border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)]`;
+/** Compact square icon actions for signup cards. */
+const signupIconBtn =
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] transition disabled:opacity-50";
+const signupApproveBtn = `${signupIconBtn} bg-[var(--felt)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] hover:bg-[var(--felt-soft)]`;
+const signupWaitlistBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--amber)_55%,transparent)] bg-[color-mix(in_srgb,var(--amber)_18%,var(--surface-2))] text-[var(--amber)] hover:bg-[color-mix(in_srgb,var(--amber)_28%,var(--surface-2))]`;
+const signupRejectBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[var(--danger-bg)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_28%,var(--surface-2))]`;
+const signupMessageBtn = `${signupIconBtn} border border-[color-mix(in_srgb,var(--chalk)_40%,transparent)] bg-[color-mix(in_srgb,var(--chalk)_14%,var(--surface-2))] text-[var(--felt-deep)] hover:bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))]`;
+const signupSecondaryBtn = `${signupIconBtn} border border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)] hover:bg-[var(--surface-3)]`;
 
 function statusTone(status: TournamentStatus): string {
   switch (status) {
@@ -243,6 +240,48 @@ function ManageTabIcon({ className }: { className?: string }) {
     <TabIconShell className={className}>
       <circle cx="12" cy="12" r="3" />
       <path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6" />
+    </TabIconShell>
+  );
+}
+
+function ApproveIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <path d="m5 12 5 5L20 7" />
+    </TabIconShell>
+  );
+}
+
+function WaitlistIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8v4l2.5 1.5" />
+    </TabIconShell>
+  );
+}
+
+function RejectIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </TabIconShell>
+  );
+}
+
+function MessageIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4 3v-3H6.5A2.5 2.5 0 0 1 4 13.5v-7z" />
+    </TabIconShell>
+  );
+}
+
+function PaidIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 7.5v9M14.2 9.2c-.5-.7-1.2-1-2.2-1-1.3 0-2.2.8-2.2 1.8 0 2.2 4.4 1.1 4.4 3.5 0 1.1-.9 2-2.4 2-1.1 0-2-.4-2.5-1.2" />
     </TabIconShell>
   );
 }
@@ -435,12 +474,12 @@ function SignupPlayerCard({
                 "radial-gradient(120% 80% at 100% 0%, rgba(224,163,90,0.28), transparent 55%)",
             }}
           />
-          <div className="relative flex min-w-0 items-start gap-2 px-3 py-2.5">
+          <div className="relative flex min-w-0 items-start gap-2 px-3 py-2">
             <div className="min-w-0 flex-1">
-              <p className="truncate font-[family-name:var(--font-display)] text-base font-semibold leading-tight tracking-tight text-white">
+              <p className="truncate font-[family-name:var(--font-display)] text-[15px] font-semibold leading-tight tracking-tight text-white">
                 {title}
               </p>
-              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
                 {statusBadge}
                 <span
                   className={[
@@ -454,7 +493,7 @@ function SignupPlayerCard({
                     : ""}
                 </span>
               </div>
-              <p className="mt-1 truncate text-[11px] font-medium leading-tight text-[var(--chalk)]">
+              <p className="mt-0.5 truncate text-[11px] font-medium leading-tight text-[var(--chalk)]">
                 {submittedLabel}
               </p>
             </div>
@@ -488,15 +527,17 @@ function SignupPlayerCard({
       ) : null}
 
       {hasActions ? (
-        <div className="grid grid-cols-4 gap-1.5 border-t border-[var(--line)] px-2.5 py-2">
+        <div className="flex items-center justify-end gap-1.5 border-t border-[var(--line)] px-2.5 py-1.5">
           {actions}
           {note ? (
             <button
               type="button"
               onClick={onShowNote}
               className={signupMessageBtn}
+              aria-label="View signup message"
+              title="Message"
             >
-              Message
+              <MessageIcon className="h-4 w-4" />
             </button>
           ) : null}
         </div>
@@ -2491,8 +2532,10 @@ export function Tournaments({
                                 })
                               }
                               className={signupApproveBtn}
+                              aria-label={`Approve ${reg.displayName}`}
+                              title="Approve"
                             >
-                              Approve
+                              <ApproveIcon className="h-4 w-4" />
                             </button>
                             <button
                               type="button"
@@ -2503,8 +2546,10 @@ export function Tournaments({
                                 })
                               }
                               className={signupWaitlistBtn}
+                              aria-label={`Waitlist ${reg.displayName}`}
+                              title="Waitlist"
                             >
-                              Waitlist
+                              <WaitlistIcon className="h-4 w-4" />
                             </button>
                             <button
                               type="button"
@@ -2515,8 +2560,10 @@ export function Tournaments({
                                 })
                               }
                               className={signupRejectBtn}
+                              aria-label={`Reject ${reg.displayName}`}
+                              title="Reject"
                             >
-                              Reject
+                              <RejectIcon className="h-4 w-4" />
                             </button>
                           </>
                         ) : reg.status === "approved" ? (
@@ -2529,8 +2576,14 @@ export function Tournaments({
                               })
                             }
                             className={signupSecondaryBtn}
+                            aria-label={
+                              reg.paid
+                                ? `Mark ${reg.displayName} unpaid`
+                                : `Mark ${reg.displayName} paid`
+                            }
+                            title={reg.paid ? "Mark unpaid" : "Mark paid"}
                           >
-                            {reg.paid ? "Mark unpaid" : "Mark paid"}
+                            <PaidIcon className="h-4 w-4" />
                           </button>
                         ) : reg.status === "waitlisted" ? (
                           <>
@@ -2543,8 +2596,10 @@ export function Tournaments({
                                 })
                               }
                               className={signupApproveBtn}
+                              aria-label={`Approve ${reg.displayName}`}
+                              title="Approve"
                             >
-                              Approve
+                              <ApproveIcon className="h-4 w-4" />
                             </button>
                             <button
                               type="button"
@@ -2555,8 +2610,10 @@ export function Tournaments({
                                 })
                               }
                               className={signupRejectBtn}
+                              aria-label={`Reject ${reg.displayName}`}
+                              title="Reject"
                             >
-                              Reject
+                              <RejectIcon className="h-4 w-4" />
                             </button>
                           </>
                         ) : undefined;
