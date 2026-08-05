@@ -145,9 +145,51 @@ function registrationCardSubtitle(reg: TournamentRegistration): string | null {
   return reg.email?.trim() || null;
 }
 
+function signupStatusBadge(
+  status: TournamentRegistration["status"],
+): ReactNode {
+  if (status === "pending") {
+    return (
+      <span className="inline-flex shrink-0 rounded-md bg-[var(--amber)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#1a140c]">
+        Pending
+      </span>
+    );
+  }
+  if (status === "approved") {
+    return (
+      <span className="inline-flex shrink-0 rounded-md bg-white/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-white ring-1 ring-white/25">
+        Approved
+      </span>
+    );
+  }
+  if (status === "waitlisted") {
+    return (
+      <span className="inline-flex shrink-0 rounded-md bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--chalk)] ring-1 ring-white/20">
+        Waitlist
+      </span>
+    );
+  }
+  if (status === "rejected") {
+    return (
+      <span className="inline-flex shrink-0 rounded-md bg-[var(--danger-bg)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--danger)] ring-1 ring-white/10">
+        Rejected
+      </span>
+    );
+  }
+  if (status === "withdrawn") {
+    return (
+      <span className="inline-flex shrink-0 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--chalk)] ring-1 ring-white/15">
+        Withdrawn
+      </span>
+    );
+  }
+  return null;
+}
+
 /** Player-search-style card for tournament signups. */
 function SignupPlayerCard({
   title,
+  titleBadge,
   subtitle,
   rating,
   meta,
@@ -159,6 +201,7 @@ function SignupPlayerCard({
   actions,
 }: {
   title: string;
+  titleBadge?: ReactNode;
   subtitle?: string | null;
   rating: number | null;
   meta?: ReactNode;
@@ -181,9 +224,12 @@ function SignupPlayerCard({
       />
       <div className="relative flex min-w-0 items-center gap-2 px-3 py-2">
         <div className="min-w-0 flex-1">
-          <p className="truncate font-[family-name:var(--font-display)] text-base font-semibold leading-tight tracking-tight text-white">
-            {title}
-          </p>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p className="min-w-0 truncate font-[family-name:var(--font-display)] text-base font-semibold leading-tight tracking-tight text-white">
+              {title}
+            </p>
+            {titleBadge}
+          </div>
           {subtitle ? (
             <p className="mt-0.5 truncate text-[11px] font-medium leading-tight text-[var(--chalk)]">
               {subtitle}
@@ -2160,9 +2206,10 @@ export function Tournaments({
                           <li key={reg.id} className="animate-rise">
                             <SignupPlayerCard
                               title={registrationCardTitle(reg)}
+                              titleBadge={signupStatusBadge(reg.status)}
                               subtitle={registrationCardSubtitle(reg)}
                               rating={stats.rating}
-                              meta="Pending"
+                              meta={`Submitted ${formatStartsAt(reg.createdAt)}`}
                               robustnessStatus={stats.robustnessStatus}
                               robustness={stats.robustness}
                               onOpenDetails={
@@ -2195,6 +2242,18 @@ export function Tournaments({
                                     disabled={saving}
                                     onClick={() =>
                                       void onUpdateRegistration(reg.id, {
+                                        status: "waitlisted",
+                                      })
+                                    }
+                                    className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-2 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
+                                  >
+                                    Waitlist
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={saving}
+                                    onClick={() =>
+                                      void onUpdateRegistration(reg.id, {
                                         status: "rejected",
                                       })
                                     }
@@ -2221,8 +2280,7 @@ export function Tournaments({
                       {otherRegistrations.map((reg) => {
                         const stats = statsForRegistration(reg);
                         const metaBits = [
-                          reg.status.charAt(0).toUpperCase() +
-                            reg.status.slice(1),
+                          `Submitted ${formatStartsAt(reg.createdAt)}`,
                           reg.status === "approved"
                             ? reg.paid
                               ? "Paid"
@@ -2233,6 +2291,7 @@ export function Tournaments({
                           <li key={reg.id}>
                             <SignupPlayerCard
                               title={registrationCardTitle(reg)}
+                              titleBadge={signupStatusBadge(reg.status)}
                               subtitle={registrationCardSubtitle(reg)}
                               rating={stats.rating}
                               meta={metaBits.join(" · ")}
@@ -2249,20 +2308,50 @@ export function Tournaments({
                               }
                               teammates={reg.teammates}
                               actions={
-                                reg.status === "approved" ? (
-                                  <button
-                                    type="button"
-                                    disabled={saving}
-                                    onClick={() =>
-                                      void onUpdateRegistration(reg.id, {
-                                        paid: !reg.paid,
-                                      })
-                                    }
-                                    className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-2 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
-                                  >
-                                    {reg.paid ? "Mark unpaid" : "Mark paid"}
-                                  </button>
-                                ) : null
+                                <>
+                                  {reg.status === "approved" ? (
+                                    <button
+                                      type="button"
+                                      disabled={saving}
+                                      onClick={() =>
+                                        void onUpdateRegistration(reg.id, {
+                                          paid: !reg.paid,
+                                        })
+                                      }
+                                      className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-2 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
+                                    >
+                                      {reg.paid ? "Mark unpaid" : "Mark paid"}
+                                    </button>
+                                  ) : null}
+                                  {reg.status === "waitlisted" ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        disabled={saving}
+                                        onClick={() =>
+                                          void onUpdateRegistration(reg.id, {
+                                            status: "approved",
+                                          })
+                                        }
+                                        className="rounded-[var(--radius)] bg-[var(--felt)] px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                                      >
+                                        Approve
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={saving}
+                                        onClick={() =>
+                                          void onUpdateRegistration(reg.id, {
+                                            status: "rejected",
+                                          })
+                                        }
+                                        className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-2 text-xs font-semibold text-[var(--danger)] disabled:opacity-50"
+                                      >
+                                        Reject
+                                      </button>
+                                    </>
+                                  ) : null}
+                                </>
                               }
                             />
                           </li>
