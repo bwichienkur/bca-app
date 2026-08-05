@@ -174,6 +174,90 @@ function ChevronIcon({ className }: { className?: string }) {
   );
 }
 
+function TabIconShell({
+  className,
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      {children}
+    </svg>
+  );
+}
+
+function OverviewTabIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </TabIconShell>
+  );
+}
+
+function SignupsTabIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="3" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a3 3 0 0 1 0 5.74" />
+    </TabIconShell>
+  );
+}
+
+function FieldTabIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <path d="M9 11 12 14l8-8" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </TabIconShell>
+  );
+}
+
+function CalcuttaTabIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M14.5 9.5c-.5-1-1.5-1.5-2.5-1.5-1.5 0-2.5 1-2.5 2.2 0 2.3 5 1.2 5 4.1 0 1.4-1.2 2.5-3 2.5-1.2 0-2.2-.5-2.8-1.5" />
+      <path d="M12 6.5v1.2M12 16.3V17.5" />
+    </TabIconShell>
+  );
+}
+
+function ManageTabIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6" />
+    </TabIconShell>
+  );
+}
+
+const ORGANIZER_TAB_ICONS: Record<
+  DetailSubTab,
+  (props: { className?: string }) => ReactNode
+> = {
+  overview: OverviewTabIcon,
+  signups: SignupsTabIcon,
+  field: FieldTabIcon,
+  calcutta: CalcuttaTabIcon,
+  manage: ManageTabIcon,
+};
+
 function registrationCardTitle(reg: TournamentRegistration): string {
   return reg.teamName?.trim() || reg.displayName;
 }
@@ -2124,30 +2208,34 @@ export function Tournaments({
               <div
                 role="tablist"
                 aria-label="Event organizer sections"
-                className="flex gap-0.5 overflow-x-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                className="grid grid-cols-5 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
               >
                 {(
                   [
                     { id: "overview" as const, label: "Overview" },
-                    {
-                      id: "signups" as const,
-                      label:
-                        t.pendingCount > 0
-                          ? `Signups (${t.pendingCount})`
-                          : "Signups",
-                    },
+                    { id: "signups" as const, label: "Signups" },
                     { id: "field" as const, label: "Field" },
                     { id: "calcutta" as const, label: "Calcutta" },
                     { id: "manage" as const, label: "Manage" },
                   ] as const
                 ).map((item) => {
                   const selected = activeTab === item.id;
+                  const Icon = ORGANIZER_TAB_ICONS[item.id];
+                  const pending =
+                    item.id === "signups" && t.pendingCount > 0
+                      ? t.pendingCount
+                      : 0;
                   return (
                     <button
                       key={item.id}
                       type="button"
                       role="tab"
                       aria-selected={selected}
+                      aria-label={
+                        pending > 0
+                          ? `${item.label}, ${pending} pending`
+                          : item.label
+                      }
                       onClick={() =>
                         startDetailTransition(() => {
                           if (item.id !== "manage") setConfirmRemove(false);
@@ -2155,13 +2243,28 @@ export function Tournaments({
                         })
                       }
                       className={[
-                        "shrink-0 rounded-md px-3 py-2 text-xs font-semibold transition",
+                        "relative flex flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 transition",
                         selected
                           ? "bg-[var(--felt)] text-white shadow-sm"
                           : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
                       ].join(" ")}
                     >
-                      {item.label}
+                      <Icon className="h-4 w-4" />
+                      <span className="text-[9px] font-semibold leading-none tracking-wide sm:text-[10px]">
+                        {item.label}
+                      </span>
+                      {pending > 0 ? (
+                        <span
+                          className={[
+                            "absolute right-0.5 top-0.5 inline-flex min-w-3.5 items-center justify-center rounded-full px-1 text-[9px] font-bold leading-none",
+                            selected
+                              ? "bg-white text-[var(--felt)]"
+                              : "bg-[var(--amber)] text-[#1a140c]",
+                          ].join(" ")}
+                        >
+                          {pending > 9 ? "9+" : pending}
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -2332,51 +2435,36 @@ export function Tournaments({
             ) : null}
 
             {isOrganizer && activeTab === "signups" ? (
-              <div className="space-y-4">
-                <SectionCard
-                  eyebrow="Organizer"
-                  title="Signups"
-                  description="Filter by status (and paid state), review Fargo, then approve or reject."
-                  badge={{
-                    label: "Showing",
-                    value: String(filteredSignups.length),
-                  }}
-                />
+              <div className="space-y-3">
                 {actionMsg ? (
                   <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
                     {actionMsg}
                   </p>
                 ) : null}
 
-                <SurfaceCard>
-                  <div
-                    className={[
-                      "grid gap-3 px-3 py-3 sm:px-4",
-                      showApprovedPaidFilters ? "sm:grid-cols-2" : "",
-                    ].join(" ")}
-                  >
-                    <div>
-                      <p className={labelClass}>Status</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="min-w-[9.5rem] flex-1">
+                    <SelectField
+                      aria-label="Signup status filter"
+                      value={signupStatusFilter}
+                      options={signupStatusOptions}
+                      onChange={setSignupStatusFilter}
+                    />
+                  </div>
+                  {showApprovedPaidFilters ? (
+                    <div className="min-w-[7.5rem] flex-1">
                       <SelectField
-                        aria-label="Signup status filter"
-                        value={signupStatusFilter}
-                        options={signupStatusOptions}
-                        onChange={setSignupStatusFilter}
+                        aria-label="Approved payment filter"
+                        value={signupPaidMode}
+                        options={SIGNUP_PAID_FILTERS}
+                        onChange={setSignupPaidMode}
                       />
                     </div>
-                    {showApprovedPaidFilters ? (
-                      <div>
-                        <p className={labelClass}>Payment</p>
-                        <SelectField
-                          aria-label="Approved payment filter"
-                          value={signupPaidMode}
-                          options={SIGNUP_PAID_FILTERS}
-                          onChange={setSignupPaidMode}
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                </SurfaceCard>
+                  ) : null}
+                  <span className="shrink-0 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-2 text-[11px] font-semibold tabular-nums text-[var(--muted)]">
+                    {filteredSignups.length}
+                  </span>
+                </div>
 
                 {filteredSignups.length === 0 ? (
                   <SurfaceCard>
@@ -2502,29 +2590,32 @@ export function Tournaments({
             ) : null}
 
             {isOrganizer && activeTab === "field" ? (
-              <div className="space-y-4">
-                <SectionCard
-                  eyebrow="Organizer"
-                  title="Field board"
-                  description="Night-of check-in and door/Venmo paid tracking for approved entries."
-                  badge={{
-                    label: "In",
-                    value: `${fieldStats.checkedIn}/${fieldStats.approved || 0}`,
-                  }}
-                />
-
-                <div className="grid grid-cols-3 gap-2">
-                  <StatTile label="Approved" value={String(fieldStats.approved)} />
-                  <StatTile
-                    label="Checked in"
-                    value={String(fieldStats.checkedIn)}
-                    delayClass="animate-delay-1"
-                  />
-                  <StatTile
-                    label="Paid"
-                    value={String(fieldStats.paid)}
-                    delayClass="animate-delay-2"
-                  />
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-1.5">
+                  <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2 py-2 text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                      Field
+                    </p>
+                    <p className="mt-0.5 font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--ink)]">
+                      {fieldStats.approved}
+                    </p>
+                  </div>
+                  <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2 py-2 text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                      In
+                    </p>
+                    <p className="mt-0.5 font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--ink)]">
+                      {fieldStats.checkedIn}
+                    </p>
+                  </div>
+                  <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2 py-2 text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                      Paid
+                    </p>
+                    <p className="mt-0.5 font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--ink)]">
+                      {fieldStats.paid}
+                    </p>
+                  </div>
                 </div>
 
                 <SurfaceCard>
@@ -2673,12 +2764,7 @@ export function Tournaments({
             ) : null}
 
             {isOrganizer && activeTab === "manage" ? (
-              <div className="space-y-4">
-                <SectionCard
-                  eyebrow="Organizer"
-                  title="Manage"
-                  description="Edit the flyer, close registration, remove the event, or review messages."
-                />
+              <div className="space-y-3">
                 <SurfaceCard>
                   <div className="flex flex-wrap gap-2 p-3 sm:p-4">
                     <button
