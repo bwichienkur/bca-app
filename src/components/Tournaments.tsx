@@ -80,6 +80,16 @@ const fieldClass =
 const labelClass =
   "mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]";
 
+/** Compact equal-width signup action buttons (one row). */
+const signupActionBtn =
+  "min-w-0 flex-1 rounded-[var(--radius)] px-1.5 py-2 text-center text-[11px] font-semibold leading-tight transition disabled:opacity-50 sm:px-2 sm:text-xs";
+const signupApproveBtn = `${signupActionBtn} bg-[var(--felt)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]`;
+const signupWaitlistBtn = `${signupActionBtn} border border-[color-mix(in_srgb,var(--amber)_55%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--amber)_28%,var(--surface-2)),color-mix(in_srgb,var(--amber)_12%,var(--surface)))] text-[var(--amber)]`;
+const signupRejectBtn = `${signupActionBtn} border border-[color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--danger)_22%,var(--surface-2)),var(--danger-bg))] text-[var(--danger)]`;
+const signupMessageBtn = `${signupActionBtn} border border-[color-mix(in_srgb,var(--chalk)_40%,transparent)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--chalk)_18%,var(--surface-2)),color-mix(in_srgb,var(--felt)_10%,var(--surface)))] text-[var(--felt-deep)]`;
+const signupMessageBtnOpen = `${signupActionBtn} border border-[var(--chalk)]/55 bg-[color-mix(in_srgb,var(--chalk)_22%,var(--surface-2))] text-[var(--felt-deep)]`;
+const signupSecondaryBtn = `${signupActionBtn} border border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)]`;
+
 function statusTone(status: TournamentStatus): string {
   switch (status) {
     case "open":
@@ -213,6 +223,8 @@ function SignupPlayerCard({
   noteOpen?: boolean;
   onToggleNote?: () => void;
 }) {
+  const hasActions = Boolean(actions) || Boolean(note);
+
   return (
     <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
       <button
@@ -234,12 +246,12 @@ function SignupPlayerCard({
                 "radial-gradient(120% 80% at 100% 0%, rgba(224,163,90,0.28), transparent 55%)",
             }}
           />
-          <div className="relative flex min-w-0 items-center gap-2 px-3 py-2">
+          <div className="relative flex min-w-0 items-start gap-2 px-3 py-2.5">
             <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                <p className="min-w-0 truncate font-[family-name:var(--font-display)] text-base font-semibold leading-tight tracking-tight text-white">
-                  {title}
-                </p>
+              <p className="truncate font-[family-name:var(--font-display)] text-base font-semibold leading-tight tracking-tight text-white">
+                {title}
+              </p>
+              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
                 {statusBadge}
                 <span
                   className={[
@@ -253,19 +265,21 @@ function SignupPlayerCard({
                     : ""}
                 </span>
               </div>
-              <p className="mt-0.5 truncate text-[11px] font-medium leading-tight text-[var(--chalk)]">
+              <p className="mt-1 truncate text-[11px] font-medium leading-tight text-[var(--chalk)]">
                 {submittedLabel}
               </p>
             </div>
-            <p className="shrink-0 font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums leading-none text-white">
-              {rating ?? "—"}
-            </p>
-            <span
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-black/25 text-white ring-1 ring-white/15 transition group-hover:bg-black/35"
-              aria-hidden
-            >
-              <ChevronIcon className="h-3.5 w-3.5" />
-            </span>
+            <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
+              <p className="font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums leading-none text-white">
+                {rating ?? "—"}
+              </p>
+              <span
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-black/25 text-white ring-1 ring-white/15 transition group-hover:bg-black/35"
+                aria-hidden
+              >
+                <ChevronIcon className="h-3.5 w-3.5" />
+              </span>
+            </div>
           </div>
         </div>
       </button>
@@ -284,40 +298,19 @@ function SignupPlayerCard({
         </div>
       ) : null}
 
-      {actions ? (
-        <div className="flex flex-wrap gap-2 border-t border-[var(--line)] px-3 py-2.5">
+      {hasActions ? (
+        <div className="flex flex-nowrap items-stretch gap-1.5 border-t border-[var(--line)] px-2.5 py-2">
           {actions}
           {note ? (
             <button
               type="button"
               onClick={onToggleNote}
               aria-expanded={Boolean(noteOpen)}
-              className={[
-                "rounded-[var(--radius)] border px-3.5 py-2 text-xs font-semibold transition",
-                noteOpen
-                  ? "border-[var(--felt)] bg-[var(--felt)]/15 text-[var(--felt-deep)]"
-                  : "border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)]",
-              ].join(" ")}
+              className={noteOpen ? signupMessageBtnOpen : signupMessageBtn}
             >
-              {noteOpen ? "Hide message" : "Message"}
+              Message
             </button>
           ) : null}
-        </div>
-      ) : note ? (
-        <div className="flex flex-wrap gap-2 border-t border-[var(--line)] px-3 py-2.5">
-          <button
-            type="button"
-            onClick={onToggleNote}
-            aria-expanded={Boolean(noteOpen)}
-            className={[
-              "rounded-[var(--radius)] border px-3.5 py-2 text-xs font-semibold transition",
-              noteOpen
-                ? "border-[var(--felt)] bg-[var(--felt)]/15 text-[var(--felt-deep)]"
-                : "border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)]",
-            ].join(" ")}
-          >
-            {noteOpen ? "Hide message" : "Message"}
-          </button>
         </div>
       ) : null}
 
@@ -2261,7 +2254,7 @@ export function Tournaments({
                                         status: "approved",
                                       })
                                     }
-                                    className="rounded-[var(--radius)] bg-[var(--felt)] px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                                    className={signupApproveBtn}
                                   >
                                     Approve
                                   </button>
@@ -2273,7 +2266,7 @@ export function Tournaments({
                                         status: "waitlisted",
                                       })
                                     }
-                                    className="rounded-[var(--radius)] border border-[var(--amber)]/50 bg-[var(--amber)]/15 px-3.5 py-2 text-xs font-semibold text-[var(--amber)] disabled:opacity-50"
+                                    className={signupWaitlistBtn}
                                   >
                                     Waitlist
                                   </button>
@@ -2285,7 +2278,7 @@ export function Tournaments({
                                         status: "rejected",
                                       })
                                     }
-                                    className="rounded-[var(--radius)] bg-[var(--danger-strong)] px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                                    className={signupRejectBtn}
                                   >
                                     Reject
                                   </button>
@@ -2338,7 +2331,7 @@ export function Tournaments({
                                           paid: !reg.paid,
                                         })
                                       }
-                                      className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-2 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
+                                      className={signupSecondaryBtn}
                                     >
                                       {reg.paid ? "Mark unpaid" : "Mark paid"}
                                     </button>
@@ -2353,7 +2346,7 @@ export function Tournaments({
                                             status: "approved",
                                           })
                                         }
-                                        className="rounded-[var(--radius)] bg-[var(--felt)] px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                                        className={signupApproveBtn}
                                       >
                                         Approve
                                       </button>
@@ -2365,7 +2358,7 @@ export function Tournaments({
                                             status: "rejected",
                                           })
                                         }
-                                        className="rounded-[var(--radius)] bg-[var(--danger-strong)] px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                                        className={signupRejectBtn}
                                       >
                                         Reject
                                       </button>
