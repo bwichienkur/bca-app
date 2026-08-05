@@ -71,6 +71,8 @@ type TournamentsProps = {
   authLoading: boolean;
   playerFargo: number | null;
   onRequestLogin: () => void;
+  /** Jump to Players search and look up a signup name (no Fargo id). */
+  onFindPlayer?: (name: string) => void;
 };
 
 const fieldClass =
@@ -108,14 +110,15 @@ function robustnessLabel(status: RobustnessStatus | null | undefined): string {
   return "Starter";
 }
 
-function robustnessClass(status: RobustnessStatus | null | undefined): string {
+/** Robustness chip for the blue signup header. */
+function robustnessBadgeOnFelt(status: RobustnessStatus | null | undefined): string {
   if (status === "established") {
-    return "bg-[var(--felt)]/20 text-[var(--felt-deep)]";
+    return "bg-white/20 text-white ring-1 ring-white/25";
   }
   if (status === "preliminary") {
-    return "bg-[var(--amber)]/15 text-[var(--amber)]";
+    return "bg-[var(--amber)] text-[#1a140c]";
   }
-  return "bg-[var(--surface-2)] text-[var(--muted)]";
+  return "bg-white/15 text-[var(--chalk)] ring-1 ring-white/20";
 }
 
 function ChevronIcon({ className }: { className?: string }) {
@@ -137,12 +140,6 @@ function ChevronIcon({ className }: { className?: string }) {
 
 function registrationCardTitle(reg: TournamentRegistration): string {
   return reg.teamName?.trim() || reg.displayName;
-}
-
-function registrationCardSubtitle(reg: TournamentRegistration): string | null {
-  const team = reg.teamName?.trim();
-  if (team && team !== reg.displayName.trim()) return reg.displayName;
-  return reg.email?.trim() || null;
 }
 
 function signupStatusBadge(
@@ -189,109 +186,89 @@ function signupStatusBadge(
 /** Player-search-style card for tournament signups. */
 function SignupPlayerCard({
   title,
-  titleBadge,
-  subtitle,
-  rating,
-  meta,
+  statusBadge,
   robustnessStatus,
   robustness,
+  submittedLabel,
+  rating,
   onOpenDetails,
-  note,
+  detailsLabel,
   teammates,
   actions,
+  note,
+  noteOpen,
+  onToggleNote,
 }: {
   title: string;
-  titleBadge?: ReactNode;
-  subtitle?: string | null;
-  rating: number | null;
-  meta?: ReactNode;
+  statusBadge?: ReactNode;
   robustnessStatus: RobustnessStatus;
   robustness: number | null;
-  onOpenDetails?: (() => void) | null;
-  note?: string | null;
+  submittedLabel: string;
+  rating: number | null;
+  onOpenDetails: () => void;
+  detailsLabel: string;
   teammates?: TournamentRegistration["teammates"];
   actions?: ReactNode;
+  note?: string | null;
+  noteOpen?: boolean;
+  onToggleNote?: () => void;
 }) {
-  const header = (
-    <div className="relative overflow-hidden bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] text-white">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-40"
-        style={{
-          background:
-            "radial-gradient(120% 80% at 100% 0%, rgba(224,163,90,0.28), transparent 55%)",
-        }}
-      />
-      <div className="relative flex min-w-0 items-center gap-2 px-3 py-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <p className="min-w-0 truncate font-[family-name:var(--font-display)] text-base font-semibold leading-tight tracking-tight text-white">
-              {title}
-            </p>
-            {titleBadge}
-          </div>
-          {subtitle ? (
-            <p className="mt-0.5 truncate text-[11px] font-medium leading-tight text-[var(--chalk)]">
-              {subtitle}
-            </p>
-          ) : null}
-        </div>
-        <p className="shrink-0 font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums leading-none text-white">
-          {rating ?? "—"}
-        </p>
-        {onOpenDetails ? (
-          <span
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-black/25 text-white ring-1 ring-white/15 transition group-hover:bg-black/35"
-            aria-hidden
-          >
-            <ChevronIcon className="h-3.5 w-3.5" />
-          </span>
-        ) : null}
-      </div>
-    </div>
-  );
-
   return (
     <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
-      {onOpenDetails ? (
-        <button
-          type="button"
-          onClick={onOpenDetails}
-          aria-label={`View stats: ${title}`}
-          className={[
-            "group block w-full text-left transition",
-            "hover:brightness-[1.03]",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--felt-soft)]",
-          ].join(" ")}
-        >
-          {header}
-        </button>
-      ) : (
-        header
-      )}
-
-      <div className="flex min-w-0 items-center gap-2 px-3 py-1.5">
-        {meta ? (
-          typeof meta === "string" ? (
-            <p className="min-w-0 flex-1 truncate text-[11px] text-[var(--muted)]">
-              {meta}
+      <button
+        type="button"
+        onClick={onOpenDetails}
+        aria-label={detailsLabel}
+        className={[
+          "group block w-full text-left transition",
+          "hover:brightness-[1.03]",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--felt-soft)]",
+        ].join(" ")}
+      >
+        <div className="relative overflow-hidden bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] text-white">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-40"
+            style={{
+              background:
+                "radial-gradient(120% 80% at 100% 0%, rgba(224,163,90,0.28), transparent 55%)",
+            }}
+          />
+          <div className="relative flex min-w-0 items-center gap-2 px-3 py-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                <p className="min-w-0 truncate font-[family-name:var(--font-display)] text-base font-semibold leading-tight tracking-tight text-white">
+                  {title}
+                </p>
+                {statusBadge}
+                <span
+                  className={[
+                    "inline-flex shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]",
+                    robustnessBadgeOnFelt(robustnessStatus),
+                  ].join(" ")}
+                >
+                  {robustnessLabel(robustnessStatus)}
+                  {robustness != null && robustness > 0
+                    ? ` · ${Math.round(robustness)}`
+                    : ""}
+                </span>
+              </div>
+              <p className="mt-0.5 truncate text-[11px] font-medium leading-tight text-[var(--chalk)]">
+                {submittedLabel}
+              </p>
+            </div>
+            <p className="shrink-0 font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums leading-none text-white">
+              {rating ?? "—"}
             </p>
-          ) : (
-            <div className="min-w-0 flex-1 truncate">{meta}</div>
-          )
-        ) : (
-          <span className="min-w-0 flex-1" />
-        )}
-        <span
-          className={[
-            "inline-flex shrink-0 rounded-[var(--radius)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
-            robustnessClass(robustnessStatus),
-          ].join(" ")}
-        >
-          {robustnessLabel(robustnessStatus)}
-          {robustness != null ? ` · ${Math.round(robustness)}` : ""}
-        </span>
-      </div>
+            <span
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-black/25 text-white ring-1 ring-white/15 transition group-hover:bg-black/35"
+              aria-hidden
+            >
+              <ChevronIcon className="h-3.5 w-3.5" />
+            </span>
+          </div>
+        </div>
+      </button>
 
       {teammates?.length ? (
         <div className="flex flex-wrap gap-1.5 border-t border-[var(--line)] px-3 py-2">
@@ -307,16 +284,47 @@ function SignupPlayerCard({
         </div>
       ) : null}
 
-      {note ? (
-        <p className="border-t border-[var(--line)] px-3 py-2 text-xs text-[var(--ink)]">
-          {note}
-        </p>
-      ) : null}
-
       {actions ? (
         <div className="flex flex-wrap gap-2 border-t border-[var(--line)] px-3 py-2.5">
           {actions}
+          {note ? (
+            <button
+              type="button"
+              onClick={onToggleNote}
+              aria-expanded={Boolean(noteOpen)}
+              className={[
+                "rounded-[var(--radius)] border px-3.5 py-2 text-xs font-semibold transition",
+                noteOpen
+                  ? "border-[var(--felt)] bg-[var(--felt)]/15 text-[var(--felt-deep)]"
+                  : "border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)]",
+              ].join(" ")}
+            >
+              {noteOpen ? "Hide message" : "Message"}
+            </button>
+          ) : null}
         </div>
+      ) : note ? (
+        <div className="flex flex-wrap gap-2 border-t border-[var(--line)] px-3 py-2.5">
+          <button
+            type="button"
+            onClick={onToggleNote}
+            aria-expanded={Boolean(noteOpen)}
+            className={[
+              "rounded-[var(--radius)] border px-3.5 py-2 text-xs font-semibold transition",
+              noteOpen
+                ? "border-[var(--felt)] bg-[var(--felt)]/15 text-[var(--felt-deep)]"
+                : "border-[var(--line)] bg-[var(--surface-2)] text-[var(--ink)]",
+            ].join(" ")}
+          >
+            {noteOpen ? "Hide message" : "Message"}
+          </button>
+        </div>
+      ) : null}
+
+      {note && noteOpen ? (
+        <p className="border-t border-[var(--line)] bg-[var(--surface-2)]/50 px-3 py-2.5 text-xs leading-relaxed text-[var(--ink)]">
+          {note}
+        </p>
       ) : null}
     </div>
   );
@@ -615,6 +623,7 @@ export function Tournaments({
   authLoading,
   playerFargo,
   onRequestLogin,
+  onFindPlayer,
 }: TournamentsProps) {
   const [view, setView] = useState<View>("browse");
   const [events, setEvents] = useState<TournamentListItem[]>([]);
@@ -647,6 +656,7 @@ export function Tournaments({
     id: string;
     name: string;
   } | null>(null);
+  const [openNoteIds, setOpenNoteIds] = useState<Record<string, boolean>>({});
   const [flyerPreview, setFlyerPreview] = useState<{
     src: string;
     title: string;
@@ -984,6 +994,25 @@ export function Tournaments({
         reg.robustnessStatusAtSignup ??
         ("starter" as RobustnessStatus),
     };
+  };
+
+  const openSignupPlayer = (reg: TournamentRegistration) => {
+    const playerId = registrationPlayerId(reg);
+    if (playerId) {
+      setInspectPlayer({ id: playerId, name: reg.displayName });
+      return;
+    }
+    onFindPlayer?.(reg.displayName.trim());
+  };
+
+  const toggleSignupNote = (regId: string) => {
+    setOpenNoteIds((prev) => ({ ...prev, [regId]: !prev[regId] }));
+  };
+
+  const signupSubmittedLabel = (reg: TournamentRegistration) => {
+    const base = `Submitted ${formatStartsAt(reg.createdAt)}`;
+    if (reg.status !== "approved") return base;
+    return `${base} · ${reg.paid ? "Paid" : "Unpaid"}`;
   };
 
   const setTournamentStatus = async (
@@ -2202,26 +2231,25 @@ export function Tournaments({
                     <ul className="space-y-2">
                       {pendingRegistrations.map((reg) => {
                         const stats = statsForRegistration(reg);
+                        const note = reg.noteToOrganizer?.trim() || null;
                         return (
                           <li key={reg.id} className="animate-rise">
                             <SignupPlayerCard
                               title={registrationCardTitle(reg)}
-                              titleBadge={signupStatusBadge(reg.status)}
-                              subtitle={registrationCardSubtitle(reg)}
+                              statusBadge={signupStatusBadge(reg.status)}
+                              submittedLabel={signupSubmittedLabel(reg)}
                               rating={stats.rating}
-                              meta={`Submitted ${formatStartsAt(reg.createdAt)}`}
                               robustnessStatus={stats.robustnessStatus}
                               robustness={stats.robustness}
-                              onOpenDetails={
+                              onOpenDetails={() => openSignupPlayer(reg)}
+                              detailsLabel={
                                 stats.playerId
-                                  ? () =>
-                                      setInspectPlayer({
-                                        id: stats.playerId!,
-                                        name: reg.displayName,
-                                      })
-                                  : null
+                                  ? `View player: ${reg.displayName}`
+                                  : `Search players for ${reg.displayName}`
                               }
-                              note={reg.noteToOrganizer || null}
+                              note={note}
+                              noteOpen={Boolean(openNoteIds[reg.id])}
+                              onToggleNote={() => toggleSignupNote(reg.id)}
                               teammates={reg.teammates}
                               actions={
                                 <>
@@ -2245,7 +2273,7 @@ export function Tournaments({
                                         status: "waitlisted",
                                       })
                                     }
-                                    className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-2 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
+                                    className="rounded-[var(--radius)] border border-[var(--amber)]/50 bg-[var(--amber)]/15 px-3.5 py-2 text-xs font-semibold text-[var(--amber)] disabled:opacity-50"
                                   >
                                     Waitlist
                                   </button>
@@ -2257,7 +2285,7 @@ export function Tournaments({
                                         status: "rejected",
                                       })
                                     }
-                                    className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-2 text-xs font-semibold text-[var(--danger)] disabled:opacity-50"
+                                    className="rounded-[var(--radius)] bg-[var(--danger-strong)] px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50"
                                   >
                                     Reject
                                   </button>
@@ -2279,33 +2307,25 @@ export function Tournaments({
                     <ul className="space-y-2">
                       {otherRegistrations.map((reg) => {
                         const stats = statsForRegistration(reg);
-                        const metaBits = [
-                          `Submitted ${formatStartsAt(reg.createdAt)}`,
-                          reg.status === "approved"
-                            ? reg.paid
-                              ? "Paid"
-                              : "Unpaid"
-                            : null,
-                        ].filter(Boolean);
+                        const note = reg.noteToOrganizer?.trim() || null;
                         return (
                           <li key={reg.id}>
                             <SignupPlayerCard
                               title={registrationCardTitle(reg)}
-                              titleBadge={signupStatusBadge(reg.status)}
-                              subtitle={registrationCardSubtitle(reg)}
+                              statusBadge={signupStatusBadge(reg.status)}
+                              submittedLabel={signupSubmittedLabel(reg)}
                               rating={stats.rating}
-                              meta={metaBits.join(" · ")}
                               robustnessStatus={stats.robustnessStatus}
                               robustness={stats.robustness}
-                              onOpenDetails={
+                              onOpenDetails={() => openSignupPlayer(reg)}
+                              detailsLabel={
                                 stats.playerId
-                                  ? () =>
-                                      setInspectPlayer({
-                                        id: stats.playerId!,
-                                        name: reg.displayName,
-                                      })
-                                  : null
+                                  ? `View player: ${reg.displayName}`
+                                  : `Search players for ${reg.displayName}`
                               }
+                              note={note}
+                              noteOpen={Boolean(openNoteIds[reg.id])}
+                              onToggleNote={() => toggleSignupNote(reg.id)}
                               teammates={reg.teammates}
                               actions={
                                 <>
@@ -2345,7 +2365,7 @@ export function Tournaments({
                                             status: "rejected",
                                           })
                                         }
-                                        className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-2 text-xs font-semibold text-[var(--danger)] disabled:opacity-50"
+                                        className="rounded-[var(--radius)] bg-[var(--danger-strong)] px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50"
                                       >
                                         Reject
                                       </button>
