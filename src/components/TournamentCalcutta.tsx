@@ -762,8 +762,8 @@ export function TournamentCalcuttaPanel({
                       className={[
                         "rounded-md px-2 py-1 text-[11px] font-semibold transition",
                         selected
-                          ? "bg-[var(--ink)] text-white"
-                          : "text-[var(--muted)] hover:text-[var(--ink)]",
+                          ? "bg-[var(--felt)] text-white shadow-sm"
+                          : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
                       ].join(" ")}
                     >
                       {label}
@@ -808,31 +808,17 @@ export function TournamentCalcuttaPanel({
                           onClick={() => selectLot(lot.registrationId)}
                           className="min-w-0 flex-1 text-left"
                         >
-                          <div className="flex items-baseline justify-between gap-2">
-                            <p className="truncate font-[family-name:var(--font-display)] text-sm font-semibold text-[var(--ink)]">
-                              <span className="mr-1.5 text-[10px] font-semibold tabular-nums text-[var(--muted)]">
-                                {lotIndex}
+                          <p className="truncate font-[family-name:var(--font-display)] text-sm font-semibold text-[var(--ink)]">
+                            <span className="mr-1.5 text-[10px] font-semibold tabular-nums text-[var(--muted)]">
+                              {lotIndex}
+                            </span>
+                            {lotLabel(reg, lot.registrationId)}
+                            {reg?.ratingAtSignup != null ? (
+                              <span className="ml-1.5 font-normal tabular-nums text-[var(--muted)]">
+                                {reg.ratingAtSignup}
                               </span>
-                              {lotLabel(reg, lot.registrationId)}
-                              {reg?.ratingAtSignup != null ? (
-                                <span className="ml-1.5 font-normal tabular-nums text-[var(--muted)]">
-                                  {reg.ratingAtSignup}
-                                </span>
-                              ) : null}
-                            </p>
-                            <p
-                              className={[
-                                "shrink-0 text-sm font-semibold tabular-nums",
-                                sold
-                                  ? "text-[var(--felt-deep)]"
-                                  : "text-[var(--muted)]",
-                              ].join(" ")}
-                            >
-                              {sold
-                                ? formatCalcuttaMoney(lot.soldPriceCents ?? 0)
-                                : "—"}
-                            </p>
-                          </div>
+                            ) : null}
+                          </p>
                           <p className="mt-0.5 truncate text-[11px] text-[var(--muted)]">
                             {sold
                               ? lot.buyerName || "Buyer not named"
@@ -843,18 +829,37 @@ export function TournamentCalcuttaPanel({
                             {lot.place != null ? ` · P${lot.place}` : ""}
                           </p>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setExpandedLotId(
-                              expanded ? null : lot.registrationId,
-                            )
-                          }
-                          className="shrink-0 rounded-md border border-[var(--line)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--muted)] hover:text-[var(--ink)]"
-                          aria-expanded={expanded}
-                        >
-                          {expanded ? "Less" : "More"}
-                        </button>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <p
+                            className={[
+                              "min-w-[2.75rem] text-right text-sm font-semibold tabular-nums",
+                              sold
+                                ? "text-[var(--felt-deep)]"
+                                : "text-[var(--muted)]",
+                            ].join(" ")}
+                          >
+                            {sold
+                              ? formatCalcuttaMoney(lot.soldPriceCents ?? 0)
+                              : "—"}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedLotId(
+                                expanded ? null : lot.registrationId,
+                              )
+                            }
+                            className={[
+                              "inline-flex h-7 shrink-0 items-center justify-center rounded-[var(--radius)] px-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] transition",
+                              expanded
+                                ? "bg-[var(--surface-2)] text-[var(--ink)] ring-1 ring-[var(--line)]"
+                                : "bg-[var(--felt)] text-white hover:bg-[var(--felt-soft)]",
+                            ].join(" ")}
+                            aria-expanded={expanded}
+                          >
+                            {expanded ? "Less" : "More"}
+                          </button>
+                        </div>
                       </div>
 
                       {expanded ? (
