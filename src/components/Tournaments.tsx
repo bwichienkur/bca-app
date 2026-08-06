@@ -4379,6 +4379,9 @@ export function Tournaments({
                   onClick={() => {
                     setEditingId(null);
                     setForm(emptyForm());
+                    setSelectedTemplateId("");
+                    setTemplateName("");
+                    setTemplateMsg(null);
                     setView("create");
                   }}
                   className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
