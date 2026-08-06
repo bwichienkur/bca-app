@@ -1316,12 +1316,12 @@ type MyEntriesPanelProps = {
   onOpenEvent: (eventId: string) => void;
 };
 
-function entryStatusLabel(status: RegistrationStatus): string {
+export function entryStatusLabel(status: RegistrationStatus): string {
   if (status === "waitlisted") return "Waitlist";
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-function entryStatusAccent(status: RegistrationStatus): string {
+export function entryStatusAccent(status: RegistrationStatus): string {
   switch (status) {
     case "approved":
       return "bg-[var(--felt)]";
@@ -1336,7 +1336,7 @@ function entryStatusAccent(status: RegistrationStatus): string {
   }
 }
 
-function entryStatusText(status: RegistrationStatus): string {
+export function entryStatusText(status: RegistrationStatus): string {
   switch (status) {
     case "approved":
       return "text-[var(--felt-deep)]";

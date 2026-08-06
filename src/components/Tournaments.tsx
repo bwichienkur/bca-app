@@ -83,6 +83,9 @@ import { SelectField } from "./SelectField";
 import { TournamentCalcuttaPanel } from "./TournamentCalcutta";
 import {
   EntryTeamsPresetsPanel,
+  entryStatusAccent,
+  entryStatusLabel,
+  entryStatusText,
   MyEntriesPanel,
   TemplatesPresetsPanel,
 } from "./TournamentPresets";
@@ -1484,7 +1487,7 @@ export function Tournaments({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [addressCopied, setAddressCopied] = useState(false);
+  const [copiedFactKey, setCopiedFactKey] = useState<string | null>(null);
   const appliedDeepLinkRef = useRef<string | null>(null);
   const [q, setQ] = useState("");
   const [region, setRegion] = useState("");
@@ -3490,66 +3493,120 @@ export function Tournaments({
 
         {myRegistration ? (
           <OverviewSection title="Your entry">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-[var(--felt)] px-2.5 py-1 text-[11px] font-semibold capitalize text-white">
-                {myRegistration.status}
-              </span>
-              {myEntryRole ? (
-                <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]">
-                  {myEntryRole === "captain" ? "Captain" : "Teammate"}
-                </span>
-              ) : null}
-              <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
-                {myRegistration.paid ? "Paid" : "Unpaid"}
-              </span>
-              {myRegistration.checkedIn ? (
-                <span className="rounded-full bg-[var(--felt)] px-2.5 py-1 text-[11px] font-semibold text-white">
-                  Checked in
-                </span>
-              ) : null}
-              {(() => {
-                const teamRating = registrationDisplayRating(
-                  myRegistration,
-                  {},
-                );
-                const isTeam = isTeamRegistration(myRegistration);
-                return (
-                  <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
-                    {teamRating != null
-                      ? isTeam
-                        ? `Team Fargo ${teamRating}`
-                        : `Fargo ${teamRating}`
-                      : "Unrated"}
-                  </span>
-                );
-              })()}
-            </div>
-            {myRegistration.teamName || myRegistration.teammates?.length ? (
-              <div className="mt-2">
-                <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)]">
-                  {myRegistration.teamName || myRegistration.displayName}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]">
-                    {myRegistration.displayName}
-                    {myRegistration.ratingAtSignup != null
-                      ? ` · ${myRegistration.ratingAtSignup}`
-                      : " · Unrated"}
-                  </span>
-                  {(myRegistration.teammates ?? []).map((mate) => (
-                    <span
-                      key={`${mate.displayName}-${mate.ratingAtSignup ?? "x"}`}
-                      className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]"
+            {(() => {
+              const isTeam = isTeamRegistration(myRegistration);
+              const teamRating = registrationDisplayRating(
+                myRegistration,
+                {},
+              );
+              const title =
+                myRegistration.teamName?.trim() ||
+                myRegistration.displayName;
+              const roster: {
+                name: string;
+                rating: number | null | undefined;
+                label: string;
+              }[] = [
+                {
+                  name: myRegistration.displayName,
+                  rating: myRegistration.ratingAtSignup,
+                  label: isTeam ? "Cap" : "",
+                },
+                ...(myRegistration.teammates ?? []).map((mate, index) => ({
+                  name: mate.displayName,
+                  rating: mate.ratingAtSignup,
+                  label: `T${index + 1}`,
+                })),
+              ];
+              const detailBits = [
+                myEntryRole
+                  ? myEntryRole === "captain"
+                    ? "Captain"
+                    : "Teammate"
+                  : null,
+                myRegistration.paid ? "Paid" : "Unpaid",
+                myRegistration.checkedIn ? "Checked in" : null,
+                teamRating != null
+                  ? isTeam
+                    ? `Team Fargo ${teamRating}`
+                    : `Fargo ${teamRating}`
+                  : "Unrated",
+              ].filter(Boolean) as string[];
+
+              return (
+                <AccentRecordCard
+                  railClassName={[
+                    "w-1 shrink-0 self-stretch",
+                    entryStatusAccent(myRegistration.status),
+                  ].join(" ")}
+                >
+                  <div className="space-y-1.5">
+                    <p
+                      className={[
+                        "text-[10px] font-semibold uppercase tracking-[0.14em]",
+                        entryStatusText(myRegistration.status),
+                      ].join(" ")}
                     >
-                      {mate.displayName}
-                      {mate.ratingAtSignup != null
-                        ? ` · ${mate.ratingAtSignup}`
-                        : " · Unrated"}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
+                      {entryStatusLabel(myRegistration.status)}
+                    </p>
+                    <p className="font-[family-name:var(--font-display)] text-[16px] font-semibold leading-snug tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
+                      {title}
+                    </p>
+                    <p className="text-[12px] leading-snug text-[var(--ink)]">
+                      {detailBits.map((bit, index) => (
+                        <span key={`${bit}-${index}`}>
+                          {index > 0 ? (
+                            <span className="mx-1.5 text-[var(--muted)]">·</span>
+                          ) : null}
+                          <span
+                            className={
+                              bit === "Unpaid" || bit === "Teammate"
+                                ? "text-[var(--muted)]"
+                                : bit === "Checked in" || bit === "Paid"
+                                  ? "text-[var(--felt-deep)]"
+                                  : undefined
+                            }
+                          >
+                            {bit}
+                          </span>
+                        </span>
+                      ))}
+                    </p>
+                    {isTeam || roster.length > 1 ? (
+                      <ul className="space-y-0.5 pt-0.5">
+                        {roster.map((member, index) => (
+                          <li
+                            key={`${member.name}-${index}`}
+                            className="flex min-w-0 items-baseline gap-1.5 text-[11px] leading-snug"
+                          >
+                            {member.label ? (
+                              <span className="w-7 shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                                {member.label}
+                              </span>
+                            ) : null}
+                            <span className="min-w-0 flex-1 break-words text-[var(--ink)]">
+                              {member.name}
+                            </span>
+                            <span
+                              className={[
+                                "shrink-0 tabular-nums",
+                                member.rating == null
+                                  ? "font-semibold text-[var(--amber)]"
+                                  : "text-[var(--muted)]",
+                              ].join(" ")}
+                            >
+                              {member.rating != null
+                                ? member.rating
+                                : "Unrated"}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                </AccentRecordCard>
+              );
+            })()}
           </OverviewSection>
         ) : t.status === "draft" ? (
           <OverviewSection title="Registration">
@@ -3912,15 +3969,17 @@ export function Tournaments({
         });
     };
 
-    const copyAddress = (address: string) => {
+    const copyFact = (key: string, value: string) => {
       void navigator.clipboard
-        ?.writeText(address)
+        ?.writeText(value)
         .then(() => {
-          setAddressCopied(true);
-          window.setTimeout(() => setAddressCopied(false), 1800);
+          setCopiedFactKey(key);
+          window.setTimeout(() => {
+            setCopiedFactKey((prev) => (prev === key ? null : prev));
+          }, 1800);
         })
         .catch(() => {
-          setActionMsg("Could not copy address.");
+          setActionMsg("Could not copy.");
         });
     };
 
@@ -4170,9 +4229,9 @@ export function Tournaments({
                               label="Address"
                               value={t.venueAddress.trim()}
                               wide
-                              copied={addressCopied}
+                              copied={copiedFactKey === "address"}
                               onCopy={() =>
-                                copyAddress(t.venueAddress.trim())
+                                copyFact("address", t.venueAddress.trim())
                               }
                             />
                           ) : null}
@@ -4241,33 +4300,52 @@ export function Tournaments({
                             wide
                           />
                           {t.venmoHandle?.trim() ? (
-                            <OverviewFact
-                              label="Venmo"
-                              value={
-                                t.venmoHandle.trim().startsWith("@")
-                                  ? t.venmoHandle.trim()
-                                  : `@${t.venmoHandle.trim()}`
-                              }
-                              wide
-                            />
+                            (() => {
+                              const value = t.venmoHandle.trim().startsWith("@")
+                                ? t.venmoHandle.trim()
+                                : `@${t.venmoHandle.trim()}`;
+                              return (
+                                <OverviewFact
+                                  label="Venmo"
+                                  value={value}
+                                  wide
+                                  copied={copiedFactKey === "venmo"}
+                                  onCopy={() => copyFact("venmo", value)}
+                                />
+                              );
+                            })()
                           ) : null}
                           {t.zelleHandle?.trim() ? (
-                            <OverviewFact
-                              label="Zelle"
-                              value={t.zelleHandle.trim()}
-                              wide
-                            />
+                            (() => {
+                              const value = t.zelleHandle!.trim();
+                              return (
+                                <OverviewFact
+                                  label="Zelle"
+                                  value={value}
+                                  wide
+                                  copied={copiedFactKey === "zelle"}
+                                  onCopy={() => copyFact("zelle", value)}
+                                />
+                              );
+                            })()
                           ) : null}
                           {t.cashAppHandle?.trim() ? (
-                            <OverviewFact
-                              label="Cash App"
-                              value={
-                                t.cashAppHandle.trim().startsWith("$")
-                                  ? t.cashAppHandle.trim()
-                                  : `$${t.cashAppHandle.trim().replace(/^\$/, "")}`
-                              }
-                              wide
-                            />
+                            (() => {
+                              const value = t.cashAppHandle
+                                .trim()
+                                .startsWith("$")
+                                ? t.cashAppHandle.trim()
+                                : `$${t.cashAppHandle.trim().replace(/^\$/, "")}`;
+                              return (
+                                <OverviewFact
+                                  label="Cash App"
+                                  value={value}
+                                  wide
+                                  copied={copiedFactKey === "cashapp"}
+                                  onCopy={() => copyFact("cashapp", value)}
+                                />
+                              );
+                            })()
                           ) : null}
                           {t.payMethod === "door" ||
                           (!t.venmoHandle?.trim() &&
@@ -4301,17 +4379,31 @@ export function Tournaments({
                             value={t.organizerName}
                           />
                           {t.organizerPhone?.trim() ? (
-                            <OverviewFact
-                              label="Phone"
-                              value={t.organizerPhone.trim()}
-                            />
+                            (() => {
+                              const value = t.organizerPhone!.trim();
+                              return (
+                                <OverviewFact
+                                  label="Phone"
+                                  value={value}
+                                  copied={copiedFactKey === "phone"}
+                                  onCopy={() => copyFact("phone", value)}
+                                />
+                              );
+                            })()
                           ) : null}
                           {t.organizerEmail?.trim() ? (
-                            <OverviewFact
-                              label="Email"
-                              value={t.organizerEmail.trim()}
-                              wide
-                            />
+                            (() => {
+                              const value = t.organizerEmail!.trim();
+                              return (
+                                <OverviewFact
+                                  label="Email"
+                                  value={value}
+                                  wide
+                                  copied={copiedFactKey === "email"}
+                                  onCopy={() => copyFact("email", value)}
+                                />
+                              );
+                            })()
                           ) : null}
                         </dl>
                       </OverviewSection>
