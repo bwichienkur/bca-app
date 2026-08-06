@@ -68,17 +68,15 @@ function normalizeTeam(raw: unknown): TournamentEntryTeam | null {
   if (!isRecord(raw)) return null;
   const id = asString(raw.id);
   const name = asString(raw.name).trim();
-  const kind =
-    raw.kind === "scotch-doubles" || raw.kind === "teams" ? raw.kind : null;
-  if (!id || !name || !kind || !Array.isArray(raw.members)) return null;
+  if (!id || !name || !Array.isArray(raw.members)) return null;
   const members = raw.members
     .map((item) => normalizeMember(item))
     .filter((item): item is TournamentEntryTeamMember => item != null);
-  if (kind === "scotch-doubles" && members.length < 1) return null;
-  if (kind === "teams" && members.length < 1) return null;
+  // Legacy scotch-doubles / teams rows still load as long as they have members.
+  if (members.length < 1) return null;
   const createdAt = asString(raw.createdAt, new Date().toISOString());
   const updatedAt = asString(raw.updatedAt, createdAt);
-  return { id, name, kind, members, createdAt, updatedAt };
+  return { id, name, members, createdAt, updatedAt };
 }
 
 function normalizeRecord(userId: string, value: unknown): EntryTeamsRecord {
@@ -131,17 +129,14 @@ export function tournamentEntryTeamsStoreMode(): "redis" | "memory" {
 
 export async function listTournamentEntryTeams(
   userId: string,
-  kind?: TournamentEntryTeam["kind"] | null,
 ): Promise<TournamentEntryTeam[]> {
   const record = await readRecord(userId.trim());
-  if (!kind) return record.teams;
-  return record.teams.filter((team) => team.kind === kind);
+  return record.teams;
 }
 
 export async function upsertTournamentEntryTeam(input: {
   userId: string;
   name: string;
-  kind: TournamentEntryTeam["kind"];
   members: TournamentEntryTeamMember[];
   id?: string;
 }): Promise<TournamentEntryTeam[]> {
@@ -149,21 +144,11 @@ export async function upsertTournamentEntryTeam(input: {
   if (!userId) throw new Error("User id is required.");
   const name = input.name.trim();
   if (!name) throw new Error("Team name is required.");
-  if (input.kind !== "scotch-doubles" && input.kind !== "teams") {
-    throw new Error("Team kind must be scotch-doubles or teams.");
-  }
   const members = input.members
     .map((item) => normalizeMember(item))
     .filter((item): item is TournamentEntryTeamMember => item != null);
   if (members.length < 1) {
-    throw new Error(
-      input.kind === "scotch-doubles"
-        ? "Add a partner to the pair."
-        : "Add at least one teammate.",
-    );
-  }
-  if (input.kind === "scotch-doubles" && members.length > 1) {
-    throw new Error("Scotch doubles pairs have one partner.");
+    throw new Error("Add at least one teammate.");
   }
 
   const record = await readRecord(userId);
@@ -173,8 +158,7 @@ export async function upsertTournamentEntryTeam(input: {
     ? record.teams.findIndex((item) => item.id === input.id)
     : -1;
   const byName = record.teams.findIndex(
-    (item) =>
-      item.kind === input.kind && item.name.trim().toLowerCase() === nameKey,
+    (item) => item.name.trim().toLowerCase() === nameKey,
   );
   const matchIndex = byId >= 0 ? byId : byName;
 
@@ -183,14 +167,12 @@ export async function upsertTournamentEntryTeam(input: {
       ? {
           ...record.teams[matchIndex]!,
           name,
-          kind: input.kind,
           members,
           updatedAt: now,
         }
       : {
           id: newId(),
           name,
-          kind: input.kind,
           members,
           createdAt: now,
           updatedAt: now,

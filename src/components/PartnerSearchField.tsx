@@ -145,33 +145,70 @@ export function PartnerSearchField({
       Boolean(error) ||
       (searched && query.trim().length >= MIN_QUERY));
 
+  const wasMenuOpen = useRef(false);
   useLayoutEffect(() => {
-    if (!showMenu || !inputRef.current) return;
+    if (!showMenu || !inputRef.current) {
+      wasMenuOpen.current = false;
+      return;
+    }
 
     const updatePosition = () => {
-      const rect = inputRef.current!.getBoundingClientRect();
-      const menuHeight = Math.min(224, window.innerHeight * 0.4);
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const openUpward = spaceBelow < menuHeight + 12 && rect.top > spaceBelow;
+      const input = inputRef.current!;
+      const rect = input.getBoundingClientRect();
+      const viewport = window.visualViewport;
+      const viewTop = viewport?.offsetTop ?? 0;
+      const viewHeight = viewport?.height ?? window.innerHeight;
+      const viewBottom = viewTop + viewHeight;
+      const gap = 4;
+      const pad = 8;
+      const spaceBelow = Math.max(0, viewBottom - rect.bottom - gap - pad);
+      const spaceAbove = Math.max(0, rect.top - viewTop - gap - pad);
+      // Prefer below the field; only flip up when below has almost no room.
+      const openUpward = spaceBelow < 96 && spaceAbove > spaceBelow;
+      const available = Math.max(openUpward ? spaceAbove : spaceBelow, 72);
+      const maxHeight = Math.min(240, available);
+      const width = Math.min(
+        Math.max(rect.width, 220),
+        (viewport?.width ?? window.innerWidth) - pad * 2,
+      );
+      const left = Math.min(
+        Math.max(pad, rect.left),
+        (viewport?.width ?? window.innerWidth) - width - pad,
+      );
+
       setMenuStyle({
         position: "fixed",
-        left: Math.max(8, rect.left),
-        width: Math.min(Math.max(rect.width, 220), window.innerWidth - 16),
-        top: openUpward ? undefined : rect.bottom + 4,
+        left,
+        width,
+        top: openUpward ? undefined : rect.bottom + gap,
         bottom: openUpward
-          ? Math.max(8, window.innerHeight - rect.top + 4)
+          ? Math.max(pad, window.innerHeight - rect.top + gap)
           : undefined,
-        maxHeight: menuHeight,
+        maxHeight,
         zIndex: 10050,
       });
     };
 
+    // On first open, nudge the field into view so results fit below the keyboard.
+    if (!wasMenuOpen.current) {
+      wasMenuOpen.current = true;
+      inputRef.current.scrollIntoView({
+        block: "center",
+        behavior: "smooth",
+      });
+      window.setTimeout(updatePosition, 280);
+    }
     updatePosition();
+    const vv = window.visualViewport;
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
+    vv?.addEventListener("resize", updatePosition);
+    vv?.addEventListener("scroll", updatePosition);
     return () => {
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
+      vv?.removeEventListener("resize", updatePosition);
+      vv?.removeEventListener("scroll", updatePosition);
     };
   }, [showMenu, results.length, loading, error]);
 

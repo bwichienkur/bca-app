@@ -1468,10 +1468,7 @@ export function Tournaments({
         setTeammates(
           tournament.eventType === "singles"
             ? []
-            : emptyTeammates(
-                mateCount ||
-                  (tournament.eventType === "scotch-doubles" ? 1 : 4),
-              ),
+            : emptyTeammates(mateCount || 1),
         );
       } catch (err) {
         setDetail(null);
@@ -1777,37 +1774,32 @@ export function Tournaments({
     }
   };
 
-  const loadEntryTeams = useCallback(
-    async (kind: "scotch-doubles" | "teams") => {
-      if (!user) {
-        setEntryTeams([]);
-        return;
-      }
-      try {
-        const res = await fetch(
-          `/api/tournaments/entry-teams?kind=${encodeURIComponent(kind)}`,
-        );
-        const data = (await res.json()) as {
-          teams?: TournamentEntryTeam[];
-          error?: string;
-        };
-        if (!res.ok) throw new Error(data.error || "Failed to load teams.");
-        setEntryTeams(data.teams ?? []);
-      } catch {
-        setEntryTeams([]);
-      }
-    },
-    [user],
-  );
+  const loadEntryTeams = useCallback(async () => {
+    if (!user) {
+      setEntryTeams([]);
+      return;
+    }
+    try {
+      const res = await fetch("/api/tournaments/entry-teams");
+      const data = (await res.json()) as {
+        teams?: TournamentEntryTeam[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error || "Failed to load teams.");
+      setEntryTeams(data.teams ?? []);
+    } catch {
+      setEntryTeams([]);
+    }
+  }, [user]);
 
   useEffect(() => {
-    const kind = detail?.tournament.eventType;
+    const eventType = detail?.tournament.eventType;
     if (
       view === "detail" &&
       user &&
-      (kind === "scotch-doubles" || kind === "teams")
+      (eventType === "scotch-doubles" || eventType === "teams")
     ) {
-      void loadEntryTeams(kind);
+      void loadEntryTeams();
     }
   }, [detail?.tournament.eventType, loadEntryTeams, user, view]);
 
@@ -1830,9 +1822,8 @@ export function Tournaments({
     setEntryTeamMsg(`Loaded “${team.name}”.`);
   };
 
-  const saveCurrentEntryTeam = async (
-    kind: "scotch-doubles" | "teams",
-  ): Promise<TournamentEntryTeam | null> => {
+  const saveCurrentEntryTeam =
+    async (): Promise<TournamentEntryTeam | null> => {
     const name = teamName.trim();
     const members = teammates
       .map((mate) => ({
@@ -1843,19 +1834,11 @@ export function Tournaments({
       }))
       .filter((mate) => mate.displayName);
     if (!name) {
-      setEntryTeamMsg(
-        kind === "scotch-doubles"
-          ? "Name this pair before saving."
-          : "Name this team before saving.",
-      );
+      setEntryTeamMsg("Name this team before saving.");
       return null;
     }
     if (members.length < 1) {
-      setEntryTeamMsg(
-        kind === "scotch-doubles"
-          ? "Add a partner before saving."
-          : "Add at least one teammate before saving.",
-      );
+      setEntryTeamMsg("Add at least one teammate before saving.");
       return null;
     }
     setEntryTeamBusy(true);
@@ -1867,9 +1850,7 @@ export function Tournaments({
         body: JSON.stringify({
           id: selectedEntryTeamId || undefined,
           name,
-          kind,
-          members:
-            kind === "scotch-doubles" ? members.slice(0, 1) : members,
+          members,
         }),
       });
       const data = (await res.json()) as {
@@ -1948,7 +1929,7 @@ export function Tournaments({
         saveEntryTeam &&
         (eventType === "scotch-doubles" || eventType === "teams")
       ) {
-        const saved = await saveCurrentEntryTeam(eventType);
+        const saved = await saveCurrentEntryTeam();
         if (!saved) {
           throw new Error(
             "Create or complete your tournament team before entering.",
@@ -3271,9 +3252,7 @@ export function Tournaments({
                     <div className="space-y-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/50 p-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                          {t.eventType === "scotch-doubles"
-                            ? "Your pair"
-                            : "Your team"}
+                          Your team
                         </p>
                         <p className="truncate text-[11px] text-[var(--muted)]">
                           Cap{" "}
@@ -3290,19 +3269,9 @@ export function Tournaments({
                         <SelectField
                           aria-label="Saved tournament teams"
                           value={selectedEntryTeamId}
-                          placeholder={
-                            t.eventType === "scotch-doubles"
-                              ? "Saved pair…"
-                              : "Saved team…"
-                          }
+                          placeholder="Saved team…"
                           options={[
-                            {
-                              value: "",
-                              label:
-                                t.eventType === "scotch-doubles"
-                                  ? "New pair"
-                                  : "New team",
-                            },
+                            { value: "", label: "New team" },
                             ...entryTeams.map((team) => ({
                               value: team.id,
                               label: team.name,
@@ -3323,9 +3292,7 @@ export function Tournaments({
 
                       <div className="min-w-0">
                         <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
-                          {t.eventType === "scotch-doubles"
-                            ? "Pair name"
-                            : "Team name"}
+                          Team name
                         </span>
                         <input
                           required
@@ -3335,66 +3302,51 @@ export function Tournaments({
                             setTeamName(e.target.value);
                             setSelectedEntryTeamId("");
                           }}
-                          placeholder={
-                            t.eventType === "scotch-doubles"
-                              ? "e.g. Smith / Lee"
-                              : "Team name"
-                          }
+                          placeholder="e.g. Smith / Lee"
                         />
                       </div>
 
                       <ul className="divide-y divide-[var(--line)] overflow-visible rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]">
-                        {teammates.map((mate, index) => {
-                          const slotLabel =
-                            t.eventType === "scotch-doubles"
-                              ? "Partner"
-                              : `T${index + 1}`;
-                          return (
-                            <li
-                              key={`mate-${index}`}
-                              className="flex min-w-0 items-center gap-1.5 px-2 py-1.5"
-                            >
-                              <span className="w-12 shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
-                                {slotLabel}
-                              </span>
-                              <PartnerSearchField
-                                compact
-                                hideLabel
-                                label={
-                                  t.eventType === "scotch-doubles"
-                                    ? "Partner"
-                                    : `Teammate ${index + 1}`
-                                }
-                                value={mate}
-                                onChange={(next) => {
+                        {teammates.map((mate, index) => (
+                          <li
+                            key={`mate-${index}`}
+                            className="flex min-w-0 items-center gap-1.5 px-2 py-1.5"
+                          >
+                            <span className="w-8 shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                              T{index + 1}
+                            </span>
+                            <PartnerSearchField
+                              compact
+                              hideLabel
+                              label={`Teammate ${index + 1}`}
+                              value={mate}
+                              onChange={(next) => {
+                                setSelectedEntryTeamId("");
+                                setTeammates((prev) =>
+                                  prev.map((row, i) =>
+                                    i === index ? next : row,
+                                  ),
+                                );
+                              }}
+                              placeholder="Name or Fargo ID…"
+                            />
+                            {teammates.length > 1 ? (
+                              <button
+                                type="button"
+                                aria-label={`Remove teammate ${index + 1}`}
+                                onClick={() => {
                                   setSelectedEntryTeamId("");
                                   setTeammates((prev) =>
-                                    prev.map((row, i) =>
-                                      i === index ? next : row,
-                                    ),
+                                    prev.filter((_, i) => i !== index),
                                   );
                                 }}
-                                placeholder="Name or Fargo ID…"
-                              />
-                              {t.eventType === "teams" &&
-                              teammates.length > 1 ? (
-                                <button
-                                  type="button"
-                                  aria-label={`Remove teammate ${index + 1}`}
-                                  onClick={() => {
-                                    setSelectedEntryTeamId("");
-                                    setTeammates((prev) =>
-                                      prev.filter((_, i) => i !== index),
-                                    );
-                                  }}
-                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)]"
-                                >
-                                  ×
-                                </button>
-                              ) : null}
-                            </li>
-                          );
-                        })}
+                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)]"
+                              >
+                                ×
+                              </button>
+                            ) : null}
+                          </li>
+                        ))}
                       </ul>
 
                       {(() => {
@@ -3419,21 +3371,19 @@ export function Tournaments({
                       })()}
 
                       <div className="flex flex-wrap items-center gap-1.5">
-                        {t.eventType === "teams" ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedEntryTeamId("");
-                              setTeammates((prev) => [
-                                ...prev,
-                                emptyTeammate(),
-                              ]);
-                            }}
-                            className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--ink)]"
-                          >
-                            + Teammate
-                          </button>
-                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedEntryTeamId("");
+                            setTeammates((prev) => [
+                              ...prev,
+                              emptyTeammate(),
+                            ]);
+                          }}
+                          className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--ink)]"
+                        >
+                          + Teammate
+                        </button>
                         <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[var(--ink)]">
                           <input
                             type="checkbox"
@@ -3448,13 +3398,7 @@ export function Tournaments({
                         <button
                           type="button"
                           disabled={entryTeamBusy}
-                          onClick={() =>
-                            void saveCurrentEntryTeam(
-                              t.eventType === "scotch-doubles"
-                                ? "scotch-doubles"
-                                : "teams",
-                            )
-                          }
+                          onClick={() => void saveCurrentEntryTeam()}
                           className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
                         >
                           {entryTeamBusy ? "Saving…" : "Save only"}

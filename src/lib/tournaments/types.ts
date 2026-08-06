@@ -236,13 +236,12 @@ export type TournamentEntryTeamMember = {
 };
 
 /**
- * Saved team/pair a player can reuse when entering scotch doubles or team events.
+ * Saved tournament team (captain + 1+ teammates) for doubles/team entry.
  * Keyed by the captain's LMS id — not a league DivisionTeam.
  */
 export type TournamentEntryTeam = {
   id: string;
   name: string;
-  kind: Extract<EventType, "scotch-doubles" | "teams">;
   members: TournamentEntryTeamMember[];
   createdAt: string;
   updatedAt: string;

@@ -6,25 +6,14 @@ import {
   tournamentEntryTeamsStoreMode,
   upsertTournamentEntryTeam,
 } from "@/lib/tournaments/entry-teams-store";
-import type {
-  TournamentEntryTeam,
-  TournamentEntryTeamMember,
-} from "@/lib/tournaments/types";
+import type { TournamentEntryTeamMember } from "@/lib/tournaments/types";
 
 export const dynamic = "force-dynamic";
 
-function parseKind(
-  value: string | null | undefined,
-): TournamentEntryTeam["kind"] | null {
-  if (value === "scotch-doubles" || value === "teams") return value;
-  return null;
-}
-
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await requireScoringSession();
-    const kind = parseKind(request.nextUrl.searchParams.get("kind"));
-    const teams = await listTournamentEntryTeams(session.lmsId, kind);
+    const teams = await listTournamentEntryTeams(session.lmsId);
     return NextResponse.json({
       teams,
       store: tournamentEntryTeamsStoreMode(),
@@ -43,19 +32,11 @@ export async function PUT(request: NextRequest) {
     const body = (await request.json()) as {
       id?: string;
       name?: string;
-      kind?: string;
       members?: TournamentEntryTeamMember[];
     };
-    const kind = parseKind(body.kind);
     if (!body?.name?.trim()) {
       return NextResponse.json(
         { error: "Team name is required.", teams: [] },
-        { status: 400 },
-      );
-    }
-    if (!kind) {
-      return NextResponse.json(
-        { error: "Team kind must be scotch-doubles or teams.", teams: [] },
         { status: 400 },
       );
     }
@@ -69,7 +50,6 @@ export async function PUT(request: NextRequest) {
       userId: session.lmsId,
       id: typeof body.id === "string" ? body.id : undefined,
       name: body.name,
-      kind,
       members: body.members,
     });
     return NextResponse.json({
@@ -83,10 +63,8 @@ export async function PUT(request: NextRequest) {
       message.includes("Sign in")
         ? 401
         : message.includes("required") ||
-            message.includes("partner") ||
             message.includes("teammate") ||
-            message.includes("kind") ||
-            message.includes("pairs")
+            message.includes("name")
           ? 400
           : 502;
     return NextResponse.json({ error: message, teams: [] }, { status });
