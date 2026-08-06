@@ -687,28 +687,38 @@ function raceText(t: TournamentListItem): string {
     : `Race to ${t.winnersRaceTo}`;
 }
 
-function StatTile({
+function OverviewSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-2.5">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+        {title}
+      </p>
+      {children}
+    </section>
+  );
+}
+
+function OverviewFact({
   label,
   value,
-  delayClass = "",
+  wide = false,
 }: {
   label: string;
   value: string;
-  delayClass?: string;
+  wide?: boolean;
 }) {
   return (
-    <div
-      className={[
-        "animate-rise min-w-0 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/70 px-3 py-3",
-        delayClass,
-      ].join(" ")}
-    >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-        {label}
-      </p>
-      <p className="mt-1.5 break-words font-[family-name:var(--font-display)] text-xl font-semibold leading-tight tracking-tight text-[var(--ink)] sm:text-2xl">
+    <div className={wide ? "min-w-0 sm:col-span-2" : "min-w-0"}>
+      <dt className={labelClass}>{label}</dt>
+      <dd className="text-sm font-medium leading-snug text-[var(--ink)] [overflow-wrap:anywhere]">
         {value}
-      </p>
+      </dd>
     </div>
   );
 }
@@ -2863,24 +2873,24 @@ export function Tournaments({
                     </div>
                   )}
 
-                  <div className="space-y-4 border-t border-[var(--line)] p-3 sm:p-4">
+                  <div className="space-y-5 border-t border-[var(--line)] p-3 sm:p-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <span
                         className={[
-                          "inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                          "inline-flex rounded-[var(--radius)] px-2.5 py-1 text-[11px] font-semibold",
                           statusTone(t.status),
                         ].join(" ")}
                       >
                         {STATUS_LABELS[t.status]}
                       </span>
-                      <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]">
+                      <span className="rounded-[var(--radius)] bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]">
                         {formatEntryFee(t.entryFeeCents)}
                       </span>
-                      <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
+                      <span className="rounded-[var(--radius)] bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
                         {t.approvedCount}/{t.maxPlayers}{" "}
                         {entryNoun(t.eventType)} in
                       </span>
-                      <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
+                      <span className="rounded-[var(--radius)] bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
                         Fargo {fargoCapText(t)}
                       </span>
                     </div>
@@ -2891,109 +2901,138 @@ export function Tournaments({
                       </p>
                     ) : null}
 
-                    <dl className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-3">
-                      {(
-                        [
-                          ["When", formatStartsAt(t.startsAt)],
-                          [
-                            "Check-in",
+                    <OverviewSection title="When & where">
+                      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <OverviewFact
+                          label="When"
+                          value={formatStartsAt(t.startsAt)}
+                        />
+                        <OverviewFact
+                          label="Check-in"
+                          value={
                             t.checkInAt
                               ? formatStartsAt(t.checkInAt)
-                              : "At start",
-                          ],
-                          [
-                            "Venue",
-                            [t.venueName, t.city].filter(Boolean).join(" · "),
-                          ],
-                          ...(t.venueAddress
-                            ? ([["Address", t.venueAddress]] as const)
-                            : []),
-                          ["Entry", entryShapeText(t)],
-                          ["Tables", `${tableSizeLabel}`],
-                          ["Break", breakLabel],
-                          ["Draw", drawLabel],
-                          ["Added money", addedMoneyLabel],
-                          [
-                            "Robustness",
-                            minRobustnessLabel(t.minRobustnessStatus),
-                          ],
-                          ["Registration", registrationLabel],
-                          ["Ruleset", rulesetLabel],
-                          ["Organizer", t.organizerName],
-                          ...(t.organizerPhone
-                            ? ([["Phone", t.organizerPhone]] as const)
-                            : []),
-                        ] as Array<[string, string]>
-                      ).map(([label, value]) => (
-                        <div key={label} className="min-w-0">
-                          <dt className={labelClass}>{label}</dt>
-                          <dd className="truncate text-sm font-medium text-[var(--ink)]">
-                            {value}
-                          </dd>
+                              : "At start"
+                          }
+                        />
+                        <OverviewFact label="Venue" value={t.venueName} />
+                        <OverviewFact
+                          label="City"
+                          value={[t.city, t.region].filter(Boolean).join(", ")}
+                        />
+                        {t.venueAddress?.trim() ? (
+                          <OverviewFact
+                            label="Address"
+                            value={t.venueAddress.trim()}
+                            wide
+                          />
+                        ) : null}
+                      </dl>
+                    </OverviewSection>
+
+                    <OverviewSection title="The match">
+                      <dl className="grid grid-cols-2 gap-x-3 gap-y-3">
+                        <OverviewFact label="Game" value={gameLabel} />
+                        <OverviewFact label="Bracket" value={formatLabel} />
+                        <OverviewFact
+                          label="Entry"
+                          value={entryShapeText(t)}
+                        />
+                        <OverviewFact
+                          label="Handicap"
+                          value={handicapLabel(t.handicapSystem)}
+                        />
+                        <OverviewFact label="Race" value={raceText(t)} />
+                        <OverviewFact label="Break" value={breakLabel} />
+                        <OverviewFact label="Draw" value={drawLabel} />
+                        <OverviewFact label="Tables" value={tableSizeLabel} />
+                        <OverviewFact label="Ruleset" value={rulesetLabel} />
+                        <OverviewFact
+                          label="Fargo"
+                          value={
+                            t.maxFargo != null
+                              ? `Cap ${t.maxFargo}`
+                              : "Open"
+                          }
+                        />
+                        <OverviewFact
+                          label="Robustness"
+                          value={minRobustnessLabel(t.minRobustnessStatus)}
+                          wide
+                        />
+                      </dl>
+                      {t.handicapNotes?.trim() ? (
+                        <div className="mt-3">
+                          <p className={labelClass}>Handicap notes</p>
+                          <p className="text-sm leading-relaxed text-[var(--ink)]">
+                            {t.handicapNotes}
+                          </p>
                         </div>
-                      ))}
-                    </dl>
+                      ) : null}
+                    </OverviewSection>
 
-                    <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/70 px-3 py-3">
-                      <p className={labelClass}>Pay here</p>
-                      <ul className="mt-1 space-y-1">
-                        {paymentLines.map((line) => (
-                          <li
-                            key={line}
-                            className="text-sm font-semibold text-[var(--ink)]"
-                          >
-                            {line}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {t.payoutNotes || t.handicapNotes ? (
-                      <div className="space-y-2">
-                        {t.payoutNotes ? (
-                          <div>
-                            <p className={labelClass}>Payouts</p>
-                            <p className="text-sm leading-relaxed text-[var(--ink)]">
-                              {t.payoutNotes}
-                            </p>
-                          </div>
-                        ) : null}
-                        {t.handicapNotes ? (
-                          <div>
-                            <p className={labelClass}>Handicap notes</p>
-                            <p className="text-sm leading-relaxed text-[var(--ink)]">
-                              {t.handicapNotes}
-                            </p>
-                          </div>
-                        ) : null}
+                    <OverviewSection title="Entry & pay">
+                      <dl className="grid grid-cols-2 gap-x-3 gap-y-3">
+                        <OverviewFact
+                          label="Entry fee"
+                          value={formatEntryFee(t.entryFeeCents)}
+                        />
+                        <OverviewFact
+                          label="Added money"
+                          value={addedMoneyLabel}
+                        />
+                        <OverviewFact
+                          label="Registration"
+                          value={registrationLabel}
+                          wide
+                        />
+                      </dl>
+                      <div className="mt-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/70 px-3 py-3">
+                        <p className={labelClass}>Pay here</p>
+                        <ul className="mt-1 space-y-1">
+                          {paymentLines.map((line) => (
+                            <li
+                              key={line}
+                              className="text-sm font-semibold text-[var(--ink)] [overflow-wrap:anywhere]"
+                            >
+                              {line}
+                            </li>
+                          ))}
+                        </ul>
                       </div>
-                    ) : null}
+                      {t.payoutNotes?.trim() ? (
+                        <div className="mt-3">
+                          <p className={labelClass}>Payouts</p>
+                          <p className="text-sm leading-relaxed text-[var(--ink)]">
+                            {t.payoutNotes}
+                          </p>
+                        </div>
+                      ) : null}
+                    </OverviewSection>
+
+                    <OverviewSection title="Contact">
+                      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <OverviewFact
+                          label="Organizer"
+                          value={t.organizerName}
+                        />
+                        {t.organizerPhone?.trim() ? (
+                          <OverviewFact
+                            label="Phone"
+                            value={t.organizerPhone.trim()}
+                          />
+                        ) : null}
+                        {t.organizerEmail?.trim() ? (
+                          <OverviewFact
+                            label="Email"
+                            value={t.organizerEmail.trim()}
+                            wide
+                          />
+                        ) : null}
+                      </dl>
+                    </OverviewSection>
                   </div>
                 </SurfaceCard>
-
-                <div>
-                  <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                    The rack
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <StatTile label="Game" value={gameLabel} />
-                    <StatTile
-                      label="Format"
-                      value={formatLabel}
-                      delayClass="animate-delay-1"
-                    />
-                    <StatTile
-                      label="Handicap"
-                      value={handicapLabel(t.handicapSystem)}
-                      delayClass="animate-delay-1"
-                    />
-                    <StatTile
-                      label="Race"
-                      value={raceText(t)}
-                      delayClass="animate-delay-2"
-                    />
-                  </div>
-                </div>
 
                 {overviewSignup}
 
