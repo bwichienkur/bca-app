@@ -369,18 +369,6 @@ function registrationCardTitle(reg: TournamentRegistration): string {
   return reg.teamName?.trim() || reg.displayName;
 }
 
-/** Split "First … Last" so the surname can sit on its own line. */
-function splitPersonName(name: string): { first: string; last: string | null } {
-  const trimmed = name.replace(/\s+/g, " ").trim();
-  if (!trimmed) return { first: "—", last: null };
-  const i = trimmed.lastIndexOf(" ");
-  if (i <= 0) return { first: trimmed, last: null };
-  return {
-    first: trimmed.slice(0, i),
-    last: trimmed.slice(i + 1),
-  };
-}
-
 function signupStatusBadge(
   status: TournamentRegistration["status"],
 ): ReactNode {
@@ -3323,7 +3311,6 @@ export function Tournaments({
                       fieldEntries.map((reg) => {
                         const stats = statsForRegistration(reg);
                         const title = registrationCardTitle(reg);
-                        const { first, last } = splitPersonName(title);
                         const hasRating = stats.rating != null;
                         const showCaptainUnderTeam =
                           Boolean(reg.teamName?.trim()) &&
@@ -3338,14 +3325,9 @@ export function Tournaments({
 
                               <div className="flex min-w-0 flex-1 items-center gap-0.5">
                                 <div className="min-w-0">
-                                  <p className="font-[family-name:var(--font-display)] text-[13px] font-semibold leading-tight tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
-                                    {first}
+                                  <p className="font-[family-name:var(--font-display)] text-[13px] font-semibold leading-snug tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
+                                    {title}
                                   </p>
-                                  {last ? (
-                                    <p className="font-[family-name:var(--font-display)] text-[13px] font-semibold leading-tight tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
-                                      {last}
-                                    </p>
-                                  ) : null}
                                   {showCaptainUnderTeam ? (
                                     <p className="mt-0.5 text-[11px] leading-tight text-[var(--muted)]">
                                       {reg.displayName}
