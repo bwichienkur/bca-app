@@ -48,10 +48,18 @@ import type {
   TournamentMessage,
   TournamentRegistration,
   TournamentStatus,
+  TournamentTemplate,
+  TournamentTemplateForm,
 } from "@/lib/tournaments/types";
 
 type HandicapFilter = "" | "handicapped" | "scratch";
 import { BackButton } from "./BackButton";
+import {
+  IconSubTabs,
+  LineupsSubIcon,
+  OverviewSubIcon,
+  RosterSubIcon,
+} from "./IconSubTabs";
 import type { AuthUser } from "./LoginScreen";
 import { DateField } from "./DateField";
 import { DateTimeField } from "./DateTimeField";
@@ -66,8 +74,13 @@ import { SearchField } from "./SearchField";
 import { SectionCard } from "./SectionCard";
 import { SelectField } from "./SelectField";
 import { TournamentCalcuttaPanel } from "./TournamentCalcutta";
+import {
+  EntryTeamsPresetsPanel,
+  TemplatesPresetsPanel,
+} from "./TournamentPresets";
 
 type View = "browse" | "create" | "edit" | "detail";
+type BrowseSubTab = "browse" | "teams" | "templates";
 type DetailSubTab = "overview" | "signups" | "field" | "calcutta" | "manage";
 type OverviewDetailTab = "when" | "match" | "pay" | "contact" | "entry";
 type FieldBoardFilter = "all" | "not-checked-in" | "unpaid";
@@ -995,6 +1008,57 @@ const emptyForm = (): EventFormState => ({
   status: "open",
 });
 
+function formToTemplateForm(form: EventFormState): TournamentTemplateForm {
+  return {
+    title: form.title,
+    description: form.description ?? "",
+    gameType: form.gameType,
+    eventType: form.eventType,
+    bracketFormat: form.bracketFormat,
+    breakFormat: form.breakFormat ?? "winner-break",
+    drawType: form.drawType ?? "seeded",
+    handicapSystem: form.handicapSystem,
+    handicapNotes: form.handicapNotes ?? "",
+    rulesetPreset: form.rulesetPreset ?? "bca",
+    winnersRaceTo: form.winnersRaceTo ?? null,
+    losersRaceTo: form.losersRaceTo ?? null,
+    maxFargo: form.maxFargo ?? null,
+    minRobustnessStatus: form.minRobustnessStatus ?? null,
+    unratedPolicy: form.unratedPolicy ?? "message-organizer",
+    maxPlayers: form.maxPlayers,
+    teamSize: form.teamSize ?? 1,
+    entryFeeCents: form.entryFeeCents ?? 0,
+    addedMoneyCents: form.addedMoneyCents ?? 0,
+    payMethod: form.payMethod ?? "door",
+    venmoHandle: form.venmoHandle ?? null,
+    zelleHandle: form.zelleHandle ?? null,
+    cashAppHandle: form.cashAppHandle ?? null,
+    payoutNotes: form.payoutNotes ?? "",
+    registrationMode: form.registrationMode ?? "approval",
+    reportedToFargo: Boolean(form.reportedToFargo),
+    tableSize: form.tableSize ?? "9ft",
+    venueName: form.venueName,
+    venueAddress: form.venueAddress ?? "",
+    city: form.city,
+    region: form.region ?? "Palm Beach",
+    organizerPhone: form.organizerPhone ?? null,
+    status: form.status === "draft" ? "draft" : "open",
+  };
+}
+
+function applyTemplateToForm(template: TournamentTemplate): EventFormState {
+  const base = emptyForm();
+  return {
+    ...base,
+    ...template.form,
+    thumbnailUrl: null,
+    startsAt: "",
+    checkInAt: null,
+    minFargo: null,
+    status: template.form.status === "draft" ? "draft" : "open",
+  };
+}
+
 function emptyTeammates(count: number): TeammateDraft[] {
   return Array.from({ length: Math.max(0, count) }, () => emptyTeammate());
 }
@@ -1059,6 +1123,7 @@ export function Tournaments({
   onDeepLinkEventIdChange,
 }: TournamentsProps) {
   const [view, setView] = useState<View>("browse");
+  const [browseSubTab, setBrowseSubTab] = useState<BrowseSubTab>("browse");
   const [events, setEvents] = useState<TournamentListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1090,6 +1155,11 @@ export function Tournaments({
   const [saveEntryTeam, setSaveEntryTeam] = useState(true);
   const [entryTeamBusy, setEntryTeamBusy] = useState(false);
   const [entryTeamMsg, setEntryTeamMsg] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<TournamentTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [templateName, setTemplateName] = useState("");
+  const [templateBusy, setTemplateBusy] = useState(false);
+  const [templateMsg, setTemplateMsg] = useState<string | null>(null);
   const [resolvedFargo, setResolvedFargo] = useState<number | null>(playerFargo);
   const [resolvedRobustnessStatus, setResolvedRobustnessStatus] =
     useState<RobustnessStatus | null>(null);
@@ -1421,6 +1491,9 @@ export function Tournaments({
   const startEdit = (tournament: TournamentListItem) => {
     setEditingId(tournament.id);
     setForm(tournamentToForm(tournament));
+    setSelectedTemplateId("");
+    setTemplateName("");
+    setTemplateMsg(null);
     setError(null);
     setActionMsg(null);
     setView("edit");
@@ -1430,12 +1503,142 @@ export function Tournaments({
     const returnId = editingId ?? selectedId;
     setForm(emptyForm());
     setEditingId(null);
+    setSelectedTemplateId("");
+    setTemplateName("");
+    setTemplateMsg(null);
     setError(null);
     if (returnId && (view === "edit" || selectedId)) {
       void openDetail(returnId);
       return;
     }
     setView("browse");
+  };
+
+  const loadTemplates = useCallback(async () => {
+    if (!user) {
+      setTemplates([]);
+      return;
+    }
+    try {
+      const res = await fetch("/api/tournaments/templates");
+      const data = (await res.json()) as {
+        templates?: TournamentTemplate[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error || "Failed to load templates.");
+      setTemplates(data.templates ?? []);
+    } catch {
+      setTemplates([]);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if ((view === "create" || view === "edit") && user) {
+      void loadTemplates();
+    }
+  }, [loadTemplates, user, view]);
+
+  const applySelectedTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    setTemplateMsg(null);
+    if (!templateId) return;
+    const template = templates.find((item) => item.id === templateId);
+    if (!template) return;
+    setForm(applyTemplateToForm(template));
+    setTemplateName(template.name);
+    setTemplateMsg(`Loaded “${template.name}”. Set the date, then publish.`);
+  };
+
+  const useTemplateForCreate = (template: TournamentTemplate) => {
+    setEditingId(null);
+    setForm(applyTemplateToForm(template));
+    setSelectedTemplateId(template.id);
+    setTemplateName(template.name);
+    setTemplateMsg(`Loaded “${template.name}”. Set the date, then publish.`);
+    setError(null);
+    setBrowseSubTab("browse");
+    setView("create");
+  };
+
+  const onSaveTemplate = async () => {
+    if (!user) {
+      onRequestLogin();
+      return;
+    }
+    const name =
+      templateName.trim() ||
+      form.title.trim() ||
+      templates.find((item) => item.id === selectedTemplateId)?.name ||
+      "";
+    if (!name) {
+      setTemplateMsg("Name this template before saving.");
+      return;
+    }
+    setTemplateBusy(true);
+    setTemplateMsg(null);
+    try {
+      const res = await fetch("/api/tournaments/templates", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: selectedTemplateId || undefined,
+          name,
+          form: formToTemplateForm(form),
+        }),
+      });
+      const data = (await res.json()) as {
+        templates?: TournamentTemplate[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error || "Failed to save template.");
+      const next = data.templates ?? [];
+      setTemplates(next);
+      const saved =
+        next.find(
+          (item) => item.name.trim().toLowerCase() === name.toLowerCase(),
+        ) ?? next[0];
+      if (saved) {
+        setSelectedTemplateId(saved.id);
+        setTemplateName(saved.name);
+      }
+      setTemplateMsg(`Saved template “${name}”.`);
+    } catch (err) {
+      setTemplateMsg(
+        err instanceof Error ? err.message : "Failed to save template.",
+      );
+    } finally {
+      setTemplateBusy(false);
+    }
+  };
+
+  const onDeleteTemplate = async () => {
+    if (!user || !selectedTemplateId) return;
+    const current = templates.find((item) => item.id === selectedTemplateId);
+    setTemplateBusy(true);
+    setTemplateMsg(null);
+    try {
+      const res = await fetch(
+        `/api/tournaments/templates?id=${encodeURIComponent(selectedTemplateId)}`,
+        { method: "DELETE" },
+      );
+      const data = (await res.json()) as {
+        templates?: TournamentTemplate[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error || "Failed to delete template.");
+      setTemplates(data.templates ?? []);
+      setSelectedTemplateId("");
+      setTemplateName("");
+      setTemplateMsg(
+        current ? `Deleted “${current.name}”.` : "Template deleted.",
+      );
+    } catch (err) {
+      setTemplateMsg(
+        err instanceof Error ? err.message : "Failed to delete template.",
+      );
+    } finally {
+      setTemplateBusy(false);
+    }
   };
 
   const onSaveForm = async (event: FormEvent) => {
@@ -2205,6 +2408,71 @@ export function Tournaments({
                   {error}
                 </p>
               ) : null}
+
+              <div className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/50 p-3">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                    Templates
+                  </p>
+                  <p className="text-[11px] text-[var(--muted)]">
+                    Saved to your account
+                  </p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                  <SelectField
+                    aria-label="Saved templates"
+                    value={selectedTemplateId}
+                    placeholder="Choose a saved template"
+                    options={[
+                      { value: "", label: "Choose a saved template" },
+                      ...templates.map((item) => ({
+                        value: item.id,
+                        label: item.name,
+                      })),
+                    ]}
+                    onChange={applySelectedTemplate}
+                  />
+                  <button
+                    type="button"
+                    disabled={templateBusy || !selectedTemplateId}
+                    onClick={() => void onDeleteTemplate()}
+                    className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)] disabled:opacity-40"
+                  >
+                    Delete
+                  </button>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                  <Field label="Template name">
+                    <input
+                      className={fieldClass}
+                      value={templateName}
+                      onChange={(e) => setTemplateName(e.target.value)}
+                      placeholder={
+                        form.title.trim() || "e.g. Friday 9-ball night"
+                      }
+                    />
+                  </Field>
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      disabled={templateBusy}
+                      onClick={() => void onSaveTemplate()}
+                      className="w-full rounded-[var(--radius)] bg-[var(--felt)] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[var(--felt-soft)] disabled:opacity-50 sm:w-auto"
+                    >
+                      {templateBusy ? "Saving…" : "Save template"}
+                    </button>
+                  </div>
+                </div>
+                {templateMsg ? (
+                  <p className="text-xs text-[var(--felt-deep)]">{templateMsg}</p>
+                ) : (
+                  <p className="text-[11px] text-[var(--muted)]">
+                    Load a template to fill format, venue, and pay settings.
+                    Dates and flyer stay blank. Manage all templates under
+                    Events → Templates.
+                  </p>
+                )}
+              </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 {isEdit ? (
@@ -4309,6 +4577,45 @@ export function Tournaments({
         description="Browse local brackets by venue and Fargo cap, or create your own night."
       />
 
+      <IconSubTabs
+        aria-label="Events sections"
+        value={browseSubTab}
+        onChange={setBrowseSubTab}
+        items={[
+          { id: "browse", label: "Browse", icon: OverviewSubIcon },
+          { id: "teams", label: "Teams", icon: RosterSubIcon },
+          { id: "templates", label: "Templates", icon: LineupsSubIcon },
+        ]}
+      />
+
+      {browseSubTab === "teams" ? (
+        <SurfaceCard>
+          <div className="p-3 sm:p-4">
+            <EntryTeamsPresetsPanel
+              signedIn={Boolean(user)}
+              authLoading={authLoading}
+              captainLabel={user?.name ?? user?.email ?? "You"}
+              captainFargo={resolvedFargo}
+              onRequestLogin={onRequestLogin}
+            />
+          </div>
+        </SurfaceCard>
+      ) : null}
+
+      {browseSubTab === "templates" ? (
+        <SurfaceCard>
+          <div className="p-3 sm:p-4">
+            <TemplatesPresetsPanel
+              signedIn={Boolean(user)}
+              authLoading={authLoading}
+              onRequestLogin={onRequestLogin}
+              onUseTemplate={useTemplateForCreate}
+            />
+          </div>
+        </SurfaceCard>
+      ) : null}
+
+      {browseSubTab === "browse" ? (
       <SurfaceCard>
         <div className="space-y-3 border-b border-[var(--line)] px-3 py-3 sm:px-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -4320,6 +4627,9 @@ export function Tournaments({
               onClick={() => {
                 setEditingId(null);
                 setForm(emptyForm());
+                setSelectedTemplateId("");
+                setTemplateName("");
+                setTemplateMsg(null);
                 setView("create");
                 setError(null);
               }}
@@ -4444,6 +4754,9 @@ export function Tournaments({
                   onClick={() => {
                     setEditingId(null);
                     setForm(emptyForm());
+                    setSelectedTemplateId("");
+                    setTemplateName("");
+                    setTemplateMsg(null);
                     setView("create");
                   }}
                   className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
@@ -4595,6 +4908,7 @@ export function Tournaments({
           )}
         </div>
       </SurfaceCard>
+      ) : null}
 
       {flyerPreview ? (
         <FlyerLightbox
