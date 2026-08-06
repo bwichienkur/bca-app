@@ -35,6 +35,12 @@ import type {
 import { DataTable } from "./DataTable";
 import { EmptyState } from "./EmptyState";
 import { HandicapCalculator } from "./HandicapCalculator";
+import {
+  IconSubTabs,
+  LineupsSubIcon,
+  RosterSubIcon,
+  StandingSubIcon,
+} from "./IconSubTabs";
 import { LoadingState } from "./LoadingState";
 import { LoginScreen, type AuthUser } from "./LoginScreen";
 import { MatchScoring } from "./MatchScoring";
@@ -1326,40 +1332,26 @@ export function LeagueApp() {
           ) : tab === "my-team" ? (
             prefs.teamName ? (
               <section className="space-y-4">
-                <div
-                  role="tablist"
+                <IconSubTabs
                   aria-label="My team sections"
-                  className="grid grid-cols-3 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
-                >
-                  {(
-                    [
-                      { id: "standing" as const, label: "Standing" },
-                      { id: "roster" as const, label: "Roster" },
-                      { id: "lineups" as const, label: "Lineups" },
-                    ]
-                  ).map((item) => {
-                    const selected = myTeamSubTab === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        role="tab"
-                        aria-selected={selected}
-                        onClick={() =>
-                          startTransition(() => setMyTeamSubTab(item.id))
-                        }
-                        className={[
-                          "rounded-md px-2 py-1.5 text-center text-xs font-semibold transition sm:text-sm",
-                          selected
-                            ? "bg-[var(--felt)] text-white shadow-sm"
-                            : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
-                        ].join(" ")}
-                      >
-                        {item.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                  value={myTeamSubTab}
+                  onChange={(id) =>
+                    startTransition(() => setMyTeamSubTab(id))
+                  }
+                  items={[
+                    {
+                      id: "standing",
+                      label: "Standing",
+                      icon: StandingSubIcon,
+                    },
+                    { id: "roster", label: "Roster", icon: RosterSubIcon },
+                    {
+                      id: "lineups",
+                      label: "Lineups",
+                      icon: LineupsSubIcon,
+                    },
+                  ]}
+                />
 
                 <div
                   className={

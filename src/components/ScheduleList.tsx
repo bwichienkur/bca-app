@@ -6,6 +6,11 @@ import { isUpcomingScheduleDate, parseScheduleDate } from "@/lib/schedule";
 import { rankForTeam, teamRanksFromReport } from "@/lib/standings";
 import type { ScheduleDay, ScheduleMatch, TableReport } from "@/lib/types";
 import { EmptyState } from "./EmptyState";
+import {
+  IconSubTabs,
+  PastSubIcon,
+  UpcomingSubIcon,
+} from "./IconSubTabs";
 import { MatchListCard } from "./MatchListCard";
 import { SectionCard } from "./SectionCard";
 
@@ -129,49 +134,25 @@ export function ScheduleList({
         }}
       />
 
-      <div
-        role="tablist"
+      <IconSubTabs
         aria-label="Schedule time range"
-        className="grid grid-cols-2 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
-      >
-        {(
-          [
-            {
-              id: "upcoming" as const,
-              label: "Upcoming",
-              count: upcomingMatches.length,
-            },
-            { id: "past" as const, label: "Past", count: pastMatches.length },
-          ]
-        ).map((item) => {
-          const selected = view === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              onClick={() => setView(item.id)}
-              className={[
-                "rounded-md px-2 py-1.5 text-center text-xs font-semibold transition sm:text-sm",
-                selected
-                  ? "bg-[var(--felt)] text-white shadow-sm"
-                  : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
-              ].join(" ")}
-            >
-              {item.label}
-              <span
-                className={[
-                  "ml-1.5 tabular-nums",
-                  selected ? "text-white/80" : "text-[var(--muted)]",
-                ].join(" ")}
-              >
-                {item.count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+        value={view}
+        onChange={setView}
+        items={[
+          {
+            id: "upcoming",
+            label: "Upcoming",
+            icon: UpcomingSubIcon,
+            count: upcomingMatches.length,
+          },
+          {
+            id: "past",
+            label: "Past",
+            icon: PastSubIcon,
+            count: pastMatches.length,
+          },
+        ]}
+      />
 
       {!visibleMatches.length ? (
         <EmptyState

@@ -31,6 +31,12 @@ import type {
   UserPreferences,
 } from "@/lib/types";
 import { EmptyState } from "./EmptyState";
+import {
+  IconSubTabs,
+  LineupsSubIcon,
+  MatchupSubIcon,
+  RoundsSubIcon,
+} from "./IconSubTabs";
 import { LoadLineupMenu } from "./LoadLineupMenu";
 import { LoadingState } from "./LoadingState";
 import { PlayerSelect } from "./PlayerSelect";
@@ -534,38 +540,16 @@ export function HandicapCalculator({
 
   return (
     <section className="animate-panel space-y-4">
-      <div
-        role="tablist"
+      <IconSubTabs
         aria-label="Handicap sections"
-        className="grid grid-cols-3 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
-      >
-        {(
-          [
-            { id: "matchup" as const, label: "Matchup" },
-            { id: "lineups" as const, label: "Lineups" },
-            { id: "rounds" as const, label: "Rounds" },
-          ]
-        ).map((item) => {
-          const selected = subTab === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              onClick={() => startTransition(() => setSubTab(item.id))}
-              className={[
-                "rounded-md px-2 py-1.5 text-center text-xs font-semibold transition sm:text-sm",
-                selected
-                  ? "bg-[var(--felt)] text-white shadow-sm"
-                  : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
-              ].join(" ")}
-            >
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
+        value={subTab}
+        onChange={(id) => startTransition(() => setSubTab(id))}
+        items={[
+          { id: "matchup", label: "Matchup", icon: MatchupSubIcon },
+          { id: "lineups", label: "Lineups", icon: LineupsSubIcon },
+          { id: "rounds", label: "Rounds", icon: RoundsSubIcon },
+        ]}
+      />
 
       <div
         className={subTab === "matchup" ? "min-w-0 space-y-3" : "hidden"}
