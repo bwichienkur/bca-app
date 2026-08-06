@@ -3,12 +3,14 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useTransition,
   type ChangeEvent,
   type FormEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
@@ -405,20 +407,23 @@ function TeamExpandIcon({ open }: { open: boolean }) {
       fill="none"
       aria-hidden
       className={[
-        "h-4 w-4 transition-transform",
+        "h-4 w-4 text-white transition-transform",
         open ? "rotate-180" : "",
       ].join(" ")}
     >
       <path
         d="M5 7.5 10 12.5 15 7.5"
         stroke="currentColor"
-        strokeWidth="1.75"
+        strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
     </svg>
   );
 }
+
+const teamExpandBtnClass =
+  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] text-white transition hover:bg-[var(--felt-soft)]";
 
 function FieldEstimatedFargoInput({
   disabled,
@@ -707,7 +712,7 @@ function SignupRequestRow({
   rating: number | null;
   isTeam: boolean;
   expanded?: boolean;
-  onToggleExpand?: () => void;
+  onToggleExpand?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   members?: Array<{
     name: string;
     rating: number | null;
@@ -816,12 +821,7 @@ function SignupRequestRow({
               <button
                 type="button"
                 onClick={onToggleExpand}
-                className={[
-                  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt)] transition hover:bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]",
-                  expanded
-                    ? "bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]"
-                    : "",
-                ].join(" ")}
+                className={teamExpandBtnClass}
                 aria-expanded={Boolean(expanded)}
                 aria-label={
                   expanded
@@ -836,7 +836,9 @@ function SignupRequestRow({
           </div>
 
           {isTeam && expanded && members?.length ? (
-            <ul className="mt-2 space-y-1 border-t border-[var(--line)] pt-2">
+            <ul
+              className="mt-2 space-y-1 border-t border-[var(--line)] pt-2 [overflow-anchor:none]"
+            >
               {members.map((member, index) => {
                 const unrated = member.rating == null;
                 return (
@@ -1480,6 +1482,47 @@ export function Tournaments({
   );
   const [expandedSignupId, setExpandedSignupId] = useState<string | null>(null);
   const [expandedFieldId, setExpandedFieldId] = useState<string | null>(null);
+  const rosterExpandAnchorRef = useRef<{
+    key: string;
+    top: number;
+  } | null>(null);
+
+  const toggleRosterExpand = useCallback(
+    (
+      kind: "signup" | "field",
+      regId: string,
+      event: ReactMouseEvent<HTMLButtonElement>,
+    ) => {
+      const row = (event.currentTarget as HTMLElement).closest(
+        "[data-roster-row]",
+      ) as HTMLElement | null;
+      rosterExpandAnchorRef.current = row
+        ? { key: `${kind}:${regId}`, top: row.getBoundingClientRect().top }
+        : null;
+      if (kind === "signup") {
+        setExpandedSignupId((prev) => (prev === regId ? null : regId));
+      } else {
+        setExpandedFieldId((prev) => (prev === regId ? null : regId));
+      }
+    },
+    [],
+  );
+
+  // Keep the toggled team row pinned in the viewport when the roster
+  // expands/collapses so the page doesn't jump under the scroll position.
+  useLayoutEffect(() => {
+    const anchor = rosterExpandAnchorRef.current;
+    if (!anchor) return;
+    rosterExpandAnchorRef.current = null;
+    const row = document.querySelector(
+      `[data-roster-row="${CSS.escape(anchor.key)}"]`,
+    ) as HTMLElement | null;
+    if (!row) return;
+    const delta = row.getBoundingClientRect().top - anchor.top;
+    if (Math.abs(delta) > 0.5) {
+      window.scrollBy(0, delta);
+    }
+  }, [expandedSignupId, expandedFieldId]);
   const [inspectPlayer, setInspectPlayer] = useState<{
     id: string;
     name: string;
@@ -4387,7 +4430,10 @@ export function Tournaments({
                         );
 
                         return (
-                          <li key={reg.id}>
+                          <li
+                            key={reg.id}
+                            data-roster-row={`signup:${reg.id}`}
+                          >
                             <SignupRequestRow
                               title={registrationCardTitle(reg)}
                               status={reg.status}
@@ -4397,10 +4443,8 @@ export function Tournaments({
                               rating={displayRating}
                               isTeam={isTeam}
                               expanded={expandedSignupId === reg.id}
-                              onToggleExpand={() =>
-                                setExpandedSignupId((prev) =>
-                                  prev === reg.id ? null : reg.id,
-                                )
+                              onToggleExpand={(event) =>
+                                toggleRosterExpand("signup", reg.id, event)
                               }
                               members={members}
                               onOpenPlayer={openSignupPlayer}
@@ -4526,7 +4570,11 @@ export function Tournaments({
                           captainLiveRating(reg, playerStats) == null;
 
                         return (
-                          <li key={reg.id} className="px-2 py-1.5 sm:px-3">
+                          <li
+                            key={reg.id}
+                            data-roster-row={`field:${reg.id}`}
+                            className="px-2 py-1.5 sm:px-3"
+                          >
                             <div className="flex items-center gap-1.5">
                               <div className="w-10 shrink-0 font-[family-name:var(--font-display)] text-[13px] font-semibold tabular-nums leading-none text-[var(--felt-deep)]">
                                 {hasRating
@@ -4593,17 +4641,10 @@ export function Tournaments({
                               {isTeam ? (
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    setExpandedFieldId((prev) =>
-                                      prev === reg.id ? null : reg.id,
-                                    )
+                                  onClick={(event) =>
+                                    toggleRosterExpand("field", reg.id, event)
                                   }
-                                  className={[
-                                    "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt)] transition hover:bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]",
-                                    expanded
-                                      ? "bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]"
-                                      : "",
-                                  ].join(" ")}
+                                  className={teamExpandBtnClass}
                                   aria-expanded={expanded}
                                   aria-label={
                                     expanded
@@ -4667,7 +4708,7 @@ export function Tournaments({
                             </div>
 
                             {isTeam && expanded ? (
-                              <ul className="mt-2 space-y-1 border-t border-[var(--line)] pt-2">
+                              <ul className="mt-2 space-y-1 border-t border-[var(--line)] pt-2 [overflow-anchor:none]">
                                 {members.map((member, index) => {
                                   const unrated = member.rating == null;
                                   return (
