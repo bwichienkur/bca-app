@@ -11,6 +11,11 @@ type StandingCell = {
 type TeamStandingSummaryProps = {
   cells: StandingCell[];
   teamName?: string;
+  /**
+   * When true, omit the team name from the header (caller already shows it).
+   * Rank becomes the primary header signal when available.
+   */
+  hideTeamName?: boolean;
   /** Denser layout for narrow / side-by-side contexts. */
   compact?: boolean;
   /**
@@ -233,6 +238,7 @@ function StatChip({
 export function TeamStandingSummary({
   cells,
   teamName,
+  hideTeamName = false,
   compact = false,
   splitHeader = !compact,
 }: TeamStandingSummaryProps) {
@@ -307,9 +313,12 @@ export function TeamStandingSummary({
   }
 
   const nameFromCells = cells.find((cell) => isNameLabel(cell.label))?.value;
-  const resolvedTeamName = teamName?.trim() || nameFromCells?.trim() || "";
+  const resolvedTeamName = hideTeamName
+    ? ""
+    : teamName?.trim() || nameFromCells?.trim() || "";
   const hasHeader = Boolean(resolvedTeamName || rankCell);
   const hasBody = Boolean(gamesRatio || chips);
+  const headerEyebrow = hideTeamName || !resolvedTeamName ? "Standing" : "Team";
 
   const statsBody = (
     <>
@@ -329,7 +338,7 @@ export function TeamStandingSummary({
       <div className="space-y-3">
         {hasHeader ? (
           <SectionCard
-            eyebrow="Team"
+            eyebrow={headerEyebrow}
             title={
               resolvedTeamName ||
               (rankCell ? `#${rankCell.value || "—"}` : "Standing")
@@ -371,7 +380,7 @@ export function TeamStandingSummary({
           <div className="relative flex min-w-0 items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/65">
-                Team
+                {headerEyebrow}
               </p>
               {resolvedTeamName ? (
                 <>
