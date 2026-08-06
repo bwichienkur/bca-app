@@ -8,6 +8,11 @@ import type {
   RosterPlayer,
   ScheduleMatch,
 } from "@/lib/types";
+import {
+  IconSubTabs,
+  RosterSubIcon,
+  StandingSubIcon,
+} from "./IconSubTabs";
 import { TeamPlayerStats } from "./TeamPlayerStats";
 import { BackButton } from "./BackButton";
 import { TeamStandingSummary } from "./TeamStandingSummary";
@@ -30,6 +35,7 @@ type ScheduleMatchDetailProps = {
 };
 
 type MatchSide = "home" | "away";
+type TeamPanelTab = "standing" | "players";
 
 function displayTeamName(name: string): string {
   return name.replace(/^\((H|A)\)\s*/i, "").trim();
@@ -67,6 +73,13 @@ function MatchTeamPanel({
   const statsTeam = playersByTeam?.teams.find(
     (item) => normalizeTeamName(item.team) === normalizeTeamName(teamName),
   );
+  const hasPlayers = Boolean(statsTeam || team?.players.length);
+  const defaultTab: TeamPanelTab = standingCells ? "standing" : "players";
+  const [subTab, setSubTab] = useState<TeamPanelTab>(defaultTab);
+
+  useEffect(() => {
+    setSubTab(standingCells ? "standing" : "players");
+  }, [teamName, standingCells]);
 
   return (
     <article className="min-w-0 overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-sm">
@@ -95,51 +108,57 @@ function MatchTeamPanel({
       </div>
 
       <div className="space-y-3 p-3">
-        {standingCells ? (
-          <TeamStandingSummary
-            cells={standingCells}
-            teamName={teamName}
-            compact
-          />
-        ) : null}
+        <IconSubTabs
+          aria-label={`${teamName} sections`}
+          value={subTab}
+          onChange={setSubTab}
+          items={[
+            { id: "standing", label: "Standing", icon: StandingSubIcon },
+            { id: "players", label: "Players", icon: RosterSubIcon },
+          ]}
+        />
 
-        {statsTeam && playersByTeam ? (
-          <section className="min-w-0">
-            <h5 className="mb-2 px-0.5 text-sm font-semibold text-[var(--ink)]">
-              Player statistics
-            </h5>
-            <div className="min-w-0 overflow-x-auto">
-              <TeamPlayerStats
-                headers={playersByTeam.headers}
-                rows={statsTeam.rows}
-                roster={team?.players}
-              />
-            </div>
-          </section>
+        {subTab === "standing" ? (
+          standingCells ? (
+            <TeamStandingSummary
+              cells={standingCells}
+              hideTeamName
+              compact
+            />
+          ) : (
+            <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-4 text-sm text-[var(--muted)]">
+              Standing isn’t available for this team yet.
+            </p>
+          )
+        ) : statsTeam && playersByTeam ? (
+          <div className="min-w-0 overflow-x-auto">
+            <TeamPlayerStats
+              headers={playersByTeam.headers}
+              rows={statsTeam.rows}
+              roster={team?.players}
+            />
+          </div>
         ) : team ? (
-          <section>
-            <h5 className="mb-2 text-sm font-semibold text-[var(--ink)]">
-              Roster & ratings
-            </h5>
-            <ul className="divide-y divide-[var(--line)] rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]">
-              {team.players.map((player) => (
-                <li
-                  key={player.id}
-                  className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
-                >
-                  <p className="min-w-0 truncate font-medium text-[var(--ink)]">
-                    {playerLabel(player)}
-                  </p>
-                  <span className="shrink-0 tabular-nums font-semibold text-[var(--felt)]">
-                    {player.fargoRating}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
+          <ul className="divide-y divide-[var(--line)] rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]">
+            {team.players.map((player) => (
+              <li
+                key={player.id}
+                className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+              >
+                <p className="min-w-0 truncate font-medium text-[var(--ink)]">
+                  {playerLabel(player)}
+                </p>
+                <span className="shrink-0 tabular-nums font-semibold text-[var(--felt)]">
+                  {player.fargoRating}
+                </span>
+              </li>
+            ))}
+          </ul>
         ) : (
-          <p className="text-sm text-[var(--muted)]">
-            Stats for this team aren’t loaded yet.
+          <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-4 text-sm text-[var(--muted)]">
+            {hasPlayers
+              ? "Stats for this team aren’t loaded yet."
+              : "Player stats aren’t loaded yet."}
           </p>
         )}
       </div>
