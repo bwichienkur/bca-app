@@ -127,7 +127,7 @@ const signupBulkApproveBtn = `${signupBulkBtn} bg-[linear-gradient(180deg,#2f8fc
 const signupBulkWaitlistBtn = `${signupBulkBtn} bg-[linear-gradient(180deg,#edc48a_0%,var(--amber)_48%,#c4893f_100%)] text-[#1a140c]`;
 const signupBulkRejectBtn = `${signupBulkBtn} bg-[linear-gradient(180deg,#e0726a_0%,#c44a42_48%,#9e342e_100%)] text-white`;
 const fieldToggleBtn =
-  "inline-flex h-7 shrink-0 items-center justify-center rounded-[var(--radius)] px-2.5 text-[11px] font-semibold transition disabled:opacity-50";
+  "inline-flex h-7 w-[2.65rem] shrink-0 items-center justify-center rounded-[var(--radius)] px-1.5 text-[11px] font-semibold transition disabled:opacity-50";
 const fieldToggleIdle = `${fieldToggleBtn} border border-[var(--line)] bg-[var(--surface-2)] text-[var(--muted)] hover:text-[var(--ink)]`;
 const fieldToggleCheckedIn = `${fieldToggleBtn} bg-[var(--felt)] text-white`;
 const fieldTogglePaid = `${fieldToggleBtn} bg-[var(--amber)] text-[#1a140c]`;
@@ -3314,44 +3314,36 @@ export function Tournaments({
                         const hasRating = stats.rating != null;
 
                         return (
-                          <li key={reg.id} className="px-3 py-2 sm:px-4">
-                            <div className="flex items-center gap-2">
-                              <div className="w-10 shrink-0 text-right font-[family-name:var(--font-display)] text-[14px] font-semibold tabular-nums leading-none text-[var(--felt-deep)]">
+                          <li key={reg.id} className="px-2 py-1.5 sm:px-3">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-8 shrink-0 font-[family-name:var(--font-display)] text-[13px] font-semibold tabular-nums leading-none text-[var(--felt-deep)]">
                                 {hasRating ? stats.rating : "—"}
                               </div>
 
-                              <div className="min-w-0 flex-1">
-                                <div className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5">
-                                  <p className="min-w-0 break-words font-[family-name:var(--font-display)] text-[14px] font-semibold leading-snug tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
-                                    {title}
-                                  </p>
-                                  {stats.playerId ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => openSignupPlayer(reg)}
-                                      className={signupInlineIconBtn}
-                                      aria-label={`View player history: ${reg.displayName}`}
-                                      title="Player history"
-                                    >
-                                      <EyeIcon className="h-3.5 w-3.5" />
-                                    </button>
-                                  ) : null}
-                                  {!hasRating ? (
-                                    <FieldEstimatedFargoInput
-                                      disabled={saving}
-                                      onSave={(rating) =>
-                                        onUpdateRegistration(reg.id, {
-                                          ratingAtSignup: rating,
-                                        })
-                                      }
-                                    />
-                                  ) : null}
-                                </div>
-                                {reg.teamName &&
-                                reg.teamName.trim() !== reg.displayName.trim() ? (
-                                  <p className="mt-0.5 truncate text-[11px] text-[var(--muted)]">
-                                    {reg.displayName}
-                                  </p>
+                              <div className="flex min-w-0 flex-1 items-center gap-0.5">
+                                <p className="min-w-0 truncate font-[family-name:var(--font-display)] text-[13px] font-semibold leading-none tracking-tight text-[var(--ink)]">
+                                  {title}
+                                </p>
+                                {stats.playerId ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openSignupPlayer(reg)}
+                                    className={signupInlineIconBtn}
+                                    aria-label={`View player history: ${reg.displayName}`}
+                                    title="Player history"
+                                  >
+                                    <EyeIcon className="h-3.5 w-3.5" />
+                                  </button>
+                                ) : null}
+                                {!hasRating ? (
+                                  <FieldEstimatedFargoInput
+                                    disabled={saving}
+                                    onSave={(rating) =>
+                                      onUpdateRegistration(reg.id, {
+                                        ratingAtSignup: rating,
+                                      })
+                                    }
+                                  />
                                 ) : null}
                               </div>
 
@@ -3370,8 +3362,16 @@ export function Tournaments({
                                       : fieldToggleIdle
                                   }
                                   aria-pressed={reg.checkedIn}
+                                  aria-label={
+                                    reg.checkedIn
+                                      ? `Mark ${reg.displayName} not checked in`
+                                      : `Check in ${reg.displayName}`
+                                  }
+                                  title={
+                                    reg.checkedIn ? "Checked in" : "Check in"
+                                  }
                                 >
-                                  {reg.checkedIn ? "In" : "Check in"}
+                                  In
                                 </button>
                                 <button
                                   type="button"
@@ -3390,11 +3390,18 @@ export function Tournaments({
                                       ? `Mark ${reg.displayName} unpaid`
                                       : `Mark ${reg.displayName} paid`
                                   }
+                                  title={reg.paid ? "Paid" : "Mark paid"}
                                 >
                                   {reg.paid ? "Paid" : "Pay"}
                                 </button>
                               </div>
                             </div>
+                            {reg.teamName &&
+                            reg.teamName.trim() !== reg.displayName.trim() ? (
+                              <p className="mt-0.5 truncate pl-[2.375rem] text-[11px] text-[var(--muted)]">
+                                {reg.displayName}
+                              </p>
+                            ) : null}
                           </li>
                         );
                       })
