@@ -22,9 +22,19 @@ function parseTeammates(raw: unknown): RegistrationTeammate[] {
       typeof row.ratingAtSignup === "number" && Number.isFinite(row.ratingAtSignup)
         ? row.ratingAtSignup
         : null;
+    const fargoPlayerId =
+      typeof row.fargoPlayerId === "string" && row.fargoPlayerId.trim()
+        ? row.fargoPlayerId.trim()
+        : null;
+    const readableId =
+      typeof row.readableId === "string" && row.readableId.trim()
+        ? row.readableId.trim()
+        : null;
     return {
       displayName: typeof row.displayName === "string" ? row.displayName : "",
       ratingAtSignup: rating,
+      fargoPlayerId,
+      readableId,
     };
   });
 }
