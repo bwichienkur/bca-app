@@ -368,19 +368,10 @@ export function EntryTeamsPresetsPanel({
       ) : null}
 
       {composing ? (
-        <div className="space-y-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/50 p-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-              {editingId ? "Edit team" : "New team"}
-            </p>
-            <p className="truncate text-[11px] text-[var(--muted)]">
-              Cap{" "}
-              <span className="font-semibold text-[var(--ink)]">
-                {captainLabel}
-                {captainFargo != null ? ` · ${captainFargo}` : ""}
-              </span>
-            </p>
-          </div>
+        <div className="space-y-2 overflow-visible rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/50 p-2.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            {editingId ? "Edit team" : "New team"}
+          </p>
 
           <div className="min-w-0">
             <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
@@ -395,6 +386,29 @@ export function EntryTeamsPresetsPanel({
           </div>
 
           <ul className="divide-y divide-[var(--line)] overflow-visible rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]">
+            <li className="flex min-w-0 items-center gap-1.5 px-2 py-1.5">
+              <span className="w-8 shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                Cap
+              </span>
+              <div className="min-w-0 flex-1 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5">
+                <p className="truncate text-sm font-medium text-[var(--ink)]">
+                  {captainLabel}
+                  <span className="ml-1.5 text-[11px] font-medium text-[var(--muted)]">
+                    (you)
+                  </span>
+                </p>
+                <p
+                  className={[
+                    "text-[11px] tabular-nums",
+                    captainFargo == null
+                      ? "font-semibold text-[var(--amber)]"
+                      : "text-[var(--muted)]",
+                  ].join(" ")}
+                >
+                  {captainFargo != null ? captainFargo : "Unrated"}
+                </p>
+              </div>
+            </li>
             {members.map((mate, index) => (
               <li
                 key={`preset-mate-${index}`}

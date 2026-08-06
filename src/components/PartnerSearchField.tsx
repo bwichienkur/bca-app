@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useId, useRef, useState } from "react";
 import type { PlayerSearchResult } from "@/lib/types";
 
 export type PartnerPick = {
@@ -65,16 +57,10 @@ export function PartnerSearchField({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
-  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
-  const [mounted, setMounted] = useState(false);
 
   const selectedKey = value.fargoPlayerId
     ? `${value.fargoPlayerId}:${value.ratingAtSignup ?? ""}:${value.displayName}`
     : "";
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Sync from parent only when a real Fargo pick (or clear) is applied.
   useEffect(() => {
@@ -145,56 +131,11 @@ export function PartnerSearchField({
       Boolean(error) ||
       (searched && query.trim().length >= MIN_QUERY));
 
-  useLayoutEffect(() => {
-    if (!showMenu || !inputRef.current) {
-      setMenuStyle(null);
-      return;
-    }
-
-    const updatePosition = () => {
-      const input = inputRef.current;
-      if (!input) return;
-      const rect = input.getBoundingClientRect();
-      const vv = window.visualViewport;
-      const gap = 4;
-      const pad = 8;
-      // Always place the menu directly under the search field.
-      const top = rect.bottom + gap;
-      const viewTop = vv?.offsetTop ?? 0;
-      const viewHeight = vv?.height ?? window.innerHeight;
-      const viewWidth = vv?.width ?? window.innerWidth;
-      const viewLeft = vv?.offsetLeft ?? 0;
-      const spaceBelow = Math.max(0, viewTop + viewHeight - top - pad);
-      const maxHeight = Math.max(96, Math.min(220, spaceBelow || 160));
-      const width = Math.min(Math.max(rect.width, 200), viewWidth - pad * 2);
-      const left = Math.min(
-        Math.max(viewLeft + pad, rect.left),
-        viewLeft + viewWidth - width - pad,
-      );
-
-      setMenuStyle({
-        position: "fixed",
-        top,
-        left,
-        width,
-        maxHeight,
-        zIndex: 10050,
-      });
-    };
-
-    updatePosition();
-    const vv = window.visualViewport;
-    window.addEventListener("resize", updatePosition);
-    window.addEventListener("scroll", updatePosition, true);
-    vv?.addEventListener("resize", updatePosition);
-    vv?.addEventListener("scroll", updatePosition);
-    return () => {
-      window.removeEventListener("resize", updatePosition);
-      window.removeEventListener("scroll", updatePosition, true);
-      vv?.removeEventListener("resize", updatePosition);
-      vv?.removeEventListener("scroll", updatePosition);
-    };
-  }, [showMenu, results.length, loading, error, query]);
+  // Keep the field above the keyboard so the anchored menu has room below.
+  useEffect(() => {
+    if (!showMenu || !inputRef.current) return;
+    inputRef.current.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [showMenu]);
 
   useEffect(() => {
     if (!open) return;
@@ -242,72 +183,14 @@ export function PartnerSearchField({
     ? "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]"
     : "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]";
 
-  const menu =
-    mounted && showMenu && menuStyle
-      ? createPortal(
-          <ul
-            ref={menuRef}
-            id={listId}
-            role="listbox"
-            style={menuStyle}
-            className="overflow-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] py-1 shadow-[var(--shadow)]"
-          >
-            {error ? (
-              <li className="px-3 py-2 text-xs text-[var(--danger)]">
-                {error}
-              </li>
-            ) : null}
-            {loading ? (
-              <li className="px-3 py-2 text-xs text-[var(--muted)]">
-                Searching Fargo…
-              </li>
-            ) : null}
-            {!loading && !error && searched && results.length === 0 ? (
-              <li className="px-3 py-2 text-xs text-[var(--muted)]">
-                No Fargo players found. You can still type a name.
-              </li>
-            ) : null}
-            {results.slice(0, 8).map((player) => {
-              const name = playerLabel(player);
-              const rating = player.effectiveRating ?? player.rating;
-              const meta = [
-                player.readableId ? `#${player.readableId}` : null,
-                rating != null ? String(rating) : null,
-                player.location?.trim() || null,
-              ]
-                .filter(Boolean)
-                .join(" · ");
-              return (
-                <li key={player.id}>
-                  <button
-                    type="button"
-                    role="option"
-                    className="flex w-full flex-col px-3 py-2 text-left transition hover:bg-[var(--surface-2)]"
-                    onMouseDown={(event) => {
-                      // Prevent input blur from racing the pick.
-                      event.preventDefault();
-                      pick(player);
-                    }}
-                  >
-                    <span className="text-sm font-semibold text-[var(--ink)]">
-                      {name}
-                    </span>
-                    {meta ? (
-                      <span className="text-[11px] text-[var(--muted)]">
-                        {meta}
-                      </span>
-                    ) : null}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>,
-          document.body,
-        )
-      : null;
-
   return (
-    <div ref={rootRef} className="relative min-w-0 flex-1">
+    <div
+      ref={rootRef}
+      className={[
+        "relative min-w-0 flex-1",
+        showMenu ? "z-[10050]" : "z-0",
+      ].join(" ")}
+    >
       <label className="block min-w-0">
         {showLabel ? (
           <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
@@ -369,7 +252,63 @@ export function PartnerSearchField({
       {loading && !compact ? (
         <p className="mt-1 text-[11px] text-[var(--muted)]">Searching Fargo…</p>
       ) : null}
-      {menu}
+
+      {showMenu ? (
+        <ul
+          ref={menuRef}
+          id={listId}
+          role="listbox"
+          className="absolute left-0 right-0 top-full z-[10050] mt-1 max-h-56 overflow-y-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] py-1 shadow-[var(--shadow)]"
+        >
+          {error ? (
+            <li className="px-3 py-2 text-xs text-[var(--danger)]">{error}</li>
+          ) : null}
+          {loading ? (
+            <li className="px-3 py-2 text-xs text-[var(--muted)]">
+              Searching Fargo…
+            </li>
+          ) : null}
+          {!loading && !error && searched && results.length === 0 ? (
+            <li className="px-3 py-2 text-xs text-[var(--muted)]">
+              No Fargo players found. You can still type a name.
+            </li>
+          ) : null}
+          {results.slice(0, 8).map((player) => {
+            const name = playerLabel(player);
+            const rating = player.effectiveRating ?? player.rating;
+            const meta = [
+              player.readableId ? `#${player.readableId}` : null,
+              rating != null ? String(rating) : null,
+              player.location?.trim() || null,
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            return (
+              <li key={player.id}>
+                <button
+                  type="button"
+                  role="option"
+                  className="flex w-full flex-col px-3 py-2 text-left transition hover:bg-[var(--surface-2)]"
+                  onMouseDown={(event) => {
+                    // Prevent input blur from racing the pick.
+                    event.preventDefault();
+                    pick(player);
+                  }}
+                >
+                  <span className="text-sm font-semibold text-[var(--ink)]">
+                    {name}
+                  </span>
+                  {meta ? (
+                    <span className="text-[11px] text-[var(--muted)]">
+                      {meta}
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
     </div>
   );
 }
