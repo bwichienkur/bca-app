@@ -17,12 +17,22 @@ type PartnerSearchFieldProps = {
   placeholder?: string;
 };
 
+const MIN_QUERY = 2;
+const DEBOUNCE_MS = 280;
+
 function playerLabel(player: PlayerSearchResult): string {
   const ordered = [player.firstName, player.lastName]
     .map((part) => part?.trim())
     .filter(Boolean)
     .join(" ");
   return ordered || player.name || "Unknown";
+}
+
+function selectedLabel(value: PartnerPick): string {
+  if (!value.displayName) return "";
+  return `${value.displayName}${
+    value.ratingAtSignup != null ? ` · ${value.ratingAtSignup}` : ""
+  }`;
 }
 
 export function PartnerSearchField({
@@ -34,66 +44,75 @@ export function PartnerSearchField({
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const requestId = useRef(0);
-  const [query, setQuery] = useState(
-    value.displayName
-      ? `${value.displayName}${
-          value.ratingAtSignup != null ? ` · ${value.ratingAtSignup}` : ""
-        }`
-      : "",
-  );
+  const [query, setQuery] = useState(() => selectedLabel(value));
   const [results, setResults] = useState<PlayerSearchResult[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searched, setSearched] = useState(false);
 
+  // Sync from parent only when a real Fargo pick (or clear) is applied.
   useEffect(() => {
-    if (!value.displayName) {
-      setQuery("");
+    if (value.fargoPlayerId) {
+      setQuery(selectedLabel(value));
       return;
     }
-    setQuery(
-      `${value.displayName}${
-        value.ratingAtSignup != null ? ` · ${value.ratingAtSignup}` : ""
-      }`,
-    );
-  }, [value.displayName, value.ratingAtSignup]);
+    if (!value.displayName) {
+      setQuery("");
+    }
+  }, [value.displayName, value.fargoPlayerId, value.ratingAtSignup]);
 
   useEffect(() => {
     const q = query.trim();
-    if (q.length < 2) {
-      setResults([]);
+    // Skip lookup only after an actual Fargo selection is showing.
+    if (
+      value.fargoPlayerId &&
+      selectedLabel(value) === query.trim()
+    ) {
       setLoading(false);
       return;
     }
-    // Don't re-search when the field is showing a selected player label.
-    if (
-      value.displayName &&
-      q.startsWith(value.displayName) &&
-      (value.ratingAtSignup == null || q.includes(String(value.ratingAtSignup)))
-    ) {
+    if (q.length < MIN_QUERY) {
+      requestId.current += 1;
+      setResults([]);
+      setError(null);
+      setLoading(false);
+      setSearched(false);
       return;
     }
+
     const id = ++requestId.current;
     setLoading(true);
+    setError(null);
     const timer = window.setTimeout(() => {
       void fetch(`/api/players/search?q=${encodeURIComponent(q)}`)
         .then(async (res) => {
           const data = (await res.json()) as {
             players?: PlayerSearchResult[];
+            error?: string;
           };
+          if (!res.ok) {
+            throw new Error(data.error || "Search failed");
+          }
           if (id !== requestId.current) return;
           setResults(data.players ?? []);
+          setSearched(true);
           setOpen(true);
         })
-        .catch(() => {
+        .catch((err: unknown) => {
           if (id !== requestId.current) return;
           setResults([]);
+          setSearched(true);
+          setOpen(true);
+          setError(err instanceof Error ? err.message : "Search failed");
         })
         .finally(() => {
           if (id === requestId.current) setLoading(false);
         });
-    }, 280);
+    }, DEBOUNCE_MS);
+
     return () => window.clearTimeout(timer);
-  }, [query, value.displayName, value.ratingAtSignup]);
+  }, [query, value]);
 
   useEffect(() => {
     if (!open) return;
@@ -104,6 +123,16 @@ export function PartnerSearchField({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
+  const commitFreeText = (raw: string) => {
+    const displayName = raw.trim();
+    onChange({
+      displayName,
+      ratingAtSignup: null,
+      fargoPlayerId: null,
+      readableId: null,
+    });
+  };
+
   const pick = (player: PlayerSearchResult) => {
     const next: PartnerPick = {
       displayName: playerLabel(player),
@@ -112,14 +141,19 @@ export function PartnerSearchField({
       readableId: player.readableId,
     };
     onChange(next);
-    setQuery(
-      `${next.displayName}${
-        next.ratingAtSignup != null ? ` · ${next.ratingAtSignup}` : ""
-      }`,
-    );
+    setQuery(selectedLabel(next));
     setOpen(false);
     setResults([]);
+    setError(null);
+    setSearched(false);
   };
+
+  const showMenu =
+    open &&
+    (loading ||
+      results.length > 0 ||
+      Boolean(error) ||
+      (searched && query.trim().length >= MIN_QUERY));
 
   return (
     <div ref={rootRef} className="relative min-w-0">
@@ -137,28 +171,51 @@ export function PartnerSearchField({
           onChange={(event) => {
             const next = event.target.value;
             setQuery(next);
-            onChange({
-              displayName: next.trim(),
-              ratingAtSignup: null,
-              fargoPlayerId: null,
-              readableId: null,
-            });
+            // Clear a prior Fargo pick as soon as the user edits the field.
+            if (value.fargoPlayerId || value.displayName !== next.trim()) {
+              onChange({
+                displayName: next.trim(),
+                ratingAtSignup: null,
+                fargoPlayerId: null,
+                readableId: null,
+              });
+            }
             setOpen(true);
           }}
           onFocus={() => {
-            if (results.length) setOpen(true);
+            if (
+              results.length > 0 ||
+              error ||
+              (searched && query.trim().length >= MIN_QUERY)
+            ) {
+              setOpen(true);
+            }
+          }}
+          onBlur={() => {
+            // Keep free-text names for partners not found in Fargo.
+            window.setTimeout(() => {
+              if (!value.fargoPlayerId) commitFreeText(query);
+            }, 120);
           }}
         />
       </label>
       {loading ? (
-        <p className="mt-1 text-[11px] text-[var(--muted)]">Searching…</p>
+        <p className="mt-1 text-[11px] text-[var(--muted)]">Searching Fargo…</p>
       ) : null}
-      {open && results.length > 0 ? (
+      {showMenu ? (
         <ul
           id={listId}
           role="listbox"
           className="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] py-1 shadow-[var(--shadow)]"
         >
+          {error ? (
+            <li className="px-3 py-2 text-xs text-[var(--danger)]">{error}</li>
+          ) : null}
+          {!loading && !error && searched && results.length === 0 ? (
+            <li className="px-3 py-2 text-xs text-[var(--muted)]">
+              No Fargo players found. You can still type a name.
+            </li>
+          ) : null}
           {results.slice(0, 8).map((player) => {
             const name = playerLabel(player);
             const rating = player.effectiveRating ?? player.rating;
@@ -175,7 +232,11 @@ export function PartnerSearchField({
                   type="button"
                   role="option"
                   className="flex w-full flex-col px-3 py-2 text-left transition hover:bg-[var(--surface-2)]"
-                  onClick={() => pick(player)}
+                  onMouseDown={(event) => {
+                    // Prevent input blur from racing the pick.
+                    event.preventDefault();
+                    pick(player);
+                  }}
                 >
                   <span className="text-sm font-semibold text-[var(--ink)]">
                     {name}
