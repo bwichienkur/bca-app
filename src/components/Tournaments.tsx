@@ -64,6 +64,7 @@ import { TournamentCalcuttaPanel } from "./TournamentCalcutta";
 
 type View = "browse" | "create" | "edit" | "detail";
 type DetailSubTab = "overview" | "signups" | "field" | "calcutta" | "manage";
+type OverviewDetailTab = "when" | "match" | "pay" | "contact";
 type FieldBoardFilter = "all" | "not-checked-in" | "unpaid";
 type SignupStatusFilter =
   | "pending"
@@ -257,6 +258,49 @@ function ManageTabIcon({ className }: { className?: string }) {
   );
 }
 
+function WhenDetailIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 10h18" />
+      <path d="M8 3v4" />
+      <path d="M16 3v4" />
+      <path d="M8 14h2M12 14h2M16 14h.01M8 17h2M12 17h2" />
+    </TabIconShell>
+  );
+}
+
+function MatchDetailIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="3.5" />
+      <path d="M12 3v3.5M12 17.5V21M3 12h3.5M17.5 12H21" />
+    </TabIconShell>
+  );
+}
+
+function PayDetailIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <path d="M3 10h18" />
+      <path d="M14.5 14.2c-.4-.7-1.1-1-1.9-1-1.1 0-1.9.7-1.9 1.6 0 1.6 3.8.9 3.8 2.9 0 1-.9 1.8-2.2 1.8-.9 0-1.6-.4-2-1.1" />
+    </TabIconShell>
+  );
+}
+
+function ContactDetailIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+      <circle cx="9.5" cy="7" r="3" />
+      <path d="M19 8v6" />
+      <path d="M22 11h-6" />
+    </TabIconShell>
+  );
+}
+
 function EditEventIcon({ className }: { className?: string }) {
   return (
     <TabIconShell className={className}>
@@ -387,6 +431,23 @@ const ORGANIZER_TAB_ICONS: Record<
   field: FieldTabIcon,
   calcutta: CalcuttaTabIcon,
   manage: ManageTabIcon,
+};
+
+const OVERVIEW_DETAIL_TABS = [
+  { id: "when" as const, label: "When" },
+  { id: "match" as const, label: "Match" },
+  { id: "pay" as const, label: "Pay" },
+  { id: "contact" as const, label: "Contact" },
+] as const;
+
+const OVERVIEW_DETAIL_TAB_ICONS: Record<
+  OverviewDetailTab,
+  (props: { className?: string }) => ReactNode
+> = {
+  when: WhenDetailIcon,
+  match: MatchDetailIcon,
+  pay: PayDetailIcon,
+  contact: ContactDetailIcon,
 };
 
 function registrationCardTitle(reg: TournamentRegistration): string {
@@ -1003,6 +1064,8 @@ export function Tournaments({
   const [messageBody, setMessageBody] = useState("");
   const [messageName, setMessageName] = useState("");
   const [detailSubTab, setDetailSubTab] = useState<DetailSubTab>("overview");
+  const [overviewDetailTab, setOverviewDetailTab] =
+    useState<OverviewDetailTab>("when");
   const [fieldFilter, setFieldFilter] = useState<FieldBoardFilter>("all");
   const [fieldQuery, setFieldQuery] = useState("");
   const [signupStatusFilter, setSignupStatusFilter] =
@@ -1178,6 +1241,7 @@ export function Tournaments({
     setRegNote("");
     setTeamName("");
     setDetailSubTab("overview");
+    setOverviewDetailTab("when");
     setFieldFilter("all");
     setFieldQuery("");
     setSignupStatusFilter("pending");
@@ -2972,136 +3036,183 @@ export function Tournaments({
                       </p>
                     ) : null}
 
-                    <OverviewSection title="When & where">
-                      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <OverviewFact
-                          label="When"
-                          value={formatStartsAt(t.startsAt)}
-                        />
-                        <OverviewFact
-                          label="Check-in"
-                          value={
-                            t.checkInAt
-                              ? formatStartsAt(t.checkInAt)
-                              : "At start"
-                          }
-                        />
-                        <OverviewFact label="Venue" value={t.venueName} />
-                        <OverviewFact
-                          label="City"
-                          value={[t.city, t.region].filter(Boolean).join(", ")}
-                        />
-                        {t.venueAddress?.trim() ? (
+                    <div
+                      role="tablist"
+                      aria-label="Event details"
+                      className="grid grid-cols-4 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+                    >
+                      {OVERVIEW_DETAIL_TABS.map((item) => {
+                        const selected = overviewDetailTab === item.id;
+                        const Icon = OVERVIEW_DETAIL_TAB_ICONS[item.id];
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={selected}
+                            aria-label={item.label}
+                            onClick={() =>
+                              startDetailTransition(() => {
+                                setOverviewDetailTab(item.id);
+                              })
+                            }
+                            className={[
+                              "relative flex flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 transition",
+                              selected
+                                ? "bg-[var(--felt)] text-white shadow-sm"
+                                : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
+                            ].join(" ")}
+                          >
+                            <Icon className="h-4 w-4" />
+                            <span className="text-[9px] font-semibold leading-none tracking-wide sm:text-[10px]">
+                              {item.label}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {overviewDetailTab === "when" ? (
+                      <OverviewSection title="When & where">
+                        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                           <OverviewFact
-                            label="Address"
-                            value={t.venueAddress.trim()}
+                            label="When"
+                            value={formatStartsAt(t.startsAt)}
+                          />
+                          <OverviewFact
+                            label="Check-in"
+                            value={
+                              t.checkInAt
+                                ? formatStartsAt(t.checkInAt)
+                                : "At start"
+                            }
+                          />
+                          <OverviewFact label="Venue" value={t.venueName} />
+                          <OverviewFact
+                            label="City"
+                            value={[t.city, t.region]
+                              .filter(Boolean)
+                              .join(", ")}
+                          />
+                          {t.venueAddress?.trim() ? (
+                            <OverviewFact
+                              label="Address"
+                              value={t.venueAddress.trim()}
+                              wide
+                            />
+                          ) : null}
+                        </dl>
+                      </OverviewSection>
+                    ) : null}
+
+                    {overviewDetailTab === "match" ? (
+                      <OverviewSection title="The match">
+                        <dl className="grid grid-cols-2 gap-x-3 gap-y-3">
+                          <OverviewFact label="Game" value={gameLabel} />
+                          <OverviewFact label="Bracket" value={formatLabel} />
+                          <OverviewFact
+                            label="Entry"
+                            value={entryShapeText(t)}
+                          />
+                          <OverviewFact
+                            label="Handicap"
+                            value={handicapLabel(t.handicapSystem)}
+                          />
+                          <OverviewFact label="Race" value={raceText(t)} />
+                          <OverviewFact label="Break" value={breakLabel} />
+                          <OverviewFact label="Draw" value={drawLabel} />
+                          <OverviewFact
+                            label="Tables"
+                            value={tableSizeLabel}
+                          />
+                          <OverviewFact label="Ruleset" value={rulesetLabel} />
+                          <OverviewFact
+                            label="Fargo"
+                            value={
+                              t.maxFargo != null ? `Cap ${t.maxFargo}` : "Open"
+                            }
+                          />
+                          <OverviewFact
+                            label="Robustness"
+                            value={minRobustnessLabel(t.minRobustnessStatus)}
                             wide
                           />
+                        </dl>
+                        {t.handicapNotes?.trim() ? (
+                          <div className="mt-3">
+                            <p className={labelClass}>Handicap notes</p>
+                            <p className="text-sm leading-relaxed text-[var(--ink)]">
+                              {t.handicapNotes}
+                            </p>
+                          </div>
                         ) : null}
-                      </dl>
-                    </OverviewSection>
+                      </OverviewSection>
+                    ) : null}
 
-                    <OverviewSection title="The match">
-                      <dl className="grid grid-cols-2 gap-x-3 gap-y-3">
-                        <OverviewFact label="Game" value={gameLabel} />
-                        <OverviewFact label="Bracket" value={formatLabel} />
-                        <OverviewFact
-                          label="Entry"
-                          value={entryShapeText(t)}
-                        />
-                        <OverviewFact
-                          label="Handicap"
-                          value={handicapLabel(t.handicapSystem)}
-                        />
-                        <OverviewFact label="Race" value={raceText(t)} />
-                        <OverviewFact label="Break" value={breakLabel} />
-                        <OverviewFact label="Draw" value={drawLabel} />
-                        <OverviewFact label="Tables" value={tableSizeLabel} />
-                        <OverviewFact label="Ruleset" value={rulesetLabel} />
-                        <OverviewFact
-                          label="Fargo"
-                          value={
-                            t.maxFargo != null
-                              ? `Cap ${t.maxFargo}`
-                              : "Open"
-                          }
-                        />
-                        <OverviewFact
-                          label="Robustness"
-                          value={minRobustnessLabel(t.minRobustnessStatus)}
-                          wide
-                        />
-                      </dl>
-                      {t.handicapNotes?.trim() ? (
-                        <div className="mt-3">
-                          <p className={labelClass}>Handicap notes</p>
-                          <p className="text-sm leading-relaxed text-[var(--ink)]">
-                            {t.handicapNotes}
-                          </p>
-                        </div>
-                      ) : null}
-                    </OverviewSection>
-
-                    <OverviewSection title="Entry & pay">
-                      <dl className="grid grid-cols-2 gap-x-3 gap-y-3">
-                        <OverviewFact
-                          label="Entry fee"
-                          value={formatEntryFee(t.entryFeeCents)}
-                        />
-                        <OverviewFact
-                          label="Added money"
-                          value={addedMoneyLabel}
-                        />
-                        <OverviewFact
-                          label="Registration"
-                          value={registrationLabel}
-                          wide
-                        />
-                      </dl>
-                      <div className="mt-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/70 px-3 py-3">
-                        <p className={labelClass}>Pay here</p>
-                        <ul className="mt-1 space-y-1">
-                          {paymentLines.map((line) => (
-                            <li
-                              key={line}
-                              className="text-sm font-semibold text-[var(--ink)] [overflow-wrap:anywhere]"
-                            >
-                              {line}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      {t.payoutNotes?.trim() ? (
-                        <div className="mt-3">
-                          <p className={labelClass}>Payouts</p>
-                          <p className="text-sm leading-relaxed text-[var(--ink)]">
-                            {t.payoutNotes}
-                          </p>
-                        </div>
-                      ) : null}
-                    </OverviewSection>
-
-                    <OverviewSection title="Contact">
-                      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <OverviewFact
-                          label="Organizer"
-                          value={t.organizerName}
-                        />
-                        {t.organizerPhone?.trim() ? (
+                    {overviewDetailTab === "pay" ? (
+                      <OverviewSection title="Entry & pay">
+                        <dl className="grid grid-cols-2 gap-x-3 gap-y-3">
                           <OverviewFact
-                            label="Phone"
-                            value={t.organizerPhone.trim()}
+                            label="Entry fee"
+                            value={formatEntryFee(t.entryFeeCents)}
                           />
-                        ) : null}
-                        {t.organizerEmail?.trim() ? (
                           <OverviewFact
-                            label="Email"
-                            value={t.organizerEmail.trim()}
+                            label="Added money"
+                            value={addedMoneyLabel}
+                          />
+                          <OverviewFact
+                            label="Registration"
+                            value={registrationLabel}
                             wide
                           />
+                        </dl>
+                        <div className="mt-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/70 px-3 py-3">
+                          <p className={labelClass}>Pay here</p>
+                          <ul className="mt-1 space-y-1">
+                            {paymentLines.map((line) => (
+                              <li
+                                key={line}
+                                className="text-sm font-semibold text-[var(--ink)] [overflow-wrap:anywhere]"
+                              >
+                                {line}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        {t.payoutNotes?.trim() ? (
+                          <div className="mt-3">
+                            <p className={labelClass}>Payouts</p>
+                            <p className="text-sm leading-relaxed text-[var(--ink)]">
+                              {t.payoutNotes}
+                            </p>
+                          </div>
                         ) : null}
-                      </dl>
-                    </OverviewSection>
+                      </OverviewSection>
+                    ) : null}
+
+                    {overviewDetailTab === "contact" ? (
+                      <OverviewSection title="Contact">
+                        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <OverviewFact
+                            label="Organizer"
+                            value={t.organizerName}
+                          />
+                          {t.organizerPhone?.trim() ? (
+                            <OverviewFact
+                              label="Phone"
+                              value={t.organizerPhone.trim()}
+                            />
+                          ) : null}
+                          {t.organizerEmail?.trim() ? (
+                            <OverviewFact
+                              label="Email"
+                              value={t.organizerEmail.trim()}
+                              wide
+                            />
+                          ) : null}
+                        </dl>
+                      </OverviewSection>
+                    ) : null}
                   </div>
                 </SurfaceCard>
 
