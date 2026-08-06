@@ -5,6 +5,11 @@ type SectionCardProps = {
   title: string;
   description?: ReactNode;
   badge?: { label: string; value: string };
+  /**
+   * Absolute top-right control (e.g. share/link). Does not participate in the
+   * title/badge flex row, so badge vertical alignment stays unchanged.
+   */
+  headerAction?: ReactNode;
   /** When omitted, renders a header-only title card. */
   children?: ReactNode;
   /** Edge-to-edge body for custom toolbars / nested content. */
@@ -18,6 +23,7 @@ export function SectionCard({
   title,
   description,
   badge,
+  headerAction,
   children,
   flush = false,
   className,
@@ -43,7 +49,18 @@ export function SectionCard({
               "radial-gradient(120% 80% at 100% 0%, rgba(224,163,90,0.28), transparent 55%)",
           }}
         />
-        <div className="relative flex min-w-0 items-center justify-between gap-3">
+        {headerAction ? (
+          <div className="absolute right-2.5 top-2.5 z-[1] sm:right-3 sm:top-3">
+            {headerAction}
+          </div>
+        ) : null}
+        <div
+          className={[
+            "relative flex min-w-0 items-center justify-between gap-3",
+            // Reserve corner space horizontally only — badge stays vertically centered.
+            headerAction ? "pr-8" : "",
+          ].join(" ")}
+        >
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/65">
               {eyebrow}
