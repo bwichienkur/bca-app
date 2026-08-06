@@ -18,6 +18,7 @@ import type {
   FargoStatsOverall,
   OpponentSort,
 } from "@/lib/fargo-player";
+import { BackButton } from "./BackButton";
 import {
   ByRatingSubIcon,
   IconSubTabs,
@@ -790,14 +791,7 @@ export function PlayerDetail({
   return (
     <section className="space-y-4 md:space-y-5">
       <div className="sticky top-[5.75rem] z-40 -mx-1 space-y-3 bg-[color-mix(in_srgb,var(--paper)_94%,transparent)] px-1 py-2 backdrop-blur sm:top-[3.75rem]">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
-        >
-          <span aria-hidden>←</span>
-          Back to search
-        </button>
+        <BackButton onClick={onBack} />
 
         <SectionCard
           eyebrow="Player"

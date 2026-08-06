@@ -48,6 +48,7 @@ import {
   type ScoringPlayer,
   type WinAdornment,
 } from "@/lib/scoring";
+import { BackButton } from "./BackButton";
 import { EmptyState } from "./EmptyState";
 import { LoadingState } from "./LoadingState";
 import type { AuthUser } from "./LoginScreen";
@@ -888,13 +889,10 @@ export function MatchScoring({
     const viewOnly = !canScore;
     const sheetLocked = submittedLocked || viewOnly;
     sheetLockedRef.current = sheetLocked;
-    const actionBtnClass =
-      "rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)]";
     return (
       <section className="animate-panel w-full min-w-0 space-y-2.5 overflow-x-hidden">
         <div className="flex items-center justify-between gap-3">
-          <button
-            type="button"
+          <BackButton
             onClick={() => {
               if (reviewMode) {
                 setView({ mode: "sheet", matchId: match.id });
@@ -903,10 +901,7 @@ export function MatchScoring({
                 setActiveGame(null);
               }
             }}
-            className={actionBtnClass}
-          >
-            {reviewMode ? "← Back to sheet" : "← Matches"}
-          </button>
+          />
         </div>
 
         <MatchScoreboard

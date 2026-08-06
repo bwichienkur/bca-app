@@ -9,6 +9,7 @@ import type {
   ScheduleMatch,
 } from "@/lib/types";
 import { TeamPlayerStats } from "./TeamPlayerStats";
+import { BackButton } from "./BackButton";
 import { TeamStandingSummary } from "./TeamStandingSummary";
 
 type StandingCell = {
@@ -200,14 +201,7 @@ export function ScheduleMatchDetail({
   return (
     <section className="animate-rise mx-auto w-full max-w-6xl space-y-3 md:space-y-4">
       <div className="min-w-0">
-        <button
-          type="button"
-          onClick={onClose}
-          className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)] md:mb-3"
-        >
-          <span aria-hidden>←</span>
-          Back to schedule
-        </button>
+        <BackButton onClick={onClose} className="mb-2 md:mb-3" />
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
           {date}
         </p>
