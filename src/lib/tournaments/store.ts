@@ -9,8 +9,14 @@ import {
   meetsMinRobustness,
   minRobustnessLabel,
 } from "@/lib/tournaments/options";
+import {
+  isActiveEntryStatus,
+  registrationMatchRole,
+  type SessionIdentity,
+} from "@/lib/tournaments/entry-match";
 import type {
   CreateTournamentInput,
+  MyTournamentEntry,
   RegistrationStatus,
   RegistrationTeammate,
   RobustnessStatus,
@@ -486,6 +492,61 @@ export async function listTournaments(
   return Promise.all(
     list.map(async (t) => toListItem(t, await getRegistrationsRaw(t.id))),
   );
+}
+
+function toMyEntryRegistration(
+  reg: TournamentRegistration,
+): MyTournamentEntry["registration"] {
+  return {
+    id: reg.id,
+    status: reg.status,
+    paid: reg.paid,
+    checkedIn: reg.checkedIn,
+    teamName: reg.teamName,
+    displayName: reg.displayName,
+    ratingAtSignup: reg.ratingAtSignup,
+    teammates: reg.teammates ?? [],
+    createdAt: reg.createdAt,
+  };
+}
+
+/**
+ * Events where the signed-in user is captain (by LMS id) or a teammate
+ * (by Fargo / readable id on the mate row). Excludes withdrawn entries.
+ */
+export async function listMyTournamentEntries(
+  identity: SessionIdentity,
+): Promise<MyTournamentEntry[]> {
+  const tournaments = sortTournaments(await getAllTournaments());
+  const entries: MyTournamentEntry[] = [];
+
+  for (const tournament of tournaments) {
+    const regs = await getRegistrationsRaw(tournament.id);
+    let best: {
+      reg: TournamentRegistration;
+      role: "captain" | "teammate";
+    } | null = null;
+
+    for (const reg of regs) {
+      if (!isActiveEntryStatus(reg.status)) continue;
+      const role = registrationMatchRole(reg, identity);
+      if (!role) continue;
+      // Prefer captain if somehow both match.
+      if (!best || (role === "captain" && best.role !== "captain")) {
+        best = { reg, role };
+        if (role === "captain") break;
+      }
+    }
+
+    if (!best) continue;
+    entries.push({
+      tournament: toListItem(tournament, regs),
+      role: best.role,
+      registration: toMyEntryRegistration(best.reg),
+    });
+  }
+
+  return entries;
 }
 
 export async function getTournamentDetail(id: string): Promise<{
