@@ -1511,7 +1511,6 @@ export function LeagueApp() {
                   normalizeTeamName(prefs.teamName ?? "") ===
                   normalizeTeamName(selectedTeamName)
                 }
-                backLabel="Back to league"
                 onClose={() => setSelectedTeamName(null)}
                 onSetAsMyTeam={
                   detailTeam ? () => setMyTeam(detailTeam) : undefined

@@ -50,6 +50,7 @@ import type {
 } from "@/lib/tournaments/types";
 
 type HandicapFilter = "" | "handicapped" | "scratch";
+import { BackButton } from "./BackButton";
 import type { AuthUser } from "./LoginScreen";
 import { DateField } from "./DateField";
 import { DateTimeField } from "./DateTimeField";
@@ -1997,14 +1998,7 @@ export function Tournaments({
     const isEdit = view === "edit";
     return (
       <div className="space-y-4 animate-panel">
-        <button
-          type="button"
-          onClick={leaveForm}
-          className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
-        >
-          <span aria-hidden>←</span>
-          {isEdit ? "Back to event" : "All events"}
-        </button>
+        <BackButton onClick={leaveForm} />
 
         <SectionCard
           eyebrow="Events"
@@ -2913,14 +2907,7 @@ export function Tournaments({
     return (
       <div className="space-y-4 animate-panel">
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={closeDetail}
-            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
-          >
-            <span aria-hidden>←</span>
-            All events
-          </button>
+          <BackButton onClick={closeDetail} />
           {selectedId ? (
             <button
               type="button"
@@ -2938,7 +2925,7 @@ export function Tournaments({
                     setActionMsg("Could not copy link.");
                   });
               }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
+              className="inline-flex items-center gap-1.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
             >
               {linkCopied ? "Link copied" : "Copy link"}
             </button>

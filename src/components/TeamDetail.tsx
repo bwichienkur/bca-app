@@ -2,6 +2,7 @@
 
 import { normalizeTeamName } from "@/lib/matchups";
 import type { DivisionTeam, PlayersByTeamReport, RosterPlayer } from "@/lib/types";
+import { BackButton } from "./BackButton";
 import { SectionCard } from "./SectionCard";
 import { TeamPlayerStats } from "./TeamPlayerStats";
 
@@ -10,8 +11,6 @@ type TeamDetailProps = {
   team: DivisionTeam | null;
   playersByTeam: PlayersByTeamReport | null;
   onClose?: () => void;
-  /** Label for the back/close control (e.g. “Back to standings”) */
-  backLabel?: string;
   onSetAsMyTeam?: () => void;
   isMyTeam?: boolean;
   /**
@@ -30,7 +29,6 @@ export function TeamDetail({
   team,
   playersByTeam,
   onClose,
-  backLabel = "Back",
   onSetAsMyTeam,
   isMyTeam,
   embedded = false,
@@ -94,16 +92,7 @@ export function TeamDetail({
 
   return (
     <div className="space-y-3">
-      {onClose ? (
-        <button
-          type="button"
-          onClick={onClose}
-          className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
-        >
-          <span aria-hidden>←</span>
-          {backLabel}
-        </button>
-      ) : null}
+      {onClose ? <BackButton onClick={onClose} /> : null}
 
       <SectionCard
         eyebrow={isMyTeam ? "My team" : "Team detail"}
