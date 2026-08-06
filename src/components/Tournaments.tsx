@@ -22,7 +22,6 @@ import {
   EVENT_TYPE_OPTIONS,
   FL_REGIONS,
   formatEntryFee,
-  formatPaymentLines,
   formatStartsAt,
   GAME_TYPE_OPTIONS,
   HANDICAP_SYSTEM_OPTIONS,
@@ -64,7 +63,7 @@ import { TournamentCalcuttaPanel } from "./TournamentCalcutta";
 
 type View = "browse" | "create" | "edit" | "detail";
 type DetailSubTab = "overview" | "signups" | "field" | "calcutta" | "manage";
-type OverviewDetailTab = "when" | "match" | "pay" | "contact";
+type OverviewDetailTab = "when" | "match" | "pay" | "contact" | "entry";
 type FieldBoardFilter = "all" | "not-checked-in" | "unpaid";
 type SignupStatusFilter =
   | "pending"
@@ -301,6 +300,17 @@ function ContactDetailIcon({ className }: { className?: string }) {
   );
 }
 
+function EntryDetailIcon({ className }: { className?: string }) {
+  return (
+    <TabIconShell className={className}>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 3v5h5" />
+      <path d="M9 13h6" />
+      <path d="M9 17h4" />
+    </TabIconShell>
+  );
+}
+
 function EditEventIcon({ className }: { className?: string }) {
   return (
     <TabIconShell className={className}>
@@ -438,6 +448,7 @@ const OVERVIEW_DETAIL_TABS = [
   { id: "match" as const, label: "Match" },
   { id: "pay" as const, label: "Pay" },
   { id: "contact" as const, label: "Contact" },
+  { id: "entry" as const, label: "Entry" },
 ] as const;
 
 const OVERVIEW_DETAIL_TAB_ICONS: Record<
@@ -448,6 +459,7 @@ const OVERVIEW_DETAIL_TAB_ICONS: Record<
   match: MatchDetailIcon,
   pay: PayDetailIcon,
   contact: ContactDetailIcon,
+  entry: EntryDetailIcon,
 };
 
 function registrationCardTitle(reg: TournamentRegistration): string {
@@ -2506,7 +2518,6 @@ export function Tournaments({
         ? (BRACKET_FORMAT_OPTIONS.find((o) => o.value === t.bracketFormat)
             ?.label ?? t.bracketFormat)
         : "";
-    const paymentLines = t ? formatPaymentLines(t) : [];
     const tableSizeLabel =
       t
         ? (TABLE_SIZE_OPTIONS.find((o) => o.value === t.tableSize)?.label ??
@@ -2551,83 +2562,72 @@ export function Tournaments({
         ) : null}
 
         {myRegistration ? (
-          <SurfaceCard>
-            <div className="space-y-2 p-3 sm:p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                Your entry
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-[var(--felt)] px-2.5 py-1 text-[11px] font-semibold capitalize text-white">
-                  {myRegistration.status}
+          <OverviewSection title="Your entry">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-[var(--felt)] px-2.5 py-1 text-[11px] font-semibold capitalize text-white">
+                {myRegistration.status}
+              </span>
+              <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
+                {myRegistration.paid ? "Paid" : "Unpaid"}
+              </span>
+              {myRegistration.checkedIn ? (
+                <span className="rounded-full bg-[var(--felt)] px-2.5 py-1 text-[11px] font-semibold text-white">
+                  Checked in
                 </span>
-                <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
-                  {myRegistration.paid ? "Paid" : "Unpaid"}
-                </span>
-                {myRegistration.checkedIn ? (
-                  <span className="rounded-full bg-[var(--felt)] px-2.5 py-1 text-[11px] font-semibold text-white">
-                    Checked in
-                  </span>
-                ) : null}
-                <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
-                  {myRegistration.ratingAtSignup != null
-                    ? `Fargo ${myRegistration.ratingAtSignup}`
-                    : "Unrated"}
-                </span>
-              </div>
-              {myRegistration.teamName || myRegistration.teammates?.length ? (
-                <div>
-                  <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)]">
-                    {myRegistration.teamName || myRegistration.displayName}
-                  </p>
-                  {myRegistration.teammates?.length ? (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {myRegistration.teammates.map((mate) => (
-                        <span
-                          key={`${mate.displayName}-${mate.ratingAtSignup ?? "x"}`}
-                          className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]"
-                        >
-                          {mate.displayName}
-                          {mate.ratingAtSignup != null
-                            ? ` · ${mate.ratingAtSignup}`
-                            : ""}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
               ) : null}
+              <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
+                {myRegistration.ratingAtSignup != null
+                  ? `Fargo ${myRegistration.ratingAtSignup}`
+                  : "Unrated"}
+              </span>
             </div>
-          </SurfaceCard>
-        ) : t.status === "draft" ? (
-          <SurfaceCard>
-            <div className="space-y-1 p-3 sm:p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                Registration
-              </p>
-              <p className="text-sm text-[var(--ink)]">
-                Not open yet — this event is still a draft.
-              </p>
-            </div>
-          </SurfaceCard>
-        ) : t.status === "open" ? (
-          <SurfaceCard>
-            <div className="space-y-3 p-3 sm:p-4">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                  {t.eventType === "teams"
-                    ? "Register your team"
-                    : t.eventType === "scotch-doubles"
-                      ? "Register your pair"
-                      : "Sign up"}
+            {myRegistration.teamName || myRegistration.teammates?.length ? (
+              <div className="mt-2">
+                <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)]">
+                  {myRegistration.teamName || myRegistration.displayName}
                 </p>
-                <p className="mt-1 text-xs text-[var(--muted)]">
-                  {entryShapeText(t)}
-                  {` · Fargo ${fargoCapText(t)}`}
-                  {t.minRobustnessStatus
-                    ? ` · ${minRobustnessLabel(t.minRobustnessStatus)}`
-                    : ""}
-                </p>
+                {myRegistration.teammates?.length ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {myRegistration.teammates.map((mate) => (
+                      <span
+                        key={`${mate.displayName}-${mate.ratingAtSignup ?? "x"}`}
+                        className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]"
+                      >
+                        {mate.displayName}
+                        {mate.ratingAtSignup != null
+                          ? ` · ${mate.ratingAtSignup}`
+                          : ""}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </div>
+            ) : null}
+          </OverviewSection>
+        ) : t.status === "draft" ? (
+          <OverviewSection title="Registration">
+            <p className="text-sm text-[var(--ink)]">
+              Not open yet — this event is still a draft.
+            </p>
+          </OverviewSection>
+        ) : t.status === "open" ? (
+          <OverviewSection
+            title={
+              t.eventType === "teams"
+                ? "Register your team"
+                : t.eventType === "scotch-doubles"
+                  ? "Register your pair"
+                  : "Sign up"
+            }
+          >
+            <div className="space-y-3">
+              <p className="text-xs text-[var(--muted)]">
+                {entryShapeText(t)}
+                {` · Fargo ${fargoCapText(t)}`}
+                {t.minRobustnessStatus
+                  ? ` · ${minRobustnessLabel(t.minRobustnessStatus)}`
+                  : ""}
+              </p>
               {!user ? (
                 <button
                   type="button"
@@ -2638,22 +2638,25 @@ export function Tournaments({
                 </button>
               ) : (
                 <>
-                  <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/60 px-3 py-2.5">
-                    <p className={labelClass}>Your Fargo</p>
-                    <p className="text-sm font-semibold text-[var(--ink)]">
-                      {fargoLoading
-                        ? "Looking up…"
-                        : resolvedFargo != null
-                          ? resolvedFargo
-                          : "Unrated"}
-                      {!fargoLoading && resolvedRobustnessStatus
-                        ? ` · ${robustnessStatusLabel(resolvedRobustnessStatus)}`
-                        : ""}
-                    </p>
-                    <p className="mt-1 text-[11px] text-[var(--muted)]">
-                      From your FargoRate account — locked at signup.
-                    </p>
-                  </div>
+                  <dl className="grid grid-cols-1 gap-3">
+                    <OverviewFact
+                      label="Your Fargo"
+                      value={
+                        fargoLoading
+                          ? "Looking up…"
+                          : resolvedFargo != null
+                            ? `${resolvedFargo}${
+                                resolvedRobustnessStatus
+                                  ? ` · ${robustnessStatusLabel(resolvedRobustnessStatus)}`
+                                  : ""
+                              }`
+                            : "Unrated"
+                      }
+                    />
+                  </dl>
+                  <p className="text-[11px] text-[var(--muted)]">
+                    From your FargoRate account — locked at signup.
+                  </p>
 
                   {t.minRobustnessStatus &&
                   !fargoLoading &&
@@ -2810,21 +2813,16 @@ export function Tournaments({
                 </>
               )}
             </div>
-          </SurfaceCard>
+          </OverviewSection>
         ) : null}
 
         {(t.unratedPolicy === "message-organizer" || !user) &&
         !myRegistration ? (
-          <SurfaceCard>
-            <form onSubmit={onSendMessage} className="space-y-3 p-3 sm:p-4">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                  Message organizer
-                </p>
-                <p className="mt-1 text-xs text-[var(--muted)]">
-                  For unrated players or questions before signup.
-                </p>
-              </div>
+          <OverviewSection title="Message organizer">
+            <form onSubmit={onSendMessage} className="space-y-3">
+              <p className="text-xs text-[var(--muted)]">
+                For unrated players or questions before signup.
+              </p>
               {!user ? (
                 <Field label="Your name">
                   <input
@@ -2851,7 +2849,7 @@ export function Tournaments({
                 Send message
               </button>
             </form>
-          </SurfaceCard>
+          </OverviewSection>
         ) : null}
       </>
     ) : null;
@@ -3039,7 +3037,7 @@ export function Tournaments({
                     <div
                       role="tablist"
                       aria-label="Event details"
-                      className="grid grid-cols-4 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+                      className="grid grid-cols-5 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
                     >
                       {OVERVIEW_DETAIL_TABS.map((item) => {
                         const selected = overviewDetailTab === item.id;
@@ -3165,28 +3163,56 @@ export function Tournaments({
                             value={registrationLabel}
                             wide
                           />
+                          {t.venmoHandle?.trim() ? (
+                            <OverviewFact
+                              label="Venmo"
+                              value={
+                                t.venmoHandle.trim().startsWith("@")
+                                  ? t.venmoHandle.trim()
+                                  : `@${t.venmoHandle.trim()}`
+                              }
+                              wide
+                            />
+                          ) : null}
+                          {t.zelleHandle?.trim() ? (
+                            <OverviewFact
+                              label="Zelle"
+                              value={t.zelleHandle.trim()}
+                              wide
+                            />
+                          ) : null}
+                          {t.cashAppHandle?.trim() ? (
+                            <OverviewFact
+                              label="Cash App"
+                              value={
+                                t.cashAppHandle.trim().startsWith("$")
+                                  ? t.cashAppHandle.trim()
+                                  : `$${t.cashAppHandle.trim().replace(/^\$/, "")}`
+                              }
+                              wide
+                            />
+                          ) : null}
+                          {t.payMethod === "door" ||
+                          (!t.venmoHandle?.trim() &&
+                            !t.zelleHandle?.trim() &&
+                            !t.cashAppHandle?.trim()) ? (
+                            <OverviewFact
+                              label="Door"
+                              value="Pay at door"
+                              wide
+                            />
+                          ) : null}
+                          {t.payMethod === "in-app-later" &&
+                          (t.venmoHandle?.trim() ||
+                            t.zelleHandle?.trim() ||
+                            t.cashAppHandle?.trim()) ? (
+                            <OverviewFact
+                              label="Also"
+                              value="In-app later"
+                              wide
+                            />
+                          ) : null}
                         </dl>
-                        <div className="mt-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/70 px-3 py-3">
-                          <p className={labelClass}>Pay here</p>
-                          <ul className="mt-1 space-y-1">
-                            {paymentLines.map((line) => (
-                              <li
-                                key={line}
-                                className="text-sm font-semibold text-[var(--ink)] [overflow-wrap:anywhere]"
-                              >
-                                {line}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                        {t.payoutNotes?.trim() ? (
-                          <div className="mt-3">
-                            <p className={labelClass}>Payouts</p>
-                            <p className="text-sm leading-relaxed text-[var(--ink)]">
-                              {t.payoutNotes}
-                            </p>
-                          </div>
-                        ) : null}
                       </OverviewSection>
                     ) : null}
 
@@ -3213,10 +3239,12 @@ export function Tournaments({
                         </dl>
                       </OverviewSection>
                     ) : null}
+
+                    {overviewDetailTab === "entry" ? (
+                      <div className="space-y-3">{overviewSignup}</div>
+                    ) : null}
                   </div>
                 </SurfaceCard>
-
-                {overviewSignup}
 
                 <TournamentCalcuttaPanel
                   tournamentId={t.id}
@@ -3898,17 +3926,6 @@ export function Tournaments({
                   <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
                     {actionMsg}
                   </p>
-                ) : null}
-
-                {t.payoutNotes ? (
-                  <SurfaceCard>
-                    <div className="space-y-1 px-3 py-3 sm:px-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                        Payout notes
-                      </p>
-                      <p className="text-sm text-[var(--ink)]">{t.payoutNotes}</p>
-                    </div>
-                  </SurfaceCard>
                 ) : null}
 
                 <SurfaceCard>
