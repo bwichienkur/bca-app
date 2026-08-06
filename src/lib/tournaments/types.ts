@@ -226,3 +226,48 @@ export type CalcuttaSummary = {
     buyBackHalf: boolean;
   }>;
 };
+
+/** Reusable create-form settings (excludes dates and flyer). */
+export type TournamentTemplateForm = {
+  title: string;
+  description: string;
+  gameType: GameType;
+  eventType: EventType;
+  bracketFormat: BracketFormat;
+  breakFormat: BreakFormat;
+  drawType: DrawType;
+  handicapSystem: HandicapSystem;
+  handicapNotes: string;
+  rulesetPreset: RulesetPreset;
+  winnersRaceTo: number | null;
+  losersRaceTo: number | null;
+  maxFargo: number | null;
+  minRobustnessStatus: RobustnessStatus | null;
+  unratedPolicy: UnratedPolicy;
+  maxPlayers: number;
+  teamSize: number;
+  entryFeeCents: number;
+  addedMoneyCents: number;
+  payMethod: PayMethod;
+  venmoHandle: string | null;
+  zelleHandle: string | null;
+  cashAppHandle: string | null;
+  payoutNotes: string;
+  registrationMode: RegistrationMode;
+  reportedToFargo: boolean;
+  tableSize: Tournament["tableSize"];
+  venueName: string;
+  venueAddress: string;
+  city: string;
+  region: string;
+  organizerPhone: string | null;
+  status: Extract<TournamentStatus, "draft" | "open">;
+};
+
+export type TournamentTemplate = {
+  id: string;
+  name: string;
+  form: TournamentTemplateForm;
+  createdAt: string;
+  updatedAt: string;
+};
