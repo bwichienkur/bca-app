@@ -14,7 +14,6 @@ import {
 } from "@/lib/tournaments/calcutta";
 import type {
   CalcuttaLot,
-  CalcuttaStatus,
   TournamentCalcutta,
   TournamentRegistration,
 } from "@/lib/tournaments/types";
@@ -62,28 +61,6 @@ function Stat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
-const STATUS_OPTIONS: Array<{
-  id: CalcuttaStatus;
-  label: string;
-  hint: string;
-}> = [
-  {
-    id: "setup",
-    label: "Setup",
-    hint: "Before the call — configure min bid and payouts.",
-  },
-  {
-    id: "live",
-    label: "Live",
-    hint: "Auction in progress — shows on the public board.",
-  },
-  {
-    id: "settled",
-    label: "Settled",
-    hint: "Auction done — assign finish places for payouts.",
-  },
-];
 
 const fieldClass =
   "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none focus:ring-2 focus:ring-[var(--felt-soft)]";
@@ -356,13 +333,7 @@ export function TournamentCalcuttaPanel({
         <SectionCard
           eyebrow="Side pot"
           title="Calcutta"
-          description={
-            calcutta.status === "settled"
-              ? "Auction settled — payouts below."
-              : calcutta.status === "live"
-                ? "Auction in progress. Sold board updates as the organizer records bids."
-                : "Calcutta is set up for this event."
-          }
+          description={`${summary?.soldCount ?? 0}/${summary?.lotCount ?? 0} sold · net ${formatCalcuttaMoney(summary?.netPotCents ?? 0)}`}
           badge={{
             label: "Pot",
             value: formatCalcuttaMoney(summary?.netPotCents ?? 0).replace(
@@ -419,7 +390,6 @@ export function TournamentCalcuttaPanel({
                               lot.buyBackHalf ? " · half buy-back" : ""
                             }`
                           : "Unsold"}
-                        {lot.place != null ? ` · Place ${lot.place}` : ""}
                       </p>
                     </div>
                     <p
@@ -438,49 +408,6 @@ export function TournamentCalcuttaPanel({
             )}
           </ul>
         </section>
-
-        {summary && summary.payouts.some((p) => p.amountCents > 0) ? (
-          <section className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
-            <div className="border-b border-[var(--line)] px-3 py-2.5 sm:px-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                Payout schedule
-              </p>
-            </div>
-            <ul className="divide-y divide-[var(--line)]">
-              {summary.payouts.map((row) => (
-                <li
-                  key={row.place}
-                  className="flex items-center justify-between gap-3 px-3 py-2.5 sm:px-4"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-[var(--ink)]">
-                      {row.place}
-                      {row.place === 1
-                        ? "st"
-                        : row.place === 2
-                          ? "nd"
-                          : row.place === 3
-                            ? "rd"
-                            : "th"}{" "}
-                      · {row.percent}%
-                    </p>
-                    <p className="mt-0.5 truncate text-xs text-[var(--muted)]">
-                      {row.registrationId
-                        ? `${lotLabel(regById.get(row.registrationId), row.registrationId)}${
-                            row.buyBackHalf ? " (split w/ player)" : ""
-                          }`
-                        : "Place not assigned yet"}
-                      {row.buyerName ? ` · ${row.buyerName}` : ""}
-                    </p>
-                  </div>
-                  <p className="shrink-0 tabular-nums font-semibold text-[var(--ink)]">
-                    {formatCalcuttaMoney(row.amountCents)}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
       </section>
     );
   }
@@ -488,19 +415,14 @@ export function TournamentCalcuttaPanel({
   const activeReg = activeLot
     ? regById.get(activeLot.registrationId)
     : undefined;
-  const settingsOpenByDefault = calcutta.status === "setup";
-  const showCallStrip = calcutta.status !== "settled" && approved.length > 0;
-  const statusLabel =
-    STATUS_OPTIONS.find((item) => item.id === calcutta.status)?.label ??
-    calcutta.status;
 
-  // Organizer manage view — live call sheet
+  // Organizer manage view — auction ledger (buyer + hammer price)
   return (
     <div className="space-y-3">
       <SectionCard
         eyebrow="Side pot"
         title="Calcutta"
-        description={`${summary?.soldCount ?? 0}/${summary?.lotCount ?? 0} sold · net ${formatCalcuttaMoney(summary?.netPotCents ?? 0)} · ${statusLabel}`}
+        description={`${summary?.soldCount ?? 0}/${summary?.lotCount ?? 0} sold · net ${formatCalcuttaMoney(summary?.netPotCents ?? 0)}`}
         badge={{
           label: "Pot",
           value: formatCalcuttaMoney(summary?.netPotCents ?? 0).replace(
@@ -510,71 +432,30 @@ export function TournamentCalcuttaPanel({
         }}
       />
 
-      <details
-        className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]"
-        open={settingsOpenByDefault}
-      >
+      <details className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <summary className="cursor-pointer list-none px-3 py-2 text-xs font-semibold text-[var(--muted)] sm:px-4 [&::-webkit-details-marker]:hidden">
           Settings · min {formatCalcuttaMoney(calcutta.minBidCents)} · house{" "}
           {calcutta.houseCutPercent}%
           {calcutta.enabled ? " · public" : ""}
         </summary>
         <div className="space-y-3 border-t border-[var(--line)] p-3 sm:p-4">
-          <div className="space-y-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-              Phase
-            </p>
-            <p className="text-xs leading-relaxed text-[var(--muted)]">
-              Setup before the call, Live while selling, Settled when you assign
-              finish places for payouts. Sold lots auto-switch you to Live.
-            </p>
-            <div
-              role="group"
-              aria-label="Calcutta status"
-              className="inline-flex gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
-            >
-              {STATUS_OPTIONS.map((item) => {
-                const selected = calcutta.status === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    title={item.hint}
-                    onClick={() => {
-                      const next = { ...calcutta, status: item.id };
-                      setCalcutta(next);
-                      void save(next, `Status: ${item.label}.`);
-                    }}
-                    className={[
-                      "rounded-md px-2.5 py-1 text-xs font-semibold transition",
-                      selected
-                        ? "bg-[var(--felt)] text-white"
-                        : "text-[var(--muted)] hover:text-[var(--ink)]",
-                    ].join(" ")}
-                  >
-                    {item.label}
-                  </button>
+          <label className="flex items-center gap-2 text-sm font-semibold text-[var(--ink)]">
+            <input
+              type="checkbox"
+              checked={calcutta.enabled}
+              onChange={(event) => {
+                const next = { ...calcutta, enabled: event.target.checked };
+                setCalcutta(next);
+                void save(
+                  next,
+                  event.target.checked
+                    ? "Public board on."
+                    : "Public board off.",
                 );
-              })}
-            </div>
-            <label className="flex items-center gap-2 text-sm font-semibold text-[var(--ink)]">
-              <input
-                type="checkbox"
-                checked={calcutta.enabled}
-                onChange={(event) => {
-                  const next = { ...calcutta, enabled: event.target.checked };
-                  setCalcutta(next);
-                  void save(
-                    next,
-                    event.target.checked
-                      ? "Public board on."
-                      : "Public board off.",
-                  );
-                }}
-              />
-              Show public board on Overview
-            </label>
-          </div>
+              }}
+            />
+            Show public board on Overview
+          </label>
 
           <div className="grid gap-2 sm:grid-cols-3">
             <label className="block min-w-0 text-sm">
@@ -628,48 +509,6 @@ export function TournamentCalcuttaPanel({
             </label>
           </div>
 
-          <div className="space-y-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-              Payout % by place
-            </p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {calcutta.payoutTiers.map((tier, index) => (
-                <label key={tier.place} className="block min-w-0 text-sm">
-                  <span className="mb-1 block text-[11px] text-[var(--muted)]">
-                    {tier.place}
-                    {tier.place === 1
-                      ? "st"
-                      : tier.place === 2
-                        ? "nd"
-                        : tier.place === 3
-                          ? "rd"
-                          : "th"}{" "}
-                    (%)
-                  </span>
-                  <input
-                    inputMode="decimal"
-                    value={String(tier.percent)}
-                    onChange={(event) => {
-                      const n = Number(event.target.value);
-                      const payoutTiers = calcutta.payoutTiers.map((row, i) =>
-                        i === index
-                          ? {
-                              ...row,
-                              percent: Number.isFinite(n)
-                                ? Math.max(0, n)
-                                : 0,
-                            }
-                          : row,
-                      );
-                      setCalcutta({ ...calcutta, payoutTiers });
-                    }}
-                    className={fieldClass}
-                  />
-                </label>
-              ))}
-            </div>
-          </div>
-
           <button
             type="button"
             disabled={saving}
@@ -698,7 +537,7 @@ export function TournamentCalcuttaPanel({
         </p>
       ) : (
         <>
-          {showCallStrip && activeLot ? (
+          {activeLot ? (
             <section className="sticky top-0 z-20 space-y-2.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-[var(--shadow)] sm:p-3.5">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <div className="min-w-0">
@@ -852,13 +691,12 @@ export function TournamentCalcuttaPanel({
                               </span>
                             ) : null}
                           </p>
-                          {sold || active || lot.place != null ? (
+                          {sold || active ? (
                             <p className="mt-0.5 truncate text-[11px] text-[var(--muted)]">
                               {sold
                                 ? lot.buyerName || "Buyer not named"
                                 : "Up next"}
                               {lot.buyBackHalf ? " · ½ buy-back" : ""}
-                              {lot.place != null ? ` · P${lot.place}` : ""}
                             </p>
                           ) : null}
                         </button>
@@ -883,10 +721,8 @@ export function TournamentCalcuttaPanel({
                               )
                             }
                             className={[
-                              "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] transition",
-                              expanded
-                                ? "bg-[var(--surface-2)] text-[var(--ink)]"
-                                : "text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
+                              "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt)] transition hover:bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]",
+                              expanded ? "bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]" : "",
                             ].join(" ")}
                             aria-expanded={expanded}
                             aria-label={
@@ -947,65 +783,6 @@ export function TournamentCalcuttaPanel({
                                   if (next) void save(next);
                                 }}
                                 className={`${compactFieldClass} tabular-nums`}
-                              />
-                            </label>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <label className="block min-w-0">
-                              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                                Place
-                              </span>
-                              <input
-                                inputMode="numeric"
-                                value={
-                                  lot.place == null ? "" : String(lot.place)
-                                }
-                                onChange={(event) => {
-                                  const raw = event.target.value.trim();
-                                  const place =
-                                    raw === ""
-                                      ? null
-                                      : Math.max(
-                                          1,
-                                          Math.floor(Number(raw)) || 1,
-                                        );
-                                  patchLot(lot.registrationId, { place });
-                                }}
-                                onBlur={(event) => {
-                                  const raw = event.target.value.trim();
-                                  const place =
-                                    raw === ""
-                                      ? null
-                                      : Math.max(
-                                          1,
-                                          Math.floor(Number(raw)) || 1,
-                                        );
-                                  const next = patchLot(lot.registrationId, {
-                                    place,
-                                  });
-                                  if (next) void save(next);
-                                }}
-                                className={compactFieldClass}
-                              />
-                            </label>
-                            <label className="block min-w-0">
-                              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                                Notes
-                              </span>
-                              <input
-                                value={lot.notes}
-                                onChange={(event) => {
-                                  patchLot(lot.registrationId, {
-                                    notes: event.target.value,
-                                  });
-                                }}
-                                onBlur={(event) => {
-                                  const next = patchLot(lot.registrationId, {
-                                    notes: event.target.value,
-                                  });
-                                  if (next) void save(next);
-                                }}
-                                className={compactFieldClass}
                               />
                             </label>
                           </div>
@@ -1077,37 +854,6 @@ export function TournamentCalcuttaPanel({
         </>
       )}
 
-      {summary && summary.payouts.length ? (
-        <details className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
-          <summary className="cursor-pointer list-none border-b border-[var(--line)] px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)] sm:px-4 [&::-webkit-details-marker]:hidden">
-            Projected payouts
-          </summary>
-          <ul className="divide-y divide-[var(--line)]">
-            {summary.payouts.map((row) => (
-              <li
-                key={row.place}
-                className="flex items-center justify-between gap-3 px-3 py-2.5 sm:px-4"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[var(--ink)]">
-                    Place {row.place} · {row.percent}%
-                  </p>
-                  <p className="mt-0.5 truncate text-xs text-[var(--muted)]">
-                    {row.registrationId
-                      ? `${lotLabel(regById.get(row.registrationId), row.registrationId)}${
-                          row.buyBackHalf ? " · split with player" : ""
-                        }${row.buyerName ? ` · ${row.buyerName}` : ""}`
-                      : "Assign a finish place on a sold lot"}
-                  </p>
-                </div>
-                <p className="shrink-0 tabular-nums font-semibold text-[var(--felt-deep)]">
-                  {formatCalcuttaMoney(row.amountCents)}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
     </div>
   );
 }
