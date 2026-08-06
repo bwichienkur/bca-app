@@ -825,18 +825,92 @@ function OverviewFact({
   label,
   value,
   wide = false,
+  onCopy,
+  copied = false,
 }: {
   label: string;
   value: string;
   wide?: boolean;
+  onCopy?: () => void;
+  copied?: boolean;
 }) {
   return (
     <div className={wide ? "min-w-0 sm:col-span-2" : "min-w-0"}>
       <dt className={labelClass}>{label}</dt>
-      <dd className="text-sm font-medium leading-snug text-[var(--ink)] [overflow-wrap:anywhere]">
-        {value}
+      <dd className="flex min-w-0 items-start gap-1.5">
+        <span className="min-w-0 flex-1 text-sm font-medium leading-snug text-[var(--ink)] [overflow-wrap:anywhere]">
+          {value}
+        </span>
+        {onCopy ? (
+          <button
+            type="button"
+            onClick={onCopy}
+            aria-label={copied ? `${label} copied` : `Copy ${label.toLowerCase()}`}
+            title={copied ? "Copied" : `Copy ${label.toLowerCase()}`}
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--felt-deep)]"
+          >
+            {copied ? (
+              <CheckIcon className="h-3.5 w-3.5 text-[var(--felt-deep)]" />
+            ) : (
+              <CopyIcon className="h-3.5 w-3.5" />
+            )}
+          </button>
+        ) : null}
       </dd>
     </div>
+  );
+}
+
+function CopyIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+    </svg>
+  );
+}
+
+function LinkIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M10 13a5 5 0 0 0 7.54.54l1.92-1.92a5 5 0 0 0-7.07-7.07l-1.17 1.17" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54L4.54 12.38a5 5 0 0 0 7.07 7.07l1.17-1.17" />
+    </svg>
+  );
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="m5 12 5 5L20 7" />
+    </svg>
   );
 }
 
@@ -1128,6 +1202,7 @@ export function Tournaments({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [addressCopied, setAddressCopied] = useState(false);
   const appliedDeepLinkRef = useRef<string | null>(null);
   const [q, setQ] = useState("");
   const [region, setRegion] = useState("");
@@ -3431,33 +3506,37 @@ export function Tournaments({
       </>
     ) : null;
 
+    const copyEventLink = () => {
+      if (!selectedId) return;
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", "events");
+      url.searchParams.set("event", selectedId);
+      void navigator.clipboard
+        ?.writeText(url.toString())
+        .then(() => {
+          setLinkCopied(true);
+          window.setTimeout(() => setLinkCopied(false), 1800);
+        })
+        .catch(() => {
+          setActionMsg("Could not copy link.");
+        });
+    };
+
+    const copyAddress = (address: string) => {
+      void navigator.clipboard
+        ?.writeText(address)
+        .then(() => {
+          setAddressCopied(true);
+          window.setTimeout(() => setAddressCopied(false), 1800);
+        })
+        .catch(() => {
+          setActionMsg("Could not copy address.");
+        });
+    };
+
     return (
       <div className="space-y-4 animate-panel">
-        <div className="flex flex-wrap items-center gap-2">
-          <BackButton onClick={closeDetail} />
-          {selectedId ? (
-            <button
-              type="button"
-              onClick={() => {
-                const url = new URL(window.location.href);
-                url.searchParams.set("tab", "events");
-                url.searchParams.set("event", selectedId);
-                void navigator.clipboard
-                  ?.writeText(url.toString())
-                  .then(() => {
-                    setLinkCopied(true);
-                    window.setTimeout(() => setLinkCopied(false), 1800);
-                  })
-                  .catch(() => {
-                    setActionMsg("Could not copy link.");
-                  });
-              }}
-              className="inline-flex items-center gap-1.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
-            >
-              {linkCopied ? "Link copied" : "Copy link"}
-            </button>
-          ) : null}
-        </div>
+        <BackButton onClick={closeDetail} />
 
         {detailLoading || !t ? (
           <LoadingState label="Loading event…" />
@@ -3486,6 +3565,23 @@ export function Tournaments({
                 label: "Fargo",
                 value: fargoCapText(t),
               }}
+              headerAction={
+                selectedId ? (
+                  <button
+                    type="button"
+                    onClick={copyEventLink}
+                    aria-label={linkCopied ? "Link copied" : "Copy event link"}
+                    title={linkCopied ? "Link copied" : "Copy event link"}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius)] bg-black/20 text-white/85 ring-1 ring-white/20 transition hover:bg-black/30 hover:text-white"
+                  >
+                    {linkCopied ? (
+                      <CheckIcon className="h-4 w-4" />
+                    ) : (
+                      <LinkIcon className="h-4 w-4" />
+                    )}
+                  </button>
+                ) : null
+              }
             />
 
             <div
@@ -3684,6 +3780,10 @@ export function Tournaments({
                               label="Address"
                               value={t.venueAddress.trim()}
                               wide
+                              copied={addressCopied}
+                              onCopy={() =>
+                                copyAddress(t.venueAddress.trim())
+                              }
                             />
                           ) : null}
                         </dl>
