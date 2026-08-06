@@ -368,7 +368,7 @@ export function EntryTeamsPresetsPanel({
       ) : null}
 
       {composing ? (
-        <div className="space-y-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/50 p-2.5">
+        <div className="space-y-2 overflow-visible rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/50 p-2.5">
           <div className="flex items-center justify-between gap-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
               {editingId ? "Edit team" : "New team"}
