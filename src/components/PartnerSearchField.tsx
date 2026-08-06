@@ -65,7 +65,7 @@ export function PartnerSearchField({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
-  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
   const [mounted, setMounted] = useState(false);
 
   const selectedKey = value.fargoPlayerId
@@ -145,59 +145,43 @@ export function PartnerSearchField({
       Boolean(error) ||
       (searched && query.trim().length >= MIN_QUERY));
 
-  const wasMenuOpen = useRef(false);
   useLayoutEffect(() => {
     if (!showMenu || !inputRef.current) {
-      wasMenuOpen.current = false;
+      setMenuStyle(null);
       return;
     }
 
     const updatePosition = () => {
-      const input = inputRef.current!;
+      const input = inputRef.current;
+      if (!input) return;
       const rect = input.getBoundingClientRect();
-      const viewport = window.visualViewport;
-      const viewTop = viewport?.offsetTop ?? 0;
-      const viewHeight = viewport?.height ?? window.innerHeight;
-      const viewBottom = viewTop + viewHeight;
+      const vv = window.visualViewport;
       const gap = 4;
       const pad = 8;
-      const spaceBelow = Math.max(0, viewBottom - rect.bottom - gap - pad);
-      const spaceAbove = Math.max(0, rect.top - viewTop - gap - pad);
-      // Prefer below the field; only flip up when below has almost no room.
-      const openUpward = spaceBelow < 96 && spaceAbove > spaceBelow;
-      const available = Math.max(openUpward ? spaceAbove : spaceBelow, 72);
-      const maxHeight = Math.min(240, available);
-      const width = Math.min(
-        Math.max(rect.width, 220),
-        (viewport?.width ?? window.innerWidth) - pad * 2,
-      );
+      // Always place the menu directly under the search field.
+      const top = rect.bottom + gap;
+      const viewTop = vv?.offsetTop ?? 0;
+      const viewHeight = vv?.height ?? window.innerHeight;
+      const viewWidth = vv?.width ?? window.innerWidth;
+      const viewLeft = vv?.offsetLeft ?? 0;
+      const spaceBelow = Math.max(0, viewTop + viewHeight - top - pad);
+      const maxHeight = Math.max(96, Math.min(220, spaceBelow || 160));
+      const width = Math.min(Math.max(rect.width, 200), viewWidth - pad * 2);
       const left = Math.min(
-        Math.max(pad, rect.left),
-        (viewport?.width ?? window.innerWidth) - width - pad,
+        Math.max(viewLeft + pad, rect.left),
+        viewLeft + viewWidth - width - pad,
       );
 
       setMenuStyle({
         position: "fixed",
+        top,
         left,
         width,
-        top: openUpward ? undefined : rect.bottom + gap,
-        bottom: openUpward
-          ? Math.max(pad, window.innerHeight - rect.top + gap)
-          : undefined,
         maxHeight,
         zIndex: 10050,
       });
     };
 
-    // On first open, nudge the field into view so results fit below the keyboard.
-    if (!wasMenuOpen.current) {
-      wasMenuOpen.current = true;
-      inputRef.current.scrollIntoView({
-        block: "center",
-        behavior: "smooth",
-      });
-      window.setTimeout(updatePosition, 280);
-    }
     updatePosition();
     const vv = window.visualViewport;
     window.addEventListener("resize", updatePosition);
@@ -210,7 +194,7 @@ export function PartnerSearchField({
       vv?.removeEventListener("resize", updatePosition);
       vv?.removeEventListener("scroll", updatePosition);
     };
-  }, [showMenu, results.length, loading, error]);
+  }, [showMenu, results.length, loading, error, query]);
 
   useEffect(() => {
     if (!open) return;
@@ -259,7 +243,7 @@ export function PartnerSearchField({
     : "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]";
 
   const menu =
-    mounted && showMenu
+    mounted && showMenu && menuStyle
       ? createPortal(
           <ul
             ref={menuRef}
