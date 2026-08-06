@@ -94,6 +94,9 @@ export type Tournament = {
 export type RegistrationTeammate = {
   displayName: string;
   ratingAtSignup: number | null;
+  /** Present when the teammate was picked from Fargo search. */
+  fargoPlayerId?: string | null;
+  readableId?: string | null;
 };
 
 export type TournamentRegistration = {

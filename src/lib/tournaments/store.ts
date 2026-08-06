@@ -327,6 +327,14 @@ function normalizeRegistration(
               Number.isFinite(t.ratingAtSignup)
                 ? t.ratingAtSignup
                 : null,
+            fargoPlayerId:
+              typeof t.fargoPlayerId === "string" && t.fargoPlayerId.trim()
+                ? t.fargoPlayerId.trim()
+                : null,
+            readableId:
+              typeof t.readableId === "string" && t.readableId.trim()
+                ? t.readableId.trim()
+                : null,
           }))
           .filter((t) => t.displayName)
       : [],
@@ -540,6 +548,14 @@ function normalizeTeammates(
       ratingAtSignup:
         typeof t.ratingAtSignup === "number" && Number.isFinite(t.ratingAtSignup)
           ? t.ratingAtSignup
+          : null,
+      fargoPlayerId:
+        typeof t.fargoPlayerId === "string" && t.fargoPlayerId.trim()
+          ? t.fargoPlayerId.trim()
+          : null,
+      readableId:
+        typeof t.readableId === "string" && t.readableId.trim()
+          ? t.readableId.trim()
           : null,
     }))
     .filter((t) => t.displayName);

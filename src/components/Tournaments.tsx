@@ -398,6 +398,28 @@ function EyeIcon({ className }: { className?: string }) {
   );
 }
 
+function TeamExpandIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden
+      className={[
+        "h-4 w-4 transition-transform",
+        open ? "rotate-180" : "",
+      ].join(" ")}
+    >
+      <path
+        d="M5 7.5 10 12.5 15 7.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function FieldEstimatedFargoInput({
   disabled,
   onSave,
@@ -486,6 +508,30 @@ const OVERVIEW_DETAIL_TAB_ICONS: Record<
 
 function registrationCardTitle(reg: TournamentRegistration): string {
   return reg.teamName?.trim() || reg.displayName;
+}
+
+function isTeamRegistration(reg: TournamentRegistration): boolean {
+  return (
+    Boolean(reg.teamName?.trim()) || (reg.teammates?.length ?? 0) > 0
+  );
+}
+
+function formatMemberRating(rating: number | null | undefined): string {
+  return rating != null && Number.isFinite(rating) ? String(rating) : "Unrated";
+}
+
+function rosterHasUnrated(
+  members: Array<{ rating: number | null }>,
+): boolean {
+  return members.some((m) => m.rating == null);
+}
+
+function UnratedBadge() {
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-md bg-[color-mix(in_srgb,var(--amber)_18%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--amber)]">
+      Unrated
+    </span>
+  );
 }
 
 function signupStatusBadge(
@@ -627,6 +673,11 @@ function formatSignupSubmittedParts(iso: string): { date: string; time: string }
   };
 }
 
+type SignupPlayerRef = {
+  id: string | null;
+  name: string;
+};
+
 /** Dense request row for organizer signup review. */
 function SignupRequestRow({
   title,
@@ -635,9 +686,11 @@ function SignupRequestRow({
   submittedDate,
   submittedTime,
   rating,
-  onOpenDetails,
-  detailsLabel,
-  teammates,
+  isTeam,
+  expanded,
+  onToggleExpand,
+  members,
+  onOpenPlayer,
   actions,
   note,
   onShowNote,
@@ -650,10 +703,18 @@ function SignupRequestRow({
   showStatus?: boolean;
   submittedDate: string;
   submittedTime: string;
+  /** Team Fargo sum for teams; captain rating for singles. */
   rating: number | null;
-  onOpenDetails: () => void;
-  detailsLabel: string;
-  teammates?: TournamentRegistration["teammates"];
+  isTeam: boolean;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
+  members?: Array<{
+    name: string;
+    rating: number | null;
+    playerId: string | null;
+    role?: string;
+  }>;
+  onOpenPlayer: (player: SignupPlayerRef) => void;
   actions?: ReactNode;
   note?: string | null;
   onShowNote?: () => void;
@@ -661,15 +722,7 @@ function SignupRequestRow({
   selected?: boolean;
   onToggleSelect?: () => void;
 }) {
-  const teammateHint = teammates?.length
-    ? teammates
-        .map((mate) =>
-          mate.ratingAtSignup != null
-            ? `${mate.displayName} · ${mate.ratingAtSignup}`
-            : mate.displayName,
-        )
-        .join(", ")
-    : null;
+  const memberCount = members?.length ?? 0;
 
   return (
     <div
@@ -695,43 +748,142 @@ function SignupRequestRow({
         ) : null}
 
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-0.5 gap-y-0.5">
-            <p className="font-[family-name:var(--font-display)] text-[14px] font-semibold leading-snug tracking-tight text-[var(--ink)]">
-              <span className="break-words [overflow-wrap:anywhere]">{title}</span>
-              <span className="mx-1.5 font-normal text-[var(--muted)]">·</span>
-              <span className="tabular-nums text-[var(--felt-deep)]">
-                {rating ?? "—"}
-              </span>
-            </p>
-            <button
-              type="button"
-              onClick={onOpenDetails}
-              className={signupInlineIconBtn}
-              aria-label={detailsLabel}
-              title="View player"
-            >
-              <EyeIcon className="h-3.5 w-3.5" />
-            </button>
-            {note ? (
+          <div className="flex items-start gap-1">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-0.5 gap-y-0.5">
+                <p className="font-[family-name:var(--font-display)] text-[14px] font-semibold leading-snug tracking-tight text-[var(--ink)]">
+                  <span className="break-words [overflow-wrap:anywhere]">
+                    {title}
+                  </span>
+                  <span className="mx-1.5 font-normal text-[var(--muted)]">
+                    ·
+                  </span>
+                  <span className="tabular-nums text-[var(--felt-deep)]">
+                    {rating != null ? rating.toLocaleString() : "—"}
+                  </span>
+                </p>
+                {!isTeam && members?.[0] ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onOpenPlayer({
+                        id: members[0]!.playerId,
+                        name: members[0]!.name,
+                      })
+                    }
+                    className={signupInlineIconBtn}
+                    aria-label={
+                      members[0].playerId
+                        ? `View player: ${members[0].name}`
+                        : `Search players for ${members[0].name}`
+                    }
+                    title="View player"
+                  >
+                    <EyeIcon className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
+                {note ? (
+                  <button
+                    type="button"
+                    onClick={onShowNote}
+                    className={signupInlineIconBtn}
+                    aria-label="View signup message"
+                    title="Message"
+                  >
+                    <MessageIcon className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
+                {!isTeam && rating == null ? (
+                  <span className="ml-0.5">
+                    <UnratedBadge />
+                  </span>
+                ) : null}
+                {showStatus ? (
+                  <span className="ml-0.5">{signupStatusBadge(status)}</span>
+                ) : null}
+              </div>
+              {isTeam ? (
+                <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                  <p className="text-[11px] leading-tight text-[var(--muted)]">
+                    {memberCount} player{memberCount === 1 ? "" : "s"}
+                    {rating != null ? " · team Fargo" : ""}
+                  </p>
+                  {members && rosterHasUnrated(members) ? <UnratedBadge /> : null}
+                </div>
+              ) : null}
+            </div>
+            {isTeam ? (
               <button
                 type="button"
-                onClick={onShowNote}
-                className={signupInlineIconBtn}
-                aria-label="View signup message"
-                title="Message"
+                onClick={onToggleExpand}
+                className={[
+                  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt)] transition hover:bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]",
+                  expanded
+                    ? "bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]"
+                    : "",
+                ].join(" ")}
+                aria-expanded={Boolean(expanded)}
+                aria-label={
+                  expanded
+                    ? `Hide roster for ${title}`
+                    : `Show roster for ${title}`
+                }
+                title={expanded ? "Hide roster" : "Show roster"}
               >
-                <MessageIcon className="h-3.5 w-3.5" />
+                <TeamExpandIcon open={Boolean(expanded)} />
               </button>
             ) : null}
-            {showStatus ? (
-              <span className="ml-0.5">{signupStatusBadge(status)}</span>
-            ) : null}
           </div>
-          {teammateHint ? (
-            <p className="mt-0.5 text-[11px] leading-tight text-[var(--muted)] [overflow-wrap:anywhere]">
-              {teammateHint}
-            </p>
+
+          {isTeam && expanded && members?.length ? (
+            <ul className="mt-2 space-y-1 border-t border-[var(--line)] pt-2">
+              {members.map((member, index) => {
+                const unrated = member.rating == null;
+                return (
+                  <li
+                    key={`${member.name}-${index}`}
+                    className="flex min-w-0 items-center gap-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-[var(--ink)]">
+                        {member.name}
+                        {member.role ? (
+                          <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                            {member.role}
+                          </span>
+                        ) : null}
+                      </p>
+                      <p
+                        className={[
+                          "text-[11px] tabular-nums",
+                          unrated
+                            ? "font-semibold text-[var(--amber)]"
+                            : "text-[var(--muted)]",
+                        ].join(" ")}
+                      >
+                        {formatMemberRating(member.rating)}
+                      </p>
+                    </div>
+                    {member.playerId ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onOpenPlayer({
+                            id: member.playerId,
+                            name: member.name,
+                          })
+                        }
+                        className="shrink-0 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1 text-[11px] font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)]"
+                      >
+                        View
+                      </button>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
           ) : null}
+
           {actions ? (
             <div className="mt-1.5 flex items-center justify-start gap-1">
               {actions}
@@ -1152,6 +1304,64 @@ function teamFargoTotal(
   };
 }
 
+function captainLiveRating(
+  reg: TournamentRegistration,
+  playerStats: Record<string, PlayerLiveStats>,
+): number | null {
+  const playerId = registrationPlayerId(reg);
+  const live = playerId ? playerStats[playerId] : undefined;
+  return live?.rating ?? reg.ratingAtSignup;
+}
+
+/** Team Fargo sum for team entries; captain rating for singles. */
+function registrationDisplayRating(
+  reg: TournamentRegistration,
+  playerStats: Record<string, PlayerLiveStats>,
+): number | null {
+  const captainRating = captainLiveRating(reg, playerStats);
+  if (!isTeamRegistration(reg)) return captainRating;
+  const mates = (reg.teammates ?? []).map((mate) => {
+    const id = mate.fargoPlayerId?.trim() || null;
+    const live = id ? playerStats[id]?.rating : undefined;
+    return { ratingAtSignup: live ?? mate.ratingAtSignup };
+  });
+  const { sum, ratedCount } = teamFargoTotal(captainRating, mates);
+  return ratedCount > 0 ? sum : null;
+}
+
+function registrationRosterMembers(
+  reg: TournamentRegistration,
+  playerStats: Record<string, PlayerLiveStats>,
+): Array<{
+  name: string;
+  rating: number | null;
+  playerId: string | null;
+  role?: string;
+}> {
+  const captainId = registrationPlayerId(reg);
+  const captain: {
+    name: string;
+    rating: number | null;
+    playerId: string | null;
+    role?: string;
+  } = {
+    name: reg.displayName,
+    rating: captainLiveRating(reg, playerStats),
+    playerId: captainId,
+    role: isTeamRegistration(reg) ? "Cap" : undefined,
+  };
+  const mates = (reg.teammates ?? []).map((mate) => {
+    const id = mate.fargoPlayerId?.trim() || null;
+    const live = id ? playerStats[id]?.rating : undefined;
+    return {
+      name: mate.displayName,
+      rating: live ?? mate.ratingAtSignup,
+      playerId: id,
+    };
+  });
+  return [captain, ...mates];
+}
+
 function toLocalInputValue(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -1268,6 +1478,8 @@ export function Tournaments({
   const [signupSelectedIds, setSignupSelectedIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [expandedSignupId, setExpandedSignupId] = useState<string | null>(null);
+  const [expandedFieldId, setExpandedFieldId] = useState<string | null>(null);
   const [inspectPlayer, setInspectPlayer] = useState<{
     id: string;
     name: string;
@@ -1923,6 +2135,8 @@ export function Tournaments({
               .map((t) => ({
                 displayName: t.displayName.trim(),
                 ratingAtSignup: t.ratingAtSignup,
+                fargoPlayerId: t.fargoPlayerId,
+                readableId: t.readableId,
               }));
 
       if (
@@ -2086,13 +2300,13 @@ export function Tournaments({
     };
   };
 
-  const openSignupPlayer = (reg: TournamentRegistration) => {
-    const playerId = registrationPlayerId(reg);
+  const openSignupPlayer = (player: SignupPlayerRef) => {
+    const playerId = player.id?.trim() || null;
     if (playerId) {
-      setInspectPlayer({ id: playerId, name: reg.displayName });
+      setInspectPlayer({ id: playerId, name: player.name });
       return;
     }
-    onFindPlayer?.(reg.displayName.trim());
+    onFindPlayer?.(player.name.trim());
   };
 
   const openSignupMessage = (reg: TournamentRegistration) => {
@@ -2253,16 +2467,10 @@ export function Tournaments({
       return list;
     }
 
-    const ratingFor = (reg: TournamentRegistration) => {
-      const playerId = registrationPlayerId(reg);
-      const live = playerId ? playerStats[playerId] : undefined;
-      return live?.rating ?? reg.ratingAtSignup;
-    };
-
-    // Highest Fargo first; earliest submission breaks ties.
+    // Highest team/player Fargo first; earliest submission breaks ties.
     return [...list].sort((a, b) => {
-      const ratingA = ratingFor(a);
-      const ratingB = ratingFor(b);
+      const ratingA = registrationDisplayRating(a, playerStats);
+      const ratingB = registrationDisplayRating(b, playerStats);
       const scoredA = ratingA != null;
       const scoredB = ratingB != null;
       if (scoredA && scoredB && ratingA !== ratingB) {
@@ -2326,9 +2534,13 @@ export function Tournaments({
     }
     const ids = [
       ...new Set(
-        detail.registrations
-          .map((r) => registrationPlayerId(r))
-          .filter((id): id is string => Boolean(id)),
+        detail.registrations.flatMap((r) => {
+          const captain = registrationPlayerId(r);
+          const mates = (r.teammates ?? [])
+            .map((m) => m.fargoPlayerId?.trim() || null)
+            .filter((id): id is string => Boolean(id));
+          return captain ? [captain, ...mates] : mates;
+        }),
       ),
     ].filter((id) => !loadedPlayerIdsRef.current.has(id));
     if (!ids.length) return;
@@ -2385,11 +2597,6 @@ export function Tournaments({
       (r) => r.status === "approved",
     );
     const q = fieldQuery.trim().toLowerCase();
-    const ratingFor = (reg: TournamentRegistration) => {
-      const playerId = registrationPlayerId(reg);
-      const live = playerId ? playerStats[playerId] : undefined;
-      return live?.rating ?? reg.ratingAtSignup;
-    };
 
     return approved
       .filter((r) => {
@@ -2406,8 +2613,8 @@ export function Tournaments({
         return hay.includes(q);
       })
       .sort((a, b) => {
-        const ratingA = ratingFor(a);
-        const ratingB = ratingFor(b);
+        const ratingA = registrationDisplayRating(a, playerStats);
+        const ratingB = registrationDisplayRating(b, playerStats);
         const scoredA = ratingA != null;
         const scoredB = ratingB != null;
         if (scoredA && scoredB && ratingA !== ratingB) {
@@ -3137,32 +3344,47 @@ export function Tournaments({
                   Checked in
                 </span>
               ) : null}
-              <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
-                {myRegistration.ratingAtSignup != null
-                  ? `Fargo ${myRegistration.ratingAtSignup}`
-                  : "Unrated"}
-              </span>
+              {(() => {
+                const teamRating = registrationDisplayRating(
+                  myRegistration,
+                  {},
+                );
+                const isTeam = isTeamRegistration(myRegistration);
+                return (
+                  <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
+                    {teamRating != null
+                      ? isTeam
+                        ? `Team Fargo ${teamRating}`
+                        : `Fargo ${teamRating}`
+                      : "Unrated"}
+                  </span>
+                );
+              })()}
             </div>
             {myRegistration.teamName || myRegistration.teammates?.length ? (
               <div className="mt-2">
                 <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)]">
                   {myRegistration.teamName || myRegistration.displayName}
                 </p>
-                {myRegistration.teammates?.length ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {myRegistration.teammates.map((mate) => (
-                      <span
-                        key={`${mate.displayName}-${mate.ratingAtSignup ?? "x"}`}
-                        className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]"
-                      >
-                        {mate.displayName}
-                        {mate.ratingAtSignup != null
-                          ? ` · ${mate.ratingAtSignup}`
-                          : ""}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]">
+                    {myRegistration.displayName}
+                    {myRegistration.ratingAtSignup != null
+                      ? ` · ${myRegistration.ratingAtSignup}`
+                      : " · Unrated"}
+                  </span>
+                  {(myRegistration.teammates ?? []).map((mate) => (
+                    <span
+                      key={`${mate.displayName}-${mate.ratingAtSignup ?? "x"}`}
+                      className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]"
+                    >
+                      {mate.displayName}
+                      {mate.ratingAtSignup != null
+                        ? ` · ${mate.ratingAtSignup}`
+                        : " · Unrated"}
+                    </span>
+                  ))}
+                </div>
               </div>
             ) : null}
           </OverviewSection>
@@ -3260,7 +3482,7 @@ export function Tournaments({
                             {user.name ?? user.email ?? "You"}
                             {resolvedFargo != null
                               ? ` · ${resolvedFargo}`
-                              : ""}
+                              : " · Unrated"}
                           </span>
                         </p>
                       </div>
@@ -3330,6 +3552,10 @@ export function Tournaments({
                               }}
                               placeholder="Name or Fargo ID…"
                             />
+                            {mate.displayName.trim() &&
+                            mate.ratingAtSignup == null ? (
+                              <UnratedBadge />
+                            ) : null}
                             {teammates.length > 1 ? (
                               <button
                                 type="button"
@@ -4129,6 +4355,16 @@ export function Tournaments({
                             </button>
                           ) : undefined;
 
+                        const isTeam = isTeamRegistration(reg);
+                        const displayRating = registrationDisplayRating(
+                          reg,
+                          playerStats,
+                        );
+                        const members = registrationRosterMembers(
+                          reg,
+                          playerStats,
+                        );
+
                         return (
                           <li key={reg.id}>
                             <SignupRequestRow
@@ -4137,16 +4373,18 @@ export function Tournaments({
                               showStatus={signupStatusFilter !== "pending"}
                               submittedDate={submitted.date}
                               submittedTime={submitted.time}
-                              rating={stats.rating}
-                              onOpenDetails={() => openSignupPlayer(reg)}
-                              detailsLabel={
-                                stats.playerId
-                                  ? `View player: ${reg.displayName}`
-                                  : `Search players for ${reg.displayName}`
+                              rating={displayRating}
+                              isTeam={isTeam}
+                              expanded={expandedSignupId === reg.id}
+                              onToggleExpand={() =>
+                                setExpandedSignupId((prev) =>
+                                  prev === reg.id ? null : reg.id,
+                                )
                               }
+                              members={members}
+                              onOpenPlayer={openSignupPlayer}
                               note={note}
                               onShowNote={() => openSignupMessage(reg)}
-                              teammates={reg.teammates}
                               actions={actions}
                               selectable={signupSelectable}
                               selected={signupSelectedIds.has(reg.id)}
@@ -4251,35 +4489,57 @@ export function Tournaments({
                       </li>
                     ) : (
                       fieldEntries.map((reg) => {
-                        const stats = statsForRegistration(reg);
                         const title = registrationCardTitle(reg);
-                        const hasRating = stats.rating != null;
-                        const showCaptainUnderTeam =
-                          Boolean(reg.teamName?.trim()) &&
-                          reg.teamName!.trim() !== reg.displayName.trim();
+                        const isTeam = isTeamRegistration(reg);
+                        const displayRating = registrationDisplayRating(
+                          reg,
+                          playerStats,
+                        );
+                        const hasRating = displayRating != null;
+                        const members = registrationRosterMembers(
+                          reg,
+                          playerStats,
+                        );
+                        const expanded = expandedFieldId === reg.id;
+                        const captainUnrated =
+                          captainLiveRating(reg, playerStats) == null;
 
                         return (
                           <li key={reg.id} className="px-2 py-1.5 sm:px-3">
                             <div className="flex items-center gap-1.5">
-                              <div className="w-8 shrink-0 font-[family-name:var(--font-display)] text-[13px] font-semibold tabular-nums leading-none text-[var(--felt-deep)]">
-                                {hasRating ? stats.rating : "—"}
+                              <div className="w-10 shrink-0 font-[family-name:var(--font-display)] text-[13px] font-semibold tabular-nums leading-none text-[var(--felt-deep)]">
+                                {hasRating
+                                  ? displayRating.toLocaleString()
+                                  : "—"}
                               </div>
 
                               <div className="flex min-w-0 flex-1 items-center gap-0.5">
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1">
                                   <p className="font-[family-name:var(--font-display)] text-[13px] font-semibold leading-snug tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
                                     {title}
                                   </p>
-                                  {showCaptainUnderTeam ? (
-                                    <p className="mt-0.5 text-[11px] leading-tight text-[var(--muted)]">
-                                      {reg.displayName}
-                                    </p>
+                                  {isTeam ? (
+                                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                                      <p className="text-[11px] leading-tight text-[var(--muted)]">
+                                        {members.length} player
+                                        {members.length === 1 ? "" : "s"}
+                                        {hasRating ? " · team Fargo" : ""}
+                                      </p>
+                                      {rosterHasUnrated(members) ? (
+                                        <UnratedBadge />
+                                      ) : null}
+                                    </div>
                                   ) : null}
                                 </div>
-                                {stats.playerId ? (
+                                {!isTeam && registrationPlayerId(reg) ? (
                                   <button
                                     type="button"
-                                    onClick={() => openSignupPlayer(reg)}
+                                    onClick={() =>
+                                      openSignupPlayer({
+                                        id: registrationPlayerId(reg),
+                                        name: reg.displayName,
+                                      })
+                                    }
                                     className={signupInlineIconBtn}
                                     aria-label={`View player history: ${reg.displayName}`}
                                     title="Player history"
@@ -4287,7 +4547,17 @@ export function Tournaments({
                                     <EyeIcon className="h-3.5 w-3.5" />
                                   </button>
                                 ) : null}
-                                {!hasRating ? (
+                                {!isTeam && captainUnrated ? (
+                                  <FieldEstimatedFargoInput
+                                    disabled={saving}
+                                    onSave={(rating) =>
+                                      onUpdateRegistration(reg.id, {
+                                        ratingAtSignup: rating,
+                                      })
+                                    }
+                                  />
+                                ) : null}
+                                {isTeam && captainUnrated && !hasRating ? (
                                   <FieldEstimatedFargoInput
                                     disabled={saving}
                                     onSave={(rating) =>
@@ -4298,6 +4568,32 @@ export function Tournaments({
                                   />
                                 ) : null}
                               </div>
+
+                              {isTeam ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedFieldId((prev) =>
+                                      prev === reg.id ? null : reg.id,
+                                    )
+                                  }
+                                  className={[
+                                    "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt)] transition hover:bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]",
+                                    expanded
+                                      ? "bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]"
+                                      : "",
+                                  ].join(" ")}
+                                  aria-expanded={expanded}
+                                  aria-label={
+                                    expanded
+                                      ? `Hide roster for ${title}`
+                                      : `Show roster for ${title}`
+                                  }
+                                  title={expanded ? "Hide roster" : "Roster"}
+                                >
+                                  <TeamExpandIcon open={expanded} />
+                                </button>
+                              ) : null}
 
                               <div className="flex shrink-0 items-center gap-1">
                                 <button
@@ -4316,8 +4612,8 @@ export function Tournaments({
                                   aria-pressed={reg.checkedIn}
                                   aria-label={
                                     reg.checkedIn
-                                      ? `Mark ${reg.displayName} not checked in`
-                                      : `Check in ${reg.displayName}`
+                                      ? `Mark ${title} not checked in`
+                                      : `Check in ${title}`
                                   }
                                   title={
                                     reg.checkedIn ? "Checked in" : "Check in"
@@ -4339,8 +4635,8 @@ export function Tournaments({
                                   aria-pressed={reg.paid}
                                   aria-label={
                                     reg.paid
-                                      ? `Mark ${reg.displayName} unpaid`
-                                      : `Mark ${reg.displayName} paid`
+                                      ? `Mark ${title} unpaid`
+                                      : `Mark ${title} paid`
                                   }
                                   title={reg.paid ? "Paid" : "Mark paid"}
                                 >
@@ -4348,6 +4644,55 @@ export function Tournaments({
                                 </button>
                               </div>
                             </div>
+
+                            {isTeam && expanded ? (
+                              <ul className="mt-2 space-y-1 border-t border-[var(--line)] pt-2">
+                                {members.map((member, index) => {
+                                  const unrated = member.rating == null;
+                                  return (
+                                    <li
+                                      key={`${reg.id}-m-${index}`}
+                                      className="flex min-w-0 items-center gap-2 px-0.5"
+                                    >
+                                      <div className="min-w-0 flex-1">
+                                        <p className="truncate text-sm font-medium text-[var(--ink)]">
+                                          {member.name}
+                                          {member.role ? (
+                                            <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                                              {member.role}
+                                            </span>
+                                          ) : null}
+                                        </p>
+                                        <p
+                                          className={[
+                                            "text-[11px] tabular-nums",
+                                            unrated
+                                              ? "font-semibold text-[var(--amber)]"
+                                              : "text-[var(--muted)]",
+                                          ].join(" ")}
+                                        >
+                                          {formatMemberRating(member.rating)}
+                                        </p>
+                                      </div>
+                                      {member.playerId ? (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            openSignupPlayer({
+                                              id: member.playerId,
+                                              name: member.name,
+                                            })
+                                          }
+                                          className="shrink-0 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1 text-[11px] font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)]"
+                                        >
+                                          View
+                                        </button>
+                                      ) : null}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            ) : null}
                           </li>
                         );
                       })
