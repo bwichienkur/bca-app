@@ -18,6 +18,17 @@ import type {
   FargoStatsOverall,
   OpponentSort,
 } from "@/lib/fargo-player";
+import {
+  ByRatingSubIcon,
+  IconSubTabs,
+  LeaguesSubIcon,
+  MatchesSubIcon,
+  OpponentsSubIcon,
+  OverviewSubIcon,
+  RecentSubIcon,
+  StatsSubIcon,
+  TwelveMonthsSubIcon,
+} from "./IconSubTabs";
 import { SearchField } from "./SearchField";
 import { SectionCard } from "./SectionCard";
 
@@ -47,17 +58,6 @@ type MatchesPayload = {
 type DetailSection = "stats" | "leagues" | "matches" | "opponents";
 type StatsSubTab = "overview" | "performance";
 
-const SECTIONS: Array<{ id: DetailSection; label: string }> = [
-  { id: "stats", label: "Stats" },
-  { id: "leagues", label: "Leagues" },
-  { id: "matches", label: "Matches" },
-  { id: "opponents", label: "Opponents" },
-];
-
-const STATS_SUBTABS: Array<{ id: StatsSubTab; label: string }> = [
-  { id: "overview", label: "Overview" },
-  { id: "performance", label: "By Rating" },
-];
 
 type OpponentsPayload = {
   opponents: FargoOpponentRecord[];
@@ -323,37 +323,15 @@ function StatsWindowToggle({
   onChange: (next: 0 | 1) => void;
 }) {
   return (
-    <div
-      role="tablist"
+    <IconSubTabs
       aria-label="Stats window"
-      className="grid w-full grid-cols-2 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
-    >
-      {(
-        [
-          [0, "12 months"],
-          [1, "Recent"],
-        ] as const
-      ).map(([option, label]) => {
-        const selected = value === option;
-        return (
-          <button
-            key={option}
-            type="button"
-            role="tab"
-            aria-selected={selected}
-            onClick={() => onChange(option)}
-            className={[
-              "rounded-md px-2 py-1.5 text-center text-xs font-semibold transition",
-              selected
-                ? "bg-[var(--felt)] text-white shadow-sm"
-                : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
-            ].join(" ")}
-          >
-            {label}
-          </button>
-        );
-      })}
-    </div>
+      value={value}
+      onChange={onChange}
+      items={[
+        { id: 0, label: "12 months", icon: TwelveMonthsSubIcon },
+        { id: 1, label: "Recent", icon: RecentSubIcon },
+      ]}
+    />
   );
 }
 
@@ -856,34 +834,21 @@ export function PlayerDetail({
           )}
         </SectionCard>
 
-        <div
-          role="tablist"
+        <IconSubTabs
           aria-label="Player detail sections"
-          className="grid w-full grid-cols-4 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
-        >
-          {SECTIONS.map((item) => {
-            const selected = section === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                onClick={() =>
-                  startTransition(() => setSection(item.id))
-                }
-                className={[
-                  "min-w-0 rounded-md px-1 py-1.5 text-center text-[11px] font-semibold leading-tight transition sm:px-2 sm:text-sm",
-                  selected
-                    ? "bg-[var(--felt)] text-white shadow-sm"
-                    : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
-                ].join(" ")}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
+          value={section}
+          onChange={(id) => startTransition(() => setSection(id))}
+          items={[
+            { id: "stats", label: "Stats", icon: StatsSubIcon },
+            { id: "leagues", label: "Leagues", icon: LeaguesSubIcon },
+            { id: "matches", label: "Matches", icon: MatchesSubIcon },
+            {
+              id: "opponents",
+              label: "Opponents",
+              icon: OpponentsSubIcon,
+            },
+          ]}
+        />
       </div>
 
       {loading ? (
@@ -900,34 +865,19 @@ export function PlayerDetail({
 
       {player && section === "stats" ? (
         <div className="space-y-3">
-          <div
-            role="tablist"
+          <IconSubTabs
             aria-label="Stats views"
-            className="grid w-full grid-cols-2 gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
-          >
-            {STATS_SUBTABS.map((item) => {
-              const selected = statsSubTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  onClick={() =>
-                    startTransition(() => setStatsSubTab(item.id))
-                  }
-                  className={[
-                    "rounded-md px-2 py-1.5 text-center text-xs font-semibold transition sm:text-sm",
-                    selected
-                      ? "bg-[var(--felt)] text-white shadow-sm"
-                      : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
-                  ].join(" ")}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
+            value={statsSubTab}
+            onChange={(id) => startTransition(() => setStatsSubTab(id))}
+            items={[
+              { id: "overview", label: "Overview", icon: OverviewSubIcon },
+              {
+                id: "performance",
+                label: "By Rating",
+                icon: ByRatingSubIcon,
+              },
+            ]}
+          />
 
           {statsSubTab === "overview" ? (
             <>

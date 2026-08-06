@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-export type IconSubTabItem<T extends string> = {
+export type IconSubTabItem<T extends string | number> = {
   id: T;
   label: string;
   icon: (props: { className?: string }) => ReactNode;
@@ -11,7 +11,7 @@ export type IconSubTabItem<T extends string> = {
   ariaLabel?: string;
 };
 
-type IconSubTabsProps<T extends string> = {
+type IconSubTabsProps<T extends string | number> = {
   "aria-label": string;
   items: IconSubTabItem<T>[];
   value: T;
@@ -118,7 +118,95 @@ export function RoundsSubIcon({ className }: { className?: string }) {
   );
 }
 
-export function IconSubTabs<T extends string>({
+export function StatsSubIcon({ className }: { className?: string }) {
+  return (
+    <IconShell className={className}>
+      <path d="M4 19V5" />
+      <path d="M4 19h16" />
+      <path d="M8 15v-4" />
+      <path d="M12 15V8" />
+      <path d="M16 15v-6" />
+    </IconShell>
+  );
+}
+
+export function LeaguesSubIcon({ className }: { className?: string }) {
+  return (
+    <IconShell className={className}>
+      <path d="M8 21h8" />
+      <path d="M12 17v4" />
+      <path d="M7 4h10v5a5 5 0 0 1-10 0V4Z" />
+      <path d="M7 6H5a2 2 0 0 0 2 4" />
+      <path d="M17 6h2a2 2 0 0 1-2 4" />
+    </IconShell>
+  );
+}
+
+export function MatchesSubIcon({ className }: { className?: string }) {
+  return (
+    <IconShell className={className}>
+      <path d="M8 7h8" />
+      <path d="M8 12h8" />
+      <path d="M8 17h5" />
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+    </IconShell>
+  );
+}
+
+export function OpponentsSubIcon({ className }: { className?: string }) {
+  return (
+    <IconShell className={className}>
+      <circle cx="8" cy="8" r="3" />
+      <circle cx="17" cy="9" r="2.5" />
+      <path d="M2.5 19a5 5 0 0 1 10 0" />
+      <path d="M13 19a4 4 0 0 1 8 0" />
+    </IconShell>
+  );
+}
+
+export function OverviewSubIcon({ className }: { className?: string }) {
+  return (
+    <IconShell className={className}>
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </IconShell>
+  );
+}
+
+export function ByRatingSubIcon({ className }: { className?: string }) {
+  return (
+    <IconShell className={className}>
+      <path d="M4 19V5" />
+      <path d="M4 19h16" />
+      <path d="m8 14 3-4 3 2 4-6" />
+    </IconShell>
+  );
+}
+
+export function TwelveMonthsSubIcon({ className }: { className?: string }) {
+  return (
+    <IconShell className={className}>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 10h18" />
+      <path d="M8 3v4" />
+      <path d="M16 3v4" />
+      <path d="M8 14h2M12 14h2M16 14h.01M8 17h2M12 17h2" />
+    </IconShell>
+  );
+}
+
+export function RecentSubIcon({ className }: { className?: string }) {
+  return (
+    <IconShell className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </IconShell>
+  );
+}
+
+export function IconSubTabs<T extends string | number>({
   "aria-label": ariaLabel,
   items,
   value,
@@ -141,7 +229,7 @@ export function IconSubTabs<T extends string>({
         const label = showCount ? `${item.label}, ${count}` : item.label;
         return (
           <button
-            key={item.id}
+            key={String(item.id)}
             type="button"
             role="tab"
             aria-selected={selected}
