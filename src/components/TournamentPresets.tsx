@@ -491,58 +491,90 @@ export function EntryTeamsPresetsPanel({
       ) : teams.length > 0 ? (
         <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/30">
           {teams.map((team) => {
-            const mateSum = team.members
-              .map((m) => m.ratingAtSignup)
-              .filter((n): n is number => n != null)
-              .reduce((acc, n) => acc + n, 0);
-            const mateRated = team.members.filter(
-              (m) => m.ratingAtSignup != null,
-            ).length;
+            const { sum, ratedCount } = teamFargoTotal(
+              captainFargo,
+              team.members,
+            );
+            const roster = [
+              {
+                name: captainLabel,
+                rating: captainFargo,
+                role: "Cap" as const,
+              },
+              ...team.members.map((m) => ({
+                name: m.displayName,
+                rating: m.ratingAtSignup,
+                role: null,
+              })),
+            ];
             return (
-            <li
-              key={team.id}
-              className="flex min-w-0 items-center gap-2 px-2.5 py-2"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-[var(--ink)]">
-                  {team.name}
-                  {mateRated > 0 ? (
-                    <span className="ml-1.5 text-[11px] font-semibold tabular-nums text-[var(--felt-deep)]">
-                      Σ {mateSum.toLocaleString()}
-                    </span>
-                  ) : null}
-                </p>
-                <p className="truncate text-[11px] text-[var(--muted)]">
-                  {team.members.length + 1} players ·{" "}
-                  {team.members
-                    .map(
-                      (m) =>
-                        `${m.displayName}${
-                          m.ratingAtSignup != null
-                            ? ` ${m.ratingAtSignup}`
-                            : ""
-                        }`,
-                    )
-                    .join(", ")}
-                </p>
-              </div>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => startEdit(team)}
-                className="shrink-0 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-[11px] font-semibold text-[var(--ink)] disabled:opacity-50"
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void onDelete(team.id)}
-                className="shrink-0 rounded-[var(--radius)] px-1.5 py-1 text-[11px] font-semibold text-[var(--muted)] disabled:opacity-50"
-              >
-                Del
-              </button>
-            </li>
+              <li key={team.id} className="space-y-1.5 px-2.5 py-2">
+                <div className="flex min-w-0 items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-[var(--ink)] [overflow-wrap:anywhere]">
+                      {team.name}
+                      {ratedCount > 0 ? (
+                        <span className="ml-1.5 text-[11px] font-semibold tabular-nums text-[var(--felt-deep)]">
+                          {sum.toLocaleString()}
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                      {roster.length} player{roster.length === 1 ? "" : "s"}
+                      {ratedCount > 0
+                        ? ` · ${ratedCount} of ${roster.length} rated`
+                        : ""}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => startEdit(team)}
+                    className="shrink-0 rounded-[var(--radius)] bg-[var(--felt)] px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-[var(--felt-soft)] disabled:opacity-50"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void onDelete(team.id)}
+                    className="shrink-0 rounded-[var(--radius)] border border-[var(--danger)]/40 bg-[var(--danger-bg)] px-2.5 py-1 text-[11px] font-semibold text-[var(--danger)] transition hover:brightness-110 disabled:opacity-50"
+                  >
+                    Del
+                  </button>
+                </div>
+                <ul className="space-y-0.5">
+                  {roster.map((member, index) => (
+                    <li
+                      key={`${team.id}-${member.name}-${index}`}
+                      className="flex min-w-0 items-baseline gap-1.5 text-[11px] leading-snug"
+                    >
+                      {member.role ? (
+                        <span className="w-7 shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                          {member.role}
+                        </span>
+                      ) : (
+                        <span className="w-7 shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                          T{index}
+                        </span>
+                      )}
+                      <span className="min-w-0 flex-1 break-words text-[var(--ink)]">
+                        {member.name}
+                      </span>
+                      <span
+                        className={[
+                          "shrink-0 tabular-nums",
+                          member.rating == null
+                            ? "font-semibold text-[var(--amber)]"
+                            : "text-[var(--muted)]",
+                        ].join(" ")}
+                      >
+                        {member.rating != null ? member.rating : "Unrated"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </li>
             );
           })}
         </ul>
