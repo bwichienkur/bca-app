@@ -1137,6 +1137,21 @@ function emptyTeammates(count: number): TeammateDraft[] {
   return Array.from({ length: Math.max(0, count) }, () => emptyTeammate());
 }
 
+/** Captain + teammate Fargo total (only rated players). */
+function teamFargoTotal(
+  captainFargo: number | null | undefined,
+  members: Array<{ ratingAtSignup: number | null }>,
+): { sum: number; ratedCount: number } {
+  const ratings = [
+    captainFargo,
+    ...members.map((m) => m.ratingAtSignup),
+  ].filter((n): n is number => n != null && Number.isFinite(n));
+  return {
+    sum: ratings.reduce((acc, n) => acc + n, 0),
+    ratedCount: ratings.length,
+  };
+}
+
 function toLocalInputValue(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -3328,7 +3343,7 @@ export function Tournaments({
                         />
                       </div>
 
-                      <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]">
+                      <ul className="divide-y divide-[var(--line)] overflow-visible rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]">
                         {teammates.map((mate, index) => {
                           const slotLabel =
                             t.eventType === "scotch-doubles"
@@ -3381,6 +3396,27 @@ export function Tournaments({
                           );
                         })}
                       </ul>
+
+                      {(() => {
+                        const { sum, ratedCount } = teamFargoTotal(
+                          resolvedFargo,
+                          teammates,
+                        );
+                        if (ratedCount === 0) return null;
+                        return (
+                          <div className="flex items-baseline justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                              Team Fargo
+                            </p>
+                            <p className="text-sm font-semibold tabular-nums text-[var(--ink)]">
+                              {sum.toLocaleString()}
+                              <span className="ml-1.5 text-[11px] font-medium text-[var(--muted)]">
+                                · {ratedCount} rated
+                              </span>
+                            </p>
+                          </div>
+                        );
+                      })()}
 
                       <div className="flex flex-wrap items-center gap-1.5">
                         {t.eventType === "teams" ? (
