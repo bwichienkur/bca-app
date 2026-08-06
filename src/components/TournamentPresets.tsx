@@ -106,6 +106,21 @@ function kindLabel(kind: TournamentEntryTeam["kind"]): string {
   return kind === "scotch-doubles" ? "Scotch doubles" : "Teams";
 }
 
+/** Captain + teammate Fargo total (only rated players). */
+function teamFargoTotal(
+  captainFargo: number | null | undefined,
+  members: Array<{ ratingAtSignup: number | null }>,
+): { sum: number; ratedCount: number } {
+  const ratings = [
+    captainFargo,
+    ...members.map((m) => m.ratingAtSignup),
+  ].filter((n): n is number => n != null && Number.isFinite(n));
+  return {
+    sum: ratings.reduce((acc, n) => acc + n, 0),
+    ratedCount: ratings.length,
+  };
+}
+
 function templateSummary(form: TournamentTemplateForm): string {
   const game =
     GAME_TYPE_OPTIONS.find((o) => o.value === form.gameType)?.label ??
@@ -420,7 +435,7 @@ export function EntryTeamsPresetsPanel({
             </div>
           </div>
 
-          <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]">
+          <ul className="divide-y divide-[var(--line)] overflow-visible rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]">
             {members.map((mate, index) => {
               const slotLabel =
                 kind === "scotch-doubles" ? "Partner" : `T${index + 1}`;
@@ -466,6 +481,24 @@ export function EntryTeamsPresetsPanel({
               );
             })}
           </ul>
+
+          {(() => {
+            const { sum, ratedCount } = teamFargoTotal(captainFargo, members);
+            if (ratedCount === 0) return null;
+            return (
+              <div className="flex items-baseline justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                  Team Fargo
+                </p>
+                <p className="text-sm font-semibold tabular-nums text-[var(--ink)]">
+                  {sum.toLocaleString()}
+                  <span className="ml-1.5 text-[11px] font-medium text-[var(--muted)]">
+                    · {ratedCount} rated
+                  </span>
+                </p>
+              </div>
+            );
+          })()}
 
           <div className="flex flex-wrap items-center gap-1.5">
             {kind === "teams" ? (
@@ -517,7 +550,15 @@ export function EntryTeamsPresetsPanel({
         />
       ) : teams.length > 0 ? (
         <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/30">
-          {teams.map((team) => (
+          {teams.map((team) => {
+            const mateSum = team.members
+              .map((m) => m.ratingAtSignup)
+              .filter((n): n is number => n != null)
+              .reduce((acc, n) => acc + n, 0);
+            const mateRated = team.members.filter(
+              (m) => m.ratingAtSignup != null,
+            ).length;
+            return (
             <li
               key={team.id}
               className="flex min-w-0 items-center gap-2 px-2.5 py-2"
@@ -525,6 +566,11 @@ export function EntryTeamsPresetsPanel({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-[var(--ink)]">
                   {team.name}
+                  {mateRated > 0 ? (
+                    <span className="ml-1.5 text-[11px] font-semibold tabular-nums text-[var(--felt-deep)]">
+                      Σ {mateSum.toLocaleString()}
+                    </span>
+                  ) : null}
                 </p>
                 <p className="truncate text-[11px] text-[var(--muted)]">
                   {kindLabel(team.kind)} ·{" "}
@@ -557,7 +603,8 @@ export function EntryTeamsPresetsPanel({
                 Del
               </button>
             </li>
-          ))}
+            );
+          })}
         </ul>
       ) : null}
     </div>
