@@ -13,7 +13,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import {
   BRACKET_FORMAT_OPTIONS,
   BREAK_FORMAT_OPTIONS,
@@ -407,14 +407,14 @@ function TeamExpandIcon({ open }: { open: boolean }) {
       fill="none"
       aria-hidden
       className={[
-        "h-4 w-4 text-white transition-transform",
+        "h-4 w-4 transition-transform",
         open ? "rotate-180" : "",
       ].join(" ")}
     >
       <path
         d="M5 7.5 10 12.5 15 7.5"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth="1.75"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -422,8 +422,53 @@ function TeamExpandIcon({ open }: { open: boolean }) {
   );
 }
 
-const teamExpandBtnClass =
-  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] text-white transition hover:bg-[var(--felt-soft)]";
+function teamExpandBtnClass(expanded: boolean): string {
+  return [
+    "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt)] transition hover:bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]",
+    expanded
+      ? "bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]"
+      : "",
+  ].join(" ");
+}
+
+function getScrollRoot(el: HTMLElement | null): HTMLElement | Window {
+  let node: HTMLElement | null = el?.parentElement ?? null;
+  while (node) {
+    const { overflowY } = getComputedStyle(node);
+    if (
+      (overflowY === "auto" ||
+        overflowY === "scroll" ||
+        overflowY === "overlay") &&
+      node.scrollHeight > node.clientHeight + 1
+    ) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return window;
+}
+
+/** Keep `el` at the same viewport Y after a layout-changing toggle. */
+function pinElementViewportTop(el: HTMLElement, top: number) {
+  const root = getScrollRoot(el);
+  const apply = () => {
+    const delta = el.getBoundingClientRect().top - top;
+    if (Math.abs(delta) < 0.5) return;
+    if (root === window) {
+      const scrolling = document.scrollingElement;
+      if (scrolling) scrolling.scrollTop += delta;
+      else window.scrollBy(0, delta);
+      return;
+    }
+    (root as HTMLElement).scrollTop += delta;
+  };
+  apply();
+  // Mobile browsers sometimes clamp scroll after layout; re-pin next frames.
+  requestAnimationFrame(() => {
+    apply();
+    requestAnimationFrame(apply);
+  });
+}
 
 function FieldEstimatedFargoInput({
   disabled,
@@ -821,7 +866,7 @@ function SignupRequestRow({
               <button
                 type="button"
                 onClick={onToggleExpand}
-                className={teamExpandBtnClass}
+                className={teamExpandBtnClass(Boolean(expanded))}
                 aria-expanded={Boolean(expanded)}
                 aria-label={
                   expanded
@@ -1482,10 +1527,10 @@ export function Tournaments({
   );
   const [expandedSignupId, setExpandedSignupId] = useState<string | null>(null);
   const [expandedFieldId, setExpandedFieldId] = useState<string | null>(null);
-  const rosterExpandAnchorRef = useRef<{
-    key: string;
-    top: number;
-  } | null>(null);
+  const [signupListMinHeight, setSignupListMinHeight] = useState(0);
+  const [fieldListMinHeight, setFieldListMinHeight] = useState(0);
+  const signupListRef = useRef<HTMLUListElement | null>(null);
+  const fieldListRef = useRef<HTMLUListElement | null>(null);
 
   const toggleRosterExpand = useCallback(
     (
@@ -1493,36 +1538,46 @@ export function Tournaments({
       regId: string,
       event: ReactMouseEvent<HTMLButtonElement>,
     ) => {
-      const row = (event.currentTarget as HTMLElement).closest(
-        "[data-roster-row]",
-      ) as HTMLElement | null;
-      rosterExpandAnchorRef.current = row
-        ? { key: `${kind}:${regId}`, top: row.getBoundingClientRect().top }
-        : null;
-      if (kind === "signup") {
-        setExpandedSignupId((prev) => (prev === regId ? null : regId));
-      } else {
-        setExpandedFieldId((prev) => (prev === regId ? null : regId));
+      const button = event.currentTarget;
+      const list =
+        kind === "signup" ? signupListRef.current : fieldListRef.current;
+      const priorHeight = list?.scrollHeight ?? 0;
+      const top = button.getBoundingClientRect().top;
+
+      // Lock list height before collapse so the page cannot shrink under
+      // the current scroll position (same approach as Calcutta lots).
+      if (list && priorHeight > 0) {
+        flushSync(() => {
+          if (kind === "signup") {
+            setSignupListMinHeight((prev) => Math.max(prev, priorHeight));
+          } else {
+            setFieldListMinHeight((prev) => Math.max(prev, priorHeight));
+          }
+        });
       }
+
+      flushSync(() => {
+        if (kind === "signup") {
+          setExpandedSignupId((prev) => (prev === regId ? null : regId));
+        } else {
+          setExpandedFieldId((prev) => (prev === regId ? null : regId));
+        }
+      });
+
+      if (list) {
+        const nextHeight = Math.max(priorHeight, list.scrollHeight);
+        if (kind === "signup") {
+          setSignupListMinHeight((prev) => Math.max(prev, nextHeight));
+        } else {
+          setFieldListMinHeight((prev) => Math.max(prev, nextHeight));
+        }
+      }
+
+      pinElementViewportTop(button, top);
     },
     [],
   );
 
-  // Keep the toggled team row pinned in the viewport when the roster
-  // expands/collapses so the page doesn't jump under the scroll position.
-  useLayoutEffect(() => {
-    const anchor = rosterExpandAnchorRef.current;
-    if (!anchor) return;
-    rosterExpandAnchorRef.current = null;
-    const row = document.querySelector(
-      `[data-roster-row="${CSS.escape(anchor.key)}"]`,
-    ) as HTMLElement | null;
-    if (!row) return;
-    const delta = row.getBoundingClientRect().top - anchor.top;
-    if (Math.abs(delta) > 0.5) {
-      window.scrollBy(0, delta);
-    }
-  }, [expandedSignupId, expandedFieldId]);
   const [inspectPlayer, setInspectPlayer] = useState<{
     id: string;
     name: string;
@@ -2680,6 +2735,46 @@ export function Tournaments({
       paid: approved.filter((r) => r.paid).length,
     };
   }, [detail?.registrations]);
+
+  // Ratchet list min-height after expand so later collapses do not jump.
+  useLayoutEffect(() => {
+    const list = signupListRef.current;
+    if (!list) return;
+    const height = list.scrollHeight;
+    if (height > 0) {
+      setSignupListMinHeight((prev) => Math.max(prev, height));
+    }
+  }, [expandedSignupId, filteredSignups.length]);
+
+  useLayoutEffect(() => {
+    const list = fieldListRef.current;
+    if (!list) return;
+    const height = list.scrollHeight;
+    if (height > 0) {
+      setFieldListMinHeight((prev) => Math.max(prev, height));
+    }
+  }, [expandedFieldId, fieldEntries.length]);
+
+  useEffect(() => {
+    setSignupListMinHeight(0);
+    setExpandedSignupId(null);
+  }, [signupStatusFilter, selectedId]);
+
+  useEffect(() => {
+    setFieldListMinHeight(0);
+    setExpandedFieldId(null);
+  }, [fieldFilter, fieldQuery, selectedId]);
+
+  useEffect(() => {
+    if (detailSubTab !== "signups") {
+      setSignupListMinHeight(0);
+      setExpandedSignupId(null);
+    }
+    if (detailSubTab !== "field") {
+      setFieldListMinHeight(0);
+      setExpandedFieldId(null);
+    }
+  }, [detailSubTab]);
 
   if (inspectPlayer) {
     return (
@@ -4319,7 +4414,15 @@ export function Tournaments({
                           : "No signups in this status."}
                     </p>
                   ) : (
-                    <ul className="divide-y divide-[var(--line)]">
+                    <ul
+                      ref={signupListRef}
+                      className="divide-y divide-[var(--line)] [overflow-anchor:none]"
+                      style={
+                        signupListMinHeight > 0
+                          ? { minHeight: signupListMinHeight }
+                          : undefined
+                      }
+                    >
                       {filteredSignups.map((reg) => {
                         const stats = statsForRegistration(reg);
                         const submitted = signupSubmittedParts(reg);
@@ -4545,7 +4648,15 @@ export function Tournaments({
                     </p>
                   ) : null}
 
-                  <ul className="divide-y divide-[var(--line)]">
+                  <ul
+                    ref={fieldListRef}
+                    className="divide-y divide-[var(--line)] [overflow-anchor:none]"
+                    style={
+                      fieldListMinHeight > 0
+                        ? { minHeight: fieldListMinHeight }
+                        : undefined
+                    }
+                  >
                     {fieldEntries.length === 0 ? (
                       <li className="px-4 py-6 text-center text-sm text-[var(--muted)]">
                         {fieldStats.approved === 0
@@ -4644,7 +4755,7 @@ export function Tournaments({
                                   onClick={(event) =>
                                     toggleRosterExpand("field", reg.id, event)
                                   }
-                                  className={teamExpandBtnClass}
+                                  className={teamExpandBtnClass(expanded)}
                                   aria-expanded={expanded}
                                   aria-label={
                                     expanded
