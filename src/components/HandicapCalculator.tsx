@@ -339,12 +339,17 @@ export function HandicapCalculator({
     slotCount: number,
   ): LineupSlot[] {
     if (!team) return emptyLineup(slotCount);
-    const saved = loadLineupPresets().find(
+    const teamPresets = loadLineupPresets().filter(
       (preset) =>
         preset.divisionId === divisionId &&
         preset.teamId === team.id &&
         preset.playerIds.length === slotCount,
     );
+    const saved =
+      teamPresets.find(
+        (preset) =>
+          preset.name.trim().toLowerCase() === "default lineup",
+      ) ?? teamPresets[0];
     return saved
       ? lineupFromIds(team, saved.playerIds, slotCount)
       : defaultTopLineup(team, slotCount);
