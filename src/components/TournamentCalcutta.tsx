@@ -7,7 +7,9 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
+import { flushSync } from "react-dom";
 import {
   formatCalcuttaMoney,
   lotLabel,
@@ -91,6 +93,82 @@ function LotExpandIcon({ open }: { open: boolean }) {
   );
 }
 
+function isTeamRegistration(reg: TournamentRegistration): boolean {
+  return (
+    Boolean(reg.teamName?.trim()) || (reg.teammates?.length ?? 0) > 0
+  );
+}
+
+function formatMemberRating(rating: number | null | undefined): string {
+  return rating != null && Number.isFinite(rating) ? String(rating) : "Unrated";
+}
+
+/** Captain + teammate Fargo total (only rated players). */
+function lotDisplayRating(reg: TournamentRegistration): number | null {
+  const ratings = [
+    reg.ratingAtSignup,
+    ...(reg.teammates ?? []).map((mate) => mate.ratingAtSignup),
+  ].filter((n): n is number => n != null && Number.isFinite(n));
+  if (ratings.length === 0) return null;
+  return ratings.reduce((acc, n) => acc + n, 0);
+}
+
+function lotRosterMembers(reg: TournamentRegistration): Array<{
+  name: string;
+  rating: number | null;
+  role?: string;
+}> {
+  const team = isTeamRegistration(reg);
+  const captain = {
+    name: reg.displayName,
+    rating: reg.ratingAtSignup,
+    role: team ? "Cap" : undefined,
+  };
+  const mates = (reg.teammates ?? []).map((mate) => ({
+    name: mate.displayName,
+    rating: mate.ratingAtSignup,
+  }));
+  return [captain, ...mates];
+}
+
+function getScrollRoot(el: HTMLElement | null): HTMLElement | Window {
+  let node: HTMLElement | null = el?.parentElement ?? null;
+  while (node) {
+    const { overflowY } = getComputedStyle(node);
+    if (
+      (overflowY === "auto" ||
+        overflowY === "scroll" ||
+        overflowY === "overlay") &&
+      node.scrollHeight > node.clientHeight + 1
+    ) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return window;
+}
+
+/** Keep `el` at the same viewport Y after a layout-changing toggle. */
+function pinElementViewportTop(el: HTMLElement, top: number) {
+  const root = getScrollRoot(el);
+  const apply = () => {
+    const delta = el.getBoundingClientRect().top - top;
+    if (Math.abs(delta) < 0.5) return;
+    if (root === window) {
+      const scrolling = document.scrollingElement;
+      if (scrolling) scrolling.scrollTop += delta;
+      else window.scrollBy(0, delta);
+      return;
+    }
+    (root as HTMLElement).scrollTop += delta;
+  };
+  apply();
+  requestAnimationFrame(() => {
+    apply();
+    requestAnimationFrame(apply);
+  });
+}
+
 export function TournamentCalcuttaPanel({
   tournamentId,
   registrations,
@@ -171,7 +249,40 @@ export function TournamentCalcuttaPanel({
     if (next === lotFilter) return;
     lotFilterAnchorTop.current =
       lotsSectionRef.current?.getBoundingClientRect().top ?? null;
+    setExpandedLotId(null);
     setLotFilter(next);
+  };
+
+  const toggleLotExpand = (
+    registrationId: string,
+    event: ReactMouseEvent<HTMLButtonElement>,
+  ) => {
+    const button = event.currentTarget;
+    const list = lotsListRef.current;
+    const priorHeight = list?.scrollHeight ?? 0;
+    const top = button.getBoundingClientRect().top;
+
+    // Lock list height before collapse so the page cannot shrink under
+    // the current scroll position.
+    if (list && priorHeight > 0) {
+      flushSync(() => {
+        setLotsListMinHeight((prev) => Math.max(prev, priorHeight));
+      });
+    }
+
+    flushSync(() => {
+      setExpandedLotId((prev) =>
+        prev === registrationId ? null : registrationId,
+      );
+    });
+
+    if (list) {
+      setLotsListMinHeight((prev) =>
+        Math.max(prev, priorHeight, list.scrollHeight),
+      );
+    }
+
+    pinElementViewportTop(button, top);
   };
 
   // Keep the Lots header pinned in the viewport when the list shrinks/grows,
@@ -190,11 +301,13 @@ export function TournamentCalcuttaPanel({
     if (section && anchor != null) {
       const delta = section.getBoundingClientRect().top - anchor;
       if (Math.abs(delta) > 0.5) {
-        window.scrollBy(0, delta);
+        const scrolling = document.scrollingElement;
+        if (scrolling) scrolling.scrollTop += delta;
+        else window.scrollBy(0, delta);
       }
       lotFilterAnchorTop.current = null;
     }
-  }, [filteredLots.length, lotFilter]);
+  }, [filteredLots.length, lotFilter, expandedLotId]);
 
   const activeLot = useMemo(() => {
     if (!calcutta || !activeLotId) return null;
@@ -685,6 +798,7 @@ export function TournamentCalcuttaPanel({
 
             <div
               ref={lotsListRef}
+              className="[overflow-anchor:none]"
               style={
                 lotsListMinHeight > 0
                   ? { minHeight: lotsListMinHeight }
@@ -700,12 +814,15 @@ export function TournamentCalcuttaPanel({
                     : "No lots yet."}
               </p>
             ) : (
-              <ul className="divide-y divide-[var(--line)]">
+              <ul className="divide-y divide-[var(--line)] [overflow-anchor:none]">
                 {filteredLots.map((lot) => {
                   const reg = regById.get(lot.registrationId);
                   const sold = isLotSold(lot);
                   const active = lot.registrationId === activeLotId;
                   const expanded = lot.registrationId === expandedLotId;
+                  const isTeam = reg ? isTeamRegistration(reg) : false;
+                  const displayRating = reg ? lotDisplayRating(reg) : null;
+                  const members = reg ? lotRosterMembers(reg) : [];
                   const lotIndex =
                     calcutta.lots.findIndex(
                       (row) => row.registrationId === lot.registrationId,
@@ -731,12 +848,19 @@ export function TournamentCalcuttaPanel({
                               {lotIndex}
                             </span>
                             {lotLabel(reg, lot.registrationId)}
-                            {reg?.ratingAtSignup != null ? (
+                            {displayRating != null ? (
                               <span className="ml-1.5 font-normal tabular-nums text-[var(--muted)]">
-                                {reg.ratingAtSignup}
+                                {displayRating.toLocaleString()}
                               </span>
                             ) : null}
                           </p>
+                          {isTeam ? (
+                            <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                              {members.length} player
+                              {members.length === 1 ? "" : "s"}
+                              {displayRating != null ? " · team Fargo" : ""}
+                            </p>
+                          ) : null}
                           {sold || active ? (
                             <p className="mt-0.5 truncate text-[11px] text-[var(--muted)]">
                               {sold
@@ -761,14 +885,14 @@ export function TournamentCalcuttaPanel({
                           </p>
                           <button
                             type="button"
-                            onClick={() =>
-                              setExpandedLotId(
-                                expanded ? null : lot.registrationId,
-                              )
+                            onClick={(event) =>
+                              toggleLotExpand(lot.registrationId, event)
                             }
                             className={[
                               "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt)] transition hover:bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]",
-                              expanded ? "bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]" : "",
+                              expanded
+                                ? "bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]"
+                                : "",
                             ].join(" ")}
                             aria-expanded={expanded}
                             aria-label={
@@ -784,7 +908,39 @@ export function TournamentCalcuttaPanel({
                       </div>
 
                       {expanded ? (
-                        <div className="mt-2 space-y-2 border-t border-[var(--line)] pt-2">
+                        <div className="mt-2 space-y-2 border-t border-[var(--line)] pt-2 [overflow-anchor:none]">
+                          {members.length > 0 ? (
+                            <ul className="space-y-1">
+                              {members.map((member, index) => {
+                                const unrated = member.rating == null;
+                                return (
+                                  <li
+                                    key={`${lot.registrationId}-m-${index}`}
+                                    className="flex min-w-0 items-baseline gap-1.5"
+                                  >
+                                    {member.role || isTeam ? (
+                                      <span className="w-7 shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                                        {member.role ?? `T${index}`}
+                                      </span>
+                                    ) : null}
+                                    <span className="min-w-0 flex-1 break-words text-sm font-medium text-[var(--ink)]">
+                                      {member.name}
+                                    </span>
+                                    <span
+                                      className={[
+                                        "shrink-0 text-[11px] tabular-nums",
+                                        unrated
+                                          ? "font-semibold text-[var(--amber)]"
+                                          : "text-[var(--muted)]",
+                                      ].join(" ")}
+                                    >
+                                      {formatMemberRating(member.rating)}
+                                    </span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          ) : null}
                           <div className="grid grid-cols-[1fr_5.5rem] gap-2">
                             <label className="block min-w-0">
                               <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
