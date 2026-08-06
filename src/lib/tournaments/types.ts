@@ -226,3 +226,24 @@ export type CalcuttaSummary = {
     buyBackHalf: boolean;
   }>;
 };
+
+/** Partner/teammate on a reusable tournament entry team (captain is the owner). */
+export type TournamentEntryTeamMember = {
+  displayName: string;
+  ratingAtSignup: number | null;
+  fargoPlayerId: string | null;
+  readableId: string | null;
+};
+
+/**
+ * Saved team/pair a player can reuse when entering scotch doubles or team events.
+ * Keyed by the captain's LMS id — not a league DivisionTeam.
+ */
+export type TournamentEntryTeam = {
+  id: string;
+  name: string;
+  kind: Extract<EventType, "scotch-doubles" | "teams">;
+  members: TournamentEntryTeamMember[];
+  createdAt: string;
+  updatedAt: string;
+};
