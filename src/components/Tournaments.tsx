@@ -369,6 +369,18 @@ function registrationCardTitle(reg: TournamentRegistration): string {
   return reg.teamName?.trim() || reg.displayName;
 }
 
+/** Split "First … Last" so the surname can sit on its own line. */
+function splitPersonName(name: string): { first: string; last: string | null } {
+  const trimmed = name.replace(/\s+/g, " ").trim();
+  if (!trimmed) return { first: "—", last: null };
+  const i = trimmed.lastIndexOf(" ");
+  if (i <= 0) return { first: trimmed, last: null };
+  return {
+    first: trimmed.slice(0, i),
+    last: trimmed.slice(i + 1),
+  };
+}
+
 function signupStatusBadge(
   status: TournamentRegistration["status"],
 ): ReactNode {
@@ -3311,7 +3323,11 @@ export function Tournaments({
                       fieldEntries.map((reg) => {
                         const stats = statsForRegistration(reg);
                         const title = registrationCardTitle(reg);
+                        const { first, last } = splitPersonName(title);
                         const hasRating = stats.rating != null;
+                        const showCaptainUnderTeam =
+                          Boolean(reg.teamName?.trim()) &&
+                          reg.teamName!.trim() !== reg.displayName.trim();
 
                         return (
                           <li key={reg.id} className="px-2 py-1.5 sm:px-3">
@@ -3321,9 +3337,21 @@ export function Tournaments({
                               </div>
 
                               <div className="flex min-w-0 flex-1 items-center gap-0.5">
-                                <p className="min-w-0 truncate font-[family-name:var(--font-display)] text-[13px] font-semibold leading-none tracking-tight text-[var(--ink)]">
-                                  {title}
-                                </p>
+                                <div className="min-w-0">
+                                  <p className="font-[family-name:var(--font-display)] text-[13px] font-semibold leading-tight tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
+                                    {first}
+                                  </p>
+                                  {last ? (
+                                    <p className="font-[family-name:var(--font-display)] text-[13px] font-semibold leading-tight tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
+                                      {last}
+                                    </p>
+                                  ) : null}
+                                  {showCaptainUnderTeam ? (
+                                    <p className="mt-0.5 text-[11px] leading-tight text-[var(--muted)]">
+                                      {reg.displayName}
+                                    </p>
+                                  ) : null}
+                                </div>
                                 {stats.playerId ? (
                                   <button
                                     type="button"
@@ -3396,12 +3424,6 @@ export function Tournaments({
                                 </button>
                               </div>
                             </div>
-                            {reg.teamName &&
-                            reg.teamName.trim() !== reg.displayName.trim() ? (
-                              <p className="mt-0.5 truncate pl-[2.375rem] text-[11px] text-[var(--muted)]">
-                                {reg.displayName}
-                              </p>
-                            ) : null}
                           </li>
                         );
                       })
