@@ -52,6 +52,7 @@ import type {
 
 type HandicapFilter = "" | "handicapped" | "scratch";
 import type { AuthUser } from "./LoginScreen";
+import { DateField } from "./DateField";
 import { DateTimeField } from "./DateTimeField";
 import { EmptyState } from "./EmptyState";
 import { LoadingState } from "./LoadingState";
@@ -70,6 +71,27 @@ type SignupStatusFilter =
   | "waitlisted"
   | "rejected";
 type SignupQueueSort = "oldest" | "fargo";
+
+const EVENTS_PAGE_SIZE = 10;
+
+function eventsPageNumbers(
+  current: number,
+  total: number,
+): Array<number | "…"> {
+  if (total <= 5) {
+    return Array.from({ length: total }, (_, index) => index + 1);
+  }
+  const pages = new Set<number>([1, total, current]);
+  if (current - 1 > 1) pages.add(current - 1);
+  if (current + 1 < total) pages.add(current + 1);
+  const sorted = [...pages].sort((a, b) => a - b);
+  const out: Array<number | "…"> = [];
+  for (let i = 0; i < sorted.length; i += 1) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) out.push("…");
+    out.push(sorted[i]);
+  }
+  return out;
+}
 
 const SIGNUP_STATUS_FILTERS: Array<{
   value: SignupStatusFilter;
@@ -962,6 +984,7 @@ export function Tournaments({
   const [startsTo, setStartsTo] = useState("");
   const [eligibleOnly, setEligibleOnly] = useState(false);
   const [eligibleRobustnessOnly, setEligibleRobustnessOnly] = useState(false);
+  const [eventsPage, setEventsPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<DetailPayload | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -1014,31 +1037,46 @@ export function Tournaments({
       setFargoLoading(false);
       return;
     }
-    // Prefer roster Fargo immediately; refresh from Fargo profile when possible.
+    // Prefer roster Fargo immediately; default robustness so the filter is usable
+    // even if the profile lookup is slow or unavailable.
     setResolvedFargo(playerFargo);
-    const lookupId = user.readableId?.trim();
-    if (!lookupId) return;
+    setResolvedRobustnessStatus("starter");
+    const lookupIds = [user.readableId, user.lmsId]
+      .map((id) => id?.trim() ?? "")
+      .filter(Boolean);
+    if (lookupIds.length === 0) {
+      setFargoLoading(false);
+      return;
+    }
     let cancelled = false;
     setFargoLoading(true);
     void (async () => {
       try {
-        const res = await fetch(`/api/players/${encodeURIComponent(lookupId)}`);
-        const data = (await res.json()) as {
-          player?: {
-            effectiveRating?: number | null;
-            provisionalRating?: number | null;
-            robustnessStatus?: RobustnessStatus;
+        for (const lookupId of lookupIds) {
+          const res = await fetch(
+            `/api/players/${encodeURIComponent(lookupId)}`,
+          );
+          const data = (await res.json()) as {
+            player?: {
+              effectiveRating?: number | null;
+              provisionalRating?: number | null;
+              robustnessStatus?: RobustnessStatus;
+            };
           };
-        };
-        if (cancelled || !res.ok) return;
-        const rating =
-          data.player?.effectiveRating ?? data.player?.provisionalRating ?? null;
-        if (rating != null) setResolvedFargo(rating);
-        if (data.player?.robustnessStatus) {
-          setResolvedRobustnessStatus(data.player.robustnessStatus);
+          if (cancelled) return;
+          if (!res.ok || !data.player) continue;
+          const rating =
+            data.player.effectiveRating ??
+            data.player.provisionalRating ??
+            null;
+          if (rating != null) setResolvedFargo(rating);
+          setResolvedRobustnessStatus(
+            data.player.robustnessStatus ?? "starter",
+          );
+          return;
         }
       } catch {
-        /* keep roster fallback */
+        /* keep starter / roster fallback */
       } finally {
         if (!cancelled) setFargoLoading(false);
       }
@@ -1096,6 +1134,39 @@ export function Tournaments({
   useEffect(() => {
     void loadEvents();
   }, [loadEvents]);
+
+  useEffect(() => {
+    setEventsPage(1);
+  }, [
+    eligibleOnly,
+    eligibleRobustnessOnly,
+    eventTypeFilter,
+    gameType,
+    handicapFilter,
+    q,
+    region,
+    resolvedFargo,
+    resolvedRobustnessStatus,
+    startsFrom,
+    startsTo,
+  ]);
+
+  const eventsTotalPages = Math.max(
+    1,
+    Math.ceil(events.length / EVENTS_PAGE_SIZE),
+  );
+  const eventsSafePage = Math.min(eventsPage, eventsTotalPages);
+  const pagedEvents = useMemo(() => {
+    const start = (eventsSafePage - 1) * EVENTS_PAGE_SIZE;
+    return events.slice(start, start + EVENTS_PAGE_SIZE);
+  }, [events, eventsSafePage]);
+
+  const goToEventsPage = useCallback(
+    (next: number) => {
+      setEventsPage(Math.min(Math.max(1, next), eventsTotalPages));
+    },
+    [eventsTotalPages],
+  );
 
   const openDetail = useCallback(async (id: string) => {
     setSelectedId(id);
@@ -3826,6 +3897,23 @@ export function Tournaments({
             label="Search events"
           />
           <div className="grid grid-cols-2 gap-2">
+            <DateField
+              aria-label="Events from date"
+              placeholder="From date"
+              value={startsFrom}
+              max={startsTo || undefined}
+              onChange={(next) => {
+                setStartsFrom(next);
+                if (next && startsTo && next > startsTo) setStartsTo("");
+              }}
+            />
+            <DateField
+              aria-label="Events to date"
+              placeholder="To date"
+              value={startsTo}
+              min={startsFrom || undefined}
+              onChange={setStartsTo}
+            />
             <SelectField
               aria-label="Filter by region"
               value={region}
@@ -3867,36 +3955,12 @@ export function Tournaments({
               ]}
               onChange={(next) => setHandicapFilter(next as HandicapFilter)}
             />
-            <label className="block min-w-0">
-              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                From
-              </span>
-              <input
-                type="date"
-                value={startsFrom}
-                onChange={(e) => setStartsFrom(e.target.value)}
-                className={fieldClass}
-                aria-label="Events from date"
-              />
-            </label>
-            <label className="block min-w-0">
-              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                To
-              </span>
-              <input
-                type="date"
-                value={startsTo}
-                min={startsFrom || undefined}
-                onChange={(e) => setStartsTo(e.target.value)}
-                className={fieldClass}
-                aria-label="Events to date"
-              />
-            </label>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
-            <label className="flex items-center gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)]">
+            <label className="flex cursor-pointer items-center gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
               <input
                 type="checkbox"
+                className="h-4 w-4 shrink-0 accent-[var(--felt)] disabled:cursor-not-allowed"
                 checked={eligibleOnly}
                 onChange={(e) => setEligibleOnly(e.target.checked)}
                 disabled={resolvedFargo == null}
@@ -3906,17 +3970,20 @@ export function Tournaments({
                 {resolvedFargo != null ? ` (${resolvedFargo})` : ""}
               </span>
             </label>
-            <label className="flex items-center gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)]">
+            <label className="flex cursor-pointer items-center gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
               <input
                 type="checkbox"
+                className="h-4 w-4 shrink-0 accent-[var(--felt)] disabled:cursor-not-allowed"
                 checked={eligibleRobustnessOnly}
                 onChange={(e) => setEligibleRobustnessOnly(e.target.checked)}
-                disabled={!resolvedRobustnessStatus}
+                disabled={!user || resolvedRobustnessStatus == null}
               />
               <span className="min-w-0 leading-snug">
                 Eligible for my robustness
-                {resolvedRobustnessStatus
-                  ? ` (${robustnessStatusLabel(resolvedRobustnessStatus)})`
+                {user
+                  ? ` (${robustnessStatusLabel(
+                      resolvedRobustnessStatus ?? "starter",
+                    )})`
                   : ""}
               </span>
             </label>
@@ -3947,75 +4014,145 @@ export function Tournaments({
               }
             />
           ) : (
-            <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)]">
-              {events.map((event) => (
-                <li key={event.id}>
-                  <div className="flex w-full items-start gap-3 px-3 py-3 transition hover:bg-[var(--surface-2)]/70 sm:px-4">
-                    {event.thumbnailUrl ? (
+            <div className="space-y-3">
+              <div className="flex items-baseline justify-between gap-3 px-0.5">
+                <p className="text-sm text-[var(--muted)]">
+                  <span className="tabular-nums font-semibold text-[var(--ink)]">
+                    {events.length}
+                  </span>{" "}
+                  event{events.length === 1 ? "" : "s"}
+                </p>
+                {eventsTotalPages > 1 ? (
+                  <p className="text-xs tabular-nums text-[var(--muted)]">
+                    Page {eventsSafePage} of {eventsTotalPages}
+                  </p>
+                ) : null}
+              </div>
+              <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)]">
+                {pagedEvents.map((event) => (
+                  <li key={event.id}>
+                    <div className="flex w-full items-start gap-3 px-3 py-3 transition hover:bg-[var(--surface-2)]/70 sm:px-4">
+                      {event.thumbnailUrl ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFlyerPreview({
+                              src: event.thumbnailUrl!,
+                              title: event.title,
+                            })
+                          }
+                          className="relative mt-0.5 h-[5.5rem] w-16 shrink-0 overflow-hidden rounded-[var(--radius)] bg-[var(--surface-2)] ring-1 ring-[var(--line)]"
+                          aria-label={`View ${event.title} flyer`}
+                          title="View full flyer"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={event.thumbnailUrl}
+                            alt=""
+                            className="h-full w-full object-contain"
+                          />
+                        </button>
+                      ) : (
+                        <div className="mt-0.5 flex h-[5.5rem] w-16 shrink-0 items-center justify-center rounded-[var(--radius)] bg-[linear-gradient(145deg,rgba(29,110,158,0.55),rgba(19,78,115,0.75))] text-xs font-semibold text-white/80">
+                          Event
+                        </div>
+                      )}
                       <button
                         type="button"
-                        onClick={() =>
-                          setFlyerPreview({
-                            src: event.thumbnailUrl!,
-                            title: event.title,
-                          })
-                        }
-                        className="relative mt-0.5 h-[5.5rem] w-16 shrink-0 overflow-hidden rounded-[var(--radius)] bg-[var(--surface-2)] ring-1 ring-[var(--line)]"
-                        aria-label={`View ${event.title} flyer`}
-                        title="View full flyer"
+                        onClick={() => void openDetail(event.id)}
+                        className="flex min-h-[5.5rem] min-w-0 flex-1 flex-col text-left"
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={event.thumbnailUrl}
-                          alt=""
-                          className="h-full w-full object-contain"
-                        />
+                        <p className="min-h-[2.5rem] font-[family-name:var(--font-display)] text-[15px] font-semibold leading-snug tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
+                          {event.title}
+                        </p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <span
+                            className={[
+                              "rounded-[var(--radius)] px-2 py-0.5 text-[10px] font-semibold",
+                              statusTone(event.status),
+                            ].join(" ")}
+                          >
+                            {STATUS_LABELS[event.status]}
+                          </span>
+                          <span className="text-xs font-medium text-[var(--ink)]">
+                            {formatStartsAt(event.startsAt)}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[11px] text-[var(--muted)]">
+                          {eventKeyFacts(event)}
+                          {" · "}
+                          {EVENT_TYPE_OPTIONS.find(
+                            (o) => o.value === event.eventType,
+                          )?.label ?? event.eventType}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                          {event.venueName}, {event.city}
+                          {" · "}
+                          {formatEntryFee(event.entryFeeCents)}
+                          {" · "}
+                          {event.spotsLeft} {entryNoun(event.eventType)} left
+                        </p>
                       </button>
-                    ) : (
-                      <div className="mt-0.5 flex h-[5.5rem] w-16 shrink-0 items-center justify-center rounded-[var(--radius)] bg-[linear-gradient(145deg,rgba(29,110,158,0.55),rgba(19,78,115,0.75))] text-xs font-semibold text-white/80">
-                        Event
-                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {eventsTotalPages > 1 ? (
+                <nav
+                  aria-label="Events pages"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-2 shadow-[var(--shadow)] sm:px-3"
+                >
+                  <button
+                    type="button"
+                    onClick={() => goToEventsPage(eventsSafePage - 1)}
+                    disabled={eventsSafePage <= 1}
+                    className="rounded-[var(--radius)] bg-[var(--surface-2)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    Previous
+                  </button>
+                  <div className="flex flex-wrap items-center justify-center gap-1">
+                    {eventsPageNumbers(eventsSafePage, eventsTotalPages).map(
+                      (item, index) =>
+                        item === "…" ? (
+                          <span
+                            key={`ellipsis-${index}`}
+                            className="px-1 text-sm text-[var(--muted)]"
+                            aria-hidden
+                          >
+                            …
+                          </span>
+                        ) : (
+                          <button
+                            key={item}
+                            type="button"
+                            aria-label={`Page ${item}`}
+                            aria-current={
+                              item === eventsSafePage ? "page" : undefined
+                            }
+                            onClick={() => goToEventsPage(item)}
+                            className={[
+                              "min-w-9 rounded-[var(--radius)] px-2.5 py-1.5 text-sm font-semibold tabular-nums transition",
+                              item === eventsSafePage
+                                ? "bg-[var(--felt)] text-white shadow-sm"
+                                : "bg-[var(--surface-2)] text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--ink)]",
+                            ].join(" ")}
+                          >
+                            {item}
+                          </button>
+                        ),
                     )}
-                    <button
-                      type="button"
-                      onClick={() => void openDetail(event.id)}
-                      className="flex min-h-[5.5rem] min-w-0 flex-1 flex-col text-left"
-                    >
-                      <p className="min-h-[2.5rem] font-[family-name:var(--font-display)] text-[15px] font-semibold leading-snug tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
-                        {event.title}
-                      </p>
-                      <div className="mt-1 flex flex-wrap items-center gap-2">
-                        <span
-                          className={[
-                            "rounded-[var(--radius)] px-2 py-0.5 text-[10px] font-semibold",
-                            statusTone(event.status),
-                          ].join(" ")}
-                        >
-                          {STATUS_LABELS[event.status]}
-                        </span>
-                        <span className="text-xs font-medium text-[var(--ink)]">
-                          {formatStartsAt(event.startsAt)}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-[11px] text-[var(--muted)]">
-                        {eventKeyFacts(event)}
-                        {" · "}
-                        {EVENT_TYPE_OPTIONS.find(
-                          (o) => o.value === event.eventType,
-                        )?.label ?? event.eventType}
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-[var(--muted)]">
-                        {event.venueName}, {event.city}
-                        {" · "}
-                        {formatEntryFee(event.entryFeeCents)}
-                        {" · "}
-                        {event.spotsLeft} {entryNoun(event.eventType)} left
-                      </p>
-                    </button>
                   </div>
-                </li>
-              ))}
-            </ul>
+                  <button
+                    type="button"
+                    onClick={() => goToEventsPage(eventsSafePage + 1)}
+                    disabled={eventsSafePage >= eventsTotalPages}
+                    className="rounded-[var(--radius)] bg-[var(--surface-2)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    Next
+                  </button>
+                </nav>
+              ) : null}
+            </div>
           )}
         </div>
       </SurfaceCard>
