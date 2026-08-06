@@ -3472,20 +3472,9 @@ export function Tournaments({
                   {t.eventType === "scotch-doubles" ||
                   t.eventType === "teams" ? (
                     <div className="space-y-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/50 p-2.5">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                          Your team
-                        </p>
-                        <p className="truncate text-[11px] text-[var(--muted)]">
-                          Cap{" "}
-                          <span className="font-semibold text-[var(--ink)]">
-                            {user.name ?? user.email ?? "You"}
-                            {resolvedFargo != null
-                              ? ` · ${resolvedFargo}`
-                              : " · Unrated"}
-                          </span>
-                        </p>
-                      </div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                        Your team
+                      </p>
 
                       <div className="flex min-w-0 items-center gap-1.5">
                         <SelectField
@@ -3529,6 +3518,34 @@ export function Tournaments({
                       </div>
 
                       <ul className="divide-y divide-[var(--line)] overflow-visible rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]">
+                        <li className="flex min-w-0 items-center gap-1.5 px-2 py-1.5">
+                          <span className="w-8 shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                            Cap
+                          </span>
+                          <div className="min-w-0 flex-1 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5">
+                            <p className="truncate text-sm font-medium text-[var(--ink)]">
+                              {user.name ?? user.email ?? "You"}
+                              <span className="ml-1.5 text-[11px] font-medium text-[var(--muted)]">
+                                (you)
+                              </span>
+                            </p>
+                            <p
+                              className={[
+                                "text-[11px] tabular-nums",
+                                resolvedFargo == null
+                                  ? "font-semibold text-[var(--amber)]"
+                                  : "text-[var(--muted)]",
+                              ].join(" ")}
+                            >
+                              {fargoLoading
+                                ? "Looking up…"
+                                : formatMemberRating(resolvedFargo)}
+                            </p>
+                          </div>
+                          {resolvedFargo == null && !fargoLoading ? (
+                            <UnratedBadge />
+                          ) : null}
+                        </li>
                         {teammates.map((mate, index) => (
                           <li
                             key={`mate-${index}`}
@@ -3576,20 +3593,24 @@ export function Tournaments({
                       </ul>
 
                       {(() => {
+                        const namedMates = teammates.filter((m) =>
+                          m.displayName.trim(),
+                        );
                         const { sum, ratedCount } = teamFargoTotal(
                           resolvedFargo,
-                          teammates,
+                          namedMates,
                         );
-                        if (ratedCount === 0) return null;
+                        const rosterSize = 1 + namedMates.length;
+                        if (ratedCount === 0 && rosterSize <= 1) return null;
                         return (
                           <div className="flex items-baseline justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5">
                             <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
                               Team Fargo
                             </p>
                             <p className="text-sm font-semibold tabular-nums text-[var(--ink)]">
-                              {sum.toLocaleString()}
+                              {ratedCount > 0 ? sum.toLocaleString() : "—"}
                               <span className="ml-1.5 text-[11px] font-medium text-[var(--muted)]">
-                                · {ratedCount} rated
+                                · {ratedCount} of {rosterSize} rated
                               </span>
                             </p>
                           </div>
@@ -3658,7 +3679,7 @@ export function Tournaments({
                         ))
                     }
                     onClick={() => void onRegister()}
-                    className="rounded-full bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                    className="w-full rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                   >
                     {saving
                       ? "Submitting…"
@@ -3702,7 +3723,7 @@ export function Tournaments({
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-4 py-2 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
+                className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
               >
                 Send message
               </button>
