@@ -18,7 +18,6 @@ import {
   PAY_METHOD_OPTIONS,
   REGISTRATION_MODE_OPTIONS,
   RULESET_OPTIONS,
-  STATUS_LABELS,
   TABLE_SIZE_OPTIONS,
   UNRATED_POLICY_OPTIONS,
 } from "@/lib/tournaments/options";
@@ -28,7 +27,6 @@ import type {
   RegistrationStatus,
   TournamentEntryTeam,
   TournamentEntryTeamMember,
-  TournamentStatus,
   TournamentTemplate,
   TournamentTemplateForm,
 } from "@/lib/tournaments/types";
@@ -1305,42 +1303,58 @@ type MyEntriesPanelProps = {
   onOpenEvent: (eventId: string) => void;
 };
 
-function entryStatusTone(status: RegistrationStatus): string {
-  switch (status) {
-    case "approved":
-      return "bg-[var(--felt)] text-white";
-    case "pending":
-      return "bg-[color-mix(in_srgb,var(--amber)_22%,transparent)] text-[var(--amber)]";
-    case "waitlisted":
-      return "bg-[var(--surface-3)] text-[var(--ink)]";
-    case "rejected":
-      return "bg-[var(--danger-bg)] text-[var(--danger)]";
-    default:
-      return "bg-[var(--surface-2)] text-[var(--muted)]";
-  }
-}
-
-function eventStatusTone(status: TournamentStatus): string {
-  switch (status) {
-    case "open":
-      return "bg-[var(--felt)] text-white";
-    case "full":
-      return "bg-[var(--amber)] text-[#1a140c]";
-    case "draft":
-      return "bg-[var(--surface-3)] text-[var(--muted)]";
-    case "closed":
-    case "completed":
-      return "bg-[var(--surface-2)] text-[var(--muted)]";
-    case "canceled":
-      return "bg-[var(--danger-bg)] text-[var(--danger)]";
-    default:
-      return "bg-[var(--surface-2)] text-[var(--muted)]";
-  }
-}
-
 function entryStatusLabel(status: RegistrationStatus): string {
   if (status === "waitlisted") return "Waitlist";
   return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function entryStatusAccent(status: RegistrationStatus): string {
+  switch (status) {
+    case "approved":
+      return "bg-[var(--felt)]";
+    case "pending":
+      return "bg-[var(--amber)]";
+    case "waitlisted":
+      return "bg-[var(--muted)]";
+    case "rejected":
+      return "bg-[var(--danger)]";
+    default:
+      return "bg-[var(--line)]";
+  }
+}
+
+function entryStatusText(status: RegistrationStatus): string {
+  switch (status) {
+    case "approved":
+      return "text-[var(--felt-deep)]";
+    case "pending":
+      return "text-[var(--amber)]";
+    case "waitlisted":
+      return "text-[var(--muted)]";
+    case "rejected":
+      return "text-[var(--danger)]";
+    default:
+      return "text-[var(--muted)]";
+  }
+}
+
+function EntryRowChevron() {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden
+      className="h-4 w-4 shrink-0 text-[var(--muted)]"
+    >
+      <path
+        d="M7.5 5 12.5 10 7.5 15"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
 export function MyEntriesPanel({
@@ -1392,20 +1406,20 @@ export function MyEntriesPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="flex flex-wrap items-end justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
             My entries
           </p>
           <p className="mt-0.5 text-xs text-[var(--muted)]">
-            Events you entered yourself or joined as a teammate
+            Your spots as captain or teammate
           </p>
         </div>
         <button
           type="button"
           disabled={loading || !signedIn}
           onClick={() => void loadEntries()}
-          className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
+          className="rounded-[var(--radius)] px-2 py-1 text-xs font-semibold text-[var(--felt-deep)] transition hover:bg-[color-mix(in_srgb,var(--felt)_14%,transparent)] disabled:opacity-50"
         >
           Refresh
         </button>
@@ -1425,75 +1439,81 @@ export function MyEntriesPanel({
           body="When you request a spot — or someone adds you to a team from Fargo search — it shows up here."
         />
       ) : (
-        <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/30">
+        <ul className="space-y-2">
           {entries.map((entry) => {
             const { tournament: event, registration: reg, role } = entry;
             const formatLabel =
               EVENT_TYPE_OPTIONS.find((o) => o.value === event.eventType)
                 ?.label ?? event.eventType;
-            const teamLabel =
-              reg.teamName?.trim() ||
-              (role === "teammate" ? reg.displayName : null);
+            const teamLabel = reg.teamName?.trim() || null;
+            const rosterCount = 1 + (reg.teammates?.length ?? 0);
+            const detailBits = [
+              role === "captain" ? "Captain" : "Teammate",
+              teamLabel,
+              teamLabel && rosterCount > 1 ? `${rosterCount} players` : null,
+              reg.paid ? "Paid" : "Unpaid",
+              reg.checkedIn ? "Checked in" : null,
+            ].filter(Boolean);
+
             return (
               <li key={`${event.id}-${reg.id}`}>
                 <button
                   type="button"
                   onClick={() => onOpenEvent(event.id)}
-                  className="flex w-full flex-col gap-1.5 px-3 py-3 text-left transition hover:bg-[var(--surface-2)]/70 sm:px-4"
+                  className="group flex w-full items-stretch overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] text-left transition hover:border-[color-mix(in_srgb,var(--felt)_45%,var(--line))] hover:bg-[color-mix(in_srgb,var(--felt)_8%,var(--surface))]"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <p className="min-w-0 font-[family-name:var(--font-display)] text-[15px] font-semibold leading-snug tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
-                      {event.title}
-                    </p>
-                    <span
-                      className={[
-                        "shrink-0 rounded-[var(--radius)] px-2 py-0.5 text-[10px] font-semibold capitalize",
-                        entryStatusTone(reg.status),
-                      ].join(" ")}
-                    >
-                      {entryStatusLabel(reg.status)}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span
-                      className={[
-                        "rounded-[var(--radius)] px-2 py-0.5 text-[10px] font-semibold",
-                        eventStatusTone(event.status),
-                      ].join(" ")}
-                    >
-                      {STATUS_LABELS[event.status]}
-                    </span>
-                    <span className="rounded-[var(--radius)] bg-[var(--surface)] px-2 py-0.5 text-[10px] font-semibold text-[var(--ink)]">
-                      {role === "captain" ? "Captain" : "Teammate"}
-                    </span>
-                    {reg.paid ? (
-                      <span className="rounded-[var(--radius)] bg-[var(--surface)] px-2 py-0.5 text-[10px] font-semibold text-[var(--muted)]">
-                        Paid
+                  <span
+                    className={[
+                      "w-1 shrink-0 self-stretch",
+                      entryStatusAccent(reg.status),
+                    ].join(" ")}
+                    aria-hidden
+                  />
+                  <span className="flex min-w-0 flex-1 items-start gap-2 px-3 py-2.5 sm:px-3.5">
+                    <span className="min-w-0 flex-1">
+                      <span
+                        className={[
+                          "block text-[10px] font-semibold uppercase tracking-[0.14em]",
+                          entryStatusText(reg.status),
+                        ].join(" ")}
+                      >
+                        {entryStatusLabel(reg.status)}
                       </span>
-                    ) : (
-                      <span className="rounded-[var(--radius)] bg-[var(--surface)] px-2 py-0.5 text-[10px] font-semibold text-[var(--muted)]">
-                        Unpaid
+                      <span className="mt-1 block font-[family-name:var(--font-display)] text-[16px] font-semibold leading-snug tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
+                        {event.title}
                       </span>
-                    )}
-                    {reg.checkedIn ? (
-                      <span className="rounded-[var(--radius)] bg-[var(--felt)] px-2 py-0.5 text-[10px] font-semibold text-white">
-                        Checked in
+                      <span className="mt-1 block text-[12px] leading-snug text-[var(--muted)]">
+                        {formatStartsAt(event.startsAt)}
+                        <span className="mx-1.5 text-[var(--line)]">·</span>
+                        {formatLabel}
+                        <span className="mx-1.5 text-[var(--line)]">·</span>
+                        {event.venueName}
                       </span>
-                    ) : null}
-                  </div>
-                  <p className="text-[11px] text-[var(--muted)]">
-                    {formatStartsAt(event.startsAt)} · {formatLabel}
-                    {" · "}
-                    {event.venueName}, {event.city}
-                  </p>
-                  {teamLabel ? (
-                    <p className="text-[11px] font-medium text-[var(--ink)]">
-                      {teamLabel}
-                      {reg.teammates?.length
-                        ? ` · ${1 + reg.teammates.length} players`
-                        : ""}
-                    </p>
-                  ) : null}
+                      <span className="mt-1.5 block text-[12px] leading-snug text-[var(--ink)]">
+                        {detailBits.map((bit, index) => (
+                          <span key={`${bit}-${index}`}>
+                            {index > 0 ? (
+                              <span className="mx-1.5 text-[var(--muted)]">
+                                ·
+                              </span>
+                            ) : null}
+                            <span
+                              className={
+                                bit === "Unpaid" || bit === "Teammate"
+                                  ? "text-[var(--muted)]"
+                                  : bit === "Checked in" || bit === "Paid"
+                                    ? "text-[var(--felt-deep)]"
+                                    : undefined
+                              }
+                            >
+                              {bit}
+                            </span>
+                          </span>
+                        ))}
+                      </span>
+                    </span>
+                    <EntryRowChevron />
+                  </span>
                 </button>
               </li>
             );
