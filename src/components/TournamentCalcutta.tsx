@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -106,8 +107,12 @@ export function TournamentCalcuttaPanel({
   const [draftBuyer, setDraftBuyer] = useState("");
   const [draftPrice, setDraftPrice] = useState("");
   const [expandedLotId, setExpandedLotId] = useState<string | null>(null);
+  const [lotsListMinHeight, setLotsListMinHeight] = useState(0);
   const priceInputRef = useRef<HTMLInputElement | null>(null);
   const buyerInputRef = useRef<HTMLInputElement | null>(null);
+  const lotsSectionRef = useRef<HTMLElement | null>(null);
+  const lotsListRef = useRef<HTMLDivElement | null>(null);
+  const lotFilterAnchorTop = useRef<number | null>(null);
 
   const approved = useMemo(
     () => registrations.filter((reg) => reg.status === "approved"),
@@ -141,6 +146,7 @@ export function TournamentCalcuttaPanel({
   }, [tournamentId]);
 
   useEffect(() => {
+    setLotsListMinHeight(0);
     void load();
   }, [load]);
 
@@ -160,6 +166,35 @@ export function TournamentCalcuttaPanel({
     if (lotFilter === "sold") return calcutta.lots.filter((lot) => isLotSold(lot));
     return calcutta.lots;
   }, [calcutta, lotFilter]);
+
+  const changeLotFilter = (next: LotFilter) => {
+    if (next === lotFilter) return;
+    lotFilterAnchorTop.current =
+      lotsSectionRef.current?.getBoundingClientRect().top ?? null;
+    setLotFilter(next);
+  };
+
+  // Keep the Lots header pinned in the viewport when the list shrinks/grows,
+  // and ratchet a min-height so the page doesn't collapse under the scroll.
+  useLayoutEffect(() => {
+    const list = lotsListRef.current;
+    if (list) {
+      const height = list.scrollHeight;
+      if (height > 0) {
+        setLotsListMinHeight((prev) => Math.max(prev, height));
+      }
+    }
+
+    const section = lotsSectionRef.current;
+    const anchor = lotFilterAnchorTop.current;
+    if (section && anchor != null) {
+      const delta = section.getBoundingClientRect().top - anchor;
+      if (Math.abs(delta) > 0.5) {
+        window.scrollBy(0, delta);
+      }
+      lotFilterAnchorTop.current = null;
+    }
+  }, [filteredLots.length, lotFilter]);
 
   const activeLot = useMemo(() => {
     if (!calcutta || !activeLotId) return null;
@@ -248,7 +283,7 @@ export function TournamentCalcuttaPanel({
 
   const selectLot = (registrationId: string) => {
     setActiveLotId(registrationId);
-    setLotFilter((prev) => (prev === "sold" ? "all" : prev));
+    if (lotFilter === "sold") changeLotFilter("all");
     requestAnimationFrame(() => {
       priceInputRef.current?.focus();
       priceInputRef.current?.select();
@@ -288,12 +323,12 @@ export function TournamentCalcuttaPanel({
     );
     if (nextUnsold) {
       setActiveLotId(nextUnsold.registrationId);
-      setLotFilter("unsold");
+      changeLotFilter("unsold");
       requestAnimationFrame(() => {
         priceInputRef.current?.focus();
       });
     } else {
-      setLotFilter("sold");
+      changeLotFilter("sold");
     }
   };
 
@@ -305,7 +340,7 @@ export function TournamentCalcuttaPanel({
     if (!next) return;
     await save(next, "Sale cleared.");
     setActiveLotId(registrationId);
-    setLotFilter("unsold");
+    changeLotFilter("unsold");
   };
 
   if (loading) {
@@ -605,7 +640,10 @@ export function TournamentCalcuttaPanel({
             </section>
           ) : null}
 
-          <section className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+          <section
+            ref={lotsSectionRef}
+            className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]"
+          >
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] px-3 py-2.5 sm:px-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
                 Lots
@@ -630,7 +668,7 @@ export function TournamentCalcuttaPanel({
                     <button
                       key={id}
                       type="button"
-                      onClick={() => setLotFilter(id)}
+                      onClick={() => changeLotFilter(id)}
                       className={[
                         "rounded-md px-2 py-1 text-[11px] font-semibold transition",
                         selected
@@ -645,6 +683,14 @@ export function TournamentCalcuttaPanel({
               </div>
             </div>
 
+            <div
+              ref={lotsListRef}
+              style={
+                lotsListMinHeight > 0
+                  ? { minHeight: lotsListMinHeight }
+                  : undefined
+              }
+            >
             {filteredLots.length === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">
                 {lotFilter === "unsold"
@@ -850,6 +896,7 @@ export function TournamentCalcuttaPanel({
                 })}
               </ul>
             )}
+            </div>
           </section>
         </>
       )}
