@@ -3315,13 +3315,13 @@ export function Tournaments({
 
                         return (
                           <li key={reg.id} className="px-2 py-1.5 sm:px-3">
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-8 shrink-0 font-[family-name:var(--font-display)] text-[13px] font-semibold tabular-nums leading-none text-[var(--felt-deep)]">
+                            <div className="flex items-start gap-1.5">
+                              <div className="w-8 shrink-0 pt-[7px] font-[family-name:var(--font-display)] text-[13px] font-semibold tabular-nums leading-none text-[var(--felt-deep)]">
                                 {hasRating ? stats.rating : "—"}
                               </div>
 
-                              <div className="flex min-w-0 flex-1 items-center gap-0.5">
-                                <p className="min-w-0 truncate font-[family-name:var(--font-display)] text-[13px] font-semibold leading-none tracking-tight text-[var(--ink)]">
+                              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-0.5 gap-y-0.5 pt-0.5">
+                                <p className="max-w-full font-[family-name:var(--font-display)] text-[13px] font-semibold leading-snug tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
                                   {title}
                                 </p>
                                 {stats.playerId ? (
@@ -3347,7 +3347,7 @@ export function Tournaments({
                                 ) : null}
                               </div>
 
-                              <div className="flex shrink-0 items-center gap-1">
+                              <div className="flex shrink-0 items-center gap-1 pt-0.5">
                                 <button
                                   type="button"
                                   disabled={saving}
