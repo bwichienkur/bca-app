@@ -8,6 +8,10 @@ import {
   saveTeamLineupPreset,
 } from "@/lib/lineup-sync";
 import type { DivisionTeam, LineupPreset, RosterPlayer } from "@/lib/types";
+import {
+  AccentRecordCard,
+  accentRecordListClass,
+} from "./AccentRecordCard";
 import { DraggableLineupList } from "./DraggableLineupList";
 import { EmptyState } from "./EmptyState";
 import { SectionCard } from "./SectionCard";
@@ -131,6 +135,54 @@ function TrashIcon({ className }: { className?: string }) {
   );
 }
 
+function ExpandIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden
+      className={[
+        "h-4 w-4 transition-transform",
+        open ? "rotate-180" : "",
+      ].join(" ")}
+    >
+      <path
+        d="M5 7.5 10 12.5 15 7.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function expandBtnClass(expanded: boolean): string {
+  return [
+    "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt)] transition hover:bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]",
+    expanded
+      ? "bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]"
+      : "",
+  ].join(" ");
+}
+
+function lineupMembers(
+  team: DivisionTeam,
+  preset: LineupPreset,
+  slots: number,
+): Array<{ name: string; rating: number | null; slot: number }> {
+  return idsFromPreset(team, preset, slots).map((id, index) => {
+    const player = id
+      ? (team.players.find((item) => item.id === id) ?? null)
+      : null;
+    return {
+      slot: index + 1,
+      name: player ? playerLabel(player) : "Empty slot",
+      rating: player?.fargoRating ?? null,
+    };
+  });
+}
+
 type EditorMode = "library" | "viewer" | "editor";
 
 type TeamLineupTemplatesProps = {
@@ -157,12 +209,14 @@ export function TeamLineupTemplates({
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setStatus(null);
     setMode("library");
+    setExpandedId(null);
 
     void loadTeamLineupPresets({ teamId: team.id, divisionId })
       .then(async (result) => {
@@ -444,62 +498,106 @@ export function TeamLineupTemplates({
           }
         />
       ) : (
-        <ul className="space-y-2.5">
+        <ul className={accentRecordListClass}>
           {teamPresets.map((preset) => {
-            const names = idsFromPreset(team, preset, slots)
-              .map((id) => {
-                if (!id) return "—";
-                const player = team.players.find((item) => item.id === id);
-                return player ? playerLabel(player) : "—";
-              })
-              .join(" · ");
+            const members = lineupMembers(team, preset, slots);
+            const filledCount = idsFromPreset(team, preset, slots).filter(
+              Boolean,
+            ).length;
             const isDefault = isDefaultLineupName(preset.name);
+            const expanded = expandedId === preset.id;
             return (
-              <li
-                key={preset.id}
-                className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-3 shadow-[var(--shadow)] sm:px-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => viewPreset(preset)}
-                    className="min-w-0 flex-1 rounded-[var(--radius)] text-left transition hover:opacity-90"
-                  >
-                    <p className="truncate font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)]">
-                      {preset.name}
-                      {isDefault ? (
-                        <span className="ml-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--felt-deep)]">
-                          Primary
-                        </span>
-                      ) : null}
-                    </p>
-                    <p className="mt-1 line-clamp-2 text-[11px] text-[var(--muted)]">
-                      {names}
-                    </p>
-                  </button>
-                  <div className="flex shrink-0 flex-col gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => viewPreset(preset)}
-                      aria-label={`View ${preset.name}`}
-                      title="View lineup"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] text-white transition hover:bg-[var(--felt-soft)]"
-                    >
-                      <EyeIcon className="h-4 w-4" />
-                    </button>
-                    {!isDefault ? (
-                      <button
-                        type="button"
-                        onClick={() => deletePreset(preset)}
-                        aria-label={`Delete ${preset.name}`}
-                        title="Delete lineup"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius)] border border-[var(--danger)]/40 bg-[var(--danger-bg)] text-[var(--danger)] transition hover:brightness-110"
-                      >
-                        <TrashIcon className="h-4 w-4" />
-                      </button>
+              <li key={preset.id}>
+                <AccentRecordCard>
+                  <div className="space-y-1.5">
+                    <div className="flex min-w-0 items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-[family-name:var(--font-display)] text-[16px] font-semibold leading-snug tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
+                          {preset.name}
+                          {isDefault ? (
+                            <span className="ml-2 align-middle text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--felt-deep)]">
+                              Primary
+                            </span>
+                          ) : null}
+                        </p>
+                        <p className="mt-0.5 text-[12px] leading-snug text-[var(--muted)]">
+                          {filledCount}/{slots} players
+                          {isDefault ? " · used first" : ""}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedId((prev) =>
+                              prev === preset.id ? null : preset.id,
+                            )
+                          }
+                          className={expandBtnClass(expanded)}
+                          aria-expanded={expanded}
+                          aria-label={
+                            expanded
+                              ? `Hide players for ${preset.name}`
+                              : `Show players for ${preset.name}`
+                          }
+                          title={expanded ? "Hide players" : "Show players"}
+                        >
+                          <ExpandIcon open={expanded} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => viewPreset(preset)}
+                          aria-label={`View ${preset.name}`}
+                          title="View lineup"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] text-white transition hover:bg-[var(--felt-soft)]"
+                        >
+                          <EyeIcon className="h-4 w-4" />
+                        </button>
+                        {!isDefault ? (
+                          <button
+                            type="button"
+                            onClick={() => deletePreset(preset)}
+                            aria-label={`Delete ${preset.name}`}
+                            title="Delete lineup"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius)] border border-[var(--danger)]/40 bg-[var(--danger-bg)] text-[var(--danger)] transition hover:brightness-110"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {expanded ? (
+                      <ul className="space-y-1 border-t border-[var(--line)] pt-2">
+                        {members.map((member) => (
+                          <li
+                            key={`${preset.id}-${member.slot}`}
+                            className="flex min-w-0 items-baseline gap-2 text-[12px] leading-snug"
+                          >
+                            <span className="w-5 shrink-0 text-[10px] font-semibold tabular-nums text-[var(--muted)]">
+                              #{member.slot}
+                            </span>
+                            <span className="min-w-0 flex-1 break-words text-[var(--ink)]">
+                              {member.name}
+                            </span>
+                            <span
+                              className={[
+                                "shrink-0 tabular-nums",
+                                member.rating == null
+                                  ? "font-semibold text-[var(--amber)]"
+                                  : "text-[var(--muted)]",
+                              ].join(" ")}
+                            >
+                              {member.rating != null
+                                ? member.rating
+                                : "Empty"}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
                     ) : null}
                   </div>
-                </div>
+                </AccentRecordCard>
               </li>
             );
           })}
