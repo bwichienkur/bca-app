@@ -5,7 +5,10 @@ import {
   listTournaments,
   tournamentStoreMode,
 } from "@/lib/tournaments/store";
-import type { CreateTournamentInput } from "@/lib/tournaments/types";
+import type {
+  CreateTournamentInput,
+  RobustnessStatus,
+} from "@/lib/tournaments/types";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +16,30 @@ function parseOptionalNumber(value: string | null): number | null {
   if (value == null || value.trim() === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+function parseDateKey(value: string | null): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : undefined;
+}
+
+function parseHandicap(
+  value: string | null,
+): "handicapped" | "scratch" | undefined {
+  if (value === "handicapped" || value === "scratch") return value;
+  return undefined;
+}
+
+function parseRobustness(value: string | null): RobustnessStatus | undefined {
+  if (
+    value === "starter" ||
+    value === "preliminary" ||
+    value === "established"
+  ) {
+    return value;
+  }
+  return undefined;
 }
 
 export async function GET(request: NextRequest) {
@@ -23,8 +50,13 @@ export async function GET(request: NextRequest) {
       region: sp.get("region") ?? undefined,
       city: sp.get("city") ?? undefined,
       gameType: sp.get("gameType") ?? undefined,
+      eventType: sp.get("eventType") ?? undefined,
+      handicap: parseHandicap(sp.get("handicap")),
       status: sp.get("status") ?? undefined,
       eligibleForFargo: parseOptionalNumber(sp.get("eligibleForFargo")),
+      eligibleForRobustness: parseRobustness(sp.get("eligibleForRobustness")),
+      startsFrom: parseDateKey(sp.get("startsFrom")),
+      startsTo: parseDateKey(sp.get("startsTo")),
     });
     return NextResponse.json({
       tournaments,

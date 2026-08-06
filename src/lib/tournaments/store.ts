@@ -58,12 +58,27 @@ export type TournamentFilters = {
   region?: string;
   city?: string;
   gameType?: string;
+  eventType?: string;
+  /** "handicapped" | "scratch" — maps to handicapSystem !== "none". */
+  handicap?: "handicapped" | "scratch";
   status?: string;
   eligibleForFargo?: number | null;
+  eligibleForRobustness?: RobustnessStatus | null;
+  /** Inclusive YYYY-MM-DD (compared to startsAt date). */
+  startsFrom?: string;
+  /** Inclusive YYYY-MM-DD (compared to startsAt date). */
+  startsTo?: string;
 };
 
 function newId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function startsAtDateKey(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function matchesFilters(t: Tournament, filters: TournamentFilters): boolean {
@@ -78,10 +93,28 @@ function matchesFilters(t: Tournament, filters: TournamentFilters): boolean {
     }
   }
   if (filters.gameType && t.gameType !== filters.gameType) return false;
+  if (filters.eventType && t.eventType !== filters.eventType) return false;
+  if (filters.handicap === "handicapped" && t.handicapSystem === "none") {
+    return false;
+  }
+  if (filters.handicap === "scratch" && t.handicapSystem !== "none") {
+    return false;
+  }
   if (filters.status && t.status !== filters.status) return false;
   if (filters.eligibleForFargo != null) {
     const f = filters.eligibleForFargo;
     if (t.maxFargo != null && f > t.maxFargo) return false;
+  }
+  if (filters.eligibleForRobustness) {
+    if (!meetsMinRobustness(filters.eligibleForRobustness, t.minRobustnessStatus)) {
+      return false;
+    }
+  }
+  if (filters.startsFrom || filters.startsTo) {
+    const day = startsAtDateKey(t.startsAt);
+    if (!day) return false;
+    if (filters.startsFrom && day < filters.startsFrom) return false;
+    if (filters.startsTo && day > filters.startsTo) return false;
   }
   if (filters.q) {
     const q = filters.q.trim().toLowerCase();
