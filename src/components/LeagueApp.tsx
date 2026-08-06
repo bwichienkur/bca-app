@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
+import { readAppUrlState, writeAppUrlState } from "@/lib/app-url";
 import {
   DEFAULT_LEAGUE_ID,
   DEFAULT_PLAYERS_PER_TEAM,
@@ -150,7 +158,16 @@ export function LeagueApp() {
   );
   const [selectedDivision, setSelectedDivision] =
     useState<DivisionSummary | null>(null);
-  const [tab, setTab] = useState<ReportTab>("standings");
+  const [tab, setTabState] = useState<ReportTab>(() => {
+    if (typeof window === "undefined") return "standings";
+    return readAppUrlState().tab ?? "standings";
+  });
+  const [deepLinkEventId, setDeepLinkEventId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return readAppUrlState().eventId;
+  });
+  const deepLinkEventIdRef = useRef(deepLinkEventId);
+  deepLinkEventIdRef.current = deepLinkEventId;
   const [playerSearchQuery, setPlayerSearchQuery] = useState("");
   const [screen, setScreen] = useState<AppScreen>("main");
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -182,6 +199,39 @@ export function LeagueApp() {
   const [refreshToken, setRefreshToken] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const didAutoCollapseContext = useRef(false);
+
+  const setTab = useCallback((next: ReportTab) => {
+    setTabState(next);
+    if (next !== "events") {
+      setDeepLinkEventId(null);
+      writeAppUrlState({ tab: next, eventId: null }, "replace");
+      return;
+    }
+    writeAppUrlState(
+      { tab: next, eventId: deepLinkEventIdRef.current },
+      "replace",
+    );
+  }, []);
+
+  const onDeepLinkEventIdChange = useCallback((eventId: string | null) => {
+    const nextId = eventId?.trim() || null;
+    setTabState("events");
+    setDeepLinkEventId(nextId);
+    writeAppUrlState(
+      { tab: "events", eventId: nextId },
+      nextId ? "push" : "replace",
+    );
+  }, []);
+
+  useEffect(() => {
+    const onPopState = () => {
+      const state = readAppUrlState();
+      setTabState(state.tab ?? "standings");
+      setDeepLinkEventId(state.eventId);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
   const teamReportKeyRef = useRef<string | null>(null);
   const playerReportKeyRef = useRef<string | null>(null);
   const scheduleKeyRef = useRef<string | null>(null);
@@ -1289,6 +1339,8 @@ export function LeagueApp() {
                       ?.fargoRating ?? null)
                   : null
               }
+              deepLinkEventId={deepLinkEventId}
+              onDeepLinkEventIdChange={onDeepLinkEventIdChange}
               onRequestLogin={() => setScreen("login")}
               onFindPlayer={(name) => {
                 setPlayerSearchQuery(name);

@@ -129,6 +129,9 @@ type TournamentsProps = {
   onRequestLogin: () => void;
   /** Jump to Players search and look up a signup name (no Fargo id). */
   onFindPlayer?: (name: string) => void;
+  /** Open this event from a shared URL (`?tab=events&event=`). */
+  deepLinkEventId?: string | null;
+  onDeepLinkEventIdChange?: (eventId: string | null) => void;
 };
 
 const fieldClass =
@@ -1043,11 +1046,15 @@ export function Tournaments({
   playerFargo,
   onRequestLogin,
   onFindPlayer,
+  deepLinkEventId = null,
+  onDeepLinkEventIdChange,
 }: TournamentsProps) {
   const [view, setView] = useState<View>("browse");
   const [events, setEvents] = useState<TournamentListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const appliedDeepLinkRef = useRef<string | null>(null);
   const [q, setQ] = useState("");
   const [region, setRegion] = useState("");
   const [gameType, setGameType] = useState<GameType | "">("");
@@ -1243,43 +1250,94 @@ export function Tournaments({
     [eventsTotalPages],
   );
 
-  const openDetail = useCallback(async (id: string) => {
-    setSelectedId(id);
-    setView("detail");
-    setDetailLoading(true);
-    setActionMsg(null);
-    setConfirmRemove(false);
+  const openDetail = useCallback(
+    async (id: string, options?: { fromDeepLink?: boolean }) => {
+      const eventId = id.trim();
+      if (!eventId) return;
+      setSelectedId(eventId);
+      setView("detail");
+      setDetailLoading(true);
+      setActionMsg(null);
+      setConfirmRemove(false);
+      setError(null);
+      setRegNote("");
+      setTeamName("");
+      setDetailSubTab("overview");
+      setOverviewDetailTab("when");
+      setFieldFilter("all");
+      setFieldQuery("");
+      setSignupStatusFilter("pending");
+      setSignupSelectedIds(new Set());
+      setLinkCopied(false);
+      if (!options?.fromDeepLink) {
+        onDeepLinkEventIdChange?.(eventId);
+      }
+      appliedDeepLinkRef.current = eventId;
+      try {
+        const res = await fetch(`/api/tournaments/${eventId}`);
+        const data = (await res.json()) as DetailPayload & { error?: string };
+        if (!res.ok) throw new Error(data.error || "Failed to load event.");
+        const tournament = data.tournament;
+        setDetail({
+          tournament,
+          registrations: data.registrations ?? [],
+          messages: data.messages ?? [],
+          isOrganizer: Boolean(data.isOrganizer),
+        });
+        const mateCount = Math.max(
+          0,
+          (tournament.teamSize ?? defaultTeamSize(tournament.eventType)) - 1,
+        );
+        setTeammates(
+          tournament.eventType === "singles"
+            ? []
+            : emptyTeammates(
+                mateCount ||
+                  (tournament.eventType === "scotch-doubles" ? 1 : 4),
+              ),
+        );
+      } catch (err) {
+        setDetail(null);
+        setError(err instanceof Error ? err.message : "Failed to load event.");
+      } finally {
+        setDetailLoading(false);
+      }
+    },
+    [onDeepLinkEventIdChange],
+  );
+
+  const closeDetail = useCallback(() => {
+    setView("browse");
+    setDetail(null);
+    setSelectedId(null);
     setError(null);
-    setRegNote("");
-    setTeamName("");
+    setActionMsg(null);
     setDetailSubTab("overview");
-    setOverviewDetailTab("when");
-    setFieldFilter("all");
-    setFieldQuery("");
-    setSignupStatusFilter("pending");
-    setSignupSelectedIds(new Set());
-    try {
-      const res = await fetch(`/api/tournaments/${id}`);
-      const data = (await res.json()) as DetailPayload & { error?: string };
-      if (!res.ok) throw new Error(data.error || "Failed to load event.");
-      const tournament = data.tournament;
-      setDetail({
-        tournament,
-        registrations: data.registrations ?? [],
-        messages: data.messages ?? [],
-        isOrganizer: Boolean(data.isOrganizer),
-      });
-      const mateCount = Math.max(0, (tournament.teamSize ?? defaultTeamSize(tournament.eventType)) - 1);
-      setTeammates(
-        tournament.eventType === "singles" ? [] : emptyTeammates(mateCount || (tournament.eventType === "scotch-doubles" ? 1 : 4)),
-      );
-    } catch (err) {
-      setDetail(null);
-      setError(err instanceof Error ? err.message : "Failed to load event.");
-    } finally {
-      setDetailLoading(false);
+    setLinkCopied(false);
+    appliedDeepLinkRef.current = null;
+    onDeepLinkEventIdChange?.(null);
+  }, [onDeepLinkEventIdChange]);
+
+  useEffect(() => {
+    const nextId = deepLinkEventId?.trim() || null;
+    if (!nextId) {
+      if (
+        appliedDeepLinkRef.current &&
+        (view === "detail" || selectedId)
+      ) {
+        appliedDeepLinkRef.current = null;
+        setView("browse");
+        setDetail(null);
+        setSelectedId(null);
+        setDetailSubTab("overview");
+      }
+      return;
     }
-  }, []);
+    if (appliedDeepLinkRef.current === nextId && selectedId === nextId) {
+      return;
+    }
+    void openDetail(nextId, { fromDeepLink: true });
+  }, [deepLinkEventId, openDetail, selectedId, view]);
 
   const refreshDetail = useCallback(async () => {
     if (!selectedId) return;
@@ -1678,9 +1736,7 @@ export function Tournaments({
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Could not remove event.");
       setConfirmRemove(false);
-      setDetail(null);
-      setSelectedId(null);
-      setView("browse");
+      closeDetail();
       await loadEvents();
     } catch (err) {
       setActionMsg(
@@ -2856,21 +2912,38 @@ export function Tournaments({
 
     return (
       <div className="space-y-4 animate-panel">
-        <button
-          type="button"
-          onClick={() => {
-            setView("browse");
-            setDetail(null);
-            setSelectedId(null);
-            setError(null);
-            setActionMsg(null);
-            setDetailSubTab("overview");
-          }}
-          className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
-        >
-          <span aria-hidden>←</span>
-          All events
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={closeDetail}
+            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
+          >
+            <span aria-hidden>←</span>
+            All events
+          </button>
+          {selectedId ? (
+            <button
+              type="button"
+              onClick={() => {
+                const url = new URL(window.location.href);
+                url.searchParams.set("tab", "events");
+                url.searchParams.set("event", selectedId);
+                void navigator.clipboard
+                  ?.writeText(url.toString())
+                  .then(() => {
+                    setLinkCopied(true);
+                    window.setTimeout(() => setLinkCopied(false), 1800);
+                  })
+                  .catch(() => {
+                    setActionMsg("Could not copy link.");
+                  });
+              }}
+              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--line-strong)]"
+            >
+              {linkCopied ? "Link copied" : "Copy link"}
+            </button>
+          ) : null}
+        </div>
 
         {detailLoading || !t ? (
           <LoadingState label="Loading event…" />
