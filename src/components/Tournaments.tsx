@@ -55,6 +55,10 @@ import type {
 } from "@/lib/tournaments/types";
 
 type HandicapFilter = "" | "handicapped" | "scratch";
+import {
+  AccentRecordCard,
+  accentRecordListClass,
+} from "./AccentRecordCard";
 import { BackButton } from "./BackButton";
 import {
   IconSubTabs,
@@ -5421,72 +5425,74 @@ export function Tournaments({
                   </p>
                 ) : null}
               </div>
-              <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)]">
+              <ul className={accentRecordListClass}>
                 {pagedEvents.map((event) => (
                   <li key={event.id}>
-                    <div className="flex w-full items-start gap-3 px-3 py-3 transition hover:bg-[var(--surface-2)]/70 sm:px-4">
-                      {event.thumbnailUrl ? (
+                    <AccentRecordCard interactive>
+                      <div className="flex w-full items-start gap-3">
+                        {event.thumbnailUrl ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setFlyerPreview({
+                                src: event.thumbnailUrl!,
+                                title: event.title,
+                              })
+                            }
+                            className="relative mt-0.5 h-[5.5rem] w-16 shrink-0 overflow-hidden rounded-[var(--radius)] bg-[var(--surface-2)] ring-1 ring-[var(--line)]"
+                            aria-label={`View ${event.title} flyer`}
+                            title="View full flyer"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={event.thumbnailUrl}
+                              alt=""
+                              className="h-full w-full object-contain"
+                            />
+                          </button>
+                        ) : (
+                          <div className="mt-0.5 flex h-[5.5rem] w-16 shrink-0 items-center justify-center rounded-[var(--radius)] bg-[linear-gradient(145deg,rgba(29,110,158,0.55),rgba(19,78,115,0.75))] text-xs font-semibold text-white/80">
+                            Event
+                          </div>
+                        )}
                         <button
                           type="button"
-                          onClick={() =>
-                            setFlyerPreview({
-                              src: event.thumbnailUrl!,
-                              title: event.title,
-                            })
-                          }
-                          className="relative mt-0.5 h-[5.5rem] w-16 shrink-0 overflow-hidden rounded-[var(--radius)] bg-[var(--surface-2)] ring-1 ring-[var(--line)]"
-                          aria-label={`View ${event.title} flyer`}
-                          title="View full flyer"
+                          onClick={() => void openDetail(event.id)}
+                          className="flex min-h-[5.5rem] min-w-0 flex-1 flex-col text-left"
                         >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={event.thumbnailUrl}
-                            alt=""
-                            className="h-full w-full object-contain"
-                          />
+                          <p className="min-h-[2.5rem] font-[family-name:var(--font-display)] text-[15px] font-semibold leading-snug tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
+                            {event.title}
+                          </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <span
+                              className={[
+                                "rounded-[var(--radius)] px-2 py-0.5 text-[10px] font-semibold",
+                                statusTone(event.status),
+                              ].join(" ")}
+                            >
+                              {STATUS_LABELS[event.status]}
+                            </span>
+                            <span className="text-xs font-medium text-[var(--ink)]">
+                              {formatStartsAt(event.startsAt)}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-[var(--muted)]">
+                            {eventKeyFacts(event)}
+                            {" · "}
+                            {EVENT_TYPE_OPTIONS.find(
+                              (o) => o.value === event.eventType,
+                            )?.label ?? event.eventType}
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                            {event.venueName}, {event.city}
+                            {" · "}
+                            {formatEntryFee(event.entryFeeCents)}
+                            {" · "}
+                            {event.spotsLeft} {entryNoun(event.eventType)} left
+                          </p>
                         </button>
-                      ) : (
-                        <div className="mt-0.5 flex h-[5.5rem] w-16 shrink-0 items-center justify-center rounded-[var(--radius)] bg-[linear-gradient(145deg,rgba(29,110,158,0.55),rgba(19,78,115,0.75))] text-xs font-semibold text-white/80">
-                          Event
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => void openDetail(event.id)}
-                        className="flex min-h-[5.5rem] min-w-0 flex-1 flex-col text-left"
-                      >
-                        <p className="min-h-[2.5rem] font-[family-name:var(--font-display)] text-[15px] font-semibold leading-snug tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
-                          {event.title}
-                        </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <span
-                            className={[
-                              "rounded-[var(--radius)] px-2 py-0.5 text-[10px] font-semibold",
-                              statusTone(event.status),
-                            ].join(" ")}
-                          >
-                            {STATUS_LABELS[event.status]}
-                          </span>
-                          <span className="text-xs font-medium text-[var(--ink)]">
-                            {formatStartsAt(event.startsAt)}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-[11px] text-[var(--muted)]">
-                          {eventKeyFacts(event)}
-                          {" · "}
-                          {EVENT_TYPE_OPTIONS.find(
-                            (o) => o.value === event.eventType,
-                          )?.label ?? event.eventType}
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-[var(--muted)]">
-                          {event.venueName}, {event.city}
-                          {" · "}
-                          {formatEntryFee(event.entryFeeCents)}
-                          {" · "}
-                          {event.spotsLeft} {entryNoun(event.eventType)} left
-                        </p>
-                      </button>
-                    </div>
+                      </div>
+                    </AccentRecordCard>
                   </li>
                 ))}
               </ul>
