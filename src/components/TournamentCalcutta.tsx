@@ -63,10 +63,26 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-const STATUS_OPTIONS: Array<{ id: CalcuttaStatus; label: string }> = [
-  { id: "setup", label: "Setup" },
-  { id: "live", label: "Live" },
-  { id: "settled", label: "Settled" },
+const STATUS_OPTIONS: Array<{
+  id: CalcuttaStatus;
+  label: string;
+  hint: string;
+}> = [
+  {
+    id: "setup",
+    label: "Setup",
+    hint: "Before the call — configure min bid and payouts.",
+  },
+  {
+    id: "live",
+    label: "Live",
+    hint: "Auction in progress — shows on the public board.",
+  },
+  {
+    id: "settled",
+    label: "Settled",
+    hint: "Auction done — assign finish places for payouts.",
+  },
 ];
 
 const fieldClass =
@@ -74,6 +90,28 @@ const fieldClass =
 
 const compactFieldClass =
   "w-full rounded-md border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1.5 text-sm text-[var(--ink)] outline-none focus:ring-2 focus:ring-[var(--felt-soft)]";
+
+function LotExpandIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden
+      className={[
+        "h-4 w-4 transition-transform",
+        open ? "rotate-180" : "",
+      ].join(" ")}
+    >
+      <path
+        d="M5 7.5 10 12.5 15 7.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 export function TournamentCalcuttaPanel({
   tournamentId,
@@ -451,6 +489,10 @@ export function TournamentCalcuttaPanel({
     ? regById.get(activeLot.registrationId)
     : undefined;
   const settingsOpenByDefault = calcutta.status === "setup";
+  const showCallStrip = calcutta.status !== "settled" && approved.length > 0;
+  const statusLabel =
+    STATUS_OPTIONS.find((item) => item.id === calcutta.status)?.label ??
+    calcutta.status;
 
   // Organizer manage view — live call sheet
   return (
@@ -458,7 +500,7 @@ export function TournamentCalcuttaPanel({
       <SectionCard
         eyebrow="Side pot"
         title="Calcutta"
-        description="Call the auction here — enter buyer and hammer price, tap Sold, move on."
+        description={`${summary?.soldCount ?? 0}/${summary?.lotCount ?? 0} sold · net ${formatCalcuttaMoney(summary?.netPotCents ?? 0)} · ${statusLabel}`}
         badge={{
           label: "Pot",
           value: formatCalcuttaMoney(summary?.netPotCents ?? 0).replace(
@@ -468,78 +510,72 @@ export function TournamentCalcuttaPanel({
         }}
       />
 
-      <div className="grid grid-cols-3 gap-2">
-        <Stat
-          label="Gross"
-          value={formatCalcuttaMoney(summary?.grossPotCents ?? 0)}
-        />
-        <Stat
-          label="Net"
-          value={formatCalcuttaMoney(summary?.netPotCents ?? 0)}
-        />
-        <Stat
-          label="Sold"
-          value={`${summary?.soldCount ?? 0}/${summary?.lotCount ?? 0}`}
-        />
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div
-          role="group"
-          aria-label="Calcutta status"
-          className="inline-flex gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
-        >
-          {STATUS_OPTIONS.map((item) => {
-            const selected = calcutta.status === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  const next = { ...calcutta, status: item.id };
-                  setCalcutta(next);
-                  void save(next, `Status: ${item.label}.`);
-                }}
-                className={[
-                  "rounded-md px-2.5 py-1 text-xs font-semibold transition",
-                  selected
-                    ? "bg-[var(--felt)] text-white"
-                    : "text-[var(--muted)] hover:text-[var(--ink)]",
-                ].join(" ")}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
-        <label className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--ink)]">
-          <input
-            type="checkbox"
-            checked={calcutta.enabled}
-            onChange={(event) => {
-              const next = { ...calcutta, enabled: event.target.checked };
-              setCalcutta(next);
-              void save(
-                next,
-                event.target.checked
-                  ? "Public board on."
-                  : "Public board off.",
-              );
-            }}
-          />
-          Public board
-        </label>
-      </div>
-
       <details
         className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]"
         open={settingsOpenByDefault}
       >
-        <summary className="cursor-pointer list-none border-b border-[var(--line)] px-3 py-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)] sm:px-4 [&::-webkit-details-marker]:hidden">
+        <summary className="cursor-pointer list-none px-3 py-2 text-xs font-semibold text-[var(--muted)] sm:px-4 [&::-webkit-details-marker]:hidden">
           Settings · min {formatCalcuttaMoney(calcutta.minBidCents)} · house{" "}
           {calcutta.houseCutPercent}%
+          {calcutta.enabled ? " · public" : ""}
         </summary>
-        <div className="space-y-3 p-3 sm:p-4">
+        <div className="space-y-3 border-t border-[var(--line)] p-3 sm:p-4">
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+              Phase
+            </p>
+            <p className="text-xs leading-relaxed text-[var(--muted)]">
+              Setup before the call, Live while selling, Settled when you assign
+              finish places for payouts. Sold lots auto-switch you to Live.
+            </p>
+            <div
+              role="group"
+              aria-label="Calcutta status"
+              className="inline-flex gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+            >
+              {STATUS_OPTIONS.map((item) => {
+                const selected = calcutta.status === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    title={item.hint}
+                    onClick={() => {
+                      const next = { ...calcutta, status: item.id };
+                      setCalcutta(next);
+                      void save(next, `Status: ${item.label}.`);
+                    }}
+                    className={[
+                      "rounded-md px-2.5 py-1 text-xs font-semibold transition",
+                      selected
+                        ? "bg-[var(--felt)] text-white"
+                        : "text-[var(--muted)] hover:text-[var(--ink)]",
+                    ].join(" ")}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+            <label className="flex items-center gap-2 text-sm font-semibold text-[var(--ink)]">
+              <input
+                type="checkbox"
+                checked={calcutta.enabled}
+                onChange={(event) => {
+                  const next = { ...calcutta, enabled: event.target.checked };
+                  setCalcutta(next);
+                  void save(
+                    next,
+                    event.target.checked
+                      ? "Public board on."
+                      : "Public board off.",
+                  );
+                }}
+              />
+              Show public board on Overview
+            </label>
+          </div>
+
           <div className="grid gap-2 sm:grid-cols-3">
             <label className="block min-w-0 text-sm">
               <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
@@ -662,26 +698,23 @@ export function TournamentCalcuttaPanel({
         </p>
       ) : (
         <>
-          {activeLot ? (
-            <section className="sticky top-0 z-20 space-y-3 rounded-[var(--radius)] border border-[var(--felt)]/35 bg-[linear-gradient(180deg,rgba(29,110,158,0.08),var(--surface)_40%)] p-3 shadow-[var(--shadow)] sm:p-4">
-              <div className="flex flex-wrap items-start justify-between gap-2">
+          {showCallStrip && activeLot ? (
+            <section className="sticky top-0 z-20 space-y-2.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-[var(--shadow)] sm:p-3.5">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--felt-deep)]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
                     Now selling
                     {unsoldLots.length > 0
                       ? ` · ${unsoldLots.length} left`
                       : " · all sold"}
                   </p>
-                  <p className="mt-0.5 font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight text-[var(--ink)]">
+                  <p className="mt-0.5 font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-[var(--ink)]">
                     {lotLabel(activeReg, activeLot.registrationId)}
-                  </p>
-                  <p className="mt-0.5 text-xs text-[var(--muted)]">
-                    {activeReg?.ratingAtSignup != null
-                      ? `Fargo ${activeReg.ratingAtSignup}`
-                      : "No Fargo on file"}
-                    {isLotSold(activeLot)
-                      ? ` · currently ${formatCalcuttaMoney(activeLot.soldPriceCents ?? 0)}`
-                      : ""}
+                    {activeReg?.ratingAtSignup != null ? (
+                      <span className="ml-1.5 text-sm font-normal tabular-nums text-[var(--muted)]">
+                        {activeReg.ratingAtSignup}
+                      </span>
+                    ) : null}
                   </p>
                 </div>
                 <p className="text-xs tabular-nums text-[var(--muted)]">
@@ -819,20 +852,20 @@ export function TournamentCalcuttaPanel({
                               </span>
                             ) : null}
                           </p>
-                          <p className="mt-0.5 truncate text-[11px] text-[var(--muted)]">
-                            {sold
-                              ? lot.buyerName || "Buyer not named"
-                              : active
-                                ? "Up next — tap to load"
-                                : "Unsold — tap to sell"}
-                            {lot.buyBackHalf ? " · ½ buy-back" : ""}
-                            {lot.place != null ? ` · P${lot.place}` : ""}
-                          </p>
+                          {sold || active || lot.place != null ? (
+                            <p className="mt-0.5 truncate text-[11px] text-[var(--muted)]">
+                              {sold
+                                ? lot.buyerName || "Buyer not named"
+                                : "Up next"}
+                              {lot.buyBackHalf ? " · ½ buy-back" : ""}
+                              {lot.place != null ? ` · P${lot.place}` : ""}
+                            </p>
+                          ) : null}
                         </button>
-                        <div className="flex shrink-0 items-center gap-2">
+                        <div className="flex shrink-0 items-center gap-1.5">
                           <p
                             className={[
-                              "min-w-[2.75rem] text-right text-sm font-semibold tabular-nums",
+                              "min-w-[2.5rem] text-right text-sm font-semibold tabular-nums",
                               sold
                                 ? "text-[var(--felt-deep)]"
                                 : "text-[var(--muted)]",
@@ -850,14 +883,20 @@ export function TournamentCalcuttaPanel({
                               )
                             }
                             className={[
-                              "inline-flex h-7 shrink-0 items-center justify-center rounded-[var(--radius)] px-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] transition",
+                              "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] transition",
                               expanded
-                                ? "bg-[var(--surface-2)] text-[var(--ink)] ring-1 ring-[var(--line)]"
-                                : "bg-[var(--felt)] text-white hover:bg-[var(--felt-soft)]",
+                                ? "bg-[var(--surface-2)] text-[var(--ink)]"
+                                : "text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
                             ].join(" ")}
                             aria-expanded={expanded}
+                            aria-label={
+                              expanded
+                                ? `Hide details for ${lotLabel(reg, lot.registrationId)}`
+                                : `Show details for ${lotLabel(reg, lot.registrationId)}`
+                            }
+                            title={expanded ? "Hide details" : "Details"}
                           >
-                            {expanded ? "Less" : "More"}
+                            <LotExpandIcon open={expanded} />
                           </button>
                         </div>
                       </div>
