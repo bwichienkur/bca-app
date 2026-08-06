@@ -102,10 +102,6 @@ function emptyTemplateForm(): TournamentTemplateForm {
   };
 }
 
-function kindLabel(kind: TournamentEntryTeam["kind"]): string {
-  return kind === "scotch-doubles" ? "Scotch doubles" : "Teams";
-}
-
 /** Captain + teammate Fargo total (only rated players). */
 function teamFargoTotal(
   captainFargo: number | null | undefined,
@@ -188,8 +184,6 @@ export function EntryTeamsPresetsPanel({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   const [name, setName] = useState("");
-  const [kind, setKind] =
-    useState<TournamentEntryTeam["kind"]>("scotch-doubles");
   const [members, setMembers] = useState<PartnerPick[]>([emptyPartner()]);
 
   const loadTeams = useCallback(async () => {
@@ -223,7 +217,6 @@ export function EntryTeamsPresetsPanel({
     setEditingId(null);
     setComposing(false);
     setName("");
-    setKind("scotch-doubles");
     setMembers([emptyPartner()]);
     setMsg(null);
   };
@@ -232,7 +225,6 @@ export function EntryTeamsPresetsPanel({
     setEditingId(null);
     setComposing(true);
     setName("");
-    setKind("scotch-doubles");
     setMembers([emptyPartner()]);
     setMsg(null);
   };
@@ -241,7 +233,6 @@ export function EntryTeamsPresetsPanel({
     setEditingId(team.id);
     setComposing(true);
     setName(team.name);
-    setKind(team.kind);
     setMembers(
       team.members.length > 0
         ? team.members.map((m) => ({ ...m }))
@@ -265,19 +256,11 @@ export function EntryTeamsPresetsPanel({
       }))
       .filter((mate) => mate.displayName);
     if (!trimmed) {
-      setMsg(
-        kind === "scotch-doubles"
-          ? "Name this pair before saving."
-          : "Name this team before saving.",
-      );
+      setMsg("Name this team before saving.");
       return;
     }
     if (nextMembers.length < 1) {
-      setMsg(
-        kind === "scotch-doubles"
-          ? "Add a partner before saving."
-          : "Add at least one teammate before saving.",
-      );
+      setMsg("Add at least one teammate before saving.");
       return;
     }
     setBusy(true);
@@ -289,9 +272,7 @@ export function EntryTeamsPresetsPanel({
         body: JSON.stringify({
           id: editingId || undefined,
           name: trimmed,
-          kind,
-          members:
-            kind === "scotch-doubles" ? nextMembers.slice(0, 1) : nextMembers,
+          members: nextMembers,
         }),
       });
       const data = (await res.json()) as {
@@ -339,7 +320,7 @@ export function EntryTeamsPresetsPanel({
     return (
       <SignInGate
         title="Sign in to manage teams"
-        body="Save scotch doubles pairs and team lineups to reuse when you enter events."
+        body="Save tournament teams (you + teammates) to reuse when you enter events."
         onRequestLogin={onRequestLogin}
       />
     );
@@ -356,7 +337,7 @@ export function EntryTeamsPresetsPanel({
             Entry teams
           </p>
           <p className="mt-0.5 text-xs text-[var(--muted)]">
-            You stay captain · reuse on event Entry
+            You stay captain · 2+ players · reuse on Entry
           </p>
         </div>
         {!composing ? (
@@ -394,92 +375,55 @@ export function EntryTeamsPresetsPanel({
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div className="min-w-0">
-              <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
-                Kind
-              </span>
-              <SelectField
-                aria-label="Team kind"
-                value={kind}
-                options={[
-                  { value: "scotch-doubles", label: "Scotch doubles" },
-                  { value: "teams", label: "Teams" },
-                ]}
-                buttonClassName="bg-[var(--surface)] !px-2.5 !py-1.5"
-                onChange={(next) => {
-                  const value = next as TournamentEntryTeam["kind"];
-                  setKind(value);
-                  setMembers((prev) =>
-                    value === "scotch-doubles"
-                      ? [prev[0] ?? emptyPartner()]
-                      : prev.length > 0
-                        ? prev
-                        : [emptyPartner()],
-                  );
-                }}
-              />
-            </div>
-            <div className="min-w-0">
-              <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
-                {kind === "scotch-doubles" ? "Pair name" : "Team name"}
-              </span>
-              <input
-                className={compactFieldClass}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={
-                  kind === "scotch-doubles" ? "e.g. Smith / Lee" : "Team name"
-                }
-              />
-            </div>
+          <div className="min-w-0">
+            <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+              Team name
+            </span>
+            <input
+              className={compactFieldClass}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Smith / Lee"
+            />
           </div>
 
           <ul className="divide-y divide-[var(--line)] overflow-visible rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]">
-            {members.map((mate, index) => {
-              const slotLabel =
-                kind === "scotch-doubles" ? "Partner" : `T${index + 1}`;
-              return (
-                <li
-                  key={`preset-mate-${index}`}
-                  className="flex min-w-0 items-center gap-1.5 px-2 py-1.5"
-                >
-                  <span className="w-12 shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
-                    {slotLabel}
-                  </span>
-                  <PartnerSearchField
-                    compact
-                    hideLabel
-                    label={
-                      kind === "scotch-doubles"
-                        ? "Partner"
-                        : `Teammate ${index + 1}`
-                    }
-                    value={mate}
-                    onChange={(next) =>
+            {members.map((mate, index) => (
+              <li
+                key={`preset-mate-${index}`}
+                className="flex min-w-0 items-center gap-1.5 px-2 py-1.5"
+              >
+                <span className="w-8 shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                  T{index + 1}
+                </span>
+                <PartnerSearchField
+                  compact
+                  hideLabel
+                  label={`Teammate ${index + 1}`}
+                  value={mate}
+                  onChange={(next) =>
+                    setMembers((prev) =>
+                      prev.map((row, i) => (i === index ? next : row)),
+                    )
+                  }
+                  placeholder="Name or Fargo ID…"
+                />
+                {members.length > 1 ? (
+                  <button
+                    type="button"
+                    aria-label={`Remove teammate ${index + 1}`}
+                    onClick={() =>
                       setMembers((prev) =>
-                        prev.map((row, i) => (i === index ? next : row)),
+                        prev.filter((_, i) => i !== index),
                       )
                     }
-                    placeholder="Name or Fargo ID…"
-                  />
-                  {kind === "teams" && members.length > 1 ? (
-                    <button
-                      type="button"
-                      aria-label={`Remove teammate ${index + 1}`}
-                      onClick={() =>
-                        setMembers((prev) =>
-                          prev.filter((_, i) => i !== index),
-                        )
-                      }
-                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)]"
-                    >
-                      ×
-                    </button>
-                  ) : null}
-                </li>
-              );
-            })}
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)]"
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </li>
+            ))}
           </ul>
 
           {(() => {
@@ -501,17 +445,13 @@ export function EntryTeamsPresetsPanel({
           })()}
 
           <div className="flex flex-wrap items-center gap-1.5">
-            {kind === "teams" ? (
-              <button
-                type="button"
-                onClick={() =>
-                  setMembers((prev) => [...prev, emptyPartner()])
-                }
-                className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--ink)]"
-              >
-                + Teammate
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => setMembers((prev) => [...prev, emptyPartner()])}
+              className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--ink)]"
+            >
+              + Teammate
+            </button>
             <button
               type="button"
               disabled={busy}
@@ -537,7 +477,7 @@ export function EntryTeamsPresetsPanel({
       ) : teams.length === 0 && !composing ? (
         <EmptyState
           title="No saved teams yet"
-          body="Create a pair or team here, then load it from an event’s Entry tab when you sign up."
+          body="Create a team here, then load it from an event’s Entry tab when you sign up."
           action={
             <button
               type="button"
@@ -573,7 +513,7 @@ export function EntryTeamsPresetsPanel({
                   ) : null}
                 </p>
                 <p className="truncate text-[11px] text-[var(--muted)]">
-                  {kindLabel(team.kind)} ·{" "}
+                  {team.members.length + 1} players ·{" "}
                   {team.members
                     .map(
                       (m) =>
