@@ -4,6 +4,13 @@ import {
   requireScoringSession,
 } from "@/lib/scoring-auth";
 import {
+  buildSessionIdentity,
+  registrationMatchRole,
+  type EntryMatchRole,
+  type SessionIdentity,
+} from "@/lib/tournaments/entry-match";
+import { resolveSessionPlayer } from "@/lib/tournaments/resolve-fargo";
+import {
   deleteTournament,
   getTournamentDetail,
   tournamentStoreMode,
@@ -28,28 +35,52 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       session && session.lmsId === detail.tournament.organizerUserId,
     );
 
+    let identity: SessionIdentity | null = null;
+    if (session) {
+      const snapshot = await resolveSessionPlayer(session);
+      identity = buildSessionIdentity(session, snapshot.fargoPlayerId);
+    }
+
+    let myEntry: {
+      registrationId: string;
+      role: EntryMatchRole;
+    } | null = null;
+    if (identity) {
+      for (const reg of detail.registrations) {
+        if (reg.status === "withdrawn") continue;
+        const role = registrationMatchRole(reg, identity);
+        if (!role) continue;
+        if (!myEntry || (role === "captain" && myEntry.role !== "captain")) {
+          myEntry = { registrationId: reg.id, role };
+          if (role === "captain") break;
+        }
+      }
+    }
+
     const registrations = isOrganizer
       ? detail.registrations
       : detail.registrations
-          .filter(
-            (r) =>
-              r.status === "approved" ||
-              (session != null && r.userId === session.lmsId),
-          )
-          .map((r) =>
-            session && r.userId === session.lmsId
+          .filter((r) => {
+            if (r.status === "approved") return true;
+            if (!identity) return false;
+            return registrationMatchRole(r, identity) != null;
+          })
+          .map((r) => {
+            const role = identity ? registrationMatchRole(r, identity) : null;
+            return role
               ? r
               : {
                   ...r,
                   email: null,
                   phone: null,
                   noteToOrganizer: "",
-                },
-          );
+                };
+          });
 
     return NextResponse.json({
       ...detail,
       isOrganizer,
+      myEntry,
       // Hide contact messages from non-organizers
       messages: isOrganizer ? detail.messages : [],
       registrations,

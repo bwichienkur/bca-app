@@ -181,6 +181,25 @@ export type TournamentListItem = Tournament & {
   spotsLeft: number;
 };
 
+/** Signed-in player's involvement on an event entry. */
+export type MyTournamentEntryRole = "captain" | "teammate";
+
+export type MyTournamentEntry = {
+  tournament: TournamentListItem;
+  role: MyTournamentEntryRole;
+  registration: {
+    id: string;
+    status: RegistrationStatus;
+    paid: boolean;
+    checkedIn: boolean;
+    teamName: string | null;
+    displayName: string;
+    ratingAtSignup: number | null;
+    teammates: RegistrationTeammate[];
+    createdAt: string;
+  };
+};
+
 /** Organizer-run player/team auction side pot (Calcutta). */
 export type CalcuttaStatus = "setup" | "live" | "settled";
 

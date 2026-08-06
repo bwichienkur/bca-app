@@ -10,6 +10,7 @@ import {
   EVENT_TYPE_OPTIONS,
   FL_REGIONS,
   formatEntryFee,
+  formatStartsAt,
   GAME_TYPE_OPTIONS,
   HANDICAP_SYSTEM_OPTIONS,
   maxEntriesLabel,
@@ -17,13 +18,17 @@ import {
   PAY_METHOD_OPTIONS,
   REGISTRATION_MODE_OPTIONS,
   RULESET_OPTIONS,
+  STATUS_LABELS,
   TABLE_SIZE_OPTIONS,
   UNRATED_POLICY_OPTIONS,
 } from "@/lib/tournaments/options";
 import type {
   EventType,
+  MyTournamentEntry,
+  RegistrationStatus,
   TournamentEntryTeam,
   TournamentEntryTeamMember,
+  TournamentStatus,
   TournamentTemplate,
   TournamentTemplateForm,
 } from "@/lib/tournaments/types";
@@ -1287,6 +1292,214 @@ export function TemplatesPresetsPanel({
           ))}
         </ul>
       ) : null}
+    </div>
+  );
+}
+
+/* ─── My entries (captain + teammate) ─── */
+
+type MyEntriesPanelProps = {
+  signedIn: boolean;
+  authLoading: boolean;
+  onRequestLogin: () => void;
+  onOpenEvent: (eventId: string) => void;
+};
+
+function entryStatusTone(status: RegistrationStatus): string {
+  switch (status) {
+    case "approved":
+      return "bg-[var(--felt)] text-white";
+    case "pending":
+      return "bg-[color-mix(in_srgb,var(--amber)_22%,transparent)] text-[var(--amber)]";
+    case "waitlisted":
+      return "bg-[var(--surface-3)] text-[var(--ink)]";
+    case "rejected":
+      return "bg-[var(--danger-bg)] text-[var(--danger)]";
+    default:
+      return "bg-[var(--surface-2)] text-[var(--muted)]";
+  }
+}
+
+function eventStatusTone(status: TournamentStatus): string {
+  switch (status) {
+    case "open":
+      return "bg-[var(--felt)] text-white";
+    case "full":
+      return "bg-[var(--amber)] text-[#1a140c]";
+    case "draft":
+      return "bg-[var(--surface-3)] text-[var(--muted)]";
+    case "closed":
+    case "completed":
+      return "bg-[var(--surface-2)] text-[var(--muted)]";
+    case "canceled":
+      return "bg-[var(--danger-bg)] text-[var(--danger)]";
+    default:
+      return "bg-[var(--surface-2)] text-[var(--muted)]";
+  }
+}
+
+function entryStatusLabel(status: RegistrationStatus): string {
+  if (status === "waitlisted") return "Waitlist";
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+export function MyEntriesPanel({
+  signedIn,
+  authLoading,
+  onRequestLogin,
+  onOpenEvent,
+}: MyEntriesPanelProps) {
+  const [entries, setEntries] = useState<MyTournamentEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadEntries = useCallback(async () => {
+    if (!signedIn) {
+      setEntries([]);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/tournaments/my-entries");
+      const data = (await res.json()) as {
+        entries?: MyTournamentEntry[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error || "Failed to load entries.");
+      setEntries(data.entries ?? []);
+    } catch (err) {
+      setEntries([]);
+      setError(err instanceof Error ? err.message : "Failed to load entries.");
+    } finally {
+      setLoading(false);
+    }
+  }, [signedIn]);
+
+  useEffect(() => {
+    if (signedIn) void loadEntries();
+  }, [loadEntries, signedIn]);
+
+  if (!signedIn && !authLoading) {
+    return (
+      <SignInGate
+        title="Sign in to see your entries"
+        body="Track every tournament you’re on — as captain or as a teammate — and check approval status."
+        onRequestLogin={onRequestLogin}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+            My entries
+          </p>
+          <p className="mt-0.5 text-xs text-[var(--muted)]">
+            Events you entered yourself or joined as a teammate
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={loading || !signedIn}
+          onClick={() => void loadEntries()}
+          className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
+        >
+          Refresh
+        </button>
+      </div>
+
+      {error ? (
+        <p className="rounded-[var(--radius)] border border-[var(--danger)]/40 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">
+          {error}
+        </p>
+      ) : null}
+
+      {loading ? (
+        <LoadingState label="Loading your entries…" />
+      ) : entries.length === 0 ? (
+        <EmptyState
+          title="No entries yet"
+          body="When you request a spot — or someone adds you to a team from Fargo search — it shows up here."
+        />
+      ) : (
+        <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/30">
+          {entries.map((entry) => {
+            const { tournament: event, registration: reg, role } = entry;
+            const formatLabel =
+              EVENT_TYPE_OPTIONS.find((o) => o.value === event.eventType)
+                ?.label ?? event.eventType;
+            const teamLabel =
+              reg.teamName?.trim() ||
+              (role === "teammate" ? reg.displayName : null);
+            return (
+              <li key={`${event.id}-${reg.id}`}>
+                <button
+                  type="button"
+                  onClick={() => onOpenEvent(event.id)}
+                  className="flex w-full flex-col gap-1.5 px-3 py-3 text-left transition hover:bg-[var(--surface-2)]/70 sm:px-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="min-w-0 font-[family-name:var(--font-display)] text-[15px] font-semibold leading-snug tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
+                      {event.title}
+                    </p>
+                    <span
+                      className={[
+                        "shrink-0 rounded-[var(--radius)] px-2 py-0.5 text-[10px] font-semibold capitalize",
+                        entryStatusTone(reg.status),
+                      ].join(" ")}
+                    >
+                      {entryStatusLabel(reg.status)}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span
+                      className={[
+                        "rounded-[var(--radius)] px-2 py-0.5 text-[10px] font-semibold",
+                        eventStatusTone(event.status),
+                      ].join(" ")}
+                    >
+                      {STATUS_LABELS[event.status]}
+                    </span>
+                    <span className="rounded-[var(--radius)] bg-[var(--surface)] px-2 py-0.5 text-[10px] font-semibold text-[var(--ink)]">
+                      {role === "captain" ? "Captain" : "Teammate"}
+                    </span>
+                    {reg.paid ? (
+                      <span className="rounded-[var(--radius)] bg-[var(--surface)] px-2 py-0.5 text-[10px] font-semibold text-[var(--muted)]">
+                        Paid
+                      </span>
+                    ) : (
+                      <span className="rounded-[var(--radius)] bg-[var(--surface)] px-2 py-0.5 text-[10px] font-semibold text-[var(--muted)]">
+                        Unpaid
+                      </span>
+                    )}
+                    {reg.checkedIn ? (
+                      <span className="rounded-[var(--radius)] bg-[var(--felt)] px-2 py-0.5 text-[10px] font-semibold text-white">
+                        Checked in
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="text-[11px] text-[var(--muted)]">
+                    {formatStartsAt(event.startsAt)} · {formatLabel}
+                    {" · "}
+                    {event.venueName}, {event.city}
+                  </p>
+                  {teamLabel ? (
+                    <p className="text-[11px] font-medium text-[var(--ink)]">
+                      {teamLabel}
+                      {reg.teammates?.length
+                        ? ` · ${1 + reg.teammates.length} players`
+                        : ""}
+                    </p>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

@@ -61,6 +61,7 @@ import {
   LineupsSubIcon,
   OverviewSubIcon,
   RosterSubIcon,
+  UpcomingSubIcon,
 } from "./IconSubTabs";
 import type { AuthUser } from "./LoginScreen";
 import { DateField } from "./DateField";
@@ -78,11 +79,12 @@ import { SelectField } from "./SelectField";
 import { TournamentCalcuttaPanel } from "./TournamentCalcutta";
 import {
   EntryTeamsPresetsPanel,
+  MyEntriesPanel,
   TemplatesPresetsPanel,
 } from "./TournamentPresets";
 
 type View = "browse" | "create" | "edit" | "detail";
-type BrowseSubTab = "browse" | "teams" | "templates";
+type BrowseSubTab = "browse" | "entries" | "teams" | "templates";
 type DetailSubTab = "overview" | "signups" | "field" | "calcutta" | "manage";
 type OverviewDetailTab = "when" | "match" | "pay" | "contact" | "entry";
 type FieldBoardFilter = "all" | "not-checked-in" | "unpaid";
@@ -141,6 +143,10 @@ type DetailPayload = {
   registrations: TournamentRegistration[];
   messages: TournamentMessage[];
   isOrganizer: boolean;
+  myEntry?: {
+    registrationId: string;
+    role: "captain" | "teammate";
+  } | null;
 };
 
 type TournamentsProps = {
@@ -1770,6 +1776,7 @@ export function Tournaments({
           registrations: data.registrations ?? [],
           messages: data.messages ?? [],
           isOrganizer: Boolean(data.isOrganizer),
+          myEntry: data.myEntry ?? null,
         });
         const mateCount = Math.max(
           0,
@@ -1834,6 +1841,7 @@ export function Tournaments({
         registrations: data.registrations ?? [],
         messages: data.messages ?? [],
         isOrganizer: Boolean(data.isOrganizer),
+        myEntry: data.myEntry ?? null,
       });
       await loadEvents();
     } catch (err) {
@@ -1843,14 +1851,22 @@ export function Tournaments({
     }
   }, [loadEvents, selectedId]);
 
+  const myEntryRole = detail?.myEntry?.role ?? null;
+
   const myRegistration = useMemo(() => {
     if (!user || !detail) return null;
+    if (detail.myEntry?.registrationId) {
+      return (
+        detail.registrations.find(
+          (r) =>
+            r.id === detail.myEntry!.registrationId &&
+            r.status !== "withdrawn",
+        ) ?? null
+      );
+    }
     return (
       detail.registrations.find(
-        (r) =>
-          r.userId === user.lmsId &&
-          r.status !== "withdrawn" &&
-          r.status !== "rejected",
+        (r) => r.userId === user.lmsId && r.status !== "withdrawn",
       ) ?? null
     );
   }, [detail, user]);
@@ -3474,6 +3490,11 @@ export function Tournaments({
               <span className="rounded-full bg-[var(--felt)] px-2.5 py-1 text-[11px] font-semibold capitalize text-white">
                 {myRegistration.status}
               </span>
+              {myEntryRole ? (
+                <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)]">
+                  {myEntryRole === "captain" ? "Captain" : "Teammate"}
+                </span>
+              ) : null}
               <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--muted)]">
                 {myRegistration.paid ? "Paid" : "Unpaid"}
               </span>
@@ -5189,10 +5210,24 @@ export function Tournaments({
         onChange={setBrowseSubTab}
         items={[
           { id: "browse", label: "Browse", icon: OverviewSubIcon },
+          { id: "entries", label: "Entries", icon: UpcomingSubIcon },
           { id: "teams", label: "Teams", icon: RosterSubIcon },
           { id: "templates", label: "Templates", icon: LineupsSubIcon },
         ]}
       />
+
+      {browseSubTab === "entries" ? (
+        <SurfaceCard>
+          <div className="p-3 sm:p-4">
+            <MyEntriesPanel
+              signedIn={Boolean(user)}
+              authLoading={authLoading}
+              onRequestLogin={onRequestLogin}
+              onOpenEvent={(eventId) => void openDetail(eventId)}
+            />
+          </div>
+        </SurfaceCard>
+      ) : null}
 
       {browseSubTab === "teams" ? (
         <SurfaceCard>
