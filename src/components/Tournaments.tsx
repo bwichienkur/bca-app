@@ -52,6 +52,7 @@ import type {
 
 type HandicapFilter = "" | "handicapped" | "scratch";
 import type { AuthUser } from "./LoginScreen";
+import { DateField } from "./DateField";
 import { DateTimeField } from "./DateTimeField";
 import { EmptyState } from "./EmptyState";
 import { LoadingState } from "./LoadingState";
@@ -3867,31 +3868,23 @@ export function Tournaments({
               ]}
               onChange={(next) => setHandicapFilter(next as HandicapFilter)}
             />
-            <label className="block min-w-0">
-              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                From
-              </span>
-              <input
-                type="date"
-                value={startsFrom}
-                onChange={(e) => setStartsFrom(e.target.value)}
-                className={fieldClass}
-                aria-label="Events from date"
-              />
-            </label>
-            <label className="block min-w-0">
-              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                To
-              </span>
-              <input
-                type="date"
-                value={startsTo}
-                min={startsFrom || undefined}
-                onChange={(e) => setStartsTo(e.target.value)}
-                className={fieldClass}
-                aria-label="Events to date"
-              />
-            </label>
+            <DateField
+              aria-label="Events from date"
+              placeholder="From date"
+              value={startsFrom}
+              max={startsTo || undefined}
+              onChange={(next) => {
+                setStartsFrom(next);
+                if (next && startsTo && next > startsTo) setStartsTo("");
+              }}
+            />
+            <DateField
+              aria-label="Events to date"
+              placeholder="To date"
+              value={startsTo}
+              min={startsFrom || undefined}
+              onChange={setStartsTo}
+            />
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="flex items-center gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)]">
