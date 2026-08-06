@@ -330,15 +330,18 @@ export function EntryTeamsPresetsPanel({
     );
   }
 
+  const compactFieldClass =
+    "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]";
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
             Entry teams
           </p>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Preset partners for scotch doubles and team events. You stay captain.
+          <p className="mt-0.5 text-xs text-[var(--muted)]">
+            You stay captain · reuse on event Entry
           </p>
         </div>
         {!composing ? (
@@ -347,7 +350,7 @@ export function EntryTeamsPresetsPanel({
             onClick={startCreate}
             className="rounded-[var(--radius)] bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--felt-soft)]"
           >
-            + New team
+            + New
           </button>
         ) : null}
       </div>
@@ -362,12 +365,25 @@ export function EntryTeamsPresetsPanel({
       ) : null}
 
       {composing ? (
-        <div className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/40 p-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-            {editingId ? "Edit team" : "New team"}
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Kind">
+        <div className="space-y-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/50 p-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+              {editingId ? "Edit team" : "New team"}
+            </p>
+            <p className="truncate text-[11px] text-[var(--muted)]">
+              Cap{" "}
+              <span className="font-semibold text-[var(--ink)]">
+                {captainLabel}
+                {captainFargo != null ? ` · ${captainFargo}` : ""}
+              </span>
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="min-w-0">
+              <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                Kind
+              </span>
               <SelectField
                 aria-label="Team kind"
                 value={kind}
@@ -375,6 +391,7 @@ export function EntryTeamsPresetsPanel({
                   { value: "scotch-doubles", label: "Scotch doubles" },
                   { value: "teams", label: "Teams" },
                 ]}
+                buttonClassName="bg-[var(--surface)] !px-2.5 !py-1.5"
                 onChange={(next) => {
                   const value = next as TournamentEntryTeam["kind"];
                   setKind(value);
@@ -387,87 +404,94 @@ export function EntryTeamsPresetsPanel({
                   );
                 }}
               />
-            </Field>
-            <Field
-              label={kind === "scotch-doubles" ? "Pair name" : "Team name"}
-            >
+            </div>
+            <div className="min-w-0">
+              <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                {kind === "scotch-doubles" ? "Pair name" : "Team name"}
+              </span>
               <input
-                className={fieldClass}
+                className={compactFieldClass}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={
                   kind === "scotch-doubles" ? "e.g. Smith / Lee" : "Team name"
                 }
               />
-            </Field>
-          </div>
-
-          <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]/70 px-3 py-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-              Captain
-            </p>
-            <p className="text-sm font-semibold text-[var(--ink)]">
-              {captainLabel}
-              {captainFargo != null ? ` · ${captainFargo}` : ""}
-            </p>
-          </div>
-
-          {members.map((mate, index) => (
-            <div
-              key={`preset-mate-${index}`}
-              className="space-y-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]/50 p-2.5"
-            >
-              <PartnerSearchField
-                label={
-                  kind === "scotch-doubles"
-                    ? "Partner"
-                    : `Teammate ${index + 1}`
-                }
-                value={mate}
-                onChange={(next) =>
-                  setMembers((prev) =>
-                    prev.map((row, i) => (i === index ? next : row)),
-                  )
-                }
-              />
-              {kind === "teams" && members.length > 1 ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setMembers((prev) => prev.filter((_, i) => i !== index))
-                  }
-                  className="text-xs font-semibold text-[var(--muted)] underline-offset-2 hover:underline"
-                >
-                  Remove
-                </button>
-              ) : null}
             </div>
-          ))}
+          </div>
 
-          {kind === "teams" ? (
-            <button
-              type="button"
-              onClick={() => setMembers((prev) => [...prev, emptyPartner()])}
-              className="rounded-[var(--radius)] border border-[var(--line)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)]"
-            >
-              Add teammate
-            </button>
-          ) : null}
+          <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]">
+            {members.map((mate, index) => {
+              const slotLabel =
+                kind === "scotch-doubles" ? "Partner" : `T${index + 1}`;
+              return (
+                <li
+                  key={`preset-mate-${index}`}
+                  className="flex min-w-0 items-center gap-1.5 px-2 py-1.5"
+                >
+                  <span className="w-12 shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                    {slotLabel}
+                  </span>
+                  <PartnerSearchField
+                    compact
+                    hideLabel
+                    label={
+                      kind === "scotch-doubles"
+                        ? "Partner"
+                        : `Teammate ${index + 1}`
+                    }
+                    value={mate}
+                    onChange={(next) =>
+                      setMembers((prev) =>
+                        prev.map((row, i) => (i === index ? next : row)),
+                      )
+                    }
+                    placeholder="Name or Fargo ID…"
+                  />
+                  {kind === "teams" && members.length > 1 ? (
+                    <button
+                      type="button"
+                      aria-label={`Remove teammate ${index + 1}`}
+                      onClick={() =>
+                        setMembers((prev) =>
+                          prev.filter((_, i) => i !== index),
+                        )
+                      }
+                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)]"
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {kind === "teams" ? (
+              <button
+                type="button"
+                onClick={() =>
+                  setMembers((prev) => [...prev, emptyPartner()])
+                }
+                className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--ink)]"
+              >
+                + Teammate
+              </button>
+            ) : null}
             <button
               type="button"
               disabled={busy}
               onClick={() => void onSave()}
-              className="rounded-[var(--radius)] bg-[var(--felt)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              className="rounded-[var(--radius)] bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
             >
-              {busy ? "Saving…" : editingId ? "Update team" : "Save team"}
+              {busy ? "Saving…" : editingId ? "Update" : "Save"}
             </button>
             <button
               type="button"
               disabled={busy}
               onClick={resetComposer}
-              className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold text-[var(--muted)]"
+              className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--muted)]"
             >
               Cancel
             </button>
@@ -492,48 +516,46 @@ export function EntryTeamsPresetsPanel({
           }
         />
       ) : teams.length > 0 ? (
-        <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)]">
+        <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/30">
           {teams.map((team) => (
-            <li key={team.id} className="space-y-2 px-3 py-3 sm:px-4">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="font-semibold text-[var(--ink)]">{team.name}</p>
-                  <p className="mt-0.5 text-[11px] text-[var(--muted)]">
-                    {kindLabel(team.kind)} · {team.members.length} partner
-                    {team.members.length === 1 ? "" : "s"}
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--muted)]">
-                    {team.members
-                      .map(
-                        (m) =>
-                          `${m.displayName}${
-                            m.ratingAtSignup != null
-                              ? ` (${m.ratingAtSignup})`
-                              : ""
-                          }`,
-                      )
-                      .join(", ")}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => startEdit(team)}
-                    className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-2.5 py-1.5 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void onDelete(team.id)}
-                    className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--muted)] disabled:opacity-50"
-                  >
-                    Delete
-                  </button>
-                </div>
+            <li
+              key={team.id}
+              className="flex min-w-0 items-center gap-2 px-2.5 py-2"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-[var(--ink)]">
+                  {team.name}
+                </p>
+                <p className="truncate text-[11px] text-[var(--muted)]">
+                  {kindLabel(team.kind)} ·{" "}
+                  {team.members
+                    .map(
+                      (m) =>
+                        `${m.displayName}${
+                          m.ratingAtSignup != null
+                            ? ` ${m.ratingAtSignup}`
+                            : ""
+                        }`,
+                    )
+                    .join(", ")}
+                </p>
               </div>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => startEdit(team)}
+                className="shrink-0 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-[11px] font-semibold text-[var(--ink)] disabled:opacity-50"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void onDelete(team.id)}
+                className="shrink-0 rounded-[var(--radius)] px-1.5 py-1 text-[11px] font-semibold text-[var(--muted)] disabled:opacity-50"
+              >
+                Del
+              </button>
             </li>
           ))}
         </ul>

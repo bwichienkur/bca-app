@@ -15,6 +15,9 @@ type PartnerSearchFieldProps = {
   value: PartnerPick;
   onChange: (next: PartnerPick) => void;
   placeholder?: string;
+  /** Denser input; hide the field label when the parent supplies one inline. */
+  compact?: boolean;
+  hideLabel?: boolean;
 };
 
 const MIN_QUERY = 2;
@@ -40,6 +43,8 @@ export function PartnerSearchField({
   value,
   onChange,
   placeholder = "Search name or Fargo ID…",
+  compact = false,
+  hideLabel = false,
 }: PartnerSearchFieldProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -155,51 +160,71 @@ export function PartnerSearchField({
       Boolean(error) ||
       (searched && query.trim().length >= MIN_QUERY));
 
+  const showLabel = !hideLabel && !compact;
+  const inputClass = compact
+    ? "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]"
+    : "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]";
+
   return (
-    <div ref={rootRef} className="relative min-w-0">
+    <div ref={rootRef} className="relative min-w-0 flex-1">
       <label className="block min-w-0">
-        <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-          {label}
-        </span>
-        <input
-          className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]"
-          value={query}
-          placeholder={placeholder}
-          aria-autocomplete="list"
-          aria-controls={listId}
-          aria-expanded={open}
-          onChange={(event) => {
-            const next = event.target.value;
-            setQuery(next);
-            // Clear a prior Fargo pick as soon as the user edits the field.
-            if (value.fargoPlayerId || value.displayName !== next.trim()) {
-              onChange({
-                displayName: next.trim(),
-                ratingAtSignup: null,
-                fargoPlayerId: null,
-                readableId: null,
-              });
-            }
-            setOpen(true);
-          }}
-          onFocus={() => {
-            if (
-              results.length > 0 ||
-              error ||
-              (searched && query.trim().length >= MIN_QUERY)
-            ) {
+        {showLabel ? (
+          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            {label}
+          </span>
+        ) : (
+          <span className="sr-only">{label}</span>
+        )}
+        <span className="relative block min-w-0">
+          <input
+            className={inputClass}
+            value={query}
+            placeholder={placeholder}
+            aria-label={label}
+            aria-autocomplete="list"
+            aria-controls={listId}
+            aria-expanded={open}
+            onChange={(event) => {
+              const next = event.target.value;
+              setQuery(next);
+              // Clear a prior Fargo pick as soon as the user edits the field.
+              if (value.fargoPlayerId || value.displayName !== next.trim()) {
+                onChange({
+                  displayName: next.trim(),
+                  ratingAtSignup: null,
+                  fargoPlayerId: null,
+                  readableId: null,
+                });
+              }
               setOpen(true);
-            }
-          }}
-          onBlur={() => {
-            // Keep free-text names for partners not found in Fargo.
-            window.setTimeout(() => {
-              if (!value.fargoPlayerId) commitFreeText(query);
-            }, 120);
-          }}
-        />
+            }}
+            onFocus={() => {
+              if (
+                results.length > 0 ||
+                error ||
+                (searched && query.trim().length >= MIN_QUERY)
+              ) {
+                setOpen(true);
+              }
+            }}
+            onBlur={() => {
+              // Keep free-text names for partners not found in Fargo.
+              window.setTimeout(() => {
+                if (!value.fargoPlayerId) commitFreeText(query);
+              }, 120);
+            }}
+          />
+          {loading && compact ? (
+            <span
+              className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-medium text-[var(--muted)]"
+              aria-hidden
+            >
+              …
+            </span>
+          ) : null}
+        </span>
       </label>
-      {loading ? (
+      {loading && !compact ? (
         <p className="mt-1 text-[11px] text-[var(--muted)]">Searching Fargo…</p>
       ) : null}
       {showMenu ? (

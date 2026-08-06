@@ -3178,62 +3178,68 @@ export function Tournaments({
 
                   {t.eventType === "scotch-doubles" ||
                   t.eventType === "teams" ? (
-                    <div className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/40 p-3">
-                      <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                    <div className="space-y-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/50 p-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
                           {t.eventType === "scotch-doubles"
-                            ? "Create your pair"
-                            : "Create your team"}
+                            ? "Your pair"
+                            : "Your team"}
                         </p>
-                        <p className="text-[11px] text-[var(--muted)]">
-                          Saved to your account
+                        <p className="truncate text-[11px] text-[var(--muted)]">
+                          Cap{" "}
+                          <span className="font-semibold text-[var(--ink)]">
+                            {user.name ?? user.email ?? "You"}
+                            {resolvedFargo != null
+                              ? ` · ${resolvedFargo}`
+                              : ""}
+                          </span>
                         </p>
                       </div>
 
-                      <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                      <div className="flex min-w-0 items-center gap-1.5">
                         <SelectField
                           aria-label="Saved tournament teams"
                           value={selectedEntryTeamId}
                           placeholder={
                             t.eventType === "scotch-doubles"
-                              ? "Choose a saved pair"
-                              : "Choose a saved team"
+                              ? "Saved pair…"
+                              : "Saved team…"
                           }
                           options={[
                             {
                               value: "",
                               label:
                                 t.eventType === "scotch-doubles"
-                                  ? "Create new pair"
-                                  : "Create new team",
+                                  ? "New pair"
+                                  : "New team",
                             },
                             ...entryTeams.map((team) => ({
                               value: team.id,
                               label: team.name,
                             })),
                           ]}
+                          buttonClassName="bg-[var(--surface)] !px-2.5 !py-1.5"
                           onChange={applyEntryTeam}
                         />
                         <button
                           type="button"
                           disabled={entryTeamBusy || !selectedEntryTeamId}
                           onClick={() => void deleteSelectedEntryTeam()}
-                          className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)] disabled:opacity-40"
+                          className="shrink-0 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)] disabled:opacity-40"
                         >
-                          Delete
+                          Del
                         </button>
                       </div>
 
-                      <Field
-                        label={
-                          t.eventType === "scotch-doubles"
+                      <div className="min-w-0">
+                        <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                          {t.eventType === "scotch-doubles"
                             ? "Pair name"
-                            : "Team name"
-                        }
-                      >
+                            : "Team name"}
+                        </span>
                         <input
                           required
-                          className={fieldClass}
+                          className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]"
                           value={teamName}
                           onChange={(e) => {
                             setTeamName(e.target.value);
@@ -3245,81 +3251,88 @@ export function Tournaments({
                               : "Team name"
                           }
                         />
-                      </Field>
-
-                      <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]/70 px-3 py-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                          Captain
-                        </p>
-                        <p className="text-sm font-semibold text-[var(--ink)]">
-                          {user.name ?? user.email ?? "You"}
-                          {resolvedFargo != null ? ` · ${resolvedFargo}` : ""}
-                        </p>
                       </div>
 
-                      {teammates.map((mate, index) => (
-                        <div
-                          key={`mate-${index}`}
-                          className="space-y-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]/50 p-2.5"
-                        >
-                          <PartnerSearchField
-                            label={
-                              t.eventType === "scotch-doubles"
-                                ? "Partner"
-                                : `Teammate ${index + 1}`
-                            }
-                            value={mate}
-                            onChange={(next) => {
-                              setSelectedEntryTeamId("");
-                              setTeammates((prev) =>
-                                prev.map((row, i) =>
-                                  i === index ? next : row,
-                                ),
-                              );
-                            }}
-                            placeholder="Search name or Fargo ID…"
-                          />
-                          {t.eventType === "teams" && teammates.length > 1 ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedEntryTeamId("");
-                                setTeammates((prev) =>
-                                  prev.filter((_, i) => i !== index),
-                                );
-                              }}
-                              className="text-xs font-semibold text-[var(--muted)] underline-offset-2 hover:underline"
+                      <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]">
+                        {teammates.map((mate, index) => {
+                          const slotLabel =
+                            t.eventType === "scotch-doubles"
+                              ? "Partner"
+                              : `T${index + 1}`;
+                          return (
+                            <li
+                              key={`mate-${index}`}
+                              className="flex min-w-0 items-center gap-1.5 px-2 py-1.5"
                             >
-                              Remove
-                            </button>
-                          ) : null}
-                        </div>
-                      ))}
+                              <span className="w-12 shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                                {slotLabel}
+                              </span>
+                              <PartnerSearchField
+                                compact
+                                hideLabel
+                                label={
+                                  t.eventType === "scotch-doubles"
+                                    ? "Partner"
+                                    : `Teammate ${index + 1}`
+                                }
+                                value={mate}
+                                onChange={(next) => {
+                                  setSelectedEntryTeamId("");
+                                  setTeammates((prev) =>
+                                    prev.map((row, i) =>
+                                      i === index ? next : row,
+                                    ),
+                                  );
+                                }}
+                                placeholder="Name or Fargo ID…"
+                              />
+                              {t.eventType === "teams" &&
+                              teammates.length > 1 ? (
+                                <button
+                                  type="button"
+                                  aria-label={`Remove teammate ${index + 1}`}
+                                  onClick={() => {
+                                    setSelectedEntryTeamId("");
+                                    setTeammates((prev) =>
+                                      prev.filter((_, i) => i !== index),
+                                    );
+                                  }}
+                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--muted)] transition hover:bg-[var(--surface-3)] hover:text-[var(--ink)]"
+                                >
+                                  ×
+                                </button>
+                              ) : null}
+                            </li>
+                          );
+                        })}
+                      </ul>
 
-                      {t.eventType === "teams" ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedEntryTeamId("");
-                            setTeammates((prev) => [...prev, emptyTeammate()]);
-                          }}
-                          className="rounded-[var(--radius)] border border-[var(--line)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)]"
-                        >
-                          Add teammate
-                        </button>
-                      ) : null}
-
-                      <div className="flex flex-wrap items-center gap-2">
-                        <label className="flex cursor-pointer items-center gap-2 text-sm text-[var(--ink)]">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {t.eventType === "teams" ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedEntryTeamId("");
+                              setTeammates((prev) => [
+                                ...prev,
+                                emptyTeammate(),
+                              ]);
+                            }}
+                            className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--ink)]"
+                          >
+                            + Teammate
+                          </button>
+                        ) : null}
+                        <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[var(--ink)]">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 accent-[var(--felt)]"
+                            className="h-3.5 w-3.5 accent-[var(--felt)]"
                             checked={saveEntryTeam}
                             onChange={(e) =>
                               setSaveEntryTeam(e.target.checked)
                             }
                           />
-                          Save team for future events
+                          Save for later
                         </label>
                         <button
                           type="button"
@@ -3331,21 +3344,16 @@ export function Tournaments({
                                 : "teams",
                             )
                           }
-                          className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
+                          className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
                         >
-                          {entryTeamBusy ? "Saving…" : "Save team only"}
+                          {entryTeamBusy ? "Saving…" : "Save only"}
                         </button>
                       </div>
                       {entryTeamMsg ? (
                         <p className="text-xs text-[var(--felt-deep)]">
                           {entryTeamMsg}
                         </p>
-                      ) : (
-                        <p className="text-[11px] text-[var(--muted)]">
-                          Search partners by name or Fargo ID, then request a
-                          spot with this team.
-                        </p>
-                      )}
+                      ) : null}
                     </div>
                   ) : null}
 
