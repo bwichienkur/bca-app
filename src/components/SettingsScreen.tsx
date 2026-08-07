@@ -284,20 +284,20 @@ export function SettingsScreen({
         </div>
 
         <div className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/60 px-3 py-2.5">
-            <div>
+          <div className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/60 px-3 py-2.5">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-[var(--ink)]">
                 FargoRate / LMS
               </p>
-              <p className="text-xs text-[var(--muted)]">
+              <p className="truncate text-xs text-[var(--muted)]">
                 {fargoLinked
                   ? scoringReady
                     ? "Connected · Score ready"
-                    : "Linked · reconnect to unlock Score"
-                  : "Required for Score and event registration"}
+                    : "Linked · reconnect for Score"
+                  : "Required for Score"}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
               {fargoLinked && !scoringReady ? (
                 <button
                   type="button"
@@ -306,7 +306,7 @@ export function SettingsScreen({
                     setLinkProvider("fargo");
                     setLinkError(null);
                   }}
-                  className="rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                  className="rounded-[var(--radius)] bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
                 >
                   Reconnect
                 </button>
@@ -316,7 +316,7 @@ export function SettingsScreen({
                   type="button"
                   disabled={linkBusy}
                   onClick={() => void unlink("fargo")}
-                  className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)] disabled:opacity-50"
+                  className="rounded-[var(--radius)] bg-[#b42318] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
                 >
                   Disconnect
                 </button>
@@ -328,7 +328,7 @@ export function SettingsScreen({
                     setLinkProvider("fargo");
                     setLinkError(null);
                   }}
-                  className="rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                  className="rounded-[var(--radius)] bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
                 >
                   Connect
                 </button>
@@ -336,39 +336,39 @@ export function SettingsScreen({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/60 px-3 py-2.5">
-            <div>
+          <div className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/60 px-3 py-2.5">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-[var(--ink)]">
                 Digital Pool
               </p>
-              <p className="text-xs text-[var(--muted)]">
-                {digitalPoolLinked
-                  ? "Connected · ready for bracket push"
-                  : "Optional · push brackets after check-in"}
+              <p className="truncate text-xs text-[var(--muted)]">
+                {digitalPoolLinked ? "Connected" : "Optional · brackets"}
               </p>
             </div>
-            {digitalPoolLinked ? (
-              <button
-                type="button"
-                disabled={linkBusy}
-                onClick={() => void unlink("digital-pool")}
-                className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)] disabled:opacity-50"
-              >
-                Disconnect
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled={linkBusy}
-                onClick={() => {
-                  setLinkProvider("digital-pool");
-                  setLinkError(null);
-                }}
-                className="rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-              >
-                Connect
-              </button>
-            )}
+            <div className="flex shrink-0 justify-end">
+              {digitalPoolLinked ? (
+                <button
+                  type="button"
+                  disabled={linkBusy}
+                  onClick={() => void unlink("digital-pool")}
+                  className="rounded-[var(--radius)] bg-[#b42318] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  Disconnect
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={linkBusy}
+                  onClick={() => {
+                    setLinkProvider("digital-pool");
+                    setLinkError(null);
+                  }}
+                  className="rounded-[var(--radius)] bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  Connect
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

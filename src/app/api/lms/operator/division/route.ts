@@ -1,27 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireOperatorApi } from "@/lib/lms-operator-api";
 import {
-  isOperatorConfigured,
   loginLeagueOperator,
   operatorCreateDivisionFromCopy,
   operatorGetDivisionSettings,
 } from "@/lib/lms-operator";
 import { invalidateOperatorCache } from "@/lib/lms-operator-cache";
-import { requireScoringSession } from "@/lib/scoring-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
-    await requireScoringSession();
-    if (!isOperatorConfigured()) {
-      return NextResponse.json(
-        {
-          error:
-            "League operator is not configured. Set LMS_OPERATOR_EMAIL and LMS_OPERATOR_PASSWORD.",
-        },
-        { status: 503 },
-      );
-    }
+    await requireOperatorApi();
 
     const divisionId = request.nextUrl.searchParams.get("divisionId")?.trim();
     if (!divisionId) {
@@ -66,16 +56,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireScoringSession();
-    if (!isOperatorConfigured()) {
-      return NextResponse.json(
-        {
-          error:
-            "League operator is not configured. Set LMS_OPERATOR_EMAIL and LMS_OPERATOR_PASSWORD.",
-        },
-        { status: 503 },
-      );
-    }
+    await requireOperatorApi();
 
     const body = (await request.json()) as {
       leagueId?: string;

@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireOperatorApi } from "@/lib/lms-operator-api";
 import {
-  isOperatorConfigured,
   loginLeagueOperator,
   operatorGetMissedMatches,
   operatorGetNextMatches,
 } from "@/lib/lms-operator";
-import { requireScoringSession } from "@/lib/scoring-auth";
 import {
   operatorCacheKey,
   withOperatorCache,
@@ -15,16 +14,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
-    await requireScoringSession();
-    if (!isOperatorConfigured()) {
-      return NextResponse.json(
-        {
-          error:
-            "League operator is not configured. Set LMS_OPERATOR_EMAIL and LMS_OPERATOR_PASSWORD.",
-        },
-        { status: 503 },
-      );
-    }
+    await requireOperatorApi();
 
     const divisionId = request.nextUrl.searchParams.get("divisionId")?.trim();
     const kind = (
