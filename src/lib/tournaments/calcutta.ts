@@ -6,13 +6,15 @@ import type {
   TournamentCalcutta,
   TournamentRegistration,
 } from "@/lib/tournaments/types";
+import {
+  computeCalcuttaPayouts,
+  defaultCalcuttaPercentTiers,
+  payoutCentsByPlace,
+} from "@/lib/tournaments/payouts";
 
-export const DEFAULT_CALCUTTA_PAYOUT_TIERS: CalcuttaPayoutTier[] = [
-  { place: 1, percent: 40 },
-  { place: 2, percent: 30 },
-  { place: 3, percent: 20 },
-  { place: 4, percent: 10 },
-];
+/** Default 8-place Calcutta shares (organizer formula — not 40/30/20/10). */
+export const DEFAULT_CALCUTTA_PAYOUT_TIERS: CalcuttaPayoutTier[] =
+  defaultCalcuttaPercentTiers(8);
 
 export function emptyCalcuttaLot(registrationId: string): CalcuttaLot {
   return {
@@ -41,6 +43,24 @@ export function defaultCalcutta(tournamentId: string): TournamentCalcutta {
   };
 }
 
+function isLegacyFlatFourTiers(tiers: CalcuttaPayoutTier[]): boolean {
+  if (tiers.length !== 4) return false;
+  const expected = [
+    { place: 1, percent: 40 },
+    { place: 2, percent: 30 },
+    { place: 3, percent: 20 },
+    { place: 4, percent: 10 },
+  ];
+  return expected.every((ref, i) => {
+    const tier = tiers[i];
+    return (
+      tier != null &&
+      tier.place === ref.place &&
+      Math.abs(tier.percent - ref.percent) < 0.05
+    );
+  });
+}
+
 function normalizeTier(raw: unknown): CalcuttaPayoutTier[] {
   if (!Array.isArray(raw) || raw.length === 0) {
     return DEFAULT_CALCUTTA_PAYOUT_TIERS.map((tier) => ({ ...tier }));
@@ -54,10 +74,13 @@ function normalizeTier(raw: unknown): CalcuttaPayoutTier[] {
       if (!Number.isFinite(percent) || percent < 0) return null;
       return { place, percent };
     })
-    .filter((tier): tier is CalcuttaPayoutTier => Boolean(tier));
-  return tiers.length
-    ? tiers.sort((a, b) => a.place - b.place)
-    : DEFAULT_CALCUTTA_PAYOUT_TIERS.map((tier) => ({ ...tier }));
+    .filter((tier): tier is CalcuttaPayoutTier => Boolean(tier))
+    .sort((a, b) => a.place - b.place);
+  // Migrate the old 40/30/20/10 default to the organizer’s 8-place formula.
+  if (!tiers.length || isLegacyFlatFourTiers(tiers)) {
+    return DEFAULT_CALCUTTA_PAYOUT_TIERS.map((tier) => ({ ...tier }));
+  }
+  return tiers;
 }
 
 function normalizeLot(raw: unknown): CalcuttaLot | null {
@@ -174,18 +197,73 @@ export function summarizeCalcutta(calcutta: TournamentCalcutta): CalcuttaSummary
     if (lot.place != null) byPlace.set(lot.place, lot);
   }
 
-  const payouts = calcutta.payoutTiers.map((tier) => {
-    const amountCents = Math.round((netPotCents * tier.percent) / 100);
-    const lot = byPlace.get(tier.place) ?? null;
-    return {
+  const highestSoldCents = soldLots.reduce(
+    (max, lot) => Math.max(max, lot.soldPriceCents ?? 0),
+    0,
+  );
+
+  // Prefer the organizer’s default Calcutta formula (clean $5 amounts, 100% net).
+  // Fall back to stored percent tiers only when they are a custom non-default set.
+  const defaultTier = DEFAULT_CALCUTTA_PAYOUT_TIERS;
+  const tiersLookDefault =
+    calcutta.payoutTiers.length === defaultTier.length &&
+    calcutta.payoutTiers.every((tier, i) => {
+      const ref = defaultTier[i];
+      return (
+        ref != null &&
+        tier.place === ref.place &&
+        Math.abs(tier.percent - ref.percent) < 0.05
+      );
+    });
+
+  let payouts: CalcuttaSummary["payouts"];
+
+  if (tiersLookDefault || calcutta.payoutTiers.length === 0) {
+    const plan = computeCalcuttaPayouts(netPotCents, {
+      paidPlaces: 8,
+      highestSoldCents: highestSoldCents > 0 ? highestSoldCents : null,
+    });
+    const byPlaceAmount = payoutCentsByPlace(plan);
+    const places = [...byPlaceAmount.keys()].sort((a, b) => a - b);
+    payouts = places.map((place) => {
+      const lot = byPlace.get(place) ?? null;
+      const amountCents = byPlaceAmount.get(place) ?? 0;
+      const tier = defaultTier.find((t) => t.place === place);
+      return {
+        place,
+        percent: tier?.percent ?? 0,
+        amountCents,
+        registrationId: lot?.registrationId ?? null,
+        buyerName: lot?.buyerName?.trim() || null,
+        buyBackHalf: Boolean(lot?.buyBackHalf),
+      };
+    });
+  } else {
+    // Custom percent table — still round each line to $5, then fix 1st to hit net.
+    const raw = calcutta.payoutTiers.map((tier) => ({
       place: tier.place,
       percent: tier.percent,
-      amountCents,
-      registrationId: lot?.registrationId ?? null,
-      buyerName: lot?.buyerName?.trim() || null,
-      buyBackHalf: Boolean(lot?.buyBackHalf),
-    };
-  });
+      amountCents: Math.round((netPotCents * tier.percent) / 100 / 500) * 500,
+    }));
+    const sum = raw.reduce((s, row) => s + row.amountCents, 0);
+    if (raw.length && sum !== netPotCents) {
+      raw[0] = {
+        ...raw[0]!,
+        amountCents: raw[0]!.amountCents + (netPotCents - sum),
+      };
+    }
+    payouts = raw.map((row) => {
+      const lot = byPlace.get(row.place) ?? null;
+      return {
+        place: row.place,
+        percent: row.percent,
+        amountCents: row.amountCents,
+        registrationId: lot?.registrationId ?? null,
+        buyerName: lot?.buyerName?.trim() || null,
+        buyBackHalf: Boolean(lot?.buyBackHalf),
+      };
+    });
+  }
 
   return {
     grossPotCents,

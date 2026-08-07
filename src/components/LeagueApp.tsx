@@ -11,7 +11,6 @@ import {
 import { readAppUrlState, writeAppUrlState } from "@/lib/app-url";
 import {
   DEFAULT_LEAGUE_ID,
-  DEFAULT_PLAYERS_PER_TEAM,
   PRIMARY_NAV_TABS,
 } from "@/lib/constants";
 import { normalizeTeamName } from "@/lib/matchups";
@@ -27,6 +26,10 @@ import {
   fetchSharedPreferences,
   pushSharedPreferences,
 } from "@/lib/prefs-sync";
+import {
+  getScoringFormat,
+  inferScoringFormatFromDivisionName,
+} from "@/lib/scoring-formats";
 import { useViewportAnchor } from "@/lib/use-viewport-anchor";
 import type {
   DivisionSummary,
@@ -892,6 +895,17 @@ export function LeagueApp() {
             normalizeTeamName(prefs?.teamName ?? "")),
     ) ?? null;
 
+  const scoringFormat = useMemo(() => {
+    if (prefs?.scoringFormatId) return getScoringFormat(prefs.scoringFormatId);
+    return inferScoringFormatFromDivisionName(
+      selectedDivision?.name ?? prefs?.divisionName,
+    );
+  }, [
+    prefs?.scoringFormatId,
+    prefs?.divisionName,
+    selectedDivision?.name,
+  ]);
+
   const detailTeam =
     divisionTeams.find(
       (team) =>
@@ -1469,6 +1483,7 @@ export function LeagueApp() {
                     <TeamLineupTemplates
                       divisionId={selectedDivision.id}
                       team={myTeam}
+                      slots={scoringFormat.playersPerTeam}
                       embedded
                     />
                   ) : (
@@ -1476,7 +1491,7 @@ export function LeagueApp() {
                       <SectionCard
                         eyebrow="Team"
                         title="Lineups"
-                        description={`Save ${DEFAULT_PLAYERS_PER_TEAM}-player orders for league night. Load them from Handicap or Score.`}
+                        description={`Save ${scoringFormat.playersPerTeam}-player orders for league night. Load them from Handicap or Score.`}
                       />
                       <EmptyState
                         title="Team roster needed"

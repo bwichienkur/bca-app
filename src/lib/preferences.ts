@@ -33,6 +33,7 @@ export function loadPreferences(): UserPreferences {
       playerName: parsed.playerName ?? null,
       teamId: parsed.teamId ?? null,
       teamName: parsed.teamName ?? null,
+      scoringFormatId: parsed.scoringFormatId ?? null,
     };
   } catch {
     return DEFAULT_PREFERENCES;

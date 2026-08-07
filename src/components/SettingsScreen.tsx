@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  LEAGUE_SCORING_FORMATS,
+  getScoringFormat,
+  inferScoringFormatFromDivisionName,
+} from "@/lib/scoring-formats";
 import type {
   DivisionSummary,
   LeagueSummary,
@@ -10,6 +15,7 @@ import type {
 } from "@/lib/types";
 import type { AuthUser } from "./LoginScreen";
 import { LoadingState } from "./LoadingState";
+import { SelectField } from "./SelectField";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
 type SettingsScreenProps = {
@@ -40,6 +46,9 @@ export function SettingsScreen({
   const [leagueId, setLeagueId] = useState(prefs.leagueId);
   const [divisionId, setDivisionId] = useState(prefs.divisionId);
   const [teamId, setTeamId] = useState(prefs.teamId);
+  const [scoringFormatId, setScoringFormatId] = useState<string>(
+    prefs.scoringFormatId ?? "auto",
+  );
   const [status, setStatus] = useState<string | null>(null);
   const [leagueQuery, setLeagueQuery] = useState(
     prefs.leagueName.split(" ").slice(0, 2).join(" ") || "Palm Beach",
@@ -158,6 +167,8 @@ export function SettingsScreen({
       teamName: selectedTeam?.teamName ?? null,
       playerId: user.lmsId,
       playerName: user.name,
+      scoringFormatId:
+        scoringFormatId === "auto" ? null : scoringFormatId,
     };
     onSave(next);
     setStatus("Defaults saved.");
@@ -527,6 +538,37 @@ export function SettingsScreen({
               />
             </>
           )}
+
+          <div className="space-y-1.5">
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+              Scoring format
+            </span>
+            <SelectField
+              aria-label="League night scoring format"
+              value={scoringFormatId}
+              onChange={(value) => {
+                setScoringFormatId(value);
+                setStatus(null);
+              }}
+              options={[
+                {
+                  value: "auto",
+                  label: "Auto (from division name)",
+                },
+                ...LEAGUE_SCORING_FORMATS.map((format) => ({
+                  value: format.id,
+                  label: format.label,
+                })),
+              ]}
+            />
+            <p className="text-[11px] leading-snug text-[var(--muted)]">
+              {scoringFormatId === "auto"
+                ? inferScoringFormatFromDivisionName(
+                    selectedDivision?.name ?? prefs.divisionName,
+                  ).description
+                : getScoringFormat(scoringFormatId).description}
+            </p>
+          </div>
 
           {status ? (
             <p className="text-sm text-[var(--felt-deep)]">{status}</p>

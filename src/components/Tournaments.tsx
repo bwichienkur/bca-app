@@ -89,6 +89,11 @@ import {
   MyEntriesPanel,
   TemplatesPresetsPanel,
 } from "./TournamentPresets";
+import {
+  computeTournamentPayouts,
+  computeTournamentPurseCents,
+  formatPayoutDollars,
+} from "@/lib/tournaments/payouts";
 
 type View = "browse" | "create" | "edit" | "detail";
 type BrowseSubTab = "browse" | "entries" | "teams" | "templates";
@@ -3483,6 +3488,31 @@ export function Tournaments({
         })()
       : "";
 
+    const paidEntryCount = (detail?.registrations ?? []).filter(
+      (reg) => reg.status === "approved" && reg.paid,
+    ).length;
+    const fieldEntryCount = (detail?.registrations ?? []).filter(
+      (reg) => reg.status === "approved",
+    ).length;
+    const payoutEntryCount =
+      paidEntryCount > 0
+        ? paidEntryCount
+        : fieldEntryCount > 0
+          ? fieldEntryCount
+          : (t?.maxPlayers ?? 0);
+    const payoutPurseCents =
+      t && payoutEntryCount > 0
+        ? computeTournamentPurseCents({
+            paidEntryCount: payoutEntryCount,
+            entryFeeCents: t.entryFeeCents,
+            addedMoneyCents: t.addedMoneyCents,
+          })
+        : 0;
+    const tournamentPayoutPlan =
+      payoutPurseCents > 0
+        ? computeTournamentPayouts(payoutPurseCents, { paidPlaces: 16 })
+        : null;
+
     const overviewSignup = t ? (
       <>
         {actionMsg ? (
@@ -4299,6 +4329,26 @@ export function Tournaments({
                             value={registrationLabel}
                             wide
                           />
+                          {tournamentPayoutPlan ? (
+                            <>
+                              <OverviewFact
+                                label="Purse"
+                                value={formatPayoutDollars(
+                                  tournamentPayoutPlan.purseCents,
+                                )}
+                              />
+                              <OverviewFact
+                                label="Based on"
+                                value={
+                                  paidEntryCount > 0
+                                    ? `${paidEntryCount} paid`
+                                    : fieldEntryCount > 0
+                                      ? `${fieldEntryCount} approved`
+                                      : `${payoutEntryCount} max`
+                                }
+                              />
+                            </>
+                          ) : null}
                           {t.venmoHandle?.trim() ? (
                             (() => {
                               const value = t.venmoHandle.trim().startsWith("@")
@@ -4368,6 +4418,37 @@ export function Tournaments({
                             />
                           ) : null}
                         </dl>
+                        {tournamentPayoutPlan ? (
+                          <div className="mt-4 space-y-2 border-t border-[var(--line)] pt-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                              Payout schedule
+                            </p>
+                            <ul className="space-y-1 text-sm text-[var(--ink)]">
+                              {tournamentPayoutPlan.rows.map((row) => (
+                                <li
+                                  key={row.label}
+                                  className="flex items-baseline justify-between gap-3"
+                                >
+                                  <span className="text-[var(--muted)]">
+                                    {row.label}
+                                    {row.count > 1 ? " each" : ""}
+                                  </span>
+                                  <span className="tabular-nums font-semibold">
+                                    {formatPayoutDollars(row.eachCents)}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                            <p className="flex items-baseline justify-between gap-3 border-t border-[var(--line)] pt-2 text-sm font-semibold">
+                              <span>Total paid</span>
+                              <span className="tabular-nums text-[var(--felt-deep)]">
+                                {formatPayoutDollars(
+                                  tournamentPayoutPlan.totalPaidCents,
+                                )}
+                              </span>
+                            </p>
+                          </div>
+                        ) : null}
                       </OverviewSection>
                     ) : null}
 
