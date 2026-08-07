@@ -12,6 +12,11 @@ import {
   type LocationInput,
   type OperatorLocation,
 } from "@/lib/lms-operator-manage";
+import {
+  invalidateOperatorCache,
+  operatorCacheKey,
+  withOperatorCache,
+} from "@/lib/lms-operator-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +30,14 @@ export async function GET(request: NextRequest) {
         { status: 400 },
       );
     }
-    const locations = await withOperatorSession((session) =>
-      operatorListLocations(session, divisionId),
+    const refresh = request.nextUrl.searchParams.get("refresh") === "1";
+    const locations = await withOperatorCache(
+      operatorCacheKey("locations", divisionId),
+      () =>
+        withOperatorSession((session) =>
+          operatorListLocations(session, divisionId),
+        ),
+      { bypass: refresh },
     );
     return NextResponse.json({ locations });
   } catch (error) {
@@ -50,6 +61,7 @@ export async function POST(request: NextRequest) {
     const location = await withOperatorSession((session) =>
       operatorCreateLocation(session, body.divisionId!.trim(), body.location!),
     );
+    await invalidateOperatorCache({ divisionId: body.divisionId!.trim() });
     return NextResponse.json({ ok: true, location });
   } catch (error) {
     return operatorErrorResponse(error);
@@ -69,6 +81,7 @@ export async function PUT(request: NextRequest) {
     const location = await withOperatorSession((session) =>
       operatorUpdateLocation(session, body.location!),
     );
+    await invalidateOperatorCache({ divisionId: body.location.divisionId });
     return NextResponse.json({ ok: true, location });
   } catch (error) {
     return operatorErrorResponse(error);
@@ -91,6 +104,8 @@ export async function DELETE(request: NextRequest) {
     await withOperatorSession((session) =>
       operatorDeleteLocation(session, locationId),
     );
+    const divisionId = request.nextUrl.searchParams.get("divisionId")?.trim();
+    await invalidateOperatorCache({ divisionId: divisionId || null });
     return NextResponse.json({ ok: true });
   } catch (error) {
     return operatorErrorResponse(error);

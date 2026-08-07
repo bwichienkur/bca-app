@@ -6,6 +6,11 @@ import {
   operatorGetPlayoffInfo,
   type PlayoffTeam,
 } from "@/lib/lms-operator";
+import {
+  invalidateOperatorCache,
+  operatorCacheKey,
+  withOperatorCache,
+} from "@/lib/lms-operator-cache";
 import { requireScoringSession } from "@/lib/scoring-auth";
 
 export const dynamic = "force-dynamic";
@@ -31,8 +36,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const operator = await loginLeagueOperator();
-    const info = await operatorGetPlayoffInfo(operator, leagueId);
+    const refresh = request.nextUrl.searchParams.get("refresh") === "1";
+    const info = await withOperatorCache(
+      operatorCacheKey("playoff", leagueId),
+      async () => {
+        const operator = await loginLeagueOperator();
+        return operatorGetPlayoffInfo(operator, leagueId);
+      },
+      { bypass: refresh },
+    );
     return NextResponse.json(info);
   } catch (error) {
     const message =
@@ -110,6 +122,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    await invalidateOperatorCache({ leagueId });
     return NextResponse.json({
       ok: true,
       message: result.message,

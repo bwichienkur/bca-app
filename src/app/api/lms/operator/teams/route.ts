@@ -11,6 +11,11 @@ import {
   withOperatorSession,
   type TeamInput,
 } from "@/lib/lms-operator-manage";
+import {
+  invalidateOperatorCache,
+  operatorCacheKey,
+  withOperatorCache,
+} from "@/lib/lms-operator-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -24,8 +29,12 @@ export async function GET(request: NextRequest) {
         { status: 400 },
       );
     }
-    const teams = await withOperatorSession((session) =>
-      operatorListTeams(session, divisionId),
+    const refresh = request.nextUrl.searchParams.get("refresh") === "1";
+    const teams = await withOperatorCache(
+      operatorCacheKey("teams", divisionId),
+      () =>
+        withOperatorSession((session) => operatorListTeams(session, divisionId)),
+      { bypass: refresh },
     );
     return NextResponse.json({ teams });
   } catch (error) {
@@ -53,6 +62,7 @@ export async function POST(request: NextRequest) {
     await withOperatorSession((session) =>
       operatorCreateTeam(session, body.divisionId!.trim(), body.team!),
     );
+    await invalidateOperatorCache({ divisionId: body.divisionId!.trim() });
     return NextResponse.json({ ok: true });
   } catch (error) {
     return operatorErrorResponse(error);
@@ -89,6 +99,7 @@ export async function PUT(request: NextRequest) {
         body.team!,
       ),
     );
+    await invalidateOperatorCache({ divisionId: body.divisionId!.trim() });
     return NextResponse.json({ ok: true });
   } catch (error) {
     return operatorErrorResponse(error);
@@ -109,6 +120,8 @@ export async function DELETE(request: NextRequest) {
       );
     }
     await withOperatorSession((session) => operatorDeleteTeam(session, teamId));
+    const divisionId = request.nextUrl.searchParams.get("divisionId")?.trim();
+    await invalidateOperatorCache({ divisionId: divisionId || null });
     return NextResponse.json({ ok: true });
   } catch (error) {
     return operatorErrorResponse(error);
