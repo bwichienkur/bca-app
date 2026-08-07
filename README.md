@@ -78,6 +78,17 @@ UPSTASH_REDIS_REST_TOKEN=xxxxxxxx
 
 Vercel KV REST names are also accepted (`KV_REST_API_URL` / `KV_REST_API_TOKEN`).
 
+### League operator stuck-match submit (optional)
+
+Player `POST /api/verticalmatch` can ghost-lock a match (`already scored` / HTTP 201 while `hasBeenPlayed` stays false). When these env vars are set, Score can fall back to LMS League Operator score entry (`/api/scoringinternal/recordscoresvertical`):
+
+```bash
+LMS_OPERATOR_EMAIL=operator@example.com
+LMS_OPERATOR_PASSWORD=********
+```
+
+Use the **LMS web** operator login (not the BCAPL player Auth0 password). On a stuck submit, Tableside auto-tries this path and also shows **Submit via league operator**.
+
 ### Score drafts
 Keyed by match id, TTL 60 days, last-write-wins with ~3s polling while a scoresheet is open.
 
