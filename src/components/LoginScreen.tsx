@@ -11,9 +11,10 @@ export type AuthUser = {
   fargoLinked?: boolean;
   digitalPoolLinked?: boolean;
   scoringReady?: boolean;
+  leagueOperator?: boolean;
 };
 
-type Mode = "fargo" | "tableside-login" | "tableside-register";
+type Mode = "fargo" | "operator" | "tableside-login" | "tableside-register";
 
 type LoginScreenProps = {
   onSuccess: (user: AuthUser) => void;
@@ -38,7 +39,9 @@ export function LoginScreen({ onSuccess, onCancel }: LoginScreenProps) {
           ? "/api/auth/register"
           : mode === "tableside-login"
             ? "/api/auth/login"
-            : "/api/scoring/login";
+            : mode === "operator"
+              ? "/api/auth/login/operator"
+              : "/api/scoring/login";
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -66,13 +69,18 @@ export function LoginScreen({ onSuccess, onCancel }: LoginScreenProps) {
   };
 
   const isFargo = mode === "fargo";
+  const isOperator = mode === "operator";
   const isRegister = mode === "tableside-register";
 
   return (
     <section className="animate-rise mx-auto max-w-lg space-y-5">
       <div>
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-          {isFargo ? "BCA / FargoRate" : "Tableside"}
+          {isFargo
+            ? "BCA / FargoRate"
+            : isOperator
+              ? "LMS League Operator"
+              : "Tableside"}
         </p>
         <h2 className="mt-1 font-[family-name:var(--font-display)] text-3xl text-[var(--felt-deep)]">
           {isRegister ? "Create account" : "Sign in"}
@@ -80,9 +88,11 @@ export function LoginScreen({ onSuccess, onCancel }: LoginScreenProps) {
         <p className="mt-2 text-sm text-[var(--muted)]">
           {isFargo
             ? "Use the same email and password as the official BCAPL scoring app. Signing in creates your Tableside account automatically and unlocks Score."
-            : isRegister
-              ? "No FargoRate account needed. Create a Tableside account for Events, then connect Digital Pool in Settings. Connect Fargo later if you want Score."
-              : "Sign in with your Tableside email and password. Connect FargoRate in Settings when you need Score."}
+            : isOperator
+              ? "Use your LMS web League Operator email and password (lms.fargorate.com). This unlocks the LMS manage tab."
+              : isRegister
+                ? "No FargoRate account needed. Create a Tableside account for Events, then connect Digital Pool in Settings. Connect Fargo later if you want Score."
+                : "Sign in with your Tableside email and password. Connect FargoRate in Settings when you need Score."}
         </p>
       </div>
 
@@ -90,6 +100,7 @@ export function LoginScreen({ onSuccess, onCancel }: LoginScreenProps) {
         {(
           [
             ["fargo", "FargoRate"],
+            ["operator", "League Operator"],
             ["tableside-login", "Tableside"],
             ["tableside-register", "Create account"],
           ] as const
@@ -153,7 +164,7 @@ export function LoginScreen({ onSuccess, onCancel }: LoginScreenProps) {
             type="password"
             autoComplete={isRegister ? "new-password" : "current-password"}
             required
-            minLength={isFargo ? 6 : 8}
+            minLength={isFargo || isOperator ? 6 : 8}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-3 outline-none ring-[var(--felt)] focus:ring-2"
@@ -177,7 +188,9 @@ export function LoginScreen({ onSuccess, onCancel }: LoginScreenProps) {
               ? "Create account"
               : isFargo
                 ? "Sign in with FargoRate"
-                : "Sign in"}
+                : isOperator
+                  ? "Sign in as League Operator"
+                  : "Sign in"}
         </button>
         <button
           type="button"

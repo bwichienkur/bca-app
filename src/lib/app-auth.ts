@@ -38,6 +38,9 @@ export type AppUser = {
   updatedAt: string;
   fargo: LinkedFargoAccount | null;
   digitalPool: LinkedDigitalPoolAccount | null;
+  /** Verified LMS League Operator web login (see /api/auth/login/operator). */
+  leagueOperator?: boolean;
+  leagueOperatorLinkedAt?: string | null;
 };
 
 export type AppSession = {
@@ -57,6 +60,8 @@ export type PublicAuthUser = {
   digitalPoolLinked: boolean;
   /** True when a live Fargo scoring session cookie is available. */
   scoringReady: boolean;
+  /** Verified LMS League Operator — unlocks the LMS tab with Bright allowlist. */
+  leagueOperator: boolean;
 };
 
 type MemoryStore = {
@@ -225,6 +230,8 @@ export async function registerAppUser(input: {
     updatedAt: now,
     fargo: null,
     digitalPool: null,
+    leagueOperator: false,
+    leagueOperatorLinkedAt: null,
   };
   return saveAppUser(user);
 }
@@ -291,6 +298,8 @@ export async function upsertAppUserFromFargo(
       updatedAt: now,
       fargo,
       digitalPool: null,
+      leagueOperator: false,
+      leagueOperatorLinkedAt: null,
     };
   } else {
     user = {
@@ -301,6 +310,50 @@ export async function upsertAppUserFromFargo(
       ...(options?.password
         ? { passwordHash: hashPassword(options.password) }
         : {}),
+    };
+  }
+  return saveAppUser(user);
+}
+
+/**
+ * Ensure an app user exists after a successful LMS League Operator web login.
+ * Marks the account as a league operator so the LMS tab stays visible.
+ */
+export async function upsertAppUserFromLeagueOperator(input: {
+  email: string;
+  password: string;
+  name?: string | null;
+}): Promise<AppUser> {
+  const email = normalizeEmail(input.email);
+  if (!email || !email.includes("@")) {
+    throw new Error("A valid league operator email is required.");
+  }
+  if (!input.password.trim()) {
+    throw new Error("Password is required.");
+  }
+
+  let user = await getAppUserByEmail(email);
+  const now = new Date().toISOString();
+  if (!user) {
+    user = {
+      id: newId(),
+      email,
+      name: input.name?.trim() || null,
+      passwordHash: hashPassword(input.password),
+      createdAt: now,
+      updatedAt: now,
+      fargo: null,
+      digitalPool: null,
+      leagueOperator: true,
+      leagueOperatorLinkedAt: now,
+    };
+  } else {
+    user = {
+      ...user,
+      name: user.name || input.name?.trim() || null,
+      passwordHash: hashPassword(input.password),
+      leagueOperator: true,
+      leagueOperatorLinkedAt: now,
     };
   }
   return saveAppUser(user);
@@ -357,6 +410,7 @@ export function toPublicAuthUser(
     fargoLinked: Boolean(user.fargo?.lmsId),
     digitalPoolLinked: Boolean(user.digitalPool?.uid),
     scoringReady,
+    leagueOperator: Boolean(user.leagueOperator),
   };
 }
 
@@ -373,5 +427,6 @@ export function publicUserFromScoring(
     fargoLinked: true,
     digitalPoolLinked: false,
     scoringReady: true,
+    leagueOperator: false,
   };
 }

@@ -25,6 +25,7 @@ import {
 import { LoadingState } from "./LoadingState";
 import type { AuthUser } from "./LoginScreen";
 import { SearchField } from "./SearchField";
+import { LmsDivisionSettingsForm } from "./LmsDivisionSettingsForm";
 import { SelectField } from "./SelectField";
 
 type LmsSubTab =
@@ -695,12 +696,17 @@ export function LmsOperator({
     let cancelled = false;
     void (async () => {
       try {
-        const data = await fetchJson<{ configured: boolean }>(
-          "/api/lms/operator/status",
-        );
+        const data = await fetchJson<{
+          configured: boolean;
+          allowed?: boolean;
+        }>("/api/lms/operator/status");
         if (!cancelled) {
-          setConfigured(data.configured);
-          setConfigError(null);
+          setConfigured(Boolean(data.configured && data.allowed !== false));
+          setConfigError(
+            data.configured && data.allowed === false
+              ? "LMS tools are only available to league operators (and Bright)."
+              : null,
+          );
         }
       } catch (error) {
         if (!cancelled) {
@@ -1291,15 +1297,23 @@ export function LmsOperator({
   }
 
   if (configured === false) {
+    const accessDenied = Boolean(
+      configError?.toLowerCase().includes("only available"),
+    );
     return (
       <section className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-4">
         <h2 className="font-[family-name:var(--font-display)] text-xl font-semibold">
-          Operator login not configured
+          {accessDenied ? "LMS access restricted" : "Operator login not configured"}
         </h2>
         <p className="text-sm text-[var(--muted)]">
           {configError ||
             "Set LMS_OPERATOR_EMAIL and LMS_OPERATOR_PASSWORD on the server."}
         </p>
+        {accessDenied ? (
+          <button type="button" onClick={onRequestLogin} className={btnPrimary}>
+            Sign in as League Operator
+          </button>
+        ) : null}
       </section>
     );
   }
@@ -1358,7 +1372,7 @@ export function LmsOperator({
             if (event.target === event.currentTarget) goList();
           }}
         >
-        <div className="flex max-h-[min(90vh,44rem)] w-full max-w-lg flex-col overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        <div className="w-full max-w-lg rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
           <div className="flex items-start justify-between gap-3 border-b border-[var(--line)] px-4 py-3">
             <h2 className="min-w-0 flex-1 break-words font-[family-name:var(--font-display)] text-xl font-semibold text-[var(--ink)]">
               {pageTitle}
@@ -1372,7 +1386,7 @@ export function LmsOperator({
               Close
             </button>
           </div>
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 sm:p-4">
+          <div className="space-y-3 p-3 sm:p-4">
         {notice ? (
           <p className="text-sm font-medium text-[var(--felt)]">{notice}</p>
         ) : null}
@@ -1885,7 +1899,7 @@ export function LmsOperator({
             <LoadingState label="Loading settings…" />
           ) : (
             <section className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3 sm:p-4">
-              <SettingsForm
+              <LmsDivisionSettingsForm
                 settings={settings}
                 templates={templates}
                 busy={busy}
@@ -2988,143 +3002,6 @@ export function LmsOperator({
           onCancel={() => setPendingConfirm(null)}
         />
       ) : null}
-    </div>
-  );
-}
-
-function SettingsForm({
-  settings,
-  templates,
-  busy,
-  onChange,
-  onSave,
-}: {
-  settings: Record<string, unknown>;
-  templates: FormatTemplate[];
-  busy: boolean;
-  onChange: (next: Record<string, unknown>) => void;
-  onSave: () => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Name">
-          <input
-            className={inputClass}
-            value={String(settings.Name ?? "")}
-            onChange={(e) => onChange({ ...settings, Name: e.target.value })}
-          />
-        </Field>
-        <Field label="Description">
-          <input
-            className={inputClass}
-            value={String(settings.Description ?? "")}
-            onChange={(e) =>
-              onChange({ ...settings, Description: e.target.value })
-            }
-          />
-        </Field>
-        <Field label="Players per team">
-          <input
-            className={inputClass}
-            value={String(settings.NumberOfPlayers ?? "")}
-            onChange={(e) =>
-              onChange({ ...settings, NumberOfPlayers: e.target.value })
-            }
-          />
-        </Field>
-        <Field label="Cost per player">
-          <input
-            className={inputClass}
-            value={String(settings.CostPerPlayer ?? "")}
-            onChange={(e) =>
-              onChange({ ...settings, CostPerPlayer: e.target.value })
-            }
-          />
-        </Field>
-        <Field label="Rounds">
-          <input
-            className={inputClass}
-            value={String(settings.NumberOfRounds ?? "")}
-            onChange={(e) =>
-              onChange({ ...settings, NumberOfRounds: e.target.value })
-            }
-          />
-        </Field>
-        <Field label="Games per round">
-          <input
-            className={inputClass}
-            value={String(settings.NumberOfGamesPerRound ?? "")}
-            onChange={(e) =>
-              onChange({
-                ...settings,
-                NumberOfGamesPerRound: e.target.value,
-              })
-            }
-          />
-        </Field>
-        <Field label="Points for win">
-          <input
-            className={inputClass}
-            value={String(settings.PointsForWin ?? "")}
-            onChange={(e) =>
-              onChange({ ...settings, PointsForWin: e.target.value })
-            }
-          />
-        </Field>
-        <Field label="Time zone">
-          <input
-            className={inputClass}
-            value={String(settings.TimeZoneName ?? "")}
-            onChange={(e) =>
-              onChange({ ...settings, TimeZoneName: e.target.value })
-            }
-          />
-        </Field>
-      </div>
-      <Field label="Apply format template">
-        <SelectField
-          aria-label="Format template"
-          value=""
-          options={[
-            { value: "", label: "Choose a template…" },
-            ...templates.map((t) => ({ value: t.id, label: t.name })),
-          ]}
-          onChange={(value) => {
-            const template = templates.find((t) => t.id === value);
-            if (!template) return;
-            onChange({ ...settings, FormatTemplate: template.template });
-          }}
-        />
-      </Field>
-      <Field label="Format template">
-        <textarea
-          className={`${inputClass} min-h-40 font-mono text-xs`}
-          value={String(settings.FormatTemplate ?? "")}
-          onChange={(e) =>
-            onChange({ ...settings, FormatTemplate: e.target.value })
-          }
-        />
-      </Field>
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={Boolean(settings.ForceChanges)}
-          onChange={(e) =>
-            onChange({ ...settings, ForceChanges: e.target.checked })
-          }
-          className="h-4 w-4 accent-[var(--felt)]"
-        />
-        Force changes on already-played scoresheets
-      </label>
-      <button
-        type="button"
-        className={btnPrimary}
-        disabled={busy}
-        onClick={onSave}
-      >
-        Save settings
-      </button>
     </div>
   );
 }

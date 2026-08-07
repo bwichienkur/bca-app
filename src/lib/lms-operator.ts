@@ -75,14 +75,15 @@ export function isOperatorConfigured(): boolean {
   );
 }
 
-/** LMS web form login for a League Operator account. */
-export async function loginLeagueOperator(): Promise<OperatorSession> {
-  const email = process.env.LMS_OPERATOR_EMAIL?.trim();
-  const password = process.env.LMS_OPERATOR_PASSWORD?.trim();
-  if (!email || !password) {
-    throw new Error(
-      "League operator login is not configured (LMS_OPERATOR_EMAIL / LMS_OPERATOR_PASSWORD).",
-    );
+/** LMS web form login for arbitrary League Operator credentials. */
+export async function loginLeagueOperatorWithCredentials(
+  email: string,
+  password: string,
+): Promise<OperatorSession> {
+  const userName = email.trim();
+  const pass = password.trim();
+  if (!userName || !pass) {
+    throw new Error("League operator email and password are required.");
   }
 
   const jar = new Map<string, string>();
@@ -100,8 +101,8 @@ export async function loginLeagueOperator(): Promise<OperatorSession> {
 
   const body = new URLSearchParams({
     __RequestVerificationToken: token,
-    UserName: email,
-    Password: password,
+    UserName: userName,
+    Password: pass,
   });
 
   let response = await fetch(`${LMS_BASE}/`, {
@@ -135,11 +136,23 @@ export async function loginLeagueOperator(): Promise<OperatorSession> {
   const jwt = jar.get("jwt_token");
   if (!jwt || !jar.get(".AspNet.ApplicationCookie")) {
     throw new Error(
-      "League operator login failed. Check LMS_OPERATOR_EMAIL / LMS_OPERATOR_PASSWORD.",
+      "League operator login failed. Check the LMS operator email and password.",
     );
   }
 
   return { jwt, cookie: cookieHeader(jar) };
+}
+
+/** LMS web form login using the server-configured League Operator account. */
+export async function loginLeagueOperator(): Promise<OperatorSession> {
+  const email = process.env.LMS_OPERATOR_EMAIL?.trim();
+  const password = process.env.LMS_OPERATOR_PASSWORD?.trim();
+  if (!email || !password) {
+    throw new Error(
+      "League operator login is not configured (LMS_OPERATOR_EMAIL / LMS_OPERATOR_PASSWORD).",
+    );
+  }
+  return loginLeagueOperatorWithCredentials(email, password);
 }
 
 /**

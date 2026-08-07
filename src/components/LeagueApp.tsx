@@ -13,6 +13,7 @@ import {
   DEFAULT_LEAGUE_ID,
   PRIMARY_NAV_TABS,
 } from "@/lib/constants";
+import { canAccessLmsFromPublicUser } from "@/lib/lms-access";
 import { normalizeTeamName } from "@/lib/matchups";
 import { enrichPlayersWithRatings } from "@/lib/players";
 import {
@@ -176,6 +177,12 @@ export function LeagueApp() {
   const [screen, setScreen] = useState<AppScreen>("main");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const showLmsTab = canAccessLmsFromPublicUser(user);
+  const primaryNavTabs = useMemo(
+    () =>
+      PRIMARY_NAV_TABS.filter((item) => item.id !== "lms" || showLmsTab),
+    [showLmsTab],
+  );
   const [membership, setMembership] = useState<MembershipSnapshot | null>(null);
   const [loadingMembership, setLoadingMembership] = useState(false);
   const [membershipError, setMembershipError] = useState<string | null>(null);
@@ -216,6 +223,13 @@ export function LeagueApp() {
       "replace",
     );
   }, []);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (tab === "lms" && !showLmsTab) {
+      setTab("standings");
+    }
+  }, [authLoading, tab, showLmsTab, setTab]);
 
   const onDeepLinkEventIdChange = useCallback((eventId: string | null) => {
     const nextId = eventId?.trim() || null;
@@ -1298,7 +1312,7 @@ export function LeagueApp() {
             aria-label="Reports"
             className="grid grid-cols-3 gap-1.5 sm:gap-2"
           >
-            {PRIMARY_NAV_TABS.map((item) => {
+            {primaryNavTabs.map((item) => {
               const active = tab === item.id;
               return (
                 <button
