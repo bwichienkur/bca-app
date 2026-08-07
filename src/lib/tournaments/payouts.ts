@@ -194,7 +194,7 @@ function allocateFromGroups(
 
   // 4) Adjust primarily 1st so total == purse. Prefer $5 steps.
   let total = totalFor(each);
-  let delta = purse - total;
+  const delta = purse - total;
   if (delta !== 0) {
     // Snap delta to $5 when possible; leftover $1–$4 goes to 1st as exact cents
     // only if needed to hit purse exactly (user wants exact purse).
@@ -207,7 +207,7 @@ function allocateFromGroups(
       adjustedFirst = second + FIVE_DOLLARS;
       // Rebalance remainder across 2nd–4th in $5 steps if we overshot.
       each[0] = adjustedFirst;
-      let newTotal = totalFor(each);
+      const newTotal = totalFor(each);
       let remain = purse - newTotal;
       let idx = 1;
       while (remain !== 0 && idx < Math.min(4, each.length)) {
@@ -367,7 +367,7 @@ export function computeCalcuttaPayouts(
             groupTotalCents: eachCents * rows[0].count,
           };
           // If that overshot the purse, trim lower singles (3rd/4th) slightly.
-          let again = rows.reduce((s, r) => s + r.groupTotalCents, 0);
+          const again = rows.reduce((s, r) => s + r.groupTotalCents, 0);
           let remain = purse - again;
           for (let i = 2; i < Math.min(4, rows.length) && remain !== 0; i += 1) {
             const row = rows[i]!;
