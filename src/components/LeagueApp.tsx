@@ -1372,11 +1372,9 @@ export function LeagueApp() {
               leagueName={prefs.leagueName}
               divisionId={selectedDivision?.id ?? prefs.divisionId}
               divisionName={selectedDivision?.name ?? prefs.divisionName}
-              divisions={divisions}
               user={user}
               authLoading={authLoading}
               onRequestLogin={() => setScreen("login")}
-              onRequestContext={() => setContextOpen(true)}
             />
           ) : tab === "score" ? (
             <MatchScoring
