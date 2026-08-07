@@ -147,6 +147,21 @@ export async function markSharedDraftSubmitted(
   await redis.set(draftKey(matchId), record, { ex: DRAFT_TTL_SECONDS });
 }
 
+/** Clear a false Tableside submit lock when LMS never marked the match played. */
+export async function clearSharedDraftSubmitted(
+  matchId: string,
+): Promise<void> {
+  const redis = getRedis();
+  if (!redis) return;
+  const existing = await getSharedDraft(matchId);
+  if (!existing || !existing.submittedAt) return;
+  const record: SharedDraftRecord = {
+    ...existing,
+    submittedAt: null,
+  };
+  await redis.set(draftKey(matchId), record, { ex: DRAFT_TTL_SECONDS });
+}
+
 export async function deleteSharedDraft(matchId: string): Promise<void> {
   const redis = getRedis();
   if (!redis) return;

@@ -151,7 +151,9 @@ function boardStatusFor(
   summary: DraftBoardSummary | null,
   draft?: ScoringDraft | null,
 ): MatchBoardStatus {
-  if (match.hasBeenPlayed || summary?.submittedAt) return "complete";
+  // LMS is the source of truth for "submitted to Fargo".
+  // A Tableside-only submittedAt without hasBeenPlayed is a sync issue, not Complete.
+  if (match.hasBeenPlayed) return "complete";
   // Live only when a game has points or a winner — empty drafts stay Not started.
   if (draftHasStartedPlay(draft)) return "in_progress";
   if (
@@ -160,6 +162,7 @@ function boardStatusFor(
   ) {
     return "in_progress";
   }
+  if (summary?.submittedAt) return "in_progress";
   return "not_started";
 }
 
@@ -222,9 +225,6 @@ export function MatchScoring({
   const [sharedDrafts, setSharedDrafts] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [syncNote, setSyncNote] = useState<string | null>(null);
-  const [remoteSubmittedAt, setRemoteSubmittedAt] = useState<string | null>(
-    null,
-  );
   const [confirmDialog, setConfirmDialog] = useState<
     null | "reset" | "submit"
   >(null);
@@ -451,7 +451,6 @@ export function MatchScoring({
     setSheetError(null);
     setSubmitMessage(null);
     setSyncNote(null);
-    setRemoteSubmittedAt(null);
     try {
       const data = await fetchJson<{ match: ScoringMatchDetail }>(
         `/api/scoring/matches/${matchId}`,
@@ -464,9 +463,6 @@ export function MatchScoring({
         if (remote.shared) setSharedDrafts(true);
         remoteDraft = remote.draft;
         submittedAt = remote.submittedAt ?? null;
-        if (submittedAt) {
-          setSyncNote("This match was already submitted from Tableside.");
-        }
       } catch {
         // Fall back to localStorage-only.
       }
@@ -500,10 +496,26 @@ export function MatchScoring({
       }
 
       const canScore = data.match.mySide != null;
-      const submittedLocked = Boolean(data.match.hasBeenPlayed || submittedAt);
+      // Only LMS hasBeenPlayed is a hard lock. Tableside submittedAt without
+      // LMS confirmation must stay editable so the sheet can be re-sent.
+      const lmsSubmitted = Boolean(data.match.hasBeenPlayed);
+      const falseTablesideLock = Boolean(submittedAt && !lmsSubmitted);
+      if (falseTablesideLock) {
+        submittedAt = null;
+        setSyncNote(
+          "Tableside marked this submitted, but LMS/Fargo still shows it unscored. Review the sheet and submit again.",
+        );
+        void fetch("/api/scoring/submit/unlock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ matchId }),
+        }).catch(() => undefined);
+      } else if (submittedAt) {
+        setSyncNote("This match was already submitted from Tableside.");
+      }
+      const submittedLocked = lmsSubmitted;
       const locked = submittedLocked || !canScore;
       sheetLockedRef.current = locked;
-      setRemoteSubmittedAt(submittedAt);
 
       const nextDraft = chosen
         ? syncLineupToGames(normalizeDraftScores(chosen), data.match)
@@ -524,8 +536,7 @@ export function MatchScoring({
           .then((remote) => {
             if (remote.shared) setSharedDrafts(true);
             if (remote.draft) baseUpdatedAtRef.current = remote.draft.updatedAt;
-            if (remote.submittedAt) {
-              setRemoteSubmittedAt(remote.submittedAt);
+            if (remote.submittedAt && data.match.hasBeenPlayed) {
               sheetLockedRef.current = true;
             }
           })
@@ -593,9 +604,16 @@ export function MatchScoring({
         .then((remote) => {
           if (!remote.shared) return;
           setSharedDrafts(true);
-          if (remote.submittedAt) {
-            setRemoteSubmittedAt(remote.submittedAt);
+          // Only LMS hasBeenPlayed is a hard lock. Ignore Tableside-only
+          // submittedAt so a false lock cannot re-lock an open sheet.
+          if (remote.submittedAt && activeMatch.hasBeenPlayed) {
             sheetLockedRef.current = true;
+          } else if (remote.submittedAt && !activeMatch.hasBeenPlayed) {
+            void fetch("/api/scoring/submit/unlock", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ matchId }),
+            }).catch(() => undefined);
           }
           if (!remote.draft) return;
           const local = draftRef.current;
@@ -789,7 +807,6 @@ export function MatchScoring({
         // Keep local + shared drafts so the night board still shows scores.
         saveDraft(draft);
         sheetLockedRef.current = true;
-        setRemoteSubmittedAt(submittedAt);
         setSubmitMessage("Match submitted to LMS.");
         setSubmitNeedsReview(false);
         setDraftSummaries((prev) => ({
@@ -885,7 +902,8 @@ export function MatchScoring({
   if (view.mode !== "list" && match && draft) {
     const reviewMode = view.mode === "review";
     const canScore = match.mySide != null;
-    const submittedLocked = Boolean(match.hasBeenPlayed || remoteSubmittedAt);
+    // Lock only when LMS/Fargo has the match as played — not on Redis submittedAt.
+    const submittedLocked = Boolean(match.hasBeenPlayed);
     const viewOnly = !canScore;
     const sheetLocked = submittedLocked || viewOnly;
     sheetLockedRef.current = sheetLocked;
