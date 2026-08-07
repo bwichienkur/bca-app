@@ -6,8 +6,11 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
+  type SyntheticEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import { LMS_BASE } from "@/lib/constants";
 import {
   AccentRecordCard,
@@ -335,7 +338,7 @@ function SectionHeader({
 }: {
   title: string;
   description?: string;
-  onAdd?: () => void;
+  onAdd?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }) {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -357,6 +360,117 @@ function SectionHeader({
         </button>
       ) : null}
     </div>
+  );
+}
+
+type PendingConfirm = {
+  title: string;
+  body: string;
+  confirmLabel: string;
+  tone?: "primary" | "danger";
+  onConfirm: () => void | Promise<void>;
+};
+
+function OperatorConfirmDialog({
+  pending,
+  busy,
+  anchorY,
+  onCancel,
+}: {
+  pending: PendingConfirm;
+  busy: boolean;
+  anchorY: number | null;
+  onCancel: () => void;
+}) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [busy, onCancel]);
+
+  if (!mounted) return null;
+
+  const topPad =
+    anchorY == null
+      ? Math.max(24, Math.round(window.innerHeight * 0.18))
+      : Math.max(12, Math.min(anchorY - 8, Math.round(window.innerHeight * 0.55)));
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[120] overflow-y-auto bg-black/50"
+      role="presentation"
+      onClick={() => {
+        if (!busy) onCancel();
+      }}
+    >
+      <div
+        className="flex min-h-full justify-center px-3 pb-10"
+        style={{ paddingTop: topPad }}
+      >
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="lms-confirm-title"
+          aria-describedby="lms-confirm-body"
+          className="w-full max-w-md rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-5 shadow-[var(--shadow)]"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <h4
+            id="lms-confirm-title"
+            className="font-[family-name:var(--font-display)] text-xl font-semibold text-[var(--felt-deep)]"
+          >
+            {pending.title}
+          </h4>
+          <p id="lms-confirm-body" className="mt-2 text-sm text-[var(--muted)]">
+            {pending.body}
+          </p>
+          <div className="mt-5 flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onCancel}
+              className={btnGhost}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void pending.onConfirm()}
+              className={
+                pending.tone === "primary" ? btnPrimary : btnDelete
+              }
+            >
+              {busy ? "Working…" : pending.confirmLabel}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function popupTopPad(anchorY: number | null): number {
+  if (typeof window === "undefined") return 24;
+  if (anchorY == null) {
+    return Math.max(24, Math.round(window.innerHeight * 0.12));
+  }
+  return Math.max(
+    12,
+    Math.min(anchorY - 8, Math.round(window.innerHeight * 0.55)),
   );
 }
 
@@ -437,6 +551,10 @@ export function LmsOperator({
 
   const [listQuery, setListQuery] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+  const [popupAnchorY, setPopupAnchorY] = useState<number | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(
+    null,
+  );
 
   const [locationDraft, setLocationDraft] = useState<OperatorLocation | null>(
     null,
@@ -1011,8 +1129,26 @@ export function LmsOperator({
     }
   }
 
+  function capturePopupAnchor(event?: SyntheticEvent | null) {
+    const target = event?.currentTarget;
+    if (target instanceof HTMLElement) {
+      setPopupAnchorY(target.getBoundingClientRect().top);
+      return;
+    }
+    setPopupAnchorY(null);
+  }
+
+  function askConfirm(
+    pending: PendingConfirm,
+    event?: SyntheticEvent | null,
+  ) {
+    capturePopupAnchor(event);
+    setPendingConfirm(pending);
+  }
+
   function goList() {
     setScreen({ type: "list" });
+    setPopupAnchorY(null);
     setLocationDraft(null);
     setTeamDraft(null);
     setPlayerDraft(null);
@@ -1020,7 +1156,11 @@ export function LmsOperator({
     setPlayerHits([]);
   }
 
-  function openEditSettings(division: { id: string; name: string }) {
+  function openEditSettings(
+    division: { id: string; name: string },
+    event?: SyntheticEvent | null,
+  ) {
+    capturePopupAnchor(event);
     setNotice(null);
     setSectionError(null);
     setSettings(null);
@@ -1030,7 +1170,11 @@ export function LmsOperator({
     setScreen({ type: "edit-settings", divisionId: division.id });
   }
 
-  async function openEditLocation(id: string | null) {
+  async function openEditLocation(
+    id: string | null,
+    event?: SyntheticEvent | null,
+  ) {
+    capturePopupAnchor(event);
     if (id) {
       const loc = locations.find((l) => l.id === id);
       setLocationDraft(loc ? { ...loc } : emptyLocation(opDivisionId));
@@ -1040,7 +1184,11 @@ export function LmsOperator({
     setScreen({ type: "edit-location", id });
   }
 
-  async function openEditTeam(id: string | null) {
+  async function openEditTeam(
+    id: string | null,
+    event?: SyntheticEvent | null,
+  ) {
+    capturePopupAnchor(event);
     let locs = locations;
     if (!locs.length && opDivisionId) {
       const data = await fetchJson<{ locations: OperatorLocation[] }>(
@@ -1071,7 +1219,11 @@ export function LmsOperator({
     setScreen({ type: "edit-team", id });
   }
 
-  async function openEditPlayer(id: string | null) {
+  async function openEditPlayer(
+    id: string | null,
+    event?: SyntheticEvent | null,
+  ) {
+    capturePopupAnchor(event);
     if (id) {
       setSectionLoading(true);
       try {
@@ -1094,7 +1246,11 @@ export function LmsOperator({
     }
   }
 
-  function openEditMatch(match: ScheduleMatch | null) {
+  function openEditMatch(
+    match: ScheduleMatch | null,
+    event?: SyntheticEvent | null,
+  ) {
+    capturePopupAnchor(event);
     if (match) {
       setMatchDraft({
         matchId: match.matchId,
@@ -1187,7 +1343,7 @@ export function LmsOperator({
   const editPopup =
     screen.type === "list" ? null : (
       <div
-        className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 p-3 sm:items-center"
+        className="fixed inset-0 z-[80] overflow-y-auto bg-black/55"
         role="dialog"
         aria-modal="true"
         aria-label={pageTitle || "Edit"}
@@ -1195,7 +1351,14 @@ export function LmsOperator({
           if (event.target === event.currentTarget) goList();
         }}
       >
-        <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        <div
+          className="flex min-h-full justify-center px-3 pb-10"
+          style={{ paddingTop: popupTopPad(popupAnchorY) }}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) goList();
+          }}
+        >
+        <div className="flex max-h-[min(90vh,44rem)] w-full max-w-lg flex-col overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
           <div className="flex items-start justify-between gap-3 border-b border-[var(--line)] px-4 py-3">
             <h2 className="min-w-0 flex-1 break-words font-[family-name:var(--font-display)] text-xl font-semibold text-[var(--ink)]">
               {pageTitle}
@@ -1952,6 +2115,7 @@ export function LmsOperator({
 
           </div>
         </div>
+        </div>
       </div>
     );
 
@@ -2145,7 +2309,7 @@ export function LmsOperator({
           <SectionHeader
             title="Teams"
             description="Create and edit teams, and manage who is on each roster."
-            onAdd={() => void openEditTeam(null)}
+            onAdd={(event) => void openEditTeam(null, event)}
           />
           <SearchField
             label="Search teams"
@@ -2188,7 +2352,7 @@ export function LmsOperator({
                       <button
                         type="button"
                         className={btnEdit}
-                        onClick={() => void openEditTeam(team.id)}
+                        onClick={(event) => void openEditTeam(team.id, event)}
                       >
                         Edit
                       </button>
@@ -2196,15 +2360,25 @@ export function LmsOperator({
                         type="button"
                         className={btnDelete}
                         disabled={busy}
-                        onClick={() => {
-                          if (!confirm(`Delete team ${team.name}?`)) return;
-                          void runAction(async () => {
-                            await fetchJson(
-                              `/api/lms/operator/teams?teamId=${encodeURIComponent(team.id)}&divisionId=${encodeURIComponent(opDivisionId)}`,
-                              { method: "DELETE" },
-                            );
-                            await refreshTeams();
-                          }, "Team deleted.");
+                        onClick={(event) => {
+                          askConfirm(
+                            {
+                              title: "Delete team",
+                              body: `Delete team ${team.name}? This cannot be undone.`,
+                              confirmLabel: "Delete",
+                              onConfirm: async () => {
+                                setPendingConfirm(null);
+                                await runAction(async () => {
+                                  await fetchJson(
+                                    `/api/lms/operator/teams?teamId=${encodeURIComponent(team.id)}&divisionId=${encodeURIComponent(opDivisionId)}`,
+                                    { method: "DELETE" },
+                                  );
+                                  await refreshTeams();
+                                }, "Team deleted.");
+                              },
+                            },
+                            event,
+                          );
                         }}
                       >
                         Delete
@@ -2212,50 +2386,59 @@ export function LmsOperator({
                     </div>
                   </div>
                   {open ? (
-                    <ul className="mt-3 space-y-2 border-t border-[var(--line)] pt-3">
+                    <ul className={`${accentRecordListClass} mt-3 border-t border-[var(--line)] pt-3`}>
                       {team.players.length === 0 ? (
                         <li className="text-sm text-[var(--muted)]">
                           No players on this roster.
                         </li>
                       ) : (
                         team.players.map((player) => (
-                          <li
-                            key={player.id}
-                            className="flex items-center justify-between gap-3 rounded-[var(--radius)] bg-[var(--surface-2)] px-3 py-2.5"
-                          >
-                            <span className="min-w-0 flex-1 text-sm font-medium text-[var(--ink)]">
-                              {player.name}
-                            </span>
-                            <button
-                              type="button"
-                              className={btnRemove}
-                              disabled={busy}
-                              onClick={() => {
-                                if (
-                                  !confirm(
-                                    `Remove ${player.name} from ${team.name}?`,
-                                  )
-                                ) {
-                                  return;
-                                }
-                                void runAction(async () => {
-                                  await fetchJson("/api/lms/operator/players", {
-                                    method: "POST",
-                                    headers: {
-                                      "Content-Type": "application/json",
-                                    },
-                                    body: JSON.stringify({
-                                      action: "remove",
-                                      teamId: team.id,
-                                      playerId: player.id,
-                                    }),
-                                  });
-                                  await refreshTeams();
-                                }, "Player removed.");
-                              }}
-                            >
-                              Remove
-                            </button>
+                          <li key={player.id}>
+                            <AccentRecordCard>
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="min-w-0 flex-1 text-sm font-medium text-[var(--ink)]">
+                                  {player.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  className={btnRemove}
+                                  disabled={busy}
+                                  onClick={(event) => {
+                                    askConfirm(
+                                      {
+                                        title: "Remove player",
+                                        body: `Remove ${player.name} from ${team.name}?`,
+                                        confirmLabel: "Remove",
+                                        onConfirm: async () => {
+                                          setPendingConfirm(null);
+                                          await runAction(async () => {
+                                            await fetchJson(
+                                              "/api/lms/operator/players",
+                                              {
+                                                method: "POST",
+                                                headers: {
+                                                  "Content-Type":
+                                                    "application/json",
+                                                },
+                                                body: JSON.stringify({
+                                                  action: "remove",
+                                                  teamId: team.id,
+                                                  playerId: player.id,
+                                                }),
+                                              },
+                                            );
+                                            await refreshTeams();
+                                          }, "Player removed.");
+                                        },
+                                      },
+                                      event,
+                                    );
+                                  }}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </AccentRecordCard>
                           </li>
                         ))
                       )}
@@ -2273,7 +2456,7 @@ export function LmsOperator({
           <SectionHeader
             title="Players"
             description="View, create, and edit player info."
-            onAdd={() => void openEditPlayer(null)}
+            onAdd={(event) => void openEditPlayer(null, event)}
           />
           <SearchField
             label="Search players"
@@ -2299,7 +2482,7 @@ export function LmsOperator({
                   <button
                     type="button"
                     className={btnEdit}
-                    onClick={() => void openEditPlayer(player.id)}
+                    onClick={(event) => void openEditPlayer(player.id, event)}
                   >
                     Edit
                   </button>
@@ -2315,7 +2498,7 @@ export function LmsOperator({
           <SectionHeader
             title="Locations"
             description="Add, edit, or delete venues."
-            onAdd={() => void openEditLocation(null)}
+            onAdd={(event) => void openEditLocation(null, event)}
           />
           <SearchField
             label="Search locations"
@@ -2348,7 +2531,7 @@ export function LmsOperator({
                     <button
                       type="button"
                       className={btnEdit}
-                      onClick={() => void openEditLocation(loc.id)}
+                      onClick={(event) => void openEditLocation(loc.id, event)}
                     >
                       Edit
                     </button>
@@ -2356,15 +2539,25 @@ export function LmsOperator({
                       type="button"
                       className={btnDelete}
                       disabled={busy}
-                      onClick={() => {
-                        if (!confirm(`Delete ${loc.name}?`)) return;
-                        void runAction(async () => {
-                          await fetchJson(
-                            `/api/lms/operator/locations?locationId=${encodeURIComponent(loc.id)}&divisionId=${encodeURIComponent(opDivisionId)}`,
-                            { method: "DELETE" },
-                          );
-                          await refreshLocations();
-                        }, "Location deleted.");
+                      onClick={(event) => {
+                        askConfirm(
+                          {
+                            title: "Delete location",
+                            body: `Delete ${loc.name}? This cannot be undone.`,
+                            confirmLabel: "Delete",
+                            onConfirm: async () => {
+                              setPendingConfirm(null);
+                              await runAction(async () => {
+                                await fetchJson(
+                                  `/api/lms/operator/locations?locationId=${encodeURIComponent(loc.id)}&divisionId=${encodeURIComponent(opDivisionId)}`,
+                                  { method: "DELETE" },
+                                );
+                                await refreshLocations();
+                              }, "Location deleted.");
+                            },
+                          },
+                          event,
+                        );
                       }}
                     >
                       Delete
@@ -2382,7 +2575,7 @@ export function LmsOperator({
           <SectionHeader
             title="Schedule"
             description="Matches grouped by date."
-            onAdd={() => openEditMatch(null)}
+            onAdd={(event) => openEditMatch(null, event)}
           />
           <SearchField
             label="Search schedule"
@@ -2425,28 +2618,33 @@ export function LmsOperator({
                 type="button"
                 className={btnPrimary}
                 disabled={busy || !genStart}
-                onClick={() => {
-                  if (
-                    !confirm(
-                      "Regenerate the schedule? This replaces the current schedule in LMS.",
-                    )
-                  ) {
-                    return;
-                  }
-                  void runAction(async () => {
-                    await fetchJson("/api/lms/operator/schedule", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        action: "generate",
-                        divisionId: opDivisionId,
-                        startDate: genStart,
-                        numberOfRounds: Number(genRounds) || 5,
-                        numberOfWeeks: Number(genWeeks) || 11,
-                      }),
-                    });
-                    await refreshSchedule();
-                  }, "Schedule generated.");
+                onClick={(event) => {
+                  askConfirm(
+                    {
+                      title: "Generate schedule",
+                      body: "Regenerate the schedule? This replaces the current schedule in LMS.",
+                      confirmLabel: "Generate",
+                      tone: "primary",
+                      onConfirm: async () => {
+                        setPendingConfirm(null);
+                        await runAction(async () => {
+                          await fetchJson("/api/lms/operator/schedule", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              action: "generate",
+                              divisionId: opDivisionId,
+                              startDate: genStart,
+                              numberOfRounds: Number(genRounds) || 5,
+                              numberOfWeeks: Number(genWeeks) || 11,
+                            }),
+                          });
+                          await refreshSchedule();
+                        }, "Schedule generated.");
+                      },
+                    },
+                    event,
+                  );
                 }}
               >
                 Generate
@@ -2455,19 +2653,29 @@ export function LmsOperator({
                 type="button"
                 className={btnDelete}
                 disabled={busy}
-                onClick={() => {
-                  if (!confirm("Clear the entire schedule?")) return;
-                  void runAction(async () => {
-                    await fetchJson("/api/lms/operator/schedule", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        action: "clear",
-                        divisionId: opDivisionId,
-                      }),
-                    });
-                    await refreshSchedule();
-                  }, "Schedule cleared.");
+                onClick={(event) => {
+                  askConfirm(
+                    {
+                      title: "Clear schedule",
+                      body: "Clear the entire schedule? This cannot be undone.",
+                      confirmLabel: "Clear all",
+                      onConfirm: async () => {
+                        setPendingConfirm(null);
+                        await runAction(async () => {
+                          await fetchJson("/api/lms/operator/schedule", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              action: "clear",
+                              divisionId: opDivisionId,
+                            }),
+                          });
+                          await refreshSchedule();
+                        }, "Schedule cleared.");
+                      },
+                    },
+                    event,
+                  );
                 }}
               >
                 Clear all
@@ -2500,87 +2708,103 @@ export function LmsOperator({
                     </div>
                   </button>
                   {open ? (
-                    <ul className="mt-3 space-y-2 border-t border-[var(--line)] pt-3">
+                    <ul
+                      className={`${accentRecordListClass} mt-3 border-t border-[var(--line)] pt-3`}
+                    >
                       {matches.map((match) => (
                         <li
                           key={
                             match.matchId ||
                             `${match.homeTeamId}-${match.awayTeamId}-${match.date}`
                           }
-                          className="rounded-[var(--radius)] bg-[var(--surface-2)] px-3 py-2.5"
                         >
-                          <p className="text-sm font-semibold">
-                            {match.homeTeamName}{" "}
-                            <span className="font-medium text-[var(--muted)]">
-                              vs
-                            </span>{" "}
-                            {match.awayTeamName}
-                          </p>
-                          <p className="text-xs text-[var(--muted)]">
-                            {match.location || "No location"}
-                          </p>
-                          {match.matchId ? (
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              <button
-                                type="button"
-                                className={btnEdit}
-                                onClick={() => openEditMatch(match)}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                className={btnGhost}
-                                disabled={busy}
-                                onClick={() =>
-                                  void runAction(async () => {
-                                    await fetchJson(
-                                      "/api/lms/operator/schedule",
-                                      {
-                                        method: "POST",
-                                        headers: {
-                                          "Content-Type": "application/json",
+                          <AccentRecordCard>
+                            <p className="text-sm font-semibold text-[var(--ink)]">
+                              {match.homeTeamName}{" "}
+                              <span className="font-medium text-[var(--muted)]">
+                                vs
+                              </span>{" "}
+                              {match.awayTeamName}
+                            </p>
+                            <p className="text-xs text-[var(--muted)]">
+                              {match.location || "No location"}
+                            </p>
+                            {match.matchId ? (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                <button
+                                  type="button"
+                                  className={btnEdit}
+                                  onClick={(event) =>
+                                    openEditMatch(match, event)
+                                  }
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className={btnGhost}
+                                  disabled={busy}
+                                  onClick={() =>
+                                    void runAction(async () => {
+                                      await fetchJson(
+                                        "/api/lms/operator/schedule",
+                                        {
+                                          method: "POST",
+                                          headers: {
+                                            "Content-Type": "application/json",
+                                          },
+                                          body: JSON.stringify({
+                                            action: "flip",
+                                            matchId: match.matchId,
+                                          }),
                                         },
-                                        body: JSON.stringify({
-                                          action: "flip",
-                                          matchId: match.matchId,
-                                        }),
-                                      },
-                                    );
-                                    await refreshSchedule();
-                                  }, "Home/away flipped.")
-                                }
-                              >
-                                Flip
-                              </button>
-                              <button
-                                type="button"
-                                className={btnDelete}
-                                disabled={busy}
-                                onClick={() => {
-                                  if (!confirm("Delete this match?")) return;
-                                  void runAction(async () => {
-                                    await fetchJson(
-                                      "/api/lms/operator/schedule",
+                                      );
+                                      await refreshSchedule();
+                                    }, "Home/away flipped.")
+                                  }
+                                >
+                                  Flip
+                                </button>
+                                <button
+                                  type="button"
+                                  className={btnDelete}
+                                  disabled={busy}
+                                  onClick={(event) => {
+                                    askConfirm(
                                       {
-                                        method: "POST",
-                                        headers: {
-                                          "Content-Type": "application/json",
+                                        title: "Delete match",
+                                        body: `Delete ${match.homeTeamName} vs ${match.awayTeamName}?`,
+                                        confirmLabel: "Delete",
+                                        onConfirm: async () => {
+                                          setPendingConfirm(null);
+                                          await runAction(async () => {
+                                            await fetchJson(
+                                              "/api/lms/operator/schedule",
+                                              {
+                                                method: "POST",
+                                                headers: {
+                                                  "Content-Type":
+                                                    "application/json",
+                                                },
+                                                body: JSON.stringify({
+                                                  action: "delete",
+                                                  matchId: match.matchId,
+                                                }),
+                                              },
+                                            );
+                                            await refreshSchedule();
+                                          }, "Match deleted.");
                                         },
-                                        body: JSON.stringify({
-                                          action: "delete",
-                                          matchId: match.matchId,
-                                        }),
                                       },
+                                      event,
                                     );
-                                    await refreshSchedule();
-                                  }, "Match deleted.");
-                                }}
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          ) : null}
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            ) : null}
+                          </AccentRecordCard>
                         </li>
                       ))}
                     </ul>
@@ -2620,11 +2844,16 @@ export function LmsOperator({
                   <button
                     type="button"
                     className={btnEdit}
-                    onClick={() =>
-                      openEditSettings({
-                        id: opDivisionId,
-                        name: opDivisionName || String(settings.Name ?? "Division"),
-                      })
+                    onClick={(event) =>
+                      openEditSettings(
+                        {
+                          id: opDivisionId,
+                          name:
+                            opDivisionName ||
+                            String(settings.Name ?? "Division"),
+                        },
+                        event,
+                      )
                     }
                   >
                     Edit
@@ -2641,7 +2870,8 @@ export function LmsOperator({
           <SectionHeader
             title="Divisions"
             description="View and edit divisions in this league, or create a new one."
-            onAdd={() => {
+            onAdd={(event) => {
+              capturePopupAnchor(event);
               setCreateSourceId(opDivisionId || divisions[0]?.id || "");
               setCreateName("");
               setCreateDescription("");
@@ -2679,7 +2909,7 @@ export function LmsOperator({
                   <button
                     type="button"
                     className={btnEdit}
-                    onClick={() => openEditSettings(division)}
+                    onClick={(event) => openEditSettings(division, event)}
                   >
                     Edit
                   </button>
@@ -2695,7 +2925,8 @@ export function LmsOperator({
           <SectionHeader
             title="Playoffs"
             description="Playoff divisions in this league. Create a new playoff or edit settings."
-            onAdd={() => {
+            onAdd={(event) => {
+              capturePopupAnchor(event);
               setSelectedTeamIds(new Set());
               setScreen({ type: "create-playoff" });
             }}
@@ -2736,7 +2967,7 @@ export function LmsOperator({
                     <button
                       type="button"
                       className={btnEdit}
-                      onClick={() => openEditSettings(division)}
+                      onClick={(event) => openEditSettings(division, event)}
                     >
                       Edit
                     </button>
@@ -2749,6 +2980,14 @@ export function LmsOperator({
       ) : null}
 
       {editPopup}
+      {pendingConfirm ? (
+        <OperatorConfirmDialog
+          pending={pendingConfirm}
+          busy={busy}
+          anchorY={popupAnchorY}
+          onCancel={() => setPendingConfirm(null)}
+        />
+      ) : null}
     </div>
   );
 }
