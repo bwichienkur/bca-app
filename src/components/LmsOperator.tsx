@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -12,7 +13,7 @@ import {
   AccentRecordCard,
   accentRecordListClass,
 } from "./AccentRecordCard";
-import { BackButton } from "./BackButton";
+import { DateField } from "./DateField";
 import {
   IconSubTabs,
   OverviewSubIcon,
@@ -318,11 +319,11 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <label className="block space-y-1.5">
+    <label className="block min-w-0 space-y-1.5">
       <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
         {label}
       </span>
-      {children}
+      <div className="min-w-0">{children}</div>
     </label>
   );
 }
@@ -337,8 +338,8 @@ function SectionHeader({
   onAdd?: () => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0 flex-1">
         <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)] sm:text-xl">
           {title}
         </h3>
@@ -347,7 +348,11 @@ function SectionHeader({
         ) : null}
       </div>
       {onAdd ? (
-        <button type="button" className={btnAdd} onClick={onAdd}>
+        <button
+          type="button"
+          className={`${btnAdd} w-full min-h-11 min-w-[8.5rem] shrink-0 px-5 sm:w-auto`}
+          onClick={onAdd}
+        >
           + Add
         </button>
       ) : null}
@@ -412,6 +417,8 @@ export function LmsOperator({
   const [opLeagueName, setOpLeagueName] = useState(seedLeagueName ?? "");
   const [opDivisionId, setOpDivisionId] = useState(seedDivisionId ?? "");
   const [opDivisionName, setOpDivisionName] = useState(seedDivisionName ?? "");
+  const opDivisionIdRef = useRef(opDivisionId);
+  opDivisionIdRef.current = opDivisionId;
   const [contextLoading, setContextLoading] = useState(false);
   const [includeArchived, setIncludeArchived] = useState(false);
 
@@ -593,11 +600,11 @@ export function LmsOperator({
     };
   }, [user, authLoading]);
 
-  const loadLeagues = useCallback(async () => {
+  const loadLeagues = useCallback(async (force = false) => {
     setContextLoading(true);
     try {
       const data = await fetchJson<{ leagues: OperatorLeague[] }>(
-        "/api/lms/operator/context",
+        `/api/lms/operator/context${force ? "?refresh=1" : ""}`,
       );
       setLeagues(data.leagues ?? []);
       if (!opLeagueId && data.leagues?.[0]) {
@@ -616,7 +623,7 @@ export function LmsOperator({
     }
   }, [opLeagueId]);
 
-  const loadDivisions = useCallback(async () => {
+  const loadDivisions = useCallback(async (force = false) => {
     if (!opLeagueId) {
       setDivisions([]);
       return;
@@ -624,17 +631,20 @@ export function LmsOperator({
     setContextLoading(true);
     try {
       const data = await fetchJson<{ divisions: OperatorDivision[] }>(
-        `/api/lms/operator/context?leagueId=${encodeURIComponent(opLeagueId)}&includeArchived=${includeArchived ? "true" : "false"}`,
+        `/api/lms/operator/context?leagueId=${encodeURIComponent(opLeagueId)}&includeArchived=${includeArchived ? "true" : "false"}${force ? "&refresh=1" : ""}`,
       );
       setDivisions(data.divisions ?? []);
+      const currentDivisionId = opDivisionIdRef.current;
       if (
-        opDivisionId &&
-        !(data.divisions ?? []).some((d) => d.id === opDivisionId)
+        currentDivisionId &&
+        !(data.divisions ?? []).some((d) => d.id === currentDivisionId)
       ) {
         setOpDivisionId("");
         setOpDivisionName("");
-      } else if (opDivisionId) {
-        const match = (data.divisions ?? []).find((d) => d.id === opDivisionId);
+      } else if (currentDivisionId) {
+        const match = (data.divisions ?? []).find(
+          (d) => d.id === currentDivisionId,
+        );
         if (match) setOpDivisionName(match.name);
       }
     } catch (error) {
@@ -644,7 +654,7 @@ export function LmsOperator({
     } finally {
       setContextLoading(false);
     }
-  }, [opLeagueId, includeArchived, opDivisionId]);
+  }, [opLeagueId, includeArchived]);
 
   useEffect(() => {
     if (!user || !configured) return;
@@ -656,16 +666,17 @@ export function LmsOperator({
     void loadDivisions();
   }, [user, configured, opLeagueId, includeArchived, loadDivisions]);
 
-  const refreshHome = useCallback(async () => {
+  const refreshHome = useCallback(async (force = false) => {
     if (!opDivisionId) return;
     setHomeLoading(true);
     try {
+      const q = force ? "&refresh=1" : "";
       const [next, missed] = await Promise.all([
         fetchJson<{ matches: OperatorMatch[] }>(
-          `/api/lms/operator/matches?divisionId=${encodeURIComponent(opDivisionId)}&kind=next`,
+          `/api/lms/operator/matches?divisionId=${encodeURIComponent(opDivisionId)}&kind=next${q}`,
         ),
         fetchJson<{ matches: OperatorMatch[] }>(
-          `/api/lms/operator/matches?divisionId=${encodeURIComponent(opDivisionId)}&kind=missed`,
+          `/api/lms/operator/matches?divisionId=${encodeURIComponent(opDivisionId)}&kind=missed${q}`,
         ),
       ]);
       setNextMatches(next.matches ?? []);
@@ -679,48 +690,99 @@ export function LmsOperator({
     }
   }, [opDivisionId]);
 
-  const refreshLocations = useCallback(async () => {
+  const refreshLocations = useCallback(async (force = false) => {
     if (!opDivisionId) return;
+    const q = force ? "&refresh=1" : "";
     const data = await fetchJson<{ locations: OperatorLocation[] }>(
-      `/api/lms/operator/locations?divisionId=${encodeURIComponent(opDivisionId)}`,
+      `/api/lms/operator/locations?divisionId=${encodeURIComponent(opDivisionId)}${q}`,
     );
     setLocations(data.locations ?? []);
   }, [opDivisionId]);
 
-  const refreshTeams = useCallback(async () => {
+  const refreshTeams = useCallback(async (force = false) => {
     if (!opDivisionId) return;
+    const q = force ? "&refresh=1" : "";
     const data = await fetchJson<{ teams: OperatorTeam[] }>(
-      `/api/lms/operator/teams?divisionId=${encodeURIComponent(opDivisionId)}`,
+      `/api/lms/operator/teams?divisionId=${encodeURIComponent(opDivisionId)}${q}`,
     );
     setTeams(data.teams ?? []);
   }, [opDivisionId]);
 
-  const refreshPlayers = useCallback(async () => {
+  const refreshPlayers = useCallback(async (force = false) => {
     if (!opDivisionId) return;
+    const q = force ? "&refresh=1" : "";
     const data = await fetchJson<{ players: OperatorPlayerRow[] }>(
-      `/api/lms/operator/players?divisionId=${encodeURIComponent(opDivisionId)}`,
+      `/api/lms/operator/players?divisionId=${encodeURIComponent(opDivisionId)}${q}`,
     );
     setPlayers(data.players ?? []);
   }, [opDivisionId]);
 
-  const refreshSchedule = useCallback(async () => {
+  const refreshSchedule = useCallback(async (force = false) => {
     if (!opDivisionId) return;
+    const q = force ? "&refresh=1" : "";
     const data = await fetchJson<{ matches: ScheduleMatch[] }>(
-      `/api/lms/operator/schedule?divisionId=${encodeURIComponent(opDivisionId)}`,
+      `/api/lms/operator/schedule?divisionId=${encodeURIComponent(opDivisionId)}${q}`,
     );
     setSchedule(data.matches ?? []);
   }, [opDivisionId]);
 
-  const refreshSettings = useCallback(async (divisionId: string) => {
+  const refreshSettings = useCallback(async (divisionId: string, force = false) => {
+    const q = force ? "&refresh=1" : "";
     const data = await fetchJson<{
       settings: Record<string, unknown>;
       templates: FormatTemplate[];
     }>(
-      `/api/lms/operator/settings?divisionId=${encodeURIComponent(divisionId)}`,
+      `/api/lms/operator/settings?divisionId=${encodeURIComponent(divisionId)}${q}`,
     );
     setSettings(data.settings);
     setTemplates(data.templates ?? []);
   }, []);
+
+  const refreshAllOperatorData = useCallback(async () => {
+    if (!opLeagueId && !opDivisionId) return;
+    setBusy(true);
+    setSectionError(null);
+    try {
+      await fetchJson("/api/lms/operator/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leagueId: opLeagueId || undefined,
+          divisionId: opDivisionId || undefined,
+        }),
+      });
+      await loadLeagues(true);
+      await loadDivisions(true);
+      if (opDivisionId) {
+        await Promise.all([
+          refreshHome(true),
+          refreshLocations(true),
+          refreshTeams(true),
+          refreshPlayers(true),
+          refreshSchedule(true),
+          refreshSettings(opDivisionId, true),
+        ]);
+      }
+      setNotice("Operator data refreshed from LMS.");
+    } catch (error) {
+      setSectionError(
+        error instanceof Error ? error.message : "Refresh failed.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [
+    opLeagueId,
+    opDivisionId,
+    loadLeagues,
+    loadDivisions,
+    refreshHome,
+    refreshLocations,
+    refreshTeams,
+    refreshPlayers,
+    refreshSchedule,
+    refreshSettings,
+  ]);
 
   useEffect(() => {
     setListQuery("");
@@ -728,7 +790,7 @@ export function LmsOperator({
     setScreen({ type: "list" });
     setNotice(null);
     setSectionError(null);
-  }, [subTab, opDivisionId]);
+  }, [subTab]);
 
   useEffect(() => {
     if (!user || !configured || !opDivisionId) return;
@@ -786,13 +848,18 @@ export function LmsOperator({
     refreshSettings,
   ]);
 
+  const editSettingsDivisionId =
+    screen.type === "edit-settings" ? screen.divisionId : null;
+
   useEffect(() => {
-    if (screen.type !== "edit-settings") return;
+    if (!editSettingsDivisionId) return;
     let cancelled = false;
     setSectionLoading(true);
+    setSettings(null);
+    setSectionError(null);
     void (async () => {
       try {
-        await refreshSettings(screen.divisionId);
+        await refreshSettings(editSettingsDivisionId);
       } catch (error) {
         if (!cancelled) {
           setSectionError(
@@ -806,7 +873,7 @@ export function LmsOperator({
     return () => {
       cancelled = true;
     };
-  }, [screen, refreshSettings]);
+  }, [editSettingsDivisionId, refreshSettings]);
 
   useEffect(() => {
     if (screen.type !== "create-playoff" && subTab !== "playoff") return;
@@ -953,6 +1020,16 @@ export function LmsOperator({
     setPlayerHits([]);
   }
 
+  function openEditSettings(division: { id: string; name: string }) {
+    setNotice(null);
+    setSectionError(null);
+    setSettings(null);
+    setSectionLoading(true);
+    setOpDivisionId(division.id);
+    setOpDivisionName(division.name);
+    setScreen({ type: "edit-settings", divisionId: division.id });
+  }
+
   async function openEditLocation(id: string | null) {
     if (id) {
       const loc = locations.find((l) => l.id === id);
@@ -1076,43 +1153,63 @@ export function LmsOperator({
   }
 
   const needsDivision = ![
+    "home",
     "playoff",
     "division",
   ].includes(subTab);
 
-  /* ---------- Edit / create pages ---------- */
-  if (screen.type !== "list") {
-    const pageTitle =
-      screen.type === "edit-location"
+  /* ---------- Edit / create popup ---------- */
+  const pageTitle =
+    screen.type === "edit-location"
+      ? screen.id
+        ? "Edit location"
+        : "Add location"
+      : screen.type === "edit-team"
         ? screen.id
-          ? "Edit location"
-          : "Add location"
-        : screen.type === "edit-team"
+          ? "Edit team"
+          : "Add team"
+        : screen.type === "edit-player"
           ? screen.id
-            ? "Edit team"
-            : "Add team"
-          : screen.type === "edit-player"
-            ? screen.id
-              ? "Edit player"
-              : "Add player"
-            : screen.type === "edit-match"
-              ? screen.matchId
-                ? "Edit match"
-                : "Add match"
-              : screen.type === "edit-settings"
-                ? "Edit division"
-                : screen.type === "create-division"
-                  ? "Add division"
-                  : "Add playoff";
+            ? "Edit player"
+            : "Add player"
+          : screen.type === "edit-match"
+            ? screen.matchId
+              ? "Edit match"
+              : "Add match"
+            : screen.type === "edit-settings"
+              ? "Edit division"
+              : screen.type === "create-division"
+                ? "Add division"
+                : screen.type === "create-playoff"
+                  ? "Add playoff"
+                  : "";
 
-    return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-3">
-          <BackButton onClick={goList} />
-          <h2 className="min-w-0 flex-1 break-words font-[family-name:var(--font-display)] text-xl font-semibold text-[var(--ink)]">
-            {pageTitle}
-          </h2>
-        </div>
+  const editPopup =
+    screen.type === "list" ? null : (
+      <div
+        className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 p-3 sm:items-center"
+        role="dialog"
+        aria-modal="true"
+        aria-label={pageTitle || "Edit"}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) goList();
+        }}
+      >
+        <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+          <div className="flex items-start justify-between gap-3 border-b border-[var(--line)] px-4 py-3">
+            <h2 className="min-w-0 flex-1 break-words font-[family-name:var(--font-display)] text-xl font-semibold text-[var(--ink)]">
+              {pageTitle}
+            </h2>
+            <button
+              type="button"
+              className={btnGhost}
+              onClick={goList}
+              aria-label="Close"
+            >
+              Close
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 sm:p-4">
         {notice ? (
           <p className="text-sm font-medium text-[var(--felt)]">{notice}</p>
         ) : null}
@@ -1562,12 +1659,11 @@ export function LmsOperator({
                 />
               </Field>
               <Field label="Date">
-                <input
-                  type="date"
-                  className={inputClass}
+                <DateField
+                  aria-label="Match date"
                   value={matchDraft.date}
-                  onChange={(e) =>
-                    setMatchDraft({ ...matchDraft, date: e.target.value })
+                  onChange={(value) =>
+                    setMatchDraft({ ...matchDraft, date: value })
                   }
                 />
               </Field>
@@ -1782,14 +1878,13 @@ export function LmsOperator({
                         className="flex w-full items-center gap-2 text-left"
                         onClick={() => toggleExpanded(`pf-${division.name}`)}
                       >
-                        <ChevronIcon
-                          open={open}
-                          className="h-4 w-4 shrink-0 text-[var(--muted)]"
-                        />
+                        <span className="inline-flex shrink-0 items-center self-center text-[var(--muted)]">
+                          <ChevronIcon open={open} className="h-4 w-4" />
+                        </span>
                         <span className="min-w-0 flex-1 text-sm font-semibold">
                           {division.name}
                         </span>
-                        <span className="text-xs text-[var(--muted)]">
+                        <span className="self-center text-xs text-[var(--muted)]">
                           {division.teams.length}
                         </span>
                       </button>
@@ -1854,9 +1949,11 @@ export function LmsOperator({
             </button>
           </section>
         ) : null}
+
+          </div>
+        </div>
       </div>
     );
-  }
 
   /* ---------- Main list chrome ---------- */
   return (
@@ -1956,67 +2053,90 @@ export function LmsOperator({
         </section>
       ) : null}
 
-      {subTab === "home" && opDivisionId ? (
+      {subTab === "home" ? (
         <section className="space-y-4">
-          <SectionHeader
-            title="Division home"
-            description="Upcoming and missed matches."
-          />
-          <div className="grid gap-4 lg:grid-cols-2">
-            {(
-              [
-                ["Upcoming", nextMatches, "No upcoming matches."],
-                ["Missed", missedMatches, "No missed matches."],
-              ] as const
-            ).map(([title, rows, empty]) => (
-              <div key={title} className="space-y-2">
-                <div className="flex items-baseline justify-between gap-2">
-                  <h4 className="text-sm font-semibold">{title}</h4>
-                  <span className="text-xs tabular-nums text-[var(--muted)]">
-                    {homeLoading ? "…" : rows.length}
-                  </span>
-                </div>
-                {homeLoading ? (
-                  <p className="text-sm text-[var(--muted)]">Loading…</p>
-                ) : rows.length === 0 ? (
-                  <p className="text-sm text-[var(--muted)]">{empty}</p>
-                ) : (
-                  <ul className={accentRecordListClass}>
-                    {rows.map((match) => (
-                      <AccentRecordCard
-                        key={
-                          match.matchId ||
-                          `${match.teamOne}-${match.teamTwo}`
-                        }
-                      >
-                        <p className="text-sm font-semibold text-[var(--ink)]">
-                          {match.teamOne}{" "}
-                          <span className="font-medium text-[var(--muted)]">
-                            vs
-                          </span>{" "}
-                          {match.teamTwo}
-                        </p>
-                        <p className="mt-0.5 text-xs text-[var(--muted)]">
-                          {formatMatchDate(
-                            match.displayDate ?? match.datePlayed,
-                          )}
-                          {match.location ? ` · ${match.location}` : ""}
-                        </p>
-                      </AccentRecordCard>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ))}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 flex-1">
+              <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)] sm:text-xl">
+                Division home
+              </h3>
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                Upcoming and missed matches. Lists are cached for 24 hours; edits
+                refresh automatically.
+              </p>
+            </div>
+            <button
+              type="button"
+              className={`${btnPrimary} w-full min-h-11 min-w-[8.5rem] shrink-0 px-5 sm:w-auto`}
+              disabled={busy || homeLoading || (!opLeagueId && !opDivisionId)}
+              onClick={() => void refreshAllOperatorData()}
+            >
+              {busy ? "Refreshing…" : "Refresh data"}
+            </button>
           </div>
-          <a
-            href={`${LMS_BASE}/Division/DivisionDetail?DivisionId=${encodeURIComponent(opDivisionId)}`}
-            target="_blank"
-            rel="noreferrer"
-            className={btnGhost}
-          >
-            Open LMS
-          </a>
+          {!opDivisionId ? (
+            <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
+              Choose a division above to see upcoming and missed matches.
+            </p>
+          ) : (
+            <>
+              <div className="grid gap-4 lg:grid-cols-2">
+                {(
+                  [
+                    ["Upcoming", nextMatches, "No upcoming matches."],
+                    ["Missed", missedMatches, "No missed matches."],
+                  ] as const
+                ).map(([title, rows, empty]) => (
+                  <div key={title} className="space-y-2">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <h4 className="text-sm font-semibold">{title}</h4>
+                      <span className="text-xs tabular-nums text-[var(--muted)]">
+                        {homeLoading ? "…" : rows.length}
+                      </span>
+                    </div>
+                    {homeLoading ? (
+                      <p className="text-sm text-[var(--muted)]">Loading…</p>
+                    ) : rows.length === 0 ? (
+                      <p className="text-sm text-[var(--muted)]">{empty}</p>
+                    ) : (
+                      <ul className={accentRecordListClass}>
+                        {rows.map((match) => (
+                          <AccentRecordCard
+                            key={
+                              match.matchId ||
+                              `${match.teamOne}-${match.teamTwo}`
+                            }
+                          >
+                            <p className="text-sm font-semibold text-[var(--ink)]">
+                              {match.teamOne}{" "}
+                              <span className="font-medium text-[var(--muted)]">
+                                vs
+                              </span>{" "}
+                              {match.teamTwo}
+                            </p>
+                            <p className="mt-0.5 text-xs text-[var(--muted)]">
+                              {formatMatchDate(
+                                match.displayDate ?? match.datePlayed,
+                              )}
+                              {match.location ? ` · ${match.location}` : ""}
+                            </p>
+                          </AccentRecordCard>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <a
+                href={`${LMS_BASE}/Division/DivisionDetail?DivisionId=${encodeURIComponent(opDivisionId)}`}
+                target="_blank"
+                rel="noreferrer"
+                className={btnGhost}
+              >
+                Open LMS
+              </a>
+            </>
+          )}
         </section>
       ) : null}
 
@@ -2040,12 +2160,12 @@ export function LmsOperator({
               const open = expandedIds.has(team.id);
               return (
                 <AccentRecordCard key={team.id}>
-                  <div className="flex items-start gap-2">
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
                       aria-expanded={open}
                       aria-label={open ? "Collapse roster" : "Expand roster"}
-                      className="mt-0.5 rounded p-1 text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
+                      className="inline-flex shrink-0 items-center self-center rounded p-1 text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
                       onClick={() => toggleExpanded(team.id)}
                     >
                       <ChevronIcon open={open} className="h-5 w-5" />
@@ -2064,7 +2184,7 @@ export function LmsOperator({
                         {team.numberOfPlayers} players
                       </p>
                     </div>
-                    <div className="flex shrink-0 gap-1.5">
+                    <div className="flex shrink-0 items-center gap-1.5">
                       <button
                         type="button"
                         className={btnEdit}
@@ -2080,7 +2200,7 @@ export function LmsOperator({
                           if (!confirm(`Delete team ${team.name}?`)) return;
                           void runAction(async () => {
                             await fetchJson(
-                              `/api/lms/operator/teams?teamId=${encodeURIComponent(team.id)}`,
+                              `/api/lms/operator/teams?teamId=${encodeURIComponent(team.id)}&divisionId=${encodeURIComponent(opDivisionId)}`,
                               { method: "DELETE" },
                             );
                             await refreshTeams();
@@ -2110,7 +2230,14 @@ export function LmsOperator({
                               type="button"
                               className={btnRemove}
                               disabled={busy}
-                              onClick={() =>
+                              onClick={() => {
+                                if (
+                                  !confirm(
+                                    `Remove ${player.name} from ${team.name}?`,
+                                  )
+                                ) {
+                                  return;
+                                }
                                 void runAction(async () => {
                                   await fetchJson("/api/lms/operator/players", {
                                     method: "POST",
@@ -2124,8 +2251,8 @@ export function LmsOperator({
                                     }),
                                   });
                                   await refreshTeams();
-                                }, "Player removed.")
-                              }
+                                }, "Player removed.");
+                              }}
                             >
                               Remove
                             </button>
@@ -2233,7 +2360,7 @@ export function LmsOperator({
                         if (!confirm(`Delete ${loc.name}?`)) return;
                         void runAction(async () => {
                           await fetchJson(
-                            `/api/lms/operator/locations?locationId=${encodeURIComponent(loc.id)}`,
+                            `/api/lms/operator/locations?locationId=${encodeURIComponent(loc.id)}&divisionId=${encodeURIComponent(opDivisionId)}`,
                             { method: "DELETE" },
                           );
                           await refreshLocations();
@@ -2264,15 +2391,14 @@ export function LmsOperator({
             onChange={setListQuery}
             embedded
           />
-          <div className="space-y-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3">
+          <div className="min-w-0 space-y-2 overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3">
             <p className="text-sm font-semibold">Generate schedule</p>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid min-w-0 gap-3 sm:grid-cols-3">
               <Field label="Start date">
-                <input
-                  type="date"
-                  className={inputClass}
+                <DateField
+                  aria-label="Start date"
                   value={genStart}
-                  onChange={(e) => setGenStart(e.target.value)}
+                  onChange={setGenStart}
                 />
               </Field>
               <Field label="Rounds">
@@ -2360,10 +2486,9 @@ export function LmsOperator({
                     aria-expanded={open}
                     onClick={() => toggleExpanded(`date-${date}`)}
                   >
-                    <ChevronIcon
-                      open={open}
-                      className="h-5 w-5 shrink-0 text-[var(--muted)]"
-                    />
+                    <span className="inline-flex shrink-0 items-center self-center text-[var(--muted)]">
+                      <ChevronIcon open={open} className="h-5 w-5" />
+                    </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-[var(--ink)]">
                         {formatMatchDate(date)}
@@ -2496,9 +2621,9 @@ export function LmsOperator({
                     type="button"
                     className={btnEdit}
                     onClick={() =>
-                      setScreen({
-                        type: "edit-settings",
-                        divisionId: opDivisionId,
+                      openEditSettings({
+                        id: opDivisionId,
+                        name: opDivisionName || String(settings.Name ?? "Division"),
                       })
                     }
                   >
@@ -2554,14 +2679,7 @@ export function LmsOperator({
                   <button
                     type="button"
                     className={btnEdit}
-                    onClick={() => {
-                      setOpDivisionId(division.id);
-                      setOpDivisionName(division.name);
-                      setScreen({
-                        type: "edit-settings",
-                        divisionId: division.id,
-                      });
-                    }}
+                    onClick={() => openEditSettings(division)}
                   >
                     Edit
                   </button>
@@ -2618,14 +2736,7 @@ export function LmsOperator({
                     <button
                       type="button"
                       className={btnEdit}
-                      onClick={() => {
-                        setOpDivisionId(division.id);
-                        setOpDivisionName(division.name);
-                        setScreen({
-                          type: "edit-settings",
-                          divisionId: division.id,
-                        });
-                      }}
+                      onClick={() => openEditSettings(division)}
                     >
                       Edit
                     </button>
@@ -2636,6 +2747,8 @@ export function LmsOperator({
           )}
         </section>
       ) : null}
+
+      {editPopup}
     </div>
   );
 }

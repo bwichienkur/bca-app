@@ -5,6 +5,7 @@ import {
   operatorCreateDivisionFromCopy,
   operatorGetDivisionSettings,
 } from "@/lib/lms-operator";
+import { invalidateOperatorCache } from "@/lib/lms-operator-cache";
 import { requireScoringSession } from "@/lib/scoring-auth";
 
 export const dynamic = "force-dynamic";
@@ -122,6 +123,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    await invalidateOperatorCache({ leagueId });
     return NextResponse.json({
       ok: true,
       messages: result.messages,

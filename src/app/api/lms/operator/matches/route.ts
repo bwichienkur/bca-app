@@ -6,6 +6,10 @@ import {
   operatorGetNextMatches,
 } from "@/lib/lms-operator";
 import { requireScoringSession } from "@/lib/scoring-auth";
+import {
+  operatorCacheKey,
+  withOperatorCache,
+} from "@/lib/lms-operator-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -39,11 +43,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const operator = await loginLeagueOperator();
-    const matches =
-      kind === "missed"
-        ? await operatorGetMissedMatches(operator, divisionId)
-        : await operatorGetNextMatches(operator, divisionId);
+    const refresh = request.nextUrl.searchParams.get("refresh") === "1";
+    const matches = await withOperatorCache(
+      operatorCacheKey("matches", divisionId, kind),
+      async () => {
+        const operator = await loginLeagueOperator();
+        return kind === "missed"
+          ? operatorGetMissedMatches(operator, divisionId)
+          : operatorGetNextMatches(operator, divisionId);
+      },
+      { bypass: refresh },
+    );
 
     return NextResponse.json({ kind, divisionId, matches });
   } catch (error) {

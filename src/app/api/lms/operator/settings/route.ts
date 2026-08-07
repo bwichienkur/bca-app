@@ -12,6 +12,11 @@ import {
   operatorSaveDivisionSettings,
   withOperatorSession,
 } from "@/lib/lms-operator-manage";
+import {
+  invalidateOperatorCache,
+  operatorCacheKey,
+  withOperatorCache,
+} from "@/lib/lms-operator-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -36,12 +41,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const session = await loginLeagueOperator();
-    const [settings, templates] = await Promise.all([
-      operatorGetDivisionSettings(session, divisionId, false),
-      operatorGetFormatTemplates(session),
-    ]);
-    return NextResponse.json({ settings, templates });
+    const refresh = request.nextUrl.searchParams.get("refresh") === "1";
+    const payload = await withOperatorCache(
+      operatorCacheKey("settings", divisionId),
+      async () => {
+        const session = await loginLeagueOperator();
+        const [settings, templates] = await Promise.all([
+          operatorGetDivisionSettings(session, divisionId, false),
+          operatorGetFormatTemplates(session),
+        ]);
+        return { settings, templates };
+      },
+      { bypass: refresh },
+    );
+    return NextResponse.json(payload);
   } catch (error) {
     return operatorErrorResponse(error);
   }
@@ -72,6 +85,9 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+    const divisionId =
+      typeof body.settings.Id === "string" ? body.settings.Id : null;
+    await invalidateOperatorCache({ divisionId });
     return NextResponse.json({
       ok: true,
       messages: result.messages,

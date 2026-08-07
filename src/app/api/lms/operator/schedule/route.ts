@@ -13,6 +13,11 @@ import {
   operatorRegenerateSchedule,
   withOperatorSession,
 } from "@/lib/lms-operator-manage";
+import {
+  invalidateOperatorCache,
+  operatorCacheKey,
+  withOperatorCache,
+} from "@/lib/lms-operator-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +31,14 @@ export async function GET(request: NextRequest) {
         { status: 400 },
       );
     }
-    const matches = await withOperatorSession((session) =>
-      operatorListSchedule(session, divisionId),
+    const refresh = request.nextUrl.searchParams.get("refresh") === "1";
+    const matches = await withOperatorCache(
+      operatorCacheKey("schedule", divisionId),
+      () =>
+        withOperatorSession((session) =>
+          operatorListSchedule(session, divisionId),
+        ),
+      { bypass: refresh },
     );
     return NextResponse.json({ matches });
   } catch (error) {
@@ -75,6 +86,7 @@ export async function POST(request: NextRequest) {
           numberOfWeeks: Number(body.numberOfWeeks),
         }),
       );
+      await invalidateOperatorCache({ divisionId: body.divisionId ?? null });
       return NextResponse.json({ ok: true });
     }
 
@@ -88,6 +100,7 @@ export async function POST(request: NextRequest) {
       await withOperatorSession((session) =>
         operatorClearSchedule(session, body.divisionId!),
       );
+      await invalidateOperatorCache({ divisionId: body.divisionId ?? null });
       return NextResponse.json({ ok: true });
     }
 
@@ -116,6 +129,7 @@ export async function POST(request: NextRequest) {
           locationId: body.locationId!,
         }),
       );
+      await invalidateOperatorCache({ divisionId: body.divisionId ?? null });
       return NextResponse.json({ ok: true });
     }
 
@@ -144,6 +158,7 @@ export async function POST(request: NextRequest) {
           locationId: body.locationId!,
         }),
       );
+      await invalidateOperatorCache({ divisionId: body.divisionId ?? null });
       return NextResponse.json({ ok: true });
     }
 
@@ -157,6 +172,7 @@ export async function POST(request: NextRequest) {
       await withOperatorSession((session) =>
         operatorDeleteMatch(session, body.matchId!),
       );
+      await invalidateOperatorCache({ divisionId: body.divisionId ?? null });
       return NextResponse.json({ ok: true });
     }
 
@@ -170,6 +186,7 @@ export async function POST(request: NextRequest) {
       await withOperatorSession((session) =>
         operatorFlipMatch(session, body.matchId!),
       );
+      await invalidateOperatorCache({ divisionId: body.divisionId ?? null });
       return NextResponse.json({ ok: true });
     }
 

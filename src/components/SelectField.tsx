@@ -26,6 +26,8 @@ type SelectFieldProps<T extends string = string> = {
   "aria-label"?: string;
   /** Extra classes for the closed trigger button. */
   buttonClassName?: string;
+  /** Allow long labels to wrap instead of truncating (default true). */
+  wrap?: boolean;
 };
 
 export function SelectField<T extends string = string>({
@@ -38,6 +40,7 @@ export function SelectField<T extends string = string>({
   id,
   "aria-label": ariaLabel,
   buttonClassName,
+  wrap = true,
 }: SelectFieldProps<T>) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -139,7 +142,7 @@ export function SelectField<T extends string = string>({
                         setOpen(false);
                       }}
                       className={[
-                        "flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm",
+                        "flex w-full items-start justify-between gap-3 px-3 py-2.5 text-left text-sm",
                         active
                           ? "bg-[var(--surface-3)]"
                           : "bg-[var(--surface-2)]",
@@ -148,9 +151,17 @@ export function SelectField<T extends string = string>({
                           : "text-[var(--ink)]",
                       ].join(" ")}
                     >
-                      <span>{option.label}</span>
+                      <span
+                        className={
+                          wrap
+                            ? "min-w-0 flex-1 whitespace-normal break-words leading-snug"
+                            : "min-w-0 flex-1 truncate"
+                        }
+                      >
+                        {option.label}
+                      </span>
                       {isSelected ? (
-                        <span className="text-[var(--felt)]">✓</span>
+                        <span className="shrink-0 text-[var(--felt)]">✓</span>
                       ) : null}
                     </button>
                   </li>
@@ -205,15 +216,21 @@ export function SelectField<T extends string = string>({
           }
         }}
         className={[
-          "flex w-full min-w-0 items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-left text-sm outline-none transition hover:border-[var(--line-strong)] focus:ring-2 focus:ring-[var(--felt-soft)] disabled:opacity-50",
+          "flex w-full min-w-0 items-start justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-left text-sm outline-none transition hover:border-[var(--line-strong)] focus:ring-2 focus:ring-[var(--felt-soft)] disabled:opacity-50",
           selected ? "text-[var(--ink)]" : "text-[var(--muted)]",
           buttonClassName ?? "",
         ].join(" ")}
       >
-        <span className="min-w-0 flex-1 truncate">
+        <span
+          className={
+            wrap
+              ? "min-w-0 flex-1 whitespace-normal break-words leading-snug [overflow-wrap:anywhere]"
+              : "min-w-0 flex-1 truncate"
+          }
+        >
           {selected?.label ?? placeholder}
         </span>
-        <span className="shrink-0 text-[var(--muted)]" aria-hidden>
+        <span className="mt-0.5 shrink-0 text-[var(--muted)]" aria-hidden>
           {open ? "▴" : "▾"}
         </span>
       </button>

@@ -15,6 +15,11 @@ import {
   withOperatorSession,
   type PlayerInput,
 } from "@/lib/lms-operator-manage";
+import {
+  invalidateOperatorCache,
+  operatorCacheKey,
+  withOperatorCache,
+} from "@/lib/lms-operator-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -43,8 +48,14 @@ export async function GET(request: NextRequest) {
         { status: 400 },
       );
     }
-    const players = await withOperatorSession((session) =>
-      operatorListPlayers(session, divisionId),
+    const refresh = params.get("refresh") === "1";
+    const players = await withOperatorCache(
+      operatorCacheKey("players", divisionId),
+      () =>
+        withOperatorSession((session) =>
+          operatorListPlayers(session, divisionId),
+        ),
+      { bypass: refresh },
     );
     return NextResponse.json({ players });
   } catch (error) {
@@ -82,6 +93,7 @@ export async function POST(request: NextRequest) {
       const created = await withOperatorSession((session) =>
         operatorCreatePlayer(session, body.player!, body.teamId),
       );
+      await invalidateOperatorCache({});
       return NextResponse.json({ ok: true, ...created });
     }
 
@@ -95,6 +107,7 @@ export async function POST(request: NextRequest) {
       await withOperatorSession((session) =>
         operatorUpdatePlayer(session, body.player!.id!, body.player!),
       );
+      await invalidateOperatorCache({});
       return NextResponse.json({ ok: true });
     }
 
@@ -120,6 +133,7 @@ export async function POST(request: NextRequest) {
           );
         }
       });
+      await invalidateOperatorCache({});
       return NextResponse.json({ ok: true });
     }
 
@@ -133,6 +147,7 @@ export async function POST(request: NextRequest) {
       await withOperatorSession((session) =>
         operatorRemovePlayerFromTeam(session, body.teamId!, body.playerId!),
       );
+      await invalidateOperatorCache({});
       return NextResponse.json({ ok: true });
     }
 
