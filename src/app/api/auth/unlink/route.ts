@@ -17,9 +17,13 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as { provider?: string };
     const provider = body.provider;
 
-    if (provider !== "fargo" && provider !== "digital-pool") {
+    if (
+      provider !== "fargo" &&
+      provider !== "digital-pool" &&
+      provider !== "operator"
+    ) {
       return NextResponse.json(
-        { error: "provider must be fargo or digital-pool." },
+        { error: "provider must be fargo, digital-pool, or operator." },
         { status: 400 },
       );
     }
@@ -28,8 +32,14 @@ export async function POST(request: NextRequest) {
     if (provider === "fargo") {
       updated = await saveAppUser({ ...appUser, fargo: null });
       await clearScoringSession();
-    } else {
+    } else if (provider === "digital-pool") {
       updated = await saveAppUser({ ...appUser, digitalPool: null });
+    } else {
+      updated = await saveAppUser({
+        ...appUser,
+        leagueOperator: false,
+        leagueOperatorLinkedAt: null,
+      });
     }
 
     const scoring = await readScoringSession();
