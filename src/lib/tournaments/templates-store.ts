@@ -1,4 +1,5 @@
 import { getRedis, isRedisConfigured } from "@/lib/redis";
+import { normalizePayMethod } from "@/lib/tournaments/options";
 import type {
   TournamentTemplate,
   TournamentTemplateForm,
@@ -107,13 +108,7 @@ function normalizeForm(raw: unknown): TournamentTemplateForm | null {
     teamSize: Math.max(1, Math.floor(asNumber(raw.teamSize, 1))),
     entryFeeCents: Math.max(0, Math.round(asNumber(raw.entryFeeCents, 0))),
     addedMoneyCents: Math.max(0, Math.round(asNumber(raw.addedMoneyCents, 0))),
-    payMethod:
-      raw.payMethod === "venmo" ||
-      raw.payMethod === "zelle" ||
-      raw.payMethod === "cashapp" ||
-      raw.payMethod === "in-app-later"
-        ? raw.payMethod
-        : "door",
+    payMethod: normalizePayMethod(raw.payMethod),
     venmoHandle: asNullableString(raw.venmoHandle),
     zelleHandle: asNullableString(raw.zelleHandle),
     cashAppHandle: asNullableString(raw.cashAppHandle),

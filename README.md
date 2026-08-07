@@ -98,6 +98,18 @@ LMS_TAB_ALLOWLIST_EMAILS=other@example.com
 LMS_TAB_ALLOWLIST_LMS_IDS=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
 
+### Tournament entry fees (Stripe)
+
+Optional. When set, organizers can choose **Pay online (Stripe)** on an event and players are sent to Stripe Checkout for the entry fee after signup (or via **Pay entry fee** on their entry).
+
+```bash
+STRIPE_SECRET_KEY=sk_live_…
+STRIPE_WEBHOOK_SECRET=whsec_…
+APP_URL=https://your-app.example.com
+```
+
+Point a Stripe webhook at `POST /api/stripe/webhook` for `checkout.session.completed` (and optionally `checkout.session.async_payment_succeeded`). `APP_URL` (or `NEXT_PUBLIC_APP_URL`) is used for Checkout success/cancel redirects.
+
 ### Score drafts
 Keyed by match id, TTL 60 days, last-write-wins with ~3s polling while a scoresheet is open.
 

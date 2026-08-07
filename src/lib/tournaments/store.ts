@@ -8,6 +8,7 @@ import {
   defaultTeamSize,
   meetsMinRobustness,
   minRobustnessLabel,
+  normalizePayMethod,
 } from "@/lib/tournaments/options";
 import {
   isActiveEntryStatus,
@@ -232,7 +233,7 @@ export async function createTournament(
     ),
     entryFeeCents: Math.max(0, Math.floor(input.entryFeeCents ?? 0)),
     addedMoneyCents: Math.max(0, Math.floor(input.addedMoneyCents ?? 0)),
-    payMethod: input.payMethod ?? "door",
+    payMethod: normalizePayMethod(input.payMethod ?? "door"),
     venmoHandle: (input.venmoHandle ?? "").trim() || null,
     zelleHandle: (input.zelleHandle ?? "").trim() || null,
     cashAppHandle: (input.cashAppHandle ?? "").trim() || null,
@@ -345,6 +346,24 @@ function normalizeRegistration(
           .filter((t) => t.displayName)
       : [],
     paid: Boolean(raw.paid),
+    paidAt:
+      typeof raw.paidAt === "string" && raw.paidAt
+        ? raw.paidAt
+        : raw.paid
+          ? (typeof raw.updatedAt === "string" && raw.updatedAt
+              ? raw.updatedAt
+              : null)
+          : null,
+    stripeCheckoutSessionId:
+      typeof raw.stripeCheckoutSessionId === "string" &&
+      raw.stripeCheckoutSessionId.trim()
+        ? raw.stripeCheckoutSessionId.trim()
+        : null,
+    stripePaymentIntentId:
+      typeof raw.stripePaymentIntentId === "string" &&
+      raw.stripePaymentIntentId.trim()
+        ? raw.stripePaymentIntentId.trim()
+        : null,
     checkedIn: Boolean(raw.checkedIn),
     checkedInAt:
       typeof raw.checkedInAt === "string" && raw.checkedInAt
@@ -380,6 +399,7 @@ function normalizeTournament(raw: Tournament): Tournament {
       raw.drawType === "random" || raw.drawType === "custom"
         ? raw.drawType
         : "seeded",
+    payMethod: normalizePayMethod(raw.payMethod),
     addedMoneyCents:
       typeof raw.addedMoneyCents === "number" && raw.addedMoneyCents >= 0
         ? Math.floor(raw.addedMoneyCents)
@@ -728,6 +748,9 @@ export async function createRegistration(input: {
     teammates,
     status,
     paid: false,
+    paidAt: null,
+    stripeCheckoutSessionId: null,
+    stripePaymentIntentId: null,
     checkedIn: false,
     checkedInAt: null,
     noteToOrganizer: (input.noteToOrganizer ?? "").trim(),
@@ -748,7 +771,14 @@ export async function createRegistration(input: {
 type RegistrationPatch = Partial<
   Pick<
     TournamentRegistration,
-    "status" | "paid" | "checkedIn" | "noteToOrganizer" | "ratingAtSignup"
+    | "status"
+    | "paid"
+    | "paidAt"
+    | "stripeCheckoutSessionId"
+    | "stripePaymentIntentId"
+    | "checkedIn"
+    | "noteToOrganizer"
+    | "ratingAtSignup"
   >
 >;
 
@@ -777,9 +807,19 @@ function applyRegistrationPatch(
     Object.entries(patch).filter(([, value]) => value !== undefined),
   ) as RegistrationPatch;
 
+  let paidAt = existing.paidAt;
+  if (definedPatch.paidAt !== undefined) {
+    paidAt = definedPatch.paidAt;
+  } else if (definedPatch.paid === true && !existing.paid) {
+    paidAt = new Date().toISOString();
+  } else if (definedPatch.paid === false) {
+    paidAt = null;
+  }
+
   return {
     ...existing,
     ...definedPatch,
+    paidAt,
     ratingAtSignup:
       definedPatch.ratingAtSignup !== undefined
         ? definedPatch.ratingAtSignup == null
@@ -864,6 +904,79 @@ export async function updateRegistrationsBulk(
     registrations: updatedRegs,
     tournament: toListItem(updated, next),
   };
+}
+
+export async function getRegistration(
+  tournamentId: string,
+  registrationId: string,
+): Promise<TournamentRegistration | null> {
+  const regs = await getRegistrationsRaw(tournamentId);
+  return regs.find((r) => r.id === registrationId) ?? null;
+}
+
+/** Persist Checkout Session id so the webhook can find the entry. */
+export async function attachStripeCheckoutSession(
+  tournamentId: string,
+  registrationId: string,
+  sessionId: string,
+): Promise<TournamentRegistration> {
+  const result = await updateRegistration(tournamentId, registrationId, {
+    stripeCheckoutSessionId: sessionId,
+  });
+  return result.registration;
+}
+
+/** Mark an entry paid from a verified Stripe Checkout completion. */
+export async function markRegistrationPaidFromStripe(input: {
+  tournamentId: string;
+  registrationId: string;
+  checkoutSessionId: string;
+  paymentIntentId: string | null;
+}): Promise<TournamentRegistration | null> {
+  const regs = await getRegistrationsRaw(input.tournamentId);
+  const idx = regs.findIndex((r) => r.id === input.registrationId);
+  if (idx < 0) return null;
+  const existing = regs[idx]!;
+  if (existing.paid && existing.stripePaymentIntentId) {
+    return existing;
+  }
+  const now = new Date().toISOString();
+  const nextReg: TournamentRegistration = {
+    ...existing,
+    paid: true,
+    paidAt: existing.paidAt ?? now,
+    stripeCheckoutSessionId:
+      input.checkoutSessionId || existing.stripeCheckoutSessionId,
+    stripePaymentIntentId:
+      input.paymentIntentId || existing.stripePaymentIntentId,
+    updatedAt: now,
+  };
+  const next = [...regs];
+  next[idx] = nextReg;
+  await saveRegistrations(input.tournamentId, next);
+  await syncStatusFromRegs(input.tournamentId, next);
+  return nextReg;
+}
+
+/** Look up a registration by Stripe Checkout Session id (webhook fallback). */
+export async function findRegistrationByCheckoutSession(
+  checkoutSessionId: string,
+): Promise<{
+  tournamentId: string;
+  registration: TournamentRegistration;
+} | null> {
+  const sessionId = checkoutSessionId.trim();
+  if (!sessionId) return null;
+
+  const tournaments = await getAllTournaments();
+  for (const tournament of tournaments) {
+    const regs = await getRegistrationsRaw(tournament.id);
+    const match = regs.find((r) => r.stripeCheckoutSessionId === sessionId);
+    if (match) {
+      return { tournamentId: tournament.id, registration: match };
+    }
+  }
+  return null;
 }
 
 export async function listMessages(

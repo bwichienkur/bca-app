@@ -109,8 +109,24 @@ export const PAY_METHOD_OPTIONS: { value: PayMethod; label: string }[] = [
   { value: "venmo", label: "Venmo" },
   { value: "zelle", label: "Zelle" },
   { value: "cashapp", label: "Cash App" },
-  { value: "in-app-later", label: "In-app later (coming soon)" },
+  { value: "stripe", label: "Pay online (Stripe)" },
 ];
+
+/** Primary pay method that collects entry fees via Stripe Checkout. */
+export function isStripePayMethod(method: PayMethod | null | undefined): boolean {
+  return method === "stripe" || method === "in-app-later";
+}
+
+export function normalizePayMethod(raw: unknown): PayMethod {
+  if (raw === "venmo" || raw === "zelle" || raw === "cashapp" || raw === "door") {
+    return raw;
+  }
+  // Legacy "in-app-later" → stripe
+  if (raw === "stripe" || raw === "in-app-later") {
+    return "stripe";
+  }
+  return "door";
+}
 
 export function formatPaymentLines(t: {
   payMethod: PayMethod;
@@ -122,16 +138,17 @@ export function formatPaymentLines(t: {
   const venmo = t.venmoHandle?.trim();
   const zelle = t.zelleHandle?.trim();
   const cashApp = t.cashAppHandle?.trim();
+  if (t.payMethod === "stripe" || t.payMethod === "in-app-later") {
+    lines.push("Pay online (Stripe)");
+  }
   if (venmo) lines.push(`Venmo ${venmo.startsWith("@") ? venmo : `@${venmo}`}`);
   if (zelle) lines.push(`Zelle ${zelle}`);
   if (cashApp) {
     const tag = cashApp.startsWith("$") ? cashApp : `$${cashApp.replace(/^\$/, "")}`;
     lines.push(`Cash App ${tag}`);
   }
-  if (t.payMethod === "door" || lines.length === 0) {
-    lines.push("Pay at door");
-  } else if (t.payMethod === "in-app-later") {
-    lines.push("In-app later");
+  if (lines.length === 0 || t.payMethod === "door") {
+    if (!lines.includes("Pay at door")) lines.push("Pay at door");
   }
   return lines;
 }
