@@ -27,6 +27,7 @@ import {
   formatStartsAt,
   GAME_TYPE_OPTIONS,
   HANDICAP_SYSTEM_OPTIONS,
+  isStripePayMethod,
   maxEntriesLabel,
   meetsMinRobustness,
   MIN_ROBUSTNESS_OPTIONS,
@@ -1863,6 +1864,28 @@ export function Tournaments({
     }
   }, [loadEvents, selectedId]);
 
+  // Stripe Checkout return: ?pay=success|cancel
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const pay = params.get("pay");
+    if (pay !== "success" && pay !== "cancel") return;
+
+    if (pay === "success") {
+      setActionMsg(
+        "Payment received. If paid status is still updating, refresh in a moment.",
+      );
+      void refreshDetail();
+    } else {
+      setActionMsg("Payment cancelled. You can pay your entry fee anytime.");
+    }
+
+    params.delete("pay");
+    const qs = params.toString();
+    const next = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
+    window.history.replaceState(null, "", next);
+  }, [deepLinkEventId, refreshDetail, selectedId]);
+
   const myEntryRole = detail?.myEntry?.role ?? null;
 
   const myRegistration = useMemo(() => {
@@ -2243,6 +2266,46 @@ export function Tournaments({
     }
   };
 
+  const startEntryCheckout = async (registrationId: string) => {
+    if (!selectedId) return;
+    const res = await fetch(`/api/tournaments/${selectedId}/checkout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ registrationId }),
+    });
+    const data = (await res.json()) as {
+      error?: string;
+      url?: string;
+      alreadyPaid?: boolean;
+    };
+    if (!res.ok) {
+      if (data.alreadyPaid) {
+        await refreshDetail();
+        setActionMsg("Entry already marked paid.");
+        return;
+      }
+      throw new Error(data.error || "Could not start online payment.");
+    }
+    if (!data.url) {
+      throw new Error("Stripe did not return a checkout URL.");
+    }
+    window.location.assign(data.url);
+  };
+
+  const onPayEntryFee = async () => {
+    if (!myRegistration) return;
+    setSaving(true);
+    setActionMsg(null);
+    try {
+      await startEntryCheckout(myRegistration.id);
+    } catch (err) {
+      setActionMsg(
+        err instanceof Error ? err.message : "Could not start online payment.",
+      );
+      setSaving(false);
+    }
+  };
+
   const onRegister = async () => {
     if (!user || !selectedId || !detail) {
       onRequestLogin();
@@ -2290,10 +2353,26 @@ export function Tournaments({
           teammates: payloadTeammates,
         }),
       });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as {
+        error?: string;
+        registration?: TournamentRegistration;
+      };
       if (!res.ok) throw new Error(data.error || "Registration failed.");
-      setActionMsg("Registration submitted.");
       setRegNote("");
+
+      const needsStripePay =
+        isStripePayMethod(detail.tournament.payMethod) &&
+        detail.tournament.entryFeeCents > 0 &&
+        data.registration &&
+        !data.registration.paid;
+
+      if (needsStripePay && data.registration) {
+        setActionMsg("Registration submitted — redirecting to payment…");
+        await startEntryCheckout(data.registration.id);
+        return;
+      }
+
+      setActionMsg("Registration submitted.");
       await refreshDetail();
     } catch (err) {
       setActionMsg(err instanceof Error ? err.message : "Registration failed.");
@@ -3633,6 +3712,23 @@ export function Tournaments({
                         ))}
                       </ul>
                     ) : null}
+                    {!myRegistration.paid &&
+                    myEntryRole === "captain" &&
+                    t &&
+                    isStripePayMethod(t.payMethod) &&
+                    t.entryFeeCents > 0 &&
+                    myRegistration.status !== "rejected" ? (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => void onPayEntryFee()}
+                        className="mt-2 w-full rounded-[var(--radius)] bg-[var(--felt)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      >
+                        {saving
+                          ? "Opening checkout…"
+                          : `Pay entry fee · ${formatEntryFee(t.entryFeeCents)}`}
+                      </button>
+                    ) : null}
                   </div>
                 </AccentRecordCard>
               );
@@ -3933,11 +4029,17 @@ export function Tournaments({
                   >
                     {saving
                       ? "Submitting…"
-                      : t.eventType === "teams"
-                        ? "Request team spot"
-                        : t.eventType === "scotch-doubles"
-                          ? "Request pair spot"
-                          : "Request spot"}
+                      : isStripePayMethod(t.payMethod) && t.entryFeeCents > 0
+                        ? t.eventType === "teams"
+                          ? `Request team spot & pay · ${formatEntryFee(t.entryFeeCents)}`
+                          : t.eventType === "scotch-doubles"
+                            ? `Request pair spot & pay · ${formatEntryFee(t.entryFeeCents)}`
+                            : `Request spot & pay · ${formatEntryFee(t.entryFeeCents)}`
+                        : t.eventType === "teams"
+                          ? "Request team spot"
+                          : t.eventType === "scotch-doubles"
+                            ? "Request pair spot"
+                            : "Request spot"}
                   </button>
                 </>
               )}
@@ -4397,23 +4499,25 @@ export function Tournaments({
                               );
                             })()
                           ) : null}
+                          {isStripePayMethod(t.payMethod) ? (
+                            <OverviewFact
+                              label="Online"
+                              value={
+                                t.entryFeeCents > 0
+                                  ? "Pay with Stripe at signup"
+                                  : "No entry fee"
+                              }
+                              wide
+                            />
+                          ) : null}
                           {t.payMethod === "door" ||
-                          (!t.venmoHandle?.trim() &&
+                          (!isStripePayMethod(t.payMethod) &&
+                            !t.venmoHandle?.trim() &&
                             !t.zelleHandle?.trim() &&
                             !t.cashAppHandle?.trim()) ? (
                             <OverviewFact
                               label="Door"
                               value="Pay at door"
-                              wide
-                            />
-                          ) : null}
-                          {t.payMethod === "in-app-later" &&
-                          (t.venmoHandle?.trim() ||
-                            t.zelleHandle?.trim() ||
-                            t.cashAppHandle?.trim()) ? (
-                            <OverviewFact
-                              label="Also"
-                              value="In-app later"
                               wide
                             />
                           ) : null}

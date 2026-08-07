@@ -16,7 +16,14 @@ export type UnratedPolicy = "cap-at-max" | "provisional" | "message-organizer";
 /** Minimum Fargo robustness required to sign up. null = any. */
 export type RobustnessStatus = "starter" | "preliminary" | "established";
 export type RegistrationMode = "open" | "approval" | "invite-only";
-export type PayMethod = "door" | "venmo" | "zelle" | "cashapp" | "in-app-later";
+export type PayMethod =
+  | "door"
+  | "venmo"
+  | "zelle"
+  | "cashapp"
+  | "stripe"
+  /** @deprecated Prefer "stripe"; still accepted when reading stored events. */
+  | "in-app-later";
 /** Matches Digital Pool break_format options. */
 export type BreakFormat = "winner-break" | "loser-break" | "alternate-break";
 /** Matches Digital Pool draw_type options. */
@@ -117,6 +124,12 @@ export type TournamentRegistration = {
   teammates: RegistrationTeammate[];
   status: RegistrationStatus;
   paid: boolean;
+  /** Set when payment is confirmed (Stripe webhook or organizer mark). */
+  paidAt: string | null;
+  /** Latest Stripe Checkout Session id for this entry fee. */
+  stripeCheckoutSessionId: string | null;
+  /** Stripe PaymentIntent id after a successful Checkout payment. */
+  stripePaymentIntentId: string | null;
   checkedIn: boolean;
   checkedInAt: string | null;
   noteToOrganizer: string;
