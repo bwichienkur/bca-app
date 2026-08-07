@@ -1,0 +1,180 @@
+import { NextRequest, NextResponse } from "next/server";
+import {
+  operatorErrorResponse,
+  requireOperatorApi,
+} from "@/lib/lms-operator-api";
+import {
+  operatorChangeMatch,
+  operatorClearSchedule,
+  operatorCreateMatch,
+  operatorDeleteMatch,
+  operatorFlipMatch,
+  operatorListSchedule,
+  operatorRegenerateSchedule,
+  withOperatorSession,
+} from "@/lib/lms-operator-manage";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(request: NextRequest) {
+  try {
+    await requireOperatorApi();
+    const divisionId = request.nextUrl.searchParams.get("divisionId")?.trim();
+    if (!divisionId) {
+      return NextResponse.json(
+        { error: "divisionId is required." },
+        { status: 400 },
+      );
+    }
+    const matches = await withOperatorSession((session) =>
+      operatorListSchedule(session, divisionId),
+    );
+    return NextResponse.json({ matches });
+  } catch (error) {
+    return operatorErrorResponse(error);
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    await requireOperatorApi();
+    const body = (await request.json()) as {
+      action?: string;
+      divisionId?: string;
+      startDate?: string;
+      numberOfRounds?: number;
+      numberOfWeeks?: number;
+      matchId?: string;
+      teamOneId?: string;
+      teamTwoId?: string;
+      date?: string;
+      locationId?: string;
+    };
+    const action = body.action ?? "list";
+
+    if (action === "generate") {
+      if (
+        !body.divisionId ||
+        !body.startDate ||
+        !body.numberOfRounds ||
+        !body.numberOfWeeks
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "divisionId, startDate, numberOfRounds, and numberOfWeeks are required.",
+          },
+          { status: 400 },
+        );
+      }
+      await withOperatorSession((session) =>
+        operatorRegenerateSchedule(session, {
+          divisionId: body.divisionId!,
+          startDate: body.startDate!,
+          numberOfRounds: Number(body.numberOfRounds),
+          numberOfWeeks: Number(body.numberOfWeeks),
+        }),
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "clear") {
+      if (!body.divisionId) {
+        return NextResponse.json(
+          { error: "divisionId is required." },
+          { status: 400 },
+        );
+      }
+      await withOperatorSession((session) =>
+        operatorClearSchedule(session, body.divisionId!),
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "create") {
+      if (
+        !body.divisionId ||
+        !body.teamOneId ||
+        !body.teamTwoId ||
+        !body.date ||
+        !body.locationId
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "divisionId, teamOneId, teamTwoId, date, and locationId are required.",
+          },
+          { status: 400 },
+        );
+      }
+      await withOperatorSession((session) =>
+        operatorCreateMatch(session, {
+          divisionId: body.divisionId!,
+          teamOneId: body.teamOneId!,
+          teamTwoId: body.teamTwoId!,
+          date: body.date!,
+          locationId: body.locationId!,
+        }),
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "change") {
+      if (
+        !body.matchId ||
+        !body.teamOneId ||
+        !body.teamTwoId ||
+        !body.date ||
+        !body.locationId
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "matchId, teamOneId, teamTwoId, date, and locationId are required.",
+          },
+          { status: 400 },
+        );
+      }
+      await withOperatorSession((session) =>
+        operatorChangeMatch(session, {
+          matchId: body.matchId!,
+          teamOneId: body.teamOneId!,
+          teamTwoId: body.teamTwoId!,
+          date: body.date!,
+          locationId: body.locationId!,
+        }),
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "delete") {
+      if (!body.matchId) {
+        return NextResponse.json(
+          { error: "matchId is required." },
+          { status: 400 },
+        );
+      }
+      await withOperatorSession((session) =>
+        operatorDeleteMatch(session, body.matchId!),
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "flip") {
+      if (!body.matchId) {
+        return NextResponse.json(
+          { error: "matchId is required." },
+          { status: 400 },
+        );
+      }
+      await withOperatorSession((session) =>
+        operatorFlipMatch(session, body.matchId!),
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    return NextResponse.json({ error: "Unknown action." }, { status: 400 });
+  } catch (error) {
+    return operatorErrorResponse(error);
+  }
+}
