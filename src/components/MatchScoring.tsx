@@ -218,6 +218,7 @@ export function MatchScoring({
   const [submitting, setSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [submitNeedsReview, setSubmitNeedsReview] = useState(false);
+  const [operatorSubmitAvailable, setOperatorSubmitAvailable] = useState(false);
   const [draftSummaries, setDraftSummaries] = useState<
     Record<string, DraftBoardSummary>
   >({});
@@ -248,6 +249,25 @@ export function MatchScoring({
   useEffect(() => {
     draftRef.current = draft;
   }, [draft]);
+
+  useEffect(() => {
+    if (!user) {
+      setOperatorSubmitAvailable(false);
+      return;
+    }
+    let cancelled = false;
+    void fetch("/api/scoring/submit/operator")
+      .then((response) => response.json())
+      .then((data: { configured?: boolean }) => {
+        if (!cancelled) setOperatorSubmitAvailable(Boolean(data.configured));
+      })
+      .catch(() => {
+        if (!cancelled) setOperatorSubmitAvailable(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   const persistDraft = (next: ScoringDraft) => {
     if (sheetLockedRef.current) return;
@@ -769,7 +789,46 @@ export function MatchScoring({
     setConfirmDialog(null);
   };
 
-  const submitMatch = async () => {
+  const finishSuccessfulSubmit = async (
+    via: string | undefined,
+    currentMatch: ScoringMatchDetail,
+    currentDraft: ScoringDraft,
+  ) => {
+    const submittedAt = new Date().toISOString();
+    // Keep local + shared drafts so the night board still shows scores.
+    saveDraft(currentDraft);
+    sheetLockedRef.current = true;
+    setSubmitMessage(
+      via === "operator"
+        ? "Match submitted via league operator score entry."
+        : "Match submitted to LMS.",
+    );
+    setSubmitNeedsReview(false);
+    setDraftSummaries((prev) => ({
+      ...prev,
+      [currentMatch.id]: summarizeDraftForBoard(currentDraft, submittedAt),
+    }));
+    setView({ mode: "list" });
+    setMatch(null);
+    setDraft(null);
+    if (divisionId) {
+      const data = await fetchJson<{ matches: ScoringMatchSummary[] }>(
+        matchesUrl(divisionId, teamId),
+      );
+      setMatches(data.matches);
+      try {
+        const remote = await fetchRemoteDraftSummaries(
+          data.matches.map((item) => item.id),
+        );
+        setSharedDrafts(remote.shared);
+        setDraftSummaries(remote.summaries);
+      } catch {
+        // list still refreshed from LMS
+      }
+    }
+  };
+
+  const submitMatch = async (options?: { preferOperator?: boolean }) => {
     if (!match || !draft || !user) return;
     if (match.mySide == null) {
       setSheetError("You can only submit scores for your team’s matches.");
@@ -787,56 +846,58 @@ export function MatchScoring({
     setSheetError(null);
     setSubmitMessage(null);
     setSubmitNeedsReview(false);
+    const currentMatch = match;
+    const currentDraft = draft;
     try {
       const payload = buildVerticalMatchPayload({
-        match,
-        draft,
+        match: currentMatch,
+        draft: currentDraft,
         scoreKeeper: user.lmsId,
       });
-      const result = await fetchJson<{
-        ok: boolean;
-        verifiedPlayed: boolean | null;
-      }>("/api/scoring/submit", {
+      const response = await fetch("/api/scoring/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ payload }),
+        body: JSON.stringify({
+          payload,
+          preferOperator: Boolean(options?.preferOperator),
+        }),
       });
+      const result = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        verifiedPlayed?: boolean | null;
+        via?: string;
+        stuck?: boolean;
+        operatorConfigured?: boolean;
+        error?: string;
+      } | null;
 
-      if (result.verifiedPlayed) {
-        const submittedAt = new Date().toISOString();
-        // Keep local + shared drafts so the night board still shows scores.
-        saveDraft(draft);
-        sheetLockedRef.current = true;
-        setSubmitMessage("Match submitted to LMS.");
-        setSubmitNeedsReview(false);
-        setDraftSummaries((prev) => ({
-          ...prev,
-          [match.id]: summarizeDraftForBoard(draft, submittedAt),
-        }));
-        setView({ mode: "list" });
-        setMatch(null);
-        setDraft(null);
-        // refresh night board
-        if (divisionId) {
-          const data = await fetchJson<{ matches: ScoringMatchSummary[] }>(
-            matchesUrl(divisionId, teamId),
-          );
-          setMatches(data.matches);
-          try {
-            const remote = await fetchRemoteDraftSummaries(
-              data.matches.map((item) => item.id),
-            );
-            setSharedDrafts(remote.shared);
-            setDraftSummaries(remote.summaries);
-          } catch {
-            // list still refreshed from LMS
-          }
-        }
+      if (typeof result?.operatorConfigured === "boolean") {
+        setOperatorSubmitAvailable(result.operatorConfigured);
+      }
+
+      if (response.ok && result?.verifiedPlayed) {
+        await finishSuccessfulSubmit(
+          result.via,
+          currentMatch,
+          currentDraft,
+        );
+        return;
+      }
+
+      setSubmitNeedsReview(true);
+      if (result?.stuck || options?.preferOperator) {
+        setSubmitMessage(
+          operatorSubmitAvailable || result?.operatorConfigured
+            ? "Player submit is stuck in LMS (scores not recorded). Try league operator submit, or keep this draft."
+            : "Player submit is stuck in LMS (scores not recorded). Ask a league operator to enter scores, or keep this draft.",
+        );
       } else {
-        setSubmitNeedsReview(true);
         setSubmitMessage(
           "LMS accepted the request, but the match still shows as unscored. Keep this draft open and verify in LMS before leaving the table.",
         );
+      }
+      if (!response.ok) {
+        setSheetError(result?.error || `Submit failed (${response.status}).`);
       }
     } catch (err) {
       setSubmitNeedsReview(true);
@@ -981,6 +1042,16 @@ export function MatchScoring({
                 >
                   {submitting ? "Retrying…" : "Retry submit"}
                 </button>
+                {operatorSubmitAvailable ? (
+                  <button
+                    type="button"
+                    onClick={() => void submitMatch({ preferOperator: true })}
+                    disabled={submitting}
+                    className="rounded-full border border-[var(--danger)]/40 bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+                  >
+                    {submitting ? "Submitting…" : "Submit via league operator"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => {
@@ -1015,6 +1086,16 @@ export function MatchScoring({
                 >
                   {submitting ? "Retrying…" : "Retry submit"}
                 </button>
+                {operatorSubmitAvailable ? (
+                  <button
+                    type="button"
+                    onClick={() => void submitMatch({ preferOperator: true })}
+                    disabled={submitting}
+                    className="rounded-full border border-[var(--amber)]/45 bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
+                  >
+                    {submitting ? "Submitting…" : "Submit via league operator"}
+                  </button>
+                ) : null}
                 <a
                   href="https://lms.fargorate.com"
                   target="_blank"

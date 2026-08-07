@@ -5,17 +5,71 @@ import {
   markSharedDraftSubmitted,
 } from "@/lib/draft-store";
 import {
+  isAlreadyScoredMessage,
+  isOperatorConfigured,
+  loginLeagueOperator,
+  operatorRecordScoresVertical,
+  verifyMatchPlayedWithPlayerToken,
+  verticalPayloadToOperatorScores,
+} from "@/lib/lms-operator";
+import {
   lmsAuthFetch,
   requireScoringSession,
 } from "@/lib/scoring-auth";
 
 export const dynamic = "force-dynamic";
 
+async function tryOperatorFallback(args: {
+  accessToken: string;
+  lmsId: string;
+  matchId: string;
+  payload: Record<string, unknown>;
+}): Promise<{ verifiedPlayed: boolean; used: boolean; error?: string }> {
+  if (!isOperatorConfigured()) {
+    return { verifiedPlayed: false, used: false };
+  }
+  try {
+    const scores = verticalPayloadToOperatorScores(args.payload);
+    const operator = await loginLeagueOperator();
+    const result = await operatorRecordScoresVertical(operator, scores);
+    if (!result.ok) {
+      return {
+        verifiedPlayed: false,
+        used: true,
+        error:
+          result.body ||
+          `League operator submit failed (${result.status}).`,
+      };
+    }
+    const verifiedPlayed = Boolean(
+      await verifyMatchPlayedWithPlayerToken(
+        args.accessToken,
+        args.matchId,
+      ),
+    );
+    if (verifiedPlayed && isDraftStoreConfigured()) {
+      await markSharedDraftSubmitted(args.matchId, args.lmsId);
+    }
+    return { verifiedPlayed, used: true };
+  } catch (error) {
+    return {
+      verifiedPlayed: false,
+      used: true,
+      error:
+        error instanceof Error
+          ? error.message
+          : "League operator submit failed.",
+    };
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await requireScoringSession();
     const body = (await request.json()) as {
       payload?: Record<string, unknown>;
+      /** When true, skip player verticalmatch and go straight to LO entry. */
+      preferOperator?: boolean;
     };
 
     if (!body.payload || typeof body.payload !== "object") {
@@ -39,6 +93,43 @@ export async function POST(request: NextRequest) {
     };
 
     const matchId = String(payload.matchId ?? payload.MatchId ?? "");
+    const operatorConfigured = isOperatorConfigured();
+
+    if (body.preferOperator) {
+      if (!matchId) {
+        return NextResponse.json(
+          { error: "matchId is required." },
+          { status: 400 },
+        );
+      }
+      const fallback = await tryOperatorFallback({
+        accessToken: session.accessToken,
+        lmsId: session.lmsId,
+        matchId,
+        payload,
+      });
+      if (fallback.verifiedPlayed) {
+        return NextResponse.json({
+          ok: true,
+          verifiedPlayed: true,
+          via: "operator",
+          operatorConfigured,
+        });
+      }
+      return NextResponse.json(
+        {
+          ok: false,
+          verifiedPlayed: false,
+          stuck: true,
+          operatorConfigured,
+          via: "operator",
+          error:
+            fallback.error ||
+            "League operator submit did not mark the match played.",
+        },
+        { status: 502 },
+      );
+    }
 
     const response = await lmsAuthFetch("/api/verticalmatch", {
       method: "POST",
@@ -68,30 +159,64 @@ export async function POST(request: NextRequest) {
         await clearSharedDraftSubmitted(matchId);
       }
 
+      const stuck = isAlreadyScoredMessage(message);
+      if (stuck && matchId && operatorConfigured) {
+        const fallback = await tryOperatorFallback({
+          accessToken: session.accessToken,
+          lmsId: session.lmsId,
+          matchId,
+          payload,
+        });
+        if (fallback.verifiedPlayed) {
+          return NextResponse.json({
+            ok: true,
+            verifiedPlayed: true,
+            via: "operator",
+            operatorConfigured,
+            playerError: message,
+          });
+        }
+      }
+
       return NextResponse.json(
-        { error: message, details: parsed },
+        {
+          error: message,
+          details: parsed,
+          stuck,
+          operatorConfigured,
+        },
         { status: response.status },
       );
     }
 
     let verifiedPlayed: boolean | null = null;
     if (matchId) {
-      // LMS can acknowledge the POST before hasBeenPlayed flips — retry briefly.
-      for (let attempt = 0; attempt < 4; attempt += 1) {
-        if (attempt > 0) {
-          await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
-        }
-        const check = await lmsAuthFetch(`/api/matches/${matchId}`);
-        if (!check.ok) continue;
-        const match = (await check.json()) as { hasBeenPlayed?: boolean };
-        verifiedPlayed = Boolean(match.hasBeenPlayed);
-        if (verifiedPlayed) break;
+      verifiedPlayed = await verifyMatchPlayedWithPlayerToken(
+        session.accessToken,
+        matchId,
+      );
+    }
+
+    // Player POST can return 200/201 without flipping hasBeenPlayed (ghost lock).
+    if (matchId && verifiedPlayed === false && operatorConfigured) {
+      const fallback = await tryOperatorFallback({
+        accessToken: session.accessToken,
+        lmsId: session.lmsId,
+        matchId,
+        payload,
+      });
+      if (fallback.verifiedPlayed) {
+        return NextResponse.json({
+          ok: true,
+          verifiedPlayed: true,
+          via: "operator",
+          operatorConfigured,
+          result: parsed,
+        });
       }
     }
 
     // Only lock the sheet when LMS actually shows the match as played.
-    // Locking on HTTP 200 alone caused "Complete" in Tableside while Fargo
-    // still had empty scores (Europa vs Hold my Beer, 2026-08-06).
     if (matchId && isDraftStoreConfigured()) {
       if (verifiedPlayed) {
         await markSharedDraftSubmitted(matchId, session.lmsId);
@@ -103,6 +228,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       verifiedPlayed,
+      via: "player",
+      stuck: verifiedPlayed === false,
+      operatorConfigured,
       result: parsed,
     });
   } catch (error) {
