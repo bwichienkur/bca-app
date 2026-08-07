@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  clearSharedDraftSubmitted,
   isDraftStoreConfigured,
   markSharedDraftSubmitted,
 } from "@/lib/draft-store";
@@ -37,6 +38,8 @@ export async function POST(request: NextRequest) {
         session.lmsId,
     };
 
+    const matchId = String(payload.matchId ?? payload.MatchId ?? "");
+
     const response = await lmsAuthFetch("/api/verticalmatch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -60,28 +63,41 @@ export async function POST(request: NextRequest) {
           ? (parsed as { message: string }).message
           : text || `Submit failed (${response.status}).`;
 
+      // Never keep a Tableside-only submit lock when LMS rejected the post.
+      if (matchId && isDraftStoreConfigured()) {
+        await clearSharedDraftSubmitted(matchId);
+      }
+
       return NextResponse.json(
         { error: message, details: parsed },
         { status: response.status },
       );
     }
 
-    const matchId = String(
-      payload.matchId ?? payload.MatchId ?? "",
-    );
     let verifiedPlayed: boolean | null = null;
     if (matchId) {
-      const check = await lmsAuthFetch(`/api/matches/${matchId}`);
-      if (check.ok) {
+      // LMS can acknowledge the POST before hasBeenPlayed flips — retry briefly.
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        if (attempt > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+        }
+        const check = await lmsAuthFetch(`/api/matches/${matchId}`);
+        if (!check.ok) continue;
         const match = (await check.json()) as { hasBeenPlayed?: boolean };
         verifiedPlayed = Boolean(match.hasBeenPlayed);
+        if (verifiedPlayed) break;
       }
     }
 
-    // Keep the shared draft after submit so the night board can still show
-    // round/game scores. Only mark it submitted (locks editing on reopen).
+    // Only lock the sheet when LMS actually shows the match as played.
+    // Locking on HTTP 200 alone caused "Complete" in Tableside while Fargo
+    // still had empty scores (Europa vs Hold my Beer, 2026-08-06).
     if (matchId && isDraftStoreConfigured()) {
-      await markSharedDraftSubmitted(matchId, session.lmsId);
+      if (verifiedPlayed) {
+        await markSharedDraftSubmitted(matchId, session.lmsId);
+      } else {
+        await clearSharedDraftSubmitted(matchId);
+      }
     }
 
     return NextResponse.json({
