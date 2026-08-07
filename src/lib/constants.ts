@@ -33,6 +33,7 @@ export const REPORT_TABS: { id: ReportTab; label: string }[] = [
   { id: "handicap", label: "Handicap" },
   { id: "events", label: "Events" },
   { id: "score", label: "Score" },
+  { id: "lms", label: "LMS" },
   { id: "search", label: "Search" },
 ];
 
@@ -48,4 +49,5 @@ export const PRIMARY_NAV_TABS: {
   { id: "handicap", label: "Handicap" },
   { id: "events", label: "Events" },
   { id: "score", label: "Score" },
+  { id: "lms", label: "LMS" },
 ];

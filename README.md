@@ -89,6 +89,8 @@ LMS_OPERATOR_PASSWORD=********
 
 Use the **LMS web** operator login (not the BCAPL player Auth0 password). On a stuck submit, Tableside auto-tries this path and also shows **Submit via league operator**.
 
+The same credentials power the **LMS** nav tab: upcoming/missed matches for the selected division, Create Playoff, and Create Division (copy settings from an existing division).
+
 ### Score drafts
 Keyed by match id, TTL 60 days, last-write-wins with ~3s polling while a scoresheet is open.
 
