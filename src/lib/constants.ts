@@ -18,6 +18,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   playerName: null,
   teamId: null,
   teamName: null,
+  scoringFormatId: null,
 };
 
 export const PREFERENCES_STORAGE_KEY = "tableside.preferences.v1";

@@ -103,6 +103,11 @@ export type UserPreferences = {
   playerName: string | null;
   teamId: string | null;
   teamName: string | null;
+  /**
+   * League night scoring preset id (see `scoring-formats.ts`).
+   * null = infer from division name, else Palm Beach 5-player default.
+   */
+  scoringFormatId?: string | null;
 };
 
 export type PlayerSearchResult = {

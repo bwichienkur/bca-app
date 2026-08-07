@@ -2050,7 +2050,7 @@ function LineupEditor({
   const slots = Math.max(
     draft.teamOneLineup.length,
     draft.teamTwoLineup.length,
-    5,
+    1,
   );
   const filledOne = draft.teamOneLineup.filter(Boolean).length;
   const filledTwo = draft.teamTwoLineup.filter(Boolean).length;

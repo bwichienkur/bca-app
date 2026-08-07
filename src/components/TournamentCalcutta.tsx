@@ -15,6 +15,7 @@ import {
   lotLabel,
   summarizeCalcutta,
 } from "@/lib/tournaments/calcutta";
+import { formatPlaceLabel } from "@/lib/tournaments/payouts";
 import type {
   CalcuttaLot,
   TournamentCalcutta,
@@ -23,6 +24,22 @@ import type {
 import { EmptyState } from "./EmptyState";
 import { LoadingState } from "./LoadingState";
 import { SectionCard } from "./SectionCard";
+
+function groupCalcuttaPayoutRows(
+  payouts: Array<{ place: number; amountCents: number }>,
+): Array<{ places: number[]; amountCents: number }> {
+  const sorted = [...payouts].sort((a, b) => a.place - b.place);
+  const groups: Array<{ places: number[]; amountCents: number }> = [];
+  for (const row of sorted) {
+    const last = groups[groups.length - 1];
+    if (last && last.amountCents === row.amountCents) {
+      last.places.push(row.place);
+    } else {
+      groups.push({ places: [row.place], amountCents: row.amountCents });
+    }
+  }
+  return groups;
+}
 
 type TournamentCalcuttaPanelProps = {
   tournamentId: string;
@@ -579,6 +596,43 @@ export function TournamentCalcuttaPanel({
           ),
         }}
       />
+
+      {summary && summary.netPotCents > 0 ? (
+        <section className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+          <div className="border-b border-[var(--line)] px-3 py-2.5 sm:px-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+              Payout schedule
+            </p>
+            <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+              Default formula · 100% of net pot
+            </p>
+          </div>
+          <ul className="divide-y divide-[var(--line)] px-3 py-1 sm:px-4">
+            {groupCalcuttaPayoutRows(summary.payouts).map((row) => (
+              <li
+                key={row.places.join("-")}
+                className="flex items-baseline justify-between gap-3 py-2 text-sm"
+              >
+                <span className="text-[var(--muted)]">
+                  {formatPlaceLabel(row.places)}
+                  {row.places.length > 1 ? " each" : ""}
+                </span>
+                <span className="tabular-nums font-semibold text-[var(--ink)]">
+                  {formatCalcuttaMoney(row.amountCents)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="flex items-baseline justify-between gap-3 border-t border-[var(--line)] px-3 py-2.5 text-sm font-semibold sm:px-4">
+            <span>Total paid</span>
+            <span className="tabular-nums text-[var(--felt-deep)]">
+              {formatCalcuttaMoney(
+                summary.payouts.reduce((s, row) => s + row.amountCents, 0),
+              )}
+            </span>
+          </p>
+        </section>
+      ) : null}
 
       <details className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <summary className="cursor-pointer list-none px-3 py-2 text-xs font-semibold text-[var(--muted)] sm:px-4 [&::-webkit-details-marker]:hidden">
