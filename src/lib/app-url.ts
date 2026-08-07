@@ -9,6 +9,7 @@ const REPORT_TABS: ReportTab[] = [
   "events",
   "search",
   "score",
+  "lms",
 ];
 
 export type AppUrlState = {

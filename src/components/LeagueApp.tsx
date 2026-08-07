@@ -53,6 +53,7 @@ import {
   StandingSubIcon,
 } from "./IconSubTabs";
 import { LoadingState } from "./LoadingState";
+import { LmsOperator } from "./LmsOperator";
 import { LoginScreen, type AuthUser } from "./LoginScreen";
 import { MatchScoring } from "./MatchScoring";
 import { NavTabIcon, SearchIcon } from "./NavIcons";
@@ -568,7 +569,8 @@ export function LeagueApp() {
       tab === "handicap" ||
       tab === "search" ||
       tab === "score" ||
-      tab === "events"
+      tab === "events" ||
+      tab === "lms"
     ) {
       setLoadingReport(false);
       return;
@@ -1336,7 +1338,10 @@ export function LeagueApp() {
         <div
           className={[
             "animate-panel min-w-0 [overflow-anchor:none]",
-            tab === "score" || tab === "players" || tab === "events"
+            tab === "score" ||
+            tab === "players" ||
+            tab === "events" ||
+            tab === "lms"
               ? "mt-0 space-y-0"
               : "space-y-6",
           ].join(" ")}
@@ -1360,6 +1365,18 @@ export function LeagueApp() {
                 setPlayerSearchQuery(name);
                 startTransition(() => setTab("search"));
               }}
+            />
+          ) : tab === "lms" ? (
+            <LmsOperator
+              leagueId={prefs.leagueId}
+              leagueName={prefs.leagueName}
+              divisionId={selectedDivision?.id ?? prefs.divisionId}
+              divisionName={selectedDivision?.name ?? prefs.divisionName}
+              divisions={divisions}
+              user={user}
+              authLoading={authLoading}
+              onRequestLogin={() => setScreen("login")}
+              onRequestContext={() => setContextOpen(true)}
             />
           ) : tab === "score" ? (
             <MatchScoring

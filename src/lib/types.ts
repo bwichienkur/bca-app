@@ -133,7 +133,8 @@ export type ReportTab =
   | "handicap"
   | "events"
   | "search"
-  | "score";
+  | "score"
+  | "lms";
 
 export type MembershipTeam = {
   teamId: string;

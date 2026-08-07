@@ -1,0 +1,140 @@
+import { NextRequest, NextResponse } from "next/server";
+import {
+  isOperatorConfigured,
+  loginLeagueOperator,
+  operatorCreateDivisionFromCopy,
+  operatorGetDivisionSettings,
+} from "@/lib/lms-operator";
+import { requireScoringSession } from "@/lib/scoring-auth";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(request: NextRequest) {
+  try {
+    await requireScoringSession();
+    if (!isOperatorConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            "League operator is not configured. Set LMS_OPERATOR_EMAIL and LMS_OPERATOR_PASSWORD.",
+        },
+        { status: 503 },
+      );
+    }
+
+    const divisionId = request.nextUrl.searchParams.get("divisionId")?.trim();
+    if (!divisionId) {
+      return NextResponse.json(
+        { error: "divisionId is required." },
+        { status: 400 },
+      );
+    }
+
+    const operator = await loginLeagueOperator();
+    const settings = await operatorGetDivisionSettings(
+      operator,
+      divisionId,
+      true,
+    );
+    return NextResponse.json({
+      id: settings.Id ?? divisionId,
+      name: settings.Name ?? null,
+      description: settings.Description ?? null,
+      skillLevel: settings.SkillLevel ?? null,
+      numberOfPlayers: settings.NumberOfPlayers ?? null,
+      costPerPlayer: settings.CostPerPlayer ?? null,
+      gameType: settings.GameType ?? null,
+      tableSize: settings.TableSize ?? null,
+      timeZoneName: settings.TimeZoneName ?? null,
+      bcaplFormat: settings.BCAPLFormat ?? null,
+      leagueId: settings.LeagueId ?? null,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to load division settings.";
+    const status = message.includes("Sign in")
+      ? 401
+      : message.includes("not configured")
+        ? 503
+        : 502;
+    return NextResponse.json({ error: message }, { status });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    await requireScoringSession();
+    if (!isOperatorConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            "League operator is not configured. Set LMS_OPERATOR_EMAIL and LMS_OPERATOR_PASSWORD.",
+        },
+        { status: 503 },
+      );
+    }
+
+    const body = (await request.json()) as {
+      leagueId?: string;
+      sourceDivisionId?: string;
+      name?: string;
+      description?: string;
+      skillLevel?: string | number;
+      includeTeams?: boolean;
+      includePlayers?: boolean;
+    };
+
+    const leagueId = body.leagueId?.trim() ?? "";
+    const sourceDivisionId = body.sourceDivisionId?.trim() ?? "";
+    const name = body.name?.trim() ?? "";
+
+    if (!leagueId || !sourceDivisionId || !name) {
+      return NextResponse.json(
+        { error: "leagueId, sourceDivisionId, and name are required." },
+        { status: 400 },
+      );
+    }
+
+    const operator = await loginLeagueOperator();
+    const result = await operatorCreateDivisionFromCopy(operator, {
+      leagueId,
+      sourceDivisionId,
+      name,
+      description: body.description?.trim(),
+      skillLevel: body.skillLevel,
+      includeTeams: body.includeTeams !== false,
+      includePlayers: Boolean(body.includePlayers),
+    });
+
+    if (!result.success) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            result.messages.join("\n") ||
+            "Division creation failed in LMS.",
+          messages: result.messages,
+          redirectUrl: result.redirectUrl,
+        },
+        { status: 400 },
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      messages: result.messages,
+      redirectUrl: result.redirectUrl,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to create division.";
+    const status = message.includes("Sign in")
+      ? 401
+      : message.includes("not configured")
+        ? 503
+        : 502;
+    return NextResponse.json({ error: message }, { status });
+  }
+}

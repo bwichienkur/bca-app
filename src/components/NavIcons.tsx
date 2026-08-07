@@ -109,6 +109,17 @@ function EventsIcon({ className }: IconProps) {
   );
 }
 
+function LmsIcon({ className }: IconProps) {
+  return (
+    <IconShell className={className}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 9h18" />
+      <path d="M8 13h3" />
+      <path d="M8 17h8" />
+    </IconShell>
+  );
+}
+
 const NAV_ICONS: Record<
   Exclude<ReportTab, "search">,
   (props: IconProps) => ReactNode
@@ -120,6 +131,7 @@ const NAV_ICONS: Record<
   handicap: HandicapIcon,
   events: EventsIcon,
   score: ScoreIcon,
+  lms: LmsIcon,
 };
 
 export function NavTabIcon({
