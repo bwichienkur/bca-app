@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
+import { LmsFormatTemplateBuilder } from "./LmsFormatTemplateBuilder";
 import { SelectField } from "./SelectField";
 
 const inputClass =
@@ -250,6 +251,7 @@ export function LmsDivisionSettingsForm({
   onSave: () => void;
 }) {
   const [tab, setTab] = useState<SettingsTab>("general");
+  const [builderOpen, setBuilderOpen] = useState(false);
   const nameLen = asStr(settings.Name).length;
 
   const teamSelected = useMemo(
@@ -597,53 +599,24 @@ export function LmsDivisionSettingsForm({
 
       {tab === "format" ? (
         <div className="space-y-3">
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/40 p-3">
+            <p className="text-sm font-semibold text-[var(--ink)]">
+              Visual scoresheet builder
+            </p>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Build rounds and games with player slots, then we translate that
+              into the LMS advanced template language for you.
+            </p>
             <button
               type="button"
-              className={`${btnPrimary} w-full`}
-              onClick={() => {
-                // Focus the scoresheet layout editor below.
-                document
-                  .getElementById("lms-scoresheet-layout")
-                  ?.scrollIntoView({ behavior: "smooth", block: "center" });
-              }}
+              className={`${btnPrimary} mt-3 w-full sm:w-auto`}
+              onClick={() => setBuilderOpen(true)}
             >
-              Scoresheet layout
-            </button>
-            <button
-              type="button"
-              className={`${btnPrimary} w-full`}
-              onClick={() => {
-                document
-                  .getElementById("lms-format-template")
-                  ?.scrollIntoView({ behavior: "smooth", block: "center" });
-              }}
-            >
-              Advanced template
+              Open scoresheet builder
             </button>
           </div>
-          <p className="text-xs text-[var(--muted)]">
-            Legacy scoresheet layouts and DSL advanced templates are saved with
-            division settings (same as LMS). Clear a layout to archive it.
-          </p>
-          <Field label="Scoresheet layout (legacy encoded)">
-            <textarea
-              id="lms-scoresheet-layout"
-              className={`${inputClass} min-h-28 font-mono text-xs`}
-              value={asStr(settings.ScoresheetLayout)}
-              onChange={(e) => patch({ ScoresheetLayout: e.target.value || null })}
-              placeholder="Empty means no legacy scoresheet layout"
-            />
-          </Field>
-          <button
-            type="button"
-            className={btnDelete}
-            disabled={!asStr(settings.ScoresheetLayout)}
-            onClick={() => patch({ ScoresheetLayout: null })}
-          >
-            Archive / clear scoresheet layout
-          </button>
-          <Field label="Apply format template">
+
+          <Field label="Start from LMS template">
             <SelectField
               aria-label="Format template"
               value=""
@@ -661,29 +634,87 @@ export function LmsDivisionSettingsForm({
               }}
             />
           </Field>
-          <Field label="Advanced format template (DSL)">
-            <textarea
-              id="lms-format-template"
-              className={`${inputClass} min-h-48 font-mono text-xs`}
-              value={asStr(settings.FormatTemplate)}
-              onChange={(e) => patch({ FormatTemplate: e.target.value })}
-            />
-          </Field>
-          <Field label="BCAPL format code">
-            <input
-              className={inputClass}
-              value={asStr(settings.BCAPLFormat)}
-              onChange={(e) => patch({ BCAPLFormat: e.target.value })}
-            />
-          </Field>
-          <Field label="Match format">
-            <input
-              className={inputClass}
-              value={asStr(settings.MatchFormat, "0")}
-              onChange={(e) => patch({ MatchFormat: e.target.value })}
-            />
-          </Field>
+
+          <details className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3">
+            <summary className="cursor-pointer text-sm font-semibold text-[var(--ink)]">
+              Advanced template text (optional)
+            </summary>
+            <div className="mt-3 space-y-3">
+              <p className="text-xs text-[var(--muted)]">
+                This is the same language LMS saves. Prefer the visual builder
+                unless you need a raw edit.
+              </p>
+              <textarea
+                id="lms-format-template"
+                className={`${inputClass} min-h-40 font-mono text-xs`}
+                value={asStr(settings.FormatTemplate)}
+                onChange={(e) => patch({ FormatTemplate: e.target.value })}
+              />
+            </div>
+          </details>
+
+          <details className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3">
+            <summary className="cursor-pointer text-sm font-semibold text-[var(--ink)]">
+              Legacy scoresheet layout (rarely used)
+            </summary>
+            <div className="mt-3 space-y-3">
+              <p className="text-xs text-[var(--muted)]">
+                Most modern divisions leave this empty and use the advanced
+                template above. Clearing archives the legacy layout.
+              </p>
+              <textarea
+                id="lms-scoresheet-layout"
+                className={`${inputClass} min-h-24 font-mono text-xs`}
+                value={asStr(settings.ScoresheetLayout)}
+                onChange={(e) =>
+                  patch({ ScoresheetLayout: e.target.value || null })
+                }
+                placeholder="Empty means no legacy scoresheet layout"
+              />
+              <button
+                type="button"
+                className={btnDelete}
+                disabled={!asStr(settings.ScoresheetLayout)}
+                onClick={() => patch({ ScoresheetLayout: null })}
+              >
+                Archive / clear scoresheet layout
+              </button>
+            </div>
+          </details>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="BCAPL format code">
+              <input
+                className={inputClass}
+                value={asStr(settings.BCAPLFormat)}
+                onChange={(e) => patch({ BCAPLFormat: e.target.value })}
+              />
+            </Field>
+            <Field label="Match format">
+              <input
+                className={inputClass}
+                value={asStr(settings.MatchFormat, "0")}
+                onChange={(e) => patch({ MatchFormat: e.target.value })}
+              />
+            </Field>
+          </div>
         </div>
+      ) : null}
+
+      {builderOpen ? (
+        <LmsFormatTemplateBuilder
+          initialTemplate={asStr(settings.FormatTemplate)}
+          playerCountHint={Number(settings.NumberOfPlayers) || undefined}
+          onCancel={() => setBuilderOpen(false)}
+          onApply={(template, meta) => {
+            patch({
+              FormatTemplate: template,
+              NumberOfPlayers: String(meta.playerCount),
+              NumberOfRounds: String(meta.rounds),
+            });
+            setBuilderOpen(false);
+          }}
+        />
       ) : null}
 
       <label className="flex items-center gap-2 text-sm">
