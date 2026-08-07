@@ -56,7 +56,7 @@ export function SettingsScreen({
   const [publicLeagues, setPublicLeagues] = useState<LeagueSummary[]>([]);
   const [loadingLeagues, setLoadingLeagues] = useState(false);
   const [linkProvider, setLinkProvider] = useState<
-    null | "fargo" | "digital-pool"
+    null | "fargo" | "digital-pool" | "operator"
   >(null);
   const [linkEmail, setLinkEmail] = useState("");
   const [linkPassword, setLinkPassword] = useState("");
@@ -65,6 +65,7 @@ export function SettingsScreen({
 
   const fargoLinked = Boolean(user.fargoLinked ?? user.lmsId);
   const digitalPoolLinked = Boolean(user.digitalPoolLinked);
+  const operatorLinked = Boolean(user.leagueOperator);
   const scoringReady = Boolean(user.scoringReady ?? user.lmsId);
 
   useEffect(() => {
@@ -183,7 +184,9 @@ export function SettingsScreen({
       const endpoint =
         linkProvider === "fargo"
           ? "/api/auth/link/fargo"
-          : "/api/auth/link/digital-pool";
+          : linkProvider === "operator"
+            ? "/api/auth/link/operator"
+            : "/api/auth/link/digital-pool";
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -206,7 +209,9 @@ export function SettingsScreen({
       setStatus(
         linkProvider === "fargo"
           ? "FargoRate connected."
-          : "Digital Pool connected.",
+          : linkProvider === "operator"
+            ? "League Operator connected."
+            : "Digital Pool connected.",
       );
       if (linkProvider === "fargo") onRefreshMembership();
     } catch (err) {
@@ -216,7 +221,7 @@ export function SettingsScreen({
     }
   };
 
-  const unlink = async (provider: "fargo" | "digital-pool") => {
+  const unlink = async (provider: "fargo" | "digital-pool" | "operator") => {
     setLinkBusy(true);
     setLinkError(null);
     try {
@@ -236,7 +241,9 @@ export function SettingsScreen({
       setStatus(
         provider === "fargo"
           ? "FargoRate disconnected."
-          : "Digital Pool disconnected.",
+          : provider === "operator"
+            ? "League Operator disconnected."
+            : "Digital Pool disconnected.",
       );
     } catch (err) {
       setLinkError(err instanceof Error ? err.message : "Could not unlink.");
@@ -260,7 +267,8 @@ export function SettingsScreen({
             <span className="font-medium text-[var(--ink)]">
               {user.name ?? user.email ?? "Player"}
             </span>
-            . Connect FargoRate for Score and Digital Pool for brackets.
+            . Connect FargoRate for Score, League Operator for the LMS tab, and
+            Digital Pool for brackets.
           </p>
         </div>
         <button
@@ -278,8 +286,8 @@ export function SettingsScreen({
             Connected accounts
           </p>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            FargoRate unlocks Score (and can create your account on sign-in).
-            Digital Pool is for bracket push.
+            FargoRate unlocks Score. League Operator uses a separate LMS web
+            login. Digital Pool is for bracket push.
           </p>
         </div>
 
@@ -287,7 +295,7 @@ export function SettingsScreen({
           <div className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/60 px-3 py-2.5">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-[var(--ink)]">
-                FargoRate / LMS
+                FargoRate
               </p>
               <p className="truncate text-xs text-[var(--muted)]">
                 {fargoLinked
@@ -339,6 +347,43 @@ export function SettingsScreen({
           <div className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/60 px-3 py-2.5">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-[var(--ink)]">
+                League Operator
+              </p>
+              <p className="truncate text-xs text-[var(--muted)]">
+                {operatorLinked
+                  ? "Connected · LMS tab unlocked"
+                  : "Separate LMS web login"}
+              </p>
+            </div>
+            <div className="flex shrink-0 justify-end">
+              {operatorLinked ? (
+                <button
+                  type="button"
+                  disabled={linkBusy}
+                  onClick={() => void unlink("operator")}
+                  className="rounded-[var(--radius)] bg-[#b42318] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  Disconnect
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={linkBusy}
+                  onClick={() => {
+                    setLinkProvider("operator");
+                    setLinkError(null);
+                  }}
+                  className="rounded-[var(--radius)] bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  Connect
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/60 px-3 py-2.5">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-[var(--ink)]">
                 Digital Pool
               </p>
               <p className="truncate text-xs text-[var(--muted)]">
@@ -377,8 +422,16 @@ export function SettingsScreen({
             <p className="text-sm font-semibold text-[var(--ink)]">
               {linkProvider === "fargo"
                 ? "Connect FargoRate"
-                : "Connect Digital Pool"}
+                : linkProvider === "operator"
+                  ? "Connect League Operator"
+                  : "Connect Digital Pool"}
             </p>
+            {linkProvider === "operator" ? (
+              <p className="text-xs text-[var(--muted)]">
+                Use your LMS website League Operator email and password
+                (lms.fargorate.com) — not your FargoRate player login.
+              </p>
+            ) : null}
             <label className="block space-y-1">
               <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
                 Email

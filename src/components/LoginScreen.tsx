@@ -89,10 +89,10 @@ export function LoginScreen({ onSuccess, onCancel }: LoginScreenProps) {
           {isFargo
             ? "Use the same email and password as the official BCAPL scoring app. Signing in creates your Tableside account automatically and unlocks Score."
             : isOperator
-              ? "Use your LMS web League Operator email and password (lms.fargorate.com). This unlocks the LMS manage tab."
+              ? "League Operator login is separate from FargoRate. Use your LMS website LO email and password (lms.fargorate.com) to unlock the LMS manage tab. You can also connect this later in Settings."
               : isRegister
-                ? "No FargoRate account needed. Create a Tableside account for Events, then connect Digital Pool in Settings. Connect Fargo later if you want Score."
-                : "Sign in with your Tableside email and password. Connect FargoRate in Settings when you need Score."}
+                ? "No FargoRate account needed. Create a Tableside account for Events, then connect Digital Pool or League Operator in Settings. Connect Fargo later if you want Score."
+                : "Sign in with your Tableside email and password. Connect FargoRate, League Operator, or Digital Pool in Settings."}
         </p>
       </div>
 
