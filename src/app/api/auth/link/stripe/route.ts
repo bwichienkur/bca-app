@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   getAppUser,
-  requireAppUser,
+  requireAppUserOrBridge,
   toPublicAuthUser,
 } from "@/lib/app-auth";
 import { readScoringSession } from "@/lib/scoring-auth";
@@ -28,24 +28,33 @@ export async function POST(request: NextRequest) {
   try {
     if (!isStripeConfigured()) {
       return NextResponse.json(
-        { error: "Stripe is not configured on this server." },
+        {
+          error:
+            "Stripe is not configured on this server. Set STRIPE_SECRET_KEY (and redeploy).",
+        },
         { status: 503 },
       );
     }
 
-    const appUser = await requireAppUser();
+    const appUser = await requireAppUserOrBridge();
     const result = await startStripeConnectOnboarding(appUser, request);
+    const scoring = await readScoringSession();
+    const scoringReady = Boolean(
+      scoring &&
+        result.user.fargo?.lmsId &&
+        scoring.lmsId === result.user.fargo.lmsId,
+    );
     return NextResponse.json({
       url: result.url,
       accountId: result.accountId,
-      user: await toUserResponse(appUser.id),
+      user: toPublicAuthUser(result.user, scoringReady),
     });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Could not start Stripe Connect.";
     const status = message.includes("Sign in")
       ? 401
-      : message.includes("not configured")
+      : message.includes("not configured") || message.includes("APP_URL")
         ? 503
         : 502;
     return NextResponse.json({ error: message }, { status });
@@ -57,12 +66,15 @@ export async function GET() {
   try {
     if (!isStripeConfigured()) {
       return NextResponse.json(
-        { error: "Stripe is not configured on this server." },
+        {
+          error:
+            "Stripe is not configured on this server. Set STRIPE_SECRET_KEY (and redeploy).",
+        },
         { status: 503 },
       );
     }
 
-    const appUser = await requireAppUser();
+    const appUser = await requireAppUserOrBridge();
     if (!appUser.stripe?.accountId) {
       return NextResponse.json({
         user: await toUserResponse(appUser.id),

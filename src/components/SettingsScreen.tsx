@@ -86,6 +86,7 @@ export function SettingsScreen({
   const connectStripe = async () => {
     setLinkBusy(true);
     setLinkError(null);
+    setStatus(null);
     try {
       const response = await fetch("/api/auth/link/stripe", { method: "POST" });
       const payload = (await response.json().catch(() => null)) as {
@@ -97,11 +98,13 @@ export function SettingsScreen({
         throw new Error(payload?.error || "Could not start Stripe Connect.");
       }
       if (payload.user) onUserUpdate?.(payload.user);
+      setStatus("Redirecting to Stripe…");
       window.location.assign(payload.url);
     } catch (err) {
-      setLinkError(
-        err instanceof Error ? err.message : "Could not start Stripe Connect.",
-      );
+      const message =
+        err instanceof Error ? err.message : "Could not start Stripe Connect.";
+      setLinkError(message);
+      setStatus(null);
       setLinkBusy(false);
     }
   };
@@ -551,6 +554,10 @@ export function SettingsScreen({
             </div>
           </div>
         </div>
+
+        {linkError && !linkProvider ? (
+          <p className="text-sm text-[var(--danger)]">{linkError}</p>
+        ) : null}
 
         {linkProvider ? (
           <form onSubmit={submitLink} className="space-y-3 border-t border-[var(--line)] pt-3">

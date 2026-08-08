@@ -483,6 +483,28 @@ export async function requireAppUser(): Promise<AppUser> {
   return user;
 }
 
+/**
+ * Prefer the Tableside app session; if missing, bridge a live Fargo scoring
+ * cookie into an app user (same path as GET /api/auth/session).
+ */
+export async function requireAppUserOrBridge(): Promise<AppUser> {
+  try {
+    return await requireAppUser();
+  } catch {
+    /* try scoring bridge below */
+  }
+
+  const { readScoringSession } = await import("@/lib/scoring-auth");
+  const scoring = await readScoringSession();
+  if (!scoring) throw new Error("Sign in required.");
+
+  const user = await upsertAppUserFromFargo(scoring, {
+    emailFallback: scoring.email ?? undefined,
+  });
+  await writeAppSession(user.id);
+  return user;
+}
+
 export function toPublicAuthUser(
   user: AppUser,
   scoringReady: boolean,
