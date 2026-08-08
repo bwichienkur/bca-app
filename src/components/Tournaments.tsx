@@ -2099,6 +2099,15 @@ export function Tournaments({
     setError(null);
     try {
       const payload = buildFormPayload();
+      if (
+        isStripePayMethod(payload.payMethod) &&
+        (payload.entryFeeCents ?? 0) > 0 &&
+        !user.stripeChargesEnabled
+      ) {
+        throw new Error(
+          "Connect Stripe in Settings (and finish setup) before using Pay online.",
+        );
+      }
       const isEdit = view === "edit" && Boolean(editingId);
       const res = await fetch(
         isEdit ? `/api/tournaments/${editingId}` : "/api/tournaments",
@@ -3274,6 +3283,13 @@ export function Tournaments({
                       setForm((p) => ({ ...p, payMethod }))
                     }
                   />
+                  {isStripePayMethod(form.payMethod) ? (
+                    <p className="mt-1.5 text-[11px] leading-snug text-[var(--muted)]">
+                      {user?.stripeChargesEnabled
+                        ? "Entry fees go to your connected Stripe account."
+                        : "Connect Stripe in Settings before players can pay online."}
+                    </p>
+                  ) : null}
                 </Field>
                 <Field label="Venmo">
                   <input

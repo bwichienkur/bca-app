@@ -7,6 +7,7 @@ export const APP_SESSION_COOKIE = "tableside.app.session";
 const USER_KEY = (id: string) => `tableside:app-user:v1:${id}`;
 const EMAIL_KEY = (email: string) =>
   `tableside:app-user-email:v1:${normalizeEmail(email)}`;
+const LMS_KEY = (lmsId: string) => `tableside:app-user-lms:v1:${lmsId.trim()}`;
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 60; // 60 days
 
 export type LinkedFargoAccount = {
@@ -29,6 +30,16 @@ export type LinkedDigitalPoolAccount = {
   linkedAt: string;
 };
 
+/** Stripe Connect Express account for tournament entry-fee payouts. */
+export type LinkedStripeAccount = {
+  accountId: string;
+  chargesEnabled: boolean;
+  detailsSubmitted: boolean;
+  payoutsEnabled: boolean;
+  linkedAt: string;
+  updatedAt: string;
+};
+
 export type AppUser = {
   id: string;
   email: string;
@@ -38,6 +49,7 @@ export type AppUser = {
   updatedAt: string;
   fargo: LinkedFargoAccount | null;
   digitalPool: LinkedDigitalPoolAccount | null;
+  stripe?: LinkedStripeAccount | null;
   /** Verified LMS League Operator web login (see /api/auth/login/operator). */
   leagueOperator?: boolean;
   leagueOperatorLinkedAt?: string | null;
@@ -58,6 +70,9 @@ export type PublicAuthUser = {
   readableId: string | null;
   fargoLinked: boolean;
   digitalPoolLinked: boolean;
+  stripeLinked: boolean;
+  /** True when the connected Stripe account can accept charges. */
+  stripeChargesEnabled: boolean;
   /** True when a live Fargo scoring session cookie is available. */
   scoringReady: boolean;
   /** Verified LMS League Operator — unlocks the LMS tab with Bright allowlist. */
@@ -67,6 +82,7 @@ export type PublicAuthUser = {
 type MemoryStore = {
   users: Map<string, AppUser>;
   emailIndex: Map<string, string>;
+  lmsIndex: Map<string, string>;
 };
 
 declare global {
@@ -79,9 +95,12 @@ function memory(): MemoryStore {
     globalThis.__tablesideAppAuthMemory = {
       users: new Map(),
       emailIndex: new Map(),
+      lmsIndex: new Map(),
     };
   }
-  return globalThis.__tablesideAppAuthMemory;
+  const store = globalThis.__tablesideAppAuthMemory;
+  if (!store.lmsIndex) store.lmsIndex = new Map();
+  return store;
 }
 
 export function normalizeEmail(email: string): string {
@@ -176,10 +195,72 @@ export async function getAppUserByEmail(
   return id ? (memory().users.get(id) ?? null) : null;
 }
 
+/** Look up an app user by linked Fargo LMS id (tournament organizerUserId). */
+export async function getAppUserByLmsId(
+  lmsId: string,
+): Promise<AppUser | null> {
+  const id = lmsId.trim();
+  if (!id) return null;
+  const redis = getRedis();
+  if (redis) {
+    try {
+      const userId = await redis.get<string>(LMS_KEY(id));
+      if (userId) {
+        const user = await getAppUser(userId);
+        if (user?.fargo?.lmsId === id) return user;
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  const userId = memory().lmsIndex.get(id);
+  if (userId) {
+    const user = memory().users.get(userId);
+    if (user?.fargo?.lmsId === id) return user;
+  }
+  // Memory fallback scan (dev / single-instance without index).
+  for (const user of memory().users.values()) {
+    if (user.fargo?.lmsId === id) return user;
+  }
+  return null;
+}
+
+async function syncLmsIndex(
+  user: AppUser,
+  previousLmsId?: string | null,
+): Promise<void> {
+  const nextLmsId = user.fargo?.lmsId?.trim() || "";
+  const prev = previousLmsId?.trim() || "";
+  const redis = getRedis();
+  if (redis) {
+    try {
+      if (prev && prev !== nextLmsId) {
+        const current = await redis.get<string>(LMS_KEY(prev));
+        if (current === user.id) await redis.del(LMS_KEY(prev));
+      }
+      if (nextLmsId) {
+        await redis.set(LMS_KEY(nextLmsId), user.id, {
+          ex: SESSION_TTL_SECONDS * 6,
+        });
+      }
+    } catch {
+      /* fall through to memory */
+    }
+  }
+  if (prev && prev !== nextLmsId) {
+    if (memory().lmsIndex.get(prev) === user.id) {
+      memory().lmsIndex.delete(prev);
+    }
+  }
+  if (nextLmsId) memory().lmsIndex.set(nextLmsId, user.id);
+}
+
 export async function saveAppUser(user: AppUser): Promise<AppUser> {
+  const previous = await getAppUser(user.id);
   const next: AppUser = {
     ...user,
     email: normalizeEmail(user.email),
+    stripe: user.stripe ?? null,
     updatedAt: new Date().toISOString(),
   };
   const redis = getRedis();
@@ -189,6 +270,7 @@ export async function saveAppUser(user: AppUser): Promise<AppUser> {
       await redis.set(EMAIL_KEY(next.email), next.id, {
         ex: SESSION_TTL_SECONDS * 6,
       });
+      await syncLmsIndex(next, previous?.fargo?.lmsId);
       return next;
     } catch {
       /* fall through */
@@ -196,6 +278,7 @@ export async function saveAppUser(user: AppUser): Promise<AppUser> {
   }
   memory().users.set(next.id, next);
   memory().emailIndex.set(next.email, next.id);
+  await syncLmsIndex(next, previous?.fargo?.lmsId);
   return next;
 }
 
@@ -230,6 +313,7 @@ export async function registerAppUser(input: {
     updatedAt: now,
     fargo: null,
     digitalPool: null,
+    stripe: null,
     leagueOperator: false,
     leagueOperatorLinkedAt: null,
   };
@@ -298,6 +382,7 @@ export async function upsertAppUserFromFargo(
       updatedAt: now,
       fargo,
       digitalPool: null,
+      stripe: null,
       leagueOperator: false,
       leagueOperatorLinkedAt: null,
     };
@@ -344,6 +429,7 @@ export async function upsertAppUserFromLeagueOperator(input: {
       updatedAt: now,
       fargo: null,
       digitalPool: null,
+      stripe: null,
       leagueOperator: true,
       leagueOperatorLinkedAt: now,
     };
@@ -401,6 +487,7 @@ export function toPublicAuthUser(
   user: AppUser,
   scoringReady: boolean,
 ): PublicAuthUser {
+  const stripe = user.stripe ?? null;
   return {
     id: user.id,
     email: user.email,
@@ -409,6 +496,8 @@ export function toPublicAuthUser(
     readableId: user.fargo?.readableId ?? null,
     fargoLinked: Boolean(user.fargo?.lmsId),
     digitalPoolLinked: Boolean(user.digitalPool?.uid),
+    stripeLinked: Boolean(stripe?.accountId),
+    stripeChargesEnabled: Boolean(stripe?.chargesEnabled),
     scoringReady,
     leagueOperator: Boolean(user.leagueOperator),
   };
@@ -426,6 +515,8 @@ export function publicUserFromScoring(
     readableId: scoring.readableId,
     fargoLinked: true,
     digitalPoolLinked: false,
+    stripeLinked: false,
+    stripeChargesEnabled: false,
     scoringReady: true,
     leagueOperator: false,
   };

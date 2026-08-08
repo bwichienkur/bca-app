@@ -20,10 +20,14 @@ export async function POST(request: NextRequest) {
     if (
       provider !== "fargo" &&
       provider !== "digital-pool" &&
-      provider !== "operator"
+      provider !== "operator" &&
+      provider !== "stripe"
     ) {
       return NextResponse.json(
-        { error: "provider must be fargo, digital-pool, or operator." },
+        {
+          error:
+            "provider must be fargo, digital-pool, operator, or stripe.",
+        },
         { status: 400 },
       );
     }
@@ -34,6 +38,8 @@ export async function POST(request: NextRequest) {
       await clearScoringSession();
     } else if (provider === "digital-pool") {
       updated = await saveAppUser({ ...appUser, digitalPool: null });
+    } else if (provider === "stripe") {
+      updated = await saveAppUser({ ...appUser, stripe: null });
     } else {
       updated = await saveAppUser({
         ...appUser,

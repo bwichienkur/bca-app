@@ -6,6 +6,10 @@ import {
   isStripePayMethod,
   requestOrigin,
 } from "@/lib/stripe";
+import {
+  platformFeeCents,
+  resolveOrganizerStripeAccount,
+} from "@/lib/stripe-connect";
 import { eventDeepLinkPath } from "@/lib/app-url";
 import {
   attachStripeCheckoutSession,
@@ -91,6 +95,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const successUrl = `${origin}${deepLink}&pay=success`;
     const cancelUrl = `${origin}${deepLink}&pay=cancel`;
 
+    const organizerStripe = await resolveOrganizerStripeAccount(
+      tournament.organizerUserId,
+    );
+    const applicationFeeAmount = platformFeeCents(tournament.entryFeeCents);
+
     const entryLabel =
       registration.teamName?.trim() || registration.displayName.trim() || "Entry";
     const stripe = getStripe();
@@ -113,10 +122,25 @@ export async function POST(request: NextRequest, context: RouteContext) {
       success_url: successUrl,
       cancel_url: cancelUrl,
       client_reference_id: registration.id,
+      payment_intent_data: {
+        transfer_data: {
+          destination: organizerStripe.accountId,
+        },
+        ...(applicationFeeAmount > 0
+          ? { application_fee_amount: applicationFeeAmount }
+          : {}),
+        metadata: {
+          tournamentId,
+          registrationId: registration.id,
+          organizerUserId: tournament.organizerUserId,
+        },
+      },
       metadata: {
         tournamentId,
         registrationId: registration.id,
         userId: session.lmsId,
+        organizerUserId: tournament.organizerUserId,
+        stripeAccountId: organizerStripe.accountId,
       },
     });
 
@@ -145,7 +169,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       ? 401
       : message.includes("not configured")
         ? 503
-        : 502;
+        : message.includes("organizer") || message.includes("Organizer")
+          ? 400
+          : 502;
     return NextResponse.json({ error: message }, { status });
   }
 }

@@ -98,17 +98,19 @@ LMS_TAB_ALLOWLIST_EMAILS=other@example.com
 LMS_TAB_ALLOWLIST_LMS_IDS=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
 
-### Tournament entry fees (Stripe)
+### Tournament entry fees (Stripe Connect)
 
-Optional. When set, organizers can choose **Pay online (Stripe)** on an event and players are sent to Stripe Checkout for the entry fee after signup (or via **Pay entry fee** on their entry).
+Optional. Organizers connect their own Stripe account in **Settings → Connected accounts → Stripe**. When an event uses **Pay online (Stripe)**, Checkout sends the entry fee to that organizer’s connected account (destination charge on the platform account).
 
 ```bash
 STRIPE_SECRET_KEY=sk_live_…
 STRIPE_WEBHOOK_SECRET=whsec_…
 APP_URL=https://your-app.example.com
+# Optional platform fee in basis points (100 = 1%). Default 0.
+# STRIPE_PLATFORM_FEE_BPS=0
 ```
 
-Point a Stripe webhook at `POST /api/stripe/webhook` for `checkout.session.completed` (and optionally `checkout.session.async_payment_succeeded`). `APP_URL` (or `NEXT_PUBLIC_APP_URL`) is used for Checkout success/cancel redirects.
+Enable **Stripe Connect** (Express) on the platform account. Point a webhook at `POST /api/stripe/webhook` for `checkout.session.completed` (and optionally `checkout.session.async_payment_succeeded`). `APP_URL` is used for Checkout and Connect onboarding return URLs.
 
 ### Score drafts
 Keyed by match id, TTL 60 days, last-write-wins with ~3s polling while a scoresheet is open.
