@@ -31,49 +31,95 @@ function linkFromAccount(
   };
 }
 
+function stripeErrorMessage(error: unknown, fallback: string): string {
+  if (!error || typeof error !== "object") return fallback;
+  const err = error as {
+    message?: string;
+    type?: string;
+    raw?: { message?: string };
+  };
+  const message = (err.message || err.raw?.message || "").trim();
+  if (!message) return fallback;
+  if (/signed up for connect/i.test(message) || /connect/i.test(message)) {
+    return `${message} Enable Connect (Express) in your Stripe Dashboard, then try again.`;
+  }
+  return message;
+}
+
 /** Create or reuse a Connect Express account and return an onboarding Account Link URL. */
 export async function startStripeConnectOnboarding(
   user: AppUser,
   request: Request,
-): Promise<{ url: string; accountId: string }> {
+): Promise<{ url: string; accountId: string; user: AppUser }> {
   const stripe = getStripe();
   const origin = requestOrigin(request);
+  if (!origin || !/^https?:\/\//i.test(origin)) {
+    throw new Error(
+      "APP_URL is missing or invalid. Set APP_URL to your public site origin (e.g. https://your-app.vercel.app).",
+    );
+  }
+
   let accountId = user.stripe?.accountId?.trim() || "";
+  let workingUser = user;
 
   if (!accountId) {
-    const account = await stripe.accounts.create({
-      type: "express",
-      country: "US",
-      email: user.email || undefined,
-      capabilities: {
-        card_payments: { requested: true },
-        transfers: { requested: true },
-      },
-      business_type: "individual",
-      metadata: {
-        tablesideUserId: user.id,
-        lmsId: user.fargo?.lmsId ?? "",
-      },
-    });
-    accountId = account.id;
-    await saveAppUser({
-      ...user,
-      stripe: linkFromAccount(account, null),
-    });
+    try {
+      const account = await stripe.accounts.create({
+        type: "express",
+        country: "US",
+        email: user.email || undefined,
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        business_type: "individual",
+        metadata: {
+          tablesideUserId: user.id,
+          lmsId: user.fargo?.lmsId ?? "",
+        },
+      });
+      accountId = account.id;
+      workingUser = await saveAppUser({
+        ...user,
+        stripe: linkFromAccount(account, null),
+      });
+    } catch (error) {
+      throw new Error(
+        stripeErrorMessage(error, "Could not create a Stripe Connect account."),
+      );
+    }
   }
 
-  const accountLink = await stripe.accountLinks.create({
-    account: accountId,
-    refresh_url: `${origin}/?stripe=refresh`,
-    return_url: `${origin}/?stripe=return`,
-    type: "account_onboarding",
-  });
+  try {
+    const accountLink = await stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: `${origin}/?stripe=refresh`,
+      return_url: `${origin}/?stripe=return`,
+      type: "account_onboarding",
+    });
 
-  if (!accountLink.url) {
-    throw new Error("Stripe did not return an onboarding URL.");
+    if (!accountLink.url) {
+      throw new Error("Stripe did not return an onboarding URL.");
+    }
+
+    return { url: accountLink.url, accountId, user: workingUser };
+  } catch (error) {
+    // Stale/deleted Connect account id — clear and ask the user to retry once.
+    const message = stripeErrorMessage(
+      error,
+      "Could not start Stripe onboarding.",
+    );
+    if (
+      workingUser.stripe?.accountId &&
+      (/no such account/i.test(message) || /account.*invalid/i.test(message))
+    ) {
+      await saveAppUser({ ...workingUser, stripe: null });
+      throw new Error(
+        "Your saved Stripe connection is no longer valid. Click Connect again to start fresh.",
+      );
+    }
+    throw new Error(message);
   }
-
-  return { url: accountLink.url, accountId };
 }
 
 /** Refresh Connect account flags from Stripe and persist on the user. */
