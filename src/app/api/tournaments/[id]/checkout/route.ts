@@ -123,6 +123,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       cancel_url: cancelUrl,
       client_reference_id: registration.id,
       payment_intent_data: {
+        // Connected account is MoR for the entry fee (Accounts v2 merchant).
+        on_behalf_of: organizerStripe.accountId,
         transfer_data: {
           destination: organizerStripe.accountId,
         },

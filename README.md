@@ -110,7 +110,7 @@ APP_URL=https://your-app.example.com
 # STRIPE_PLATFORM_FEE_BPS=0
 ```
 
-Enable **Stripe Connect** (Express) on the platform account. Point a webhook at `POST /api/stripe/webhook` for `checkout.session.completed` (and optionally `checkout.session.async_payment_succeeded`). `APP_URL` is used for Checkout and Connect onboarding return URLs.
+Enable **Stripe Connect** on the platform account and finish the Connect platform profile. Organizer onboarding uses **Accounts v2** (`/v2/core/accounts`) with Express Dashboard access. Point a webhook at `POST /api/stripe/webhook` for `checkout.session.completed` (and optionally `checkout.session.async_payment_succeeded`). `APP_URL` is used for Checkout and Connect onboarding return URLs.
 
 ### Score drafts
 Keyed by match id, TTL 60 days, last-write-wins with ~3s polling while a scoresheet is open.

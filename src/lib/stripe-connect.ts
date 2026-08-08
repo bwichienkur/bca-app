@@ -40,13 +40,18 @@ function stripeErrorMessage(error: unknown, fallback: string): string {
   };
   const message = (err.message || err.raw?.message || "").trim();
   if (!message) return fallback;
-  if (/signed up for connect/i.test(message) || /connect/i.test(message)) {
-    return `${message} Enable Connect (Express) in your Stripe Dashboard, then try again.`;
+
+  // Avoid dumping the whole Stripe docs essay into the Settings UI.
+  if (/Accounts v1/i.test(message) || /\/v2\/core\/accounts/i.test(message)) {
+    return "Stripe requires Accounts v2 for new Connect platforms. Update/redeploy Tableside, complete Connect platform setup in the Stripe Dashboard, then try Connect again.";
+  }
+  if (/signed up for connect/i.test(message)) {
+    return `${message} Finish Connect platform setup in your Stripe Dashboard, then try again.`;
   }
   return message;
 }
 
-/** Create or reuse a Connect Express account and return an onboarding Account Link URL. */
+/** Create or reuse a Connect account (Accounts v2) and return an onboarding URL. */
 export async function startStripeConnectOnboarding(
   user: AppUser,
   request: Request,
@@ -64,24 +69,81 @@ export async function startStripeConnectOnboarding(
 
   if (!accountId) {
     try {
-      const account = await stripe.accounts.create({
-        type: "express",
-        country: "US",
-        email: user.email || undefined,
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true },
+      const displayName =
+        user.name?.trim() ||
+        user.fargo?.name?.trim() ||
+        user.email.split("@")[0] ||
+        "Organizer";
+
+      const account = await stripe.v2.core.accounts.create({
+        contact_email: user.email || undefined,
+        display_name: displayName,
+        dashboard: "express",
+        identity: {
+          country: "us",
+          entity_type: "individual",
         },
-        business_type: "individual",
+        configuration: {
+          // Destination charges with on_behalf_of use the merchant config.
+          merchant: {
+            capabilities: {
+              card_payments: { requested: true },
+            },
+          },
+          // Allows receiving transfers into the connected Stripe balance.
+          recipient: {
+            capabilities: {
+              stripe_balance: {
+                stripe_transfers: { requested: true },
+              },
+            },
+          },
+        },
+        defaults: {
+          currency: "usd",
+          responsibilities: {
+            fees_collector: "stripe",
+            losses_collector: "application",
+          },
+          locales: ["en-US"],
+        },
         metadata: {
           tablesideUserId: user.id,
           lmsId: user.fargo?.lmsId ?? "",
         },
+        include: [
+          "configuration.merchant",
+          "configuration.recipient",
+          "identity",
+          "requirements",
+        ],
       });
+
       accountId = account.id;
+      // v1 retrieve works for v2 account IDs and exposes charges/payouts flags.
+      let chargesEnabled = false;
+      let detailsSubmitted = false;
+      let payoutsEnabled = false;
+      try {
+        const v1 = await stripe.accounts.retrieve(accountId);
+        chargesEnabled = Boolean(v1.charges_enabled);
+        detailsSubmitted = Boolean(v1.details_submitted);
+        payoutsEnabled = Boolean(v1.payouts_enabled);
+      } catch {
+        /* brand-new accounts often aren't charge-ready yet */
+      }
+
       workingUser = await saveAppUser({
         ...user,
-        stripe: linkFromAccount(account, null),
+        stripe: linkFromAccount(
+          {
+            id: accountId,
+            charges_enabled: chargesEnabled,
+            details_submitted: detailsSubmitted,
+            payouts_enabled: payoutsEnabled,
+          },
+          null,
+        ),
       });
     } catch (error) {
       throw new Error(
@@ -91,11 +153,19 @@ export async function startStripeConnectOnboarding(
   }
 
   try {
-    const accountLink = await stripe.accountLinks.create({
+    const accountLink = await stripe.v2.core.accountLinks.create({
       account: accountId,
-      refresh_url: `${origin}/?stripe=refresh`,
-      return_url: `${origin}/?stripe=return`,
-      type: "account_onboarding",
+      use_case: {
+        type: "account_onboarding",
+        account_onboarding: {
+          configurations: ["merchant", "recipient"],
+          collection_options: {
+            fields: "eventually_due",
+          },
+          return_url: `${origin}/?stripe=return`,
+          refresh_url: `${origin}/?stripe=refresh`,
+        },
+      },
     });
 
     if (!accountLink.url) {
@@ -104,7 +174,6 @@ export async function startStripeConnectOnboarding(
 
     return { url: accountLink.url, accountId, user: workingUser };
   } catch (error) {
-    // Stale/deleted Connect account id — clear and ask the user to retry once.
     const message = stripeErrorMessage(
       error,
       "Could not start Stripe onboarding.",
@@ -132,6 +201,7 @@ export async function syncStripeConnectAccount(
   }
 
   const stripe = getStripe();
+  // Interoperable: v1 retrieve accepts v2 account IDs.
   const account = await stripe.accounts.retrieve(accountId);
   return saveAppUser({
     ...user,

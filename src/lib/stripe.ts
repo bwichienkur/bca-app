@@ -15,7 +15,7 @@ export function getStripe(): Stripe {
   }
   if (!stripeClient) {
     stripeClient = new Stripe(key, {
-      apiVersion: "2025-08-27.basil",
+      apiVersion: "2026-07-29.dahlia",
       typescript: true,
     });
   }
