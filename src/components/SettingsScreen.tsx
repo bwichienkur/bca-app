@@ -65,8 +65,94 @@ export function SettingsScreen({
 
   const fargoLinked = Boolean(user.fargoLinked ?? user.lmsId);
   const digitalPoolLinked = Boolean(user.digitalPoolLinked);
+  const stripeLinked = Boolean(user.stripeLinked);
+  const stripeChargesEnabled = Boolean(user.stripeChargesEnabled);
   const operatorLinked = Boolean(user.leagueOperator);
   const scoringReady = Boolean(user.scoringReady ?? user.lmsId);
+
+  const refreshStripeStatus = async () => {
+    const response = await fetch("/api/auth/link/stripe");
+    const payload = (await response.json().catch(() => null)) as {
+      user?: AuthUser;
+      error?: string;
+    } | null;
+    if (!response.ok || !payload?.user) {
+      throw new Error(payload?.error || "Could not refresh Stripe status.");
+    }
+    onUserUpdate?.(payload.user);
+    return payload.user;
+  };
+
+  const connectStripe = async () => {
+    setLinkBusy(true);
+    setLinkError(null);
+    try {
+      const response = await fetch("/api/auth/link/stripe", { method: "POST" });
+      const payload = (await response.json().catch(() => null)) as {
+        url?: string;
+        user?: AuthUser;
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.url) {
+        throw new Error(payload?.error || "Could not start Stripe Connect.");
+      }
+      if (payload.user) onUserUpdate?.(payload.user);
+      window.location.assign(payload.url);
+    } catch (err) {
+      setLinkError(
+        err instanceof Error ? err.message : "Could not start Stripe Connect.",
+      );
+      setLinkBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const stripe = params.get("stripe");
+    if (stripe !== "return" && stripe !== "refresh") return;
+
+    let cancelled = false;
+    setLinkBusy(true);
+    setLinkError(null);
+    void (async () => {
+      try {
+        const next = await refreshStripeStatus();
+        if (cancelled) return;
+        setStatus(
+          next.stripeChargesEnabled
+            ? "Stripe connected — ready for tournament entry fees."
+            : stripe === "refresh"
+              ? "Stripe setup incomplete — continue connecting to finish."
+              : "Stripe linked — finish any remaining steps if payouts aren’t ready yet.",
+        );
+      } catch (err) {
+        if (!cancelled) {
+          setLinkError(
+            err instanceof Error
+              ? err.message
+              : "Could not refresh Stripe status.",
+          );
+        }
+      } finally {
+        if (!cancelled) setLinkBusy(false);
+      }
+    })();
+
+    params.delete("stripe");
+    const qs = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`,
+    );
+
+    return () => {
+      cancelled = true;
+    };
+    // Run once on mount when returning from Stripe Connect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -221,7 +307,9 @@ export function SettingsScreen({
     }
   };
 
-  const unlink = async (provider: "fargo" | "digital-pool" | "operator") => {
+  const unlink = async (
+    provider: "fargo" | "digital-pool" | "operator" | "stripe",
+  ) => {
     setLinkBusy(true);
     setLinkError(null);
     try {
@@ -243,7 +331,9 @@ export function SettingsScreen({
           ? "FargoRate disconnected."
           : provider === "operator"
             ? "League Operator disconnected."
-            : "Digital Pool disconnected.",
+            : provider === "stripe"
+              ? "Stripe disconnected."
+              : "Digital Pool disconnected.",
       );
     } catch (err) {
       setLinkError(err instanceof Error ? err.message : "Could not unlink.");
@@ -267,8 +357,8 @@ export function SettingsScreen({
             <span className="font-medium text-[var(--ink)]">
               {user.name ?? user.email ?? "Player"}
             </span>
-            . Connect FargoRate for Score, League Operator for the LMS tab, and
-            Digital Pool for brackets.
+            . Connect FargoRate for Score, League Operator for the LMS tab,
+            Digital Pool for brackets, and Stripe for tournament entry fees.
           </p>
         </div>
         <button
@@ -287,7 +377,8 @@ export function SettingsScreen({
           </p>
           <p className="mt-1 text-sm text-[var(--muted)]">
             FargoRate unlocks Score. League Operator uses a separate LMS web
-            login. Digital Pool is for bracket push.
+            login. Digital Pool is for bracket push. Stripe receives tournament
+            entry fees for events you organize.
           </p>
         </div>
 
@@ -408,6 +499,50 @@ export function SettingsScreen({
                     setLinkProvider("digital-pool");
                     setLinkError(null);
                   }}
+                  className="rounded-[var(--radius)] bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  Connect
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/60 px-3 py-2.5">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-[var(--ink)]">Stripe</p>
+              <p className="truncate text-xs text-[var(--muted)]">
+                {stripeChargesEnabled
+                  ? "Connected · ready for entry fees"
+                  : stripeLinked
+                    ? "Linked · finish setup to accept payments"
+                    : "Optional · tournament payouts"}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+              {stripeLinked && !stripeChargesEnabled ? (
+                <button
+                  type="button"
+                  disabled={linkBusy}
+                  onClick={() => void connectStripe()}
+                  className="rounded-[var(--radius)] bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  Continue
+                </button>
+              ) : null}
+              {stripeLinked ? (
+                <button
+                  type="button"
+                  disabled={linkBusy}
+                  onClick={() => void unlink("stripe")}
+                  className="rounded-[var(--radius)] bg-[#b42318] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  Disconnect
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={linkBusy}
+                  onClick={() => void connectStripe()}
                   className="rounded-[var(--radius)] bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
                 >
                   Connect

@@ -250,6 +250,16 @@ export function LeagueApp() {
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
+
+  // Stripe Connect return/refresh → open Settings to sync account status.
+  useEffect(() => {
+    if (typeof window === "undefined" || authLoading) return;
+    const params = new URLSearchParams(window.location.search);
+    const stripe = params.get("stripe");
+    if (stripe !== "return" && stripe !== "refresh") return;
+    if (user) setScreen("settings");
+    else setScreen("login");
+  }, [authLoading, user]);
   const teamReportKeyRef = useRef<string | null>(null);
   const playerReportKeyRef = useRef<string | null>(null);
   const scheduleKeyRef = useRef<string | null>(null);

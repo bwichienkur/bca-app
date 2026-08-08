@@ -10,6 +10,8 @@ export type AuthUser = {
   email: string | null;
   fargoLinked?: boolean;
   digitalPoolLinked?: boolean;
+  stripeLinked?: boolean;
+  stripeChargesEnabled?: boolean;
   scoringReady?: boolean;
   leagueOperator?: boolean;
 };
