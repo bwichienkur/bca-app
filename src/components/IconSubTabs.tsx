@@ -17,6 +17,8 @@ type IconSubTabsProps<T extends string | number> = {
   value: T;
   onChange: (id: T) => void;
   columns?: number;
+  /** Extra classes on the tablist (e.g. flush inside a parent card). */
+  className?: string;
 };
 
 function IconShell({
@@ -212,13 +214,19 @@ export function IconSubTabs<T extends string | number>({
   value,
   onChange,
   columns,
+  className = "",
 }: IconSubTabsProps<T>) {
   const cols = columns ?? items.length;
   return (
     <div
       role="tablist"
       aria-label={ariaLabel}
-      className="grid gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+      className={[
+        "grid gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
       style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
     >
       {items.map((item) => {

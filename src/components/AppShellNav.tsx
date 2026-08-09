@@ -4,7 +4,6 @@ import type { AppPillar, ReportTab } from "@/lib/types";
 import {
   APP_PILLARS,
   LEAGUE_SECTIONS,
-  MANAGE_SECTIONS,
   sectionUsesLeafIcon,
   type NavSection,
 } from "@/lib/app-nav";
@@ -100,18 +99,8 @@ export function PillarSideNav({
   const pillars = APP_PILLARS.filter(
     (item) => item.id !== "manage" || showManage,
   );
-  const nested =
-    activePillar === "league"
-      ? LEAGUE_SECTIONS
-      : activePillar === "manage"
-        ? MANAGE_SECTIONS
-        : null;
-  const nestedLabel =
-    activePillar === "league"
-      ? "League tools"
-      : activePillar === "manage"
-        ? "Manage tools"
-        : null;
+  const nested = activePillar === "league" ? LEAGUE_SECTIONS : null;
+  const nestedLabel = activePillar === "league" ? "League tools" : null;
 
   return (
     <aside className="sticky top-4 hidden w-56 shrink-0 self-start md:block">

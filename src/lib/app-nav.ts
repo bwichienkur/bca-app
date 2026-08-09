@@ -63,9 +63,8 @@ export const LEAGUE_SECTIONS: NavSection[] = [
   { id: "players", label: "Players" },
 ];
 
-/** Manage leaf destinations (provider-specific ops live here). */
+/** Manage leaf destinations — LMS is the primary Manage surface. */
 export const MANAGE_SECTIONS: NavSection[] = [
-  { id: "create-league", label: "Create league", shortLabel: "Create" },
   { id: "lms", label: "Fargo LMS", shortLabel: "LMS" },
 ];
 
@@ -125,7 +124,7 @@ export function defaultTabForPillar(
       if (options?.hasDivision) return "schedule";
       return "standings";
     case "manage":
-      return "create-league";
+      return "lms";
     case "account":
       return "account";
   }

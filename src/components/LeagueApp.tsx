@@ -11,9 +11,7 @@ import {
 import { readAppUrlState, writeAppUrlState } from "@/lib/app-url";
 import {
   defaultTabForPillar,
-  HOME_SECTIONS,
   LEAGUE_SECTIONS,
-  MANAGE_SECTIONS,
   pillarForTab,
   pillarShowsPlayContext,
   tabBelongsToPillar,
@@ -1365,22 +1363,6 @@ export function LeagueApp() {
             sections={LEAGUE_SECTIONS}
             activeId={tab}
             onSelect={selectLeagueSection}
-          />
-        ) : activePillar === "manage" ? (
-          <SectionChipNav
-            aria-label="Manage sections"
-            sections={MANAGE_SECTIONS}
-            activeId={tab === "lms" ? "lms" : "create-league"}
-            onSelect={(next) => startTransition(() => setTab(next))}
-          />
-        ) : activePillar === "home" ? (
-          <SectionChipNav
-            aria-label="Home sections"
-            sections={HOME_SECTIONS}
-            activeId={tab === "search" ? "search" : "events"}
-            onSelect={(next) => {
-              startTransition(() => setTab(next));
-            }}
           />
         ) : null}
 
