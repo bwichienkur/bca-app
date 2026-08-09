@@ -2,487 +2,333 @@
 
 import { useMemo, useState } from "react";
 import {
-  clampPlayerCount,
-  defaultFormatModel,
-  emptyGame,
-  emptyRound,
-  FORMAT_GAME_TYPE_OPTIONS,
-  FORMAT_MULTIPLIER_OPTIONS,
-  FORMAT_RACE_LENGTH_OPTIONS,
-  parseFormatTemplate,
-  serializeFormatTemplate,
-  summarizeFormatModel,
-  type FormatGame,
-  type FormatGameKind,
-  type FormatPlayerRef,
-  type FormatTemplateModel,
-} from "@/lib/lms-format-template";
+  defaultFormatPicks,
+  generateLeagueFormat,
+  HANDICAP_MODE_OPTIONS,
+  NIGHT_STYLE_OPTIONS,
+  type FormatGeneratorPicks,
+  type HandicapMode,
+  type NightStyle,
+} from "@/lib/format-generator";
 import { FormatScoresheetPreview } from "./FormatScoresheetPreview";
 import { SelectField } from "./SelectField";
 
-const inputClass =
-  "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none ring-[var(--felt)] focus:ring-2";
 const btnPrimary =
   "inline-flex items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
 const btnGhost =
   "inline-flex items-center justify-center rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold text-[var(--ink)] disabled:opacity-50";
-const btnDelete =
-  "inline-flex items-center justify-center rounded-[var(--radius)] bg-[#b42318] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
+const inputClass =
+  "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none ring-[var(--felt)] focus:ring-2";
 
-export function playerSlotLabel(ref: FormatPlayerRef): string {
-  return `${ref.side === "H" ? "Home" : "Away"}${ref.index}`;
-}
-
-function kindLabel(kind: FormatGameKind): string {
-  if (kind === "R") return "Race";
-  if (kind === "D") return "Scotch";
-  return "Singles";
-}
-
-function playerOptions(count: number, side: "H" | "A") {
-  return Array.from({ length: count }, (_, i) => {
-    const n = i + 1;
-    return {
-      value: `${side}${n}`,
-      label: `${side === "H" ? "Home" : "Away"}${n}`,
-    };
-  });
-}
-
-function refValue(ref: FormatPlayerRef): string {
-  return `${ref.side}${ref.index}`;
-}
-
-function parseRef(value: string): FormatPlayerRef {
-  const side = value.startsWith("A") ? "A" : "H";
-  const index = Number(value.slice(1)) || 1;
-  return { side, index };
-}
-
-type LmsScoresheetStudioProps = {
-  /** Optional starting player count for a blank sandbox. */
-  playerCountHint?: number;
-};
-
-export function LmsScoresheetStudio({
-  playerCountHint,
-}: LmsScoresheetStudioProps) {
-  const initial = defaultFormatModel(playerCountHint || 5, playerCountHint || 5);
-  const [model, setModel] = useState<FormatTemplateModel>(() => initial);
-  const [dslText, setDslText] = useState(() => serializeFormatTemplate(initial));
-  const [dslError, setDslError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
-
-  const summary = useMemo(() => summarizeFormatModel(model), [model]);
-  const allPlayerOptions = useMemo(
-    () => [
-      ...playerOptions(model.playerCount, "H"),
-      ...playerOptions(model.playerCount, "A"),
-    ],
-    [model.playerCount],
+function ChoiceCard({
+  selected,
+  title,
+  description,
+  onClick,
+}: {
+  selected: boolean;
+  title: string;
+  description: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "rounded-[var(--radius)] border px-3 py-2.5 text-left transition",
+        selected
+          ? "border-[var(--felt)] bg-[color-mix(in_srgb,var(--felt)_12%,var(--surface))] shadow-sm"
+          : "border-[var(--line)] bg-[var(--surface)] hover:border-[var(--felt)]/50",
+      ].join(" ")}
+    >
+      <p className="text-sm font-semibold text-[var(--ink)]">{title}</p>
+      <p className="mt-0.5 text-xs text-[var(--muted)]">{description}</p>
+    </button>
   );
+}
 
-  const syncFromModel = (next: FormatTemplateModel) => {
-    setModel(next);
-    setDslText(serializeFormatTemplate(next));
-    setDslError(null);
-  };
+export function LmsScoresheetStudio() {
+  const [picks, setPicks] = useState<FormatGeneratorPicks>(() =>
+    defaultFormatPicks(),
+  );
+  const [showDsl, setShowDsl] = useState(false);
+  const [paperOpen, setPaperOpen] = useState(false);
+  const [copied, setCopied] = useState<"dsl" | "hints" | null>(null);
 
-  const setPlayerCount = (next: number) => {
-    const count = clampPlayerCount(next);
-    syncFromModel({
-      ...model,
-      playerCount: count,
-      rounds: model.rounds.map((round) => ({
-        ...round,
-        games: round.games.map((game) => ({
-          ...game,
-          breakPlayers: game.breakPlayers.map((p) => ({
-            ...p,
-            index: Math.min(count, p.index),
-          })),
-          otherPlayers: game.otherPlayers.map((p) => ({
-            ...p,
-            index: Math.min(count, p.index),
-          })),
-        })),
-      })),
+  const result = useMemo(() => generateLeagueFormat(picks), [picks]);
+
+  const patch = (partial: Partial<FormatGeneratorPicks>) =>
+    setPicks((prev) => {
+      const next = { ...prev, ...partial };
+      if (next.nightStyle === "doubles") next.playersPerTeam = 2;
+      if (next.nightStyle === "tuesday-races" && next.handicapMode === "round-hc") {
+        next.handicapMode = "r6-hot";
+      }
+      return next;
     });
-  };
 
-  const updateRound = (
-    roundId: string,
-    updater: (
-      round: FormatTemplateModel["rounds"][number],
-    ) => FormatTemplateModel["rounds"][number],
-  ) => {
-    syncFromModel({
-      ...model,
-      rounds: model.rounds.map((round) =>
-        round.id === roundId ? updater(round) : round,
-      ),
-    });
-  };
-
-  const updateGame = (
-    roundId: string,
-    gameId: string,
-    updater: (game: FormatGame) => FormatGame,
-  ) => {
-    updateRound(roundId, (round) => ({
-      ...round,
-      games: round.games.map((game) =>
-        game.id === gameId ? updater(game) : game,
-      ),
-    }));
-  };
-
-  const applyDslText = (raw: string) => {
-    setDslText(raw);
-    const parsed = parseFormatTemplate(raw);
-    setModel(parsed);
-    setDslError(null);
-  };
-
-  const resetDefault = () => {
-    syncFromModel(defaultFormatModel(model.playerCount, model.playerCount));
-  };
-
-  const copyDsl = async () => {
+  const copyText = async (text: string, which: "dsl" | "hints") => {
     try {
-      await navigator.clipboard.writeText(dslText);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
+      await navigator.clipboard.writeText(text);
+      setCopied(which);
+      window.setTimeout(() => setCopied(null), 1600);
     } catch {
-      setDslError("Clipboard unavailable — select the DSL and copy manually.");
+      // ignore
     }
   };
+
+  const hintsText = [
+    `NumberOfPlayers=${result.divisionHints.NumberOfPlayers}`,
+    `NumberOfRounds=${result.divisionHints.NumberOfRounds}`,
+    `PointsForWin=${result.divisionHints.PointsForWin}`,
+    `UseHandicap=${result.divisionHints.UseHandicap}`,
+    `HandicapMode=${result.divisionHints.HandicapMode}`,
+    `MatchWinForRound=${result.divisionHints.MatchWinForRound}`,
+    "",
+    ...result.divisionHints.notes,
+    "",
+    "FormatTemplate:",
+    result.dsl,
+  ].join("\n");
+
+  const playerOptions =
+    picks.nightStyle === "doubles"
+      ? [{ value: "2", label: "2 (doubles)" }]
+      : [3, 4, 5, 6].map((n) => ({ value: String(n), label: String(n) }));
 
   return (
     <section className="space-y-4">
       <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/50 px-3 py-2.5">
         <p className="text-sm font-semibold text-[var(--ink)]">
-          Scoresheet sandbox
+          Scoring & handicap format
         </p>
         <p className="mt-0.5 text-xs text-[var(--muted)]">
-          Edit the sheet or paste DSL — nothing is saved to a division. Generate
-          opens a paper preview (Tuesday 9-Ball / R6 Hot layout for race
-          nights). {summary}
+          Pick team size, night style, and handicap. We generate a consistent LMS
+          scoresheet template plus the app scoring rules — so Score and Handicap
+          tabs match what you put in LMS.
         </p>
       </div>
 
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="min-w-[8rem] space-y-1.5">
-          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-            Players / side
-          </span>
-          <SelectField
-            aria-label="Players per team"
-            value={String(model.playerCount)}
-            options={Array.from({ length: 10 }, (_, i) => ({
-              value: String(i + 1),
-              label: String(i + 1),
-            }))}
-            onChange={(value) => setPlayerCount(Number(value))}
-          />
-        </label>
-        <button
-          type="button"
-          className={btnGhost}
-          onClick={() =>
-            syncFromModel({
-              ...model,
-              rounds: [...model.rounds, emptyRound()],
-            })
-          }
-        >
-          + Round
-        </button>
-        <button type="button" className={btnGhost} onClick={resetDefault}>
-          Default Home/Away sheet
-        </button>
-        <button
-          type="button"
-          className={btnPrimary}
-          disabled={model.rounds.every((round) => round.games.length === 0)}
-          onClick={() => setPreviewOpen(true)}
-        >
-          Generate
-        </button>
-      </div>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,18rem)_1fr]">
+        <div className="space-y-4">
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+              Players per side
+            </span>
+            <SelectField
+              aria-label="Players per side"
+              value={String(picks.playersPerTeam)}
+              options={playerOptions}
+              onChange={(value) =>
+                patch({ playersPerTeam: Number(value) || 4 })
+              }
+              disabled={picks.nightStyle === "doubles"}
+            />
+          </label>
 
-      <div className="grid gap-3 xl:grid-cols-2">
-        <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-            Build rounds & games
-          </p>
-          {model.rounds.map((round, roundIndex) => (
-            <article
-              key={round.id}
-              className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] bg-[var(--surface-2)] px-3 py-2">
-                <h3 className="text-sm font-semibold text-[var(--ink)]">
-                  Round {roundIndex + 1}
-                </h3>
-                <div className="flex flex-wrap gap-1">
-                  {(
-                    [
-                      ["S", "Singles"],
-                      ["R", "Race"],
-                      ["D", "Scotch"],
-                    ] as const
-                  ).map(([kind, label]) => (
-                    <button
-                      key={kind}
-                      type="button"
-                      className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-[11px] font-semibold text-[var(--ink)]"
-                      onClick={() =>
-                        updateRound(round.id, (current) => ({
-                          ...current,
-                          games: [...current.games, emptyGame(kind)],
-                        }))
-                      }
-                    >
-                      + {label}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    className={btnDelete}
-                    disabled={model.rounds.length <= 1}
-                    onClick={() =>
-                      syncFromModel({
-                        ...model,
-                        rounds: model.rounds.filter((r) => r.id !== round.id),
-                      })
-                    }
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
+          {picks.nightStyle === "matrix" || picks.nightStyle === "team-race" ? (
+            <label className="block space-y-1.5">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                Game
+              </span>
+              <SelectField
+                aria-label="Game ball"
+                value={picks.gameBall ?? "9"}
+                options={[
+                  { value: "9", label: "9-Ball" },
+                  { value: "8", label: "8-Ball" },
+                ]}
+                onChange={(value) =>
+                  patch({ gameBall: value === "8" ? "8" : "9" })
+                }
+              />
+            </label>
+          ) : null}
 
-              {round.games.length === 0 ? (
-                <p className="px-3 py-4 text-xs text-[var(--muted)]">
-                  No games — add Singles, Race, or Scotch.
-                </p>
-              ) : (
-                <ul className="divide-y divide-[var(--line)]">
-                  {round.games.map((game, gameIndex) => (
-                    <li key={game.id} className="space-y-2 px-3 py-2.5">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                          G{gameIndex + 1} · {kindLabel(game.kind)}
-                          {game.kind === "R"
-                            ? ` · RL${game.raceLength || "7"}`
-                            : ""}
-                        </p>
-                        <button
-                          type="button"
-                          className="text-[11px] font-semibold text-[#b42318]"
-                          onClick={() =>
-                            updateRound(round.id, (current) => ({
-                              ...current,
-                              games: current.games.filter(
-                                (g) => g.id !== game.id,
-                              ),
-                            }))
-                          }
-                        >
-                          Remove game
-                        </button>
-                      </div>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+              Night style
+            </p>
+            <div className="grid gap-1.5">
+              {NIGHT_STYLE_OPTIONS.map((option) => (
+                <ChoiceCard
+                  key={option.id}
+                  selected={picks.nightStyle === option.id}
+                  title={option.label}
+                  description={option.description}
+                  onClick={() =>
+                    patch({ nightStyle: option.id as NightStyle })
+                  }
+                />
+              ))}
+            </div>
+          </div>
 
-                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-[var(--radius)] bg-[var(--surface-2)] px-2.5 py-2">
-                        <p className="truncate text-sm font-semibold text-[var(--felt-deep)]">
-                          {game.breakPlayers.map(playerSlotLabel).join(" / ")}
-                        </p>
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                          vs
-                        </span>
-                        <p className="truncate text-right text-sm font-semibold text-[var(--felt-deep)]">
-                          {game.otherPlayers.map(playerSlotLabel).join(" / ")}
-                        </p>
-                      </div>
-                      <p className="text-[11px] text-[var(--muted)]">
-                        {game.breakTeam === 1 ? "Home" : "Away"} breaks
-                      </p>
-
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {(game.kind === "D" ? [0, 1] : [0]).map((slot) => (
-                          <label key={`b-${slot}`} className="space-y-1">
-                            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                              Break {slot + 1}
-                            </span>
-                            <SelectField
-                              aria-label={`Break player ${slot + 1}`}
-                              value={refValue(
-                                game.breakPlayers[slot] ?? {
-                                  side: game.breakTeam === 1 ? "H" : "A",
-                                  index: 1,
-                                },
-                              )}
-                              options={allPlayerOptions}
-                              onChange={(value) =>
-                                updateGame(round.id, game.id, (g) => {
-                                  const next = [...g.breakPlayers];
-                                  next[slot] = parseRef(value);
-                                  return { ...g, breakPlayers: next };
-                                })
-                              }
-                            />
-                          </label>
-                        ))}
-                        {(game.kind === "D" ? [0, 1] : [0]).map((slot) => (
-                          <label key={`o-${slot}`} className="space-y-1">
-                            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                              Other {slot + 1}
-                            </span>
-                            <SelectField
-                              aria-label={`Other player ${slot + 1}`}
-                              value={refValue(
-                                game.otherPlayers[slot] ?? {
-                                  side: game.breakTeam === 1 ? "A" : "H",
-                                  index: 1,
-                                },
-                              )}
-                              options={allPlayerOptions}
-                              onChange={(value) =>
-                                updateGame(round.id, game.id, (g) => {
-                                  const next = [...g.otherPlayers];
-                                  next[slot] = parseRef(value);
-                                  return { ...g, otherPlayers: next };
-                                })
-                              }
-                            />
-                          </label>
-                        ))}
-                        <label className="space-y-1">
-                          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                            Break side
-                          </span>
-                          <SelectField
-                            aria-label="Break side"
-                            value={String(game.breakTeam)}
-                            options={[
-                              { value: "1", label: "Home breaks" },
-                              { value: "2", label: "Away breaks" },
-                            ]}
-                            onChange={(value) =>
-                              updateGame(round.id, game.id, (g) => ({
-                                ...g,
-                                breakTeam: value === "2" ? 2 : 1,
-                              }))
-                            }
-                          />
-                        </label>
-                        <label className="space-y-1">
-                          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                            Game type
-                          </span>
-                          <SelectField
-                            aria-label="Game type"
-                            value={game.gameType || "0"}
-                            options={[...FORMAT_GAME_TYPE_OPTIONS]}
-                            onChange={(value) =>
-                              updateGame(round.id, game.id, (g) => ({
-                                ...g,
-                                gameType: value,
-                              }))
-                            }
-                          />
-                        </label>
-                        <label className="space-y-1">
-                          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                            Point multiplier
-                          </span>
-                          <SelectField
-                            aria-label="Point multiplier"
-                            value={game.multiplier || "1.00"}
-                            options={[...FORMAT_MULTIPLIER_OPTIONS]}
-                            onChange={(value) =>
-                              updateGame(round.id, game.id, (g) => ({
-                                ...g,
-                                multiplier: value,
-                              }))
-                            }
-                          />
-                        </label>
-                        {game.kind === "R" ? (
-                          <label className="space-y-1">
-                            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                              Race length
-                            </span>
-                            <SelectField
-                              aria-label="Race length"
-                              value={game.raceLength || "7"}
-                              options={FORMAT_RACE_LENGTH_OPTIONS}
-                              onChange={(value) =>
-                                updateGame(round.id, game.id, (g) => ({
-                                  ...g,
-                                  raceLength: value,
-                                }))
-                              }
-                            />
-                          </label>
-                        ) : null}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </article>
-          ))}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+              Handicap
+            </p>
+            <div className="grid gap-1.5">
+              {HANDICAP_MODE_OPTIONS.filter((option) => {
+                if (
+                  picks.nightStyle === "tuesday-races" &&
+                  option.id === "round-hc"
+                ) {
+                  return false;
+                }
+                if (
+                  picks.nightStyle === "matrix" &&
+                  option.id === "r6-hot"
+                ) {
+                  return false;
+                }
+                return true;
+              }).map((option) => (
+                <ChoiceCard
+                  key={option.id}
+                  selected={picks.handicapMode === option.id}
+                  title={option.label}
+                  description={option.description}
+                  onClick={() =>
+                    patch({ handicapMode: option.id as HandicapMode })
+                  }
+                />
+              ))}
+            </div>
+          </div>
         </div>
 
-        <div className="space-y-2 xl:sticky xl:top-3 xl:self-start">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-              LMS template DSL
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={btnGhost}
-                onClick={() => void copyDsl()}
-              >
-                {copied ? "Copied" : "Copy DSL"}
-              </button>
+        <div className="space-y-3">
+          <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+            <div className="border-b border-[var(--line)] bg-[var(--surface-2)] px-3 py-2.5 sm:px-4">
+              <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--felt-deep)]">
+                {result.title}
+              </p>
+              <p className="mt-0.5 text-xs text-[var(--muted)]">
+                {result.scoringSummary}
+              </p>
+            </div>
+
+            <ul className="space-y-1.5 border-b border-[var(--line)] px-3 py-3 text-sm text-[var(--ink)] sm:px-4">
+              {result.bullets.map((bullet) => (
+                <li key={bullet} className="flex gap-2">
+                  <span className="text-[var(--felt)]" aria-hidden>
+                    ·
+                  </span>
+                  <span className="min-w-0">{bullet}</span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="space-y-3 px-3 py-3 sm:px-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                Night matchups
+              </p>
+              <div className="space-y-2">
+                {result.matchups.map((block) => (
+                  <div
+                    key={block.round}
+                    className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/40 px-3 py-2"
+                  >
+                    <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--amber)]">
+                      Round {block.round}
+                    </p>
+                    <ul className="mt-1.5 space-y-1">
+                      {block.games.map((game, index) => (
+                        <li
+                          key={`${block.round}-${index}`}
+                          className="flex flex-wrap items-center gap-2 text-sm"
+                        >
+                          <span className="font-medium text-[var(--ink)]">
+                            {game.label}
+                          </span>
+                          <span className="rounded-md bg-[var(--surface)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--muted)]">
+                            {game.kind}
+                          </span>
+                          {game.raceLength ? (
+                            <span className="rounded-md bg-[color-mix(in_srgb,var(--felt)_14%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--felt-deep)]">
+                              {picks.handicapMode === "r6-hot"
+                                ? "Race from R6 Hot"
+                                : `Race to ${game.raceLength}`}
+                            </span>
+                          ) : null}
+                          <span className="text-[10px] font-semibold text-[var(--muted)]">
+                            {game.homeBreaks ? "Home breaks" : "Away breaks"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 border-t border-[var(--line)] px-3 py-3 sm:px-4">
               <button
                 type="button"
                 className={btnPrimary}
-                disabled={model.rounds.every((round) => round.games.length === 0)}
-                onClick={() => setPreviewOpen(true)}
+                onClick={() => void copyText(result.dsl, "dsl")}
               >
-                Generate
+                {copied === "dsl" ? "DSL copied" : "Copy LMS template"}
+              </button>
+              <button
+                type="button"
+                className={btnGhost}
+                onClick={() => void copyText(hintsText, "hints")}
+              >
+                {copied === "hints" ? "Hints copied" : "Copy LMS field hints"}
+              </button>
+              <button
+                type="button"
+                className={btnGhost}
+                onClick={() => setShowDsl((v) => !v)}
+              >
+                {showDsl ? "Hide DSL" : "Show DSL"}
+              </button>
+              <button
+                type="button"
+                className={btnGhost}
+                onClick={() => setPaperOpen(true)}
+              >
+                Paper-style preview
               </button>
             </div>
+
+            {showDsl ? (
+              <div className="border-t border-[var(--line)] px-3 py-3 sm:px-4">
+                <textarea
+                  readOnly
+                  aria-label="Generated LMS format template"
+                  className={`${inputClass} min-h-[14rem] font-mono text-xs leading-relaxed`}
+                  value={result.dsl}
+                />
+              </div>
+            ) : null}
           </div>
-          <textarea
-            aria-label="LMS format template DSL"
-            className={`${inputClass} min-h-[28rem] font-mono text-xs leading-relaxed`}
-            value={dslText}
-            onChange={(e) => applyDslText(e.target.value)}
-            spellCheck={false}
-          />
-          {dslError ? (
-            <p className="text-xs text-[#b42318]">{dslError}</p>
-          ) : (
-            <p className="text-xs text-[var(--muted)]">
-              Tokens use H1/A1 in DSL; the builder and Generate preview show
-              Home1 / Away1. Paste a template to rebuild the sandbox.
-            </p>
-          )}
+
+          <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-3 text-xs text-[var(--muted)] sm:px-4">
+            <p className="font-semibold text-[var(--ink)]">How to use in LMS</p>
+            <ol className="mt-1.5 list-decimal space-y-1 pl-4">
+              <li>Copy LMS template into Division → Format → advanced template.</li>
+              <li>
+                Set players / rounds / points / handicap from the hints (or paste
+                the hint block).
+              </li>
+              <li>
+                In the app, Score and Handicap follow the same night style when
+                the division signals match (or set scoring format in Account).
+              </li>
+            </ol>
+          </div>
         </div>
       </div>
 
       <FormatScoresheetPreview
-        open={previewOpen}
-        onClose={() => setPreviewOpen(false)}
-        model={model}
-        title="Generated scoresheet"
+        open={paperOpen}
+        onClose={() => setPaperOpen(false)}
+        model={result.model}
+        title="Paper-style preview"
       />
     </section>
   );

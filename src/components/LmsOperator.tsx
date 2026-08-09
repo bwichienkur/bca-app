@@ -637,7 +637,7 @@ export function LmsOperator({
       { id: "players", label: "Players", icon: PlayersIcon },
       { id: "locations", label: "Locations", icon: LocationsIcon },
       { id: "schedule", label: "Schedule", icon: ScheduleIcon },
-      { id: "scoresheet", label: "Sheet", icon: ScoresheetIcon },
+      { id: "scoresheet", label: "Format", icon: ScoresheetIcon },
       { id: "playoff", label: "Playoff", icon: PlayoffIcon },
       { id: "division", label: "Division", icon: DivisionIcon },
     ],
@@ -2951,8 +2951,8 @@ export function LmsOperator({
       {subTab === "scoresheet" ? (
         <section className="space-y-3">
           <SectionHeader
-            title="Scoresheet sandbox"
-            description="Build or paste a template, then Generate a paper-style preview. Nothing is saved to a division."
+            title="Format generator"
+            description="Build a scoring and handicap night that stays consistent between LMS and the app. Copy the template into division settings when ready."
           />
           <LmsScoresheetStudio />
         </section>

@@ -605,7 +605,7 @@ export function LmsDivisionSettingsForm({
 
       <SettingsBlock
         title="Format"
-        description="Match format template for this division. The Sheet tab is a separate sandbox for previewing DSL."
+        description="Match format template for this division. Use the Format tab to generate scoring + handicap recipes, then paste the template here."
       >
         <div className="space-y-3">
           <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/40 p-3">
@@ -613,8 +613,8 @@ export function LmsDivisionSettingsForm({
               Scoresheet builder
             </p>
             <p className="mt-1 text-xs text-[var(--muted)]">
-              Build rounds and games here to update this division’s template, or
-              use the Sheet tab sandbox to preview what a sheet looks like.
+              Build rounds and games here, or generate a consistent night on the
+              Format tab (size × style × handicap) and paste the DSL below.
             </p>
             <button
               type="button"
