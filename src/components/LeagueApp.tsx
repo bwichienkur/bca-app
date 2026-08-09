@@ -27,10 +27,7 @@ import {
   fetchSharedPreferences,
   pushSharedPreferences,
 } from "@/lib/prefs-sync";
-import {
-  getScoringFormat,
-  inferScoringFormatFromDivisionName,
-} from "@/lib/scoring-formats";
+import { resolveScoringFormat } from "@/lib/division-scoring-config";
 import { useViewportAnchor } from "@/lib/use-viewport-anchor";
 import type {
   DivisionSummary,
@@ -921,16 +918,18 @@ export function LeagueApp() {
             normalizeTeamName(prefs?.teamName ?? "")),
     ) ?? null;
 
-  const scoringFormat = useMemo(() => {
-    if (prefs?.scoringFormatId) return getScoringFormat(prefs.scoringFormatId);
-    return inferScoringFormatFromDivisionName(
-      selectedDivision?.name ?? prefs?.divisionName,
-    );
-  }, [
-    prefs?.scoringFormatId,
-    prefs?.divisionName,
-    selectedDivision?.name,
-  ]);
+  const scoringFormat = useMemo(
+    () =>
+      resolveScoringFormat({
+        prefsFormatId: prefs?.scoringFormatId,
+        divisionName: selectedDivision?.name ?? prefs?.divisionName,
+      }),
+    [
+      prefs?.scoringFormatId,
+      prefs?.divisionName,
+      selectedDivision?.name,
+    ],
+  );
 
   const detailTeam =
     divisionTeams.find(
@@ -1406,6 +1405,7 @@ export function LeagueApp() {
               divisionName={selectedDivision?.name ?? null}
               teamId={prefs.teamId}
               teamName={prefs.teamName}
+              scoringFormatId={prefs.scoringFormatId}
               user={user}
               authLoading={authLoading}
               onRequestLogin={() => setScreen("login")}

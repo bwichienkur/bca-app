@@ -748,7 +748,7 @@ export function SettingsScreen({
               options={[
                 {
                   value: "auto",
-                  label: "Auto (from division name)",
+                  label: "Auto (division + scoresheet)",
                 },
                 ...LEAGUE_SCORING_FORMATS.map((format) => ({
                   value: format.id,
@@ -758,9 +758,9 @@ export function SettingsScreen({
             />
             <p className="text-[11px] leading-snug text-[var(--muted)]">
               {scoringFormatId === "auto"
-                ? inferScoringFormatFromDivisionName(
+                ? `${inferScoringFormatFromDivisionName(
                     selectedDivision?.name ?? prefs.divisionName,
-                  ).description
+                  ).description} LMS scoresheet setup (players, race vs points, match-win round) can refine this when you open a match.`
                 : getScoringFormat(scoringFormatId).description}
             </p>
           </div>
