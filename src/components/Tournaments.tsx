@@ -68,6 +68,7 @@ import {
   RosterSubIcon,
   UpcomingSubIcon,
 } from "./IconSubTabs";
+import { SubTabCard } from "./SubTabCard";
 import type { AuthUser } from "./LoginScreen";
 import { DateField } from "./DateField";
 import { DateTimeField } from "./DateTimeField";
@@ -4182,71 +4183,45 @@ export function Tournaments({
               }
             />
 
-            <div
-              role="tablist"
-              aria-label={
-                isOrganizer ? "Event organizer sections" : "Event sections"
+            <SubTabCard
+              className="animate-panel"
+              contentClassName={
+                activeTab === "overview"
+                  ? "p-0"
+                  : "space-y-3 p-3 sm:p-4"
               }
-              className={[
-                "grid gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5",
-                isOrganizer ? "grid-cols-5" : "grid-cols-2",
-              ].join(" ")}
+              tabs={
+                <IconSubTabs
+                  aria-label={
+                    isOrganizer
+                      ? "Event organizer sections"
+                      : "Event sections"
+                  }
+                  value={activeTab}
+                  onChange={(id) =>
+                    startDetailTransition(() => {
+                      if (id !== "manage") setConfirmRemove(false);
+                      setDetailSubTab(id);
+                    })
+                  }
+                  columns={detailTabs.length}
+                  className="rounded-none border-0 bg-transparent p-0"
+                  items={detailTabs.map((item) => ({
+                    id: item.id,
+                    label: item.label,
+                    icon: ORGANIZER_TAB_ICONS[item.id],
+                    count:
+                      isOrganizer &&
+                      item.id === "signups" &&
+                      t.pendingCount > 0
+                        ? t.pendingCount
+                        : undefined,
+                  }))}
+                />
+              }
             >
-              {detailTabs.map((item) => {
-                const selected = activeTab === item.id;
-                const Icon = ORGANIZER_TAB_ICONS[item.id];
-                const pending =
-                  isOrganizer && item.id === "signups" && t.pendingCount > 0
-                    ? t.pendingCount
-                    : 0;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    aria-label={
-                      pending > 0
-                        ? `${item.label}, ${pending} pending`
-                        : item.label
-                    }
-                    onClick={() =>
-                      startDetailTransition(() => {
-                        if (item.id !== "manage") setConfirmRemove(false);
-                        setDetailSubTab(item.id);
-                      })
-                    }
-                    className={[
-                      "relative flex flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 transition",
-                      selected
-                        ? "bg-[var(--felt)] text-white shadow-sm"
-                        : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
-                    ].join(" ")}
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span className="text-[9px] font-semibold leading-none tracking-wide sm:text-[10px]">
-                      {item.label}
-                    </span>
-                    {pending > 0 ? (
-                      <span
-                        className={[
-                          "absolute right-0.5 top-0.5 inline-flex min-w-3.5 items-center justify-center rounded-full px-1 text-[9px] font-bold leading-none",
-                          selected
-                            ? "bg-white text-[var(--felt)]"
-                            : "bg-[var(--amber)] text-[#1a140c]",
-                        ].join(" ")}
-                      >
-                        {pending > 9 ? "9+" : pending}
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
-
             {activeTab === "overview" ? (
-              <div className="space-y-4">
-                <SurfaceCard>
+              <div className="space-y-0">
                   {t.thumbnailUrl ? (
                     <button
                       type="button"
@@ -4614,15 +4589,14 @@ export function Tournaments({
                     {overviewDetailTab === "entry" ? (
                       <div className="space-y-3">{overviewSignup}</div>
                     ) : null}
-                  </div>
-                </SurfaceCard>
 
-                <TournamentCalcuttaPanel
-                  tournamentId={t.id}
-                  registrations={detail?.registrations ?? []}
-                  isOrganizer={false}
-                  variant="board"
-                />
+                    <TournamentCalcuttaPanel
+                      tournamentId={t.id}
+                      registrations={detail?.registrations ?? []}
+                      isOrganizer={false}
+                      variant="board"
+                    />
+                  </div>
               </div>
             ) : null}
 
@@ -5465,6 +5439,7 @@ export function Tournaments({
                 </SurfaceCard>
               </div>
             ) : null}
+            </SubTabCard>
           </>
         )}
 
