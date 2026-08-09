@@ -31,6 +31,7 @@ import {
 } from "./PanelHeader";
 import { SearchField } from "./SearchField";
 import { LmsDivisionSettingsForm } from "./LmsDivisionSettingsForm";
+import { LmsScoresheetStudio } from "./LmsScoresheetStudio";
 import { SectionCard } from "./SectionCard";
 import { SelectField } from "./SelectField";
 
@@ -40,7 +41,7 @@ type LmsSubTab =
   | "players"
   | "locations"
   | "schedule"
-  | "settings"
+  | "scoresheet"
   | "playoff"
   | "division";
 
@@ -233,11 +234,14 @@ function ScheduleIcon({ className }: { className?: string }) {
     </IconShell>
   );
 }
-function SettingsIcon({ className }: { className?: string }) {
+function ScoresheetIcon({ className }: { className?: string }) {
   return (
     <IconShell className={className}>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 3v5h5" />
+      <path d="M9 13h6" />
+      <path d="M9 17h4" />
+      <path d="M9 9h2" />
     </IconShell>
   );
 }
@@ -633,7 +637,7 @@ export function LmsOperator({
       { id: "players", label: "Players", icon: PlayersIcon },
       { id: "locations", label: "Locations", icon: LocationsIcon },
       { id: "schedule", label: "Schedule", icon: ScheduleIcon },
-      { id: "settings", label: "Settings", icon: SettingsIcon },
+      { id: "scoresheet", label: "Sheet", icon: ScoresheetIcon },
       { id: "playoff", label: "Playoff", icon: PlayoffIcon },
       { id: "division", label: "Division", icon: DivisionIcon },
     ],
@@ -935,7 +939,11 @@ export function LmsOperator({
   useEffect(() => {
     if (!user || !configured || !opDivisionId) return;
     if (screen.type !== "list") return;
-    if (!["teams", "players", "locations", "schedule", "settings"].includes(subTab))
+    if (
+      !["teams", "players", "locations", "schedule", "scoresheet"].includes(
+        subTab,
+      )
+    )
       return;
 
     let cancelled = false;
@@ -954,7 +962,7 @@ export function LmsOperator({
             refreshTeams(),
             refreshLocations(),
           ]);
-        } else if (subTab === "settings") {
+        } else if (subTab === "scoresheet") {
           await refreshSettings(opDivisionId);
         }
       } catch (error) {
@@ -1184,6 +1192,7 @@ export function LmsOperator({
     setSectionLoading(true);
     setOpDivisionId(division.id);
     setOpDivisionName(division.name);
+    // Do not change subTab here — the subTab effect resets screen to list.
     setScreen({ type: "edit-settings", divisionId: division.id });
   }
 
@@ -1333,11 +1342,7 @@ export function LmsOperator({
     return <LoadingState label="Checking league operator…" />;
   }
 
-  const needsDivision = ![
-    "home",
-    "playoff",
-    "division",
-  ].includes(subTab);
+  const needsDivision = !["home", "playoff", "division"].includes(subTab);
 
   /* ---------- Edit / create popup ---------- */
   const pageTitle =
@@ -1383,7 +1388,12 @@ export function LmsOperator({
             if (event.target === event.currentTarget) goList();
           }}
         >
-        <div className="w-full max-w-lg rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        <div
+          className={[
+            "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]",
+            screen.type === "edit-settings" ? "max-w-2xl" : "max-w-lg",
+          ].join(" ")}
+        >
           <div className="flex items-start justify-between gap-3 border-b border-[var(--line)] px-4 py-3">
             <h2 className="min-w-0 flex-1 break-words font-[family-name:var(--font-display)] text-xl font-semibold text-[var(--ink)]">
               {pageTitle}
@@ -1906,10 +1916,29 @@ export function LmsOperator({
         ) : null}
 
         {screen.type === "edit-settings" ? (
-          sectionLoading || !settings ? (
-            <LoadingState label="Loading settings…" />
-          ) : (
-            <section className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3 sm:p-4">
+          <section className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3 sm:p-4">
+            <Field label="Division">
+              <SelectField
+                aria-label="Division being edited"
+                value={screen.divisionId}
+                options={divisions.map((d) => ({
+                  value: d.id,
+                  label: d.name,
+                }))}
+                onChange={(value) => {
+                  const division = divisions.find((d) => d.id === value);
+                  if (!division) return;
+                  setOpDivisionId(division.id);
+                  setOpDivisionName(division.name);
+                  setSettings(null);
+                  setSectionLoading(true);
+                  setScreen({ type: "edit-settings", divisionId: division.id });
+                }}
+              />
+            </Field>
+            {sectionLoading || !settings ? (
+              <LoadingState label="Loading settings…" />
+            ) : (
               <LmsDivisionSettingsForm
                 settings={settings}
                 templates={templates}
@@ -1937,8 +1966,8 @@ export function LmsOperator({
                   }, "Settings saved.")
                 }
               />
-            </section>
-          )
+            )}
+          </section>
         ) : null}
 
         {screen.type === "create-division" ? (
@@ -2273,6 +2302,12 @@ export function LmsOperator({
                 const division = divisions.find((d) => d.id === value);
                 setOpDivisionId(value);
                 setOpDivisionName(division?.name ?? "");
+                // Switching division while editing settings reloads that form.
+                if (screen.type === "edit-settings" && value) {
+                  setSettings(null);
+                  setSectionLoading(true);
+                  setScreen({ type: "edit-settings", divisionId: value });
+                }
               }}
               placeholder={
                 !opLeagueId
@@ -2320,7 +2355,8 @@ export function LmsOperator({
       {needsDivision && !opDivisionId ? (
         <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-4 text-sm text-[var(--muted)]">
           Choose a division above to manage this section. Division and Playoff
-          lists work from the league alone.
+          lists work from the league alone. Edit a division to open all of its
+          settings in one place.
         </div>
       ) : null}
 
@@ -2913,48 +2949,46 @@ export function LmsOperator({
         </section>
       ) : null}
 
-      {subTab === "settings" && opDivisionId ? (
+      {subTab === "scoresheet" && opDivisionId ? (
         <section className="space-y-3">
           <SectionHeader
-            title="Division settings"
-            description="Edit core fields and the match format for the selected division."
+            title="Scoresheet"
+            description="Build a Home1 / Away1 scoresheet and get the LMS DSL — or paste DSL to preview the sheet."
           />
-          {sectionLoading || !settings ? (
-            <LoadingState label="Loading settings…" />
+          {sectionLoading && !settings ? (
+            <LoadingState label="Loading division format…" />
           ) : (
-            <ul className={accentRecordListClass}>
-              <AccentRecordCard>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-[var(--ink)]">
-                      {String(settings.Name ?? opDivisionName)}
-                    </p>
-                    <p className="text-xs text-[var(--muted)]">
-                      {String(settings.Description ?? "No description")} ·{" "}
-                      {String(settings.NumberOfPlayers ?? "—")} players ·{" "}
-                      {String(settings.NumberOfRounds ?? "—")} rounds
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className={btnEdit}
-                    onClick={(event) =>
-                      openEditSettings(
-                        {
-                          id: opDivisionId,
-                          name:
-                            opDivisionName ||
-                            String(settings.Name ?? "Division"),
-                        },
-                        event,
-                      )
-                    }
-                  >
-                    Edit
-                  </button>
-                </div>
-              </AccentRecordCard>
-            </ul>
+            <LmsScoresheetStudio
+              initialTemplate={
+                settings && typeof settings.FormatTemplate === "string"
+                  ? settings.FormatTemplate
+                  : ""
+              }
+              playerCountHint={
+                settings
+                  ? Number(settings.NumberOfPlayers) || undefined
+                  : undefined
+              }
+              divisionName={opDivisionName || null}
+              busy={busy}
+              onSaveToDivision={(template, meta) =>
+                void runAction(async () => {
+                  const next = {
+                    ...(settings ?? {}),
+                    FormatTemplate: template,
+                    NumberOfPlayers: String(meta.playerCount),
+                    NumberOfRounds: String(meta.rounds),
+                  };
+                  setSettings(next);
+                  await fetchJson("/api/lms/operator/settings", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ settings: next }),
+                  });
+                  await refreshSettings(opDivisionId);
+                }, "Scoresheet saved to division.")
+              }
+            />
           )}
         </section>
       ) : null}
@@ -2963,7 +2997,7 @@ export function LmsOperator({
         <section className="space-y-3">
           <SectionHeader
             title="Divisions"
-            description="View and edit divisions in this league, or create a new one."
+            description="Edit opens every setting for that division — general, scoring, handicap, and format."
             onAdd={(event) => {
               capturePopupAnchor(event);
               setCreateSourceId(opDivisionId || divisions[0]?.id || "");
@@ -2986,18 +3020,15 @@ export function LmsOperator({
                   <button
                     type="button"
                     className="min-w-0 flex-1 text-left"
-                    onClick={() => {
-                      setOpDivisionId(division.id);
-                      setOpDivisionName(division.name);
-                    }}
+                    onClick={(event) => openEditSettings(division, event)}
                   >
                     <p className="text-sm font-semibold text-[var(--ink)]">
                       {division.name}
                     </p>
                     <p className="text-xs text-[var(--muted)]">
                       {division.id === opDivisionId
-                        ? "Currently managing"
-                        : "Tap name to manage"}
+                        ? "Managing · tap to edit settings"
+                        : "Tap to edit all settings"}
                     </p>
                   </button>
                   <button
@@ -3044,18 +3075,15 @@ export function LmsOperator({
                     <button
                       type="button"
                       className="min-w-0 flex-1 text-left"
-                      onClick={() => {
-                        setOpDivisionId(division.id);
-                        setOpDivisionName(division.name);
-                      }}
+                      onClick={(event) => openEditSettings(division, event)}
                     >
                       <p className="text-sm font-semibold text-[var(--ink)]">
                         {division.name}
                       </p>
                       <p className="text-xs text-[var(--muted)]">
                         {division.id === opDivisionId
-                          ? "Currently managing"
-                          : "Tap name to manage"}
+                          ? "Managing · tap to edit settings"
+                          : "Tap to edit all settings"}
                       </p>
                     </button>
                     <button
