@@ -44,7 +44,7 @@ import {
 import { LoadLineupMenu } from "./LoadLineupMenu";
 import { LoadingState } from "./LoadingState";
 import { PlayerSelect } from "./PlayerSelect";
-import { SectionCard } from "./SectionCard";
+import { PanelHeader, PanelHeaderCount } from "./PanelHeader";
 import { SubTabCard } from "./SubTabCard";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
@@ -506,8 +506,7 @@ export function HandicapCalculator({
   if (loading) {
     return (
       <section className="animate-rise space-y-4">
-        <SectionCard
-          eyebrow="Handicap"
+        <PanelHeader
           title="Matchup"
           description="Loading teams, ratings, and format…"
         />
@@ -521,8 +520,7 @@ export function HandicapCalculator({
   if (error || !data) {
     return (
       <section className="animate-rise space-y-4">
-        <SectionCard
-          eyebrow="Handicap"
+        <PanelHeader
           title="Matchup"
           description="Couldn't load the calculator"
         />
@@ -606,11 +604,10 @@ export function HandicapCalculator({
         className={subTab === "matchup" ? "min-w-0 space-y-3" : "hidden"}
         aria-hidden={subTab !== "matchup"}
       >
-        <SectionCard
-          eyebrow="Handicap"
+        <PanelHeader
           title="Matchup"
           description={formatMeta}
-          badge={{ label: "Sides", value: String(slots) }}
+          action={<PanelHeaderCount label="Sides" value={String(slots)} />}
         />
         <ContentCard>
           <div className="relative z-20 grid gap-2.5 sm:grid-cols-2">
@@ -642,21 +639,20 @@ export function HandicapCalculator({
         className={subTab === "lineups" ? "min-w-0 space-y-3" : "hidden"}
         aria-hidden={subTab !== "lineups"}
       >
-        <SectionCard
-          eyebrow="Handicap"
+        <PanelHeader
           title="Lineups"
           description={
             teamsReady
               ? `Pick ${slots} players per side · drag ⠿ to reorder`
               : "Select a matchup first, then build both sides"
           }
-          badge={
-            teamsReady
-              ? {
-                  label: "Filled",
-                  value: `${homeFilled + awayFilled}/${slots * 2}`,
-                }
-              : undefined
+          action={
+            teamsReady ? (
+              <PanelHeaderCount
+                label="Filled"
+                value={`${homeFilled + awayFilled}/${slots * 2}`}
+              />
+            ) : undefined
           }
         />
         {!homeTeam || !awayTeam ? (
@@ -794,8 +790,7 @@ export function HandicapCalculator({
         className={subTab === "rounds" ? "min-w-0 space-y-3" : "hidden"}
         aria-hidden={subTab !== "rounds"}
       >
-        <SectionCard
-          eyebrow="Handicap"
+        <PanelHeader
           title={
             scoringFormat.teamPointMode === "match-win"
               ? "Match handicaps"
@@ -814,16 +809,17 @@ export function HandicapCalculator({
                   } results`
                 : "Results appear after both lineups are set"
           }
-          badge={
-            lineupsReady && results
-              ? {
-                  label:
-                    scoringFormat.teamPointMode === "match-win"
-                      ? "Matches"
-                      : "Rounds",
-                  value: String(results.length),
+          action={
+            lineupsReady && results ? (
+              <PanelHeaderCount
+                label={
+                  scoringFormat.teamPointMode === "match-win"
+                    ? "Matches"
+                    : "Rounds"
                 }
-              : undefined
+                value={String(results.length)}
+              />
+            ) : undefined
           }
         />
         {!teamsReady ? (

@@ -63,7 +63,7 @@ import type { AuthUser } from "./LoginScreen";
 import { DraggableLineupList } from "./DraggableLineupList";
 import { LoadLineupMenu } from "./LoadLineupMenu";
 import { MatchListCard, type MatchBoardStatus } from "./MatchListCard";
-import { SectionCard } from "./SectionCard";
+import { PanelHeader, PanelHeaderCount } from "./PanelHeader";
 import { SelectField } from "./SelectField";
 import { loadTeamLineupPresets } from "@/lib/lineup-sync";
 import { rankForTeam, teamRanksFromReport } from "@/lib/standings";
@@ -1683,15 +1683,14 @@ export function MatchScoring({
         ? `${nightVenues.length} venues`
         : null;
   return (
-    <section className="animate-rise space-y-3">
-      <SectionCard
-        eyebrow="Score"
-        title="Night Board"
+    <section className="animate-rise space-y-3 p-3 sm:p-4">
+      <PanelHeader
+        title="Night board"
         description={
           <>
             Live scores for every match in{" "}
             {divisionName ? (
-              <span className="font-medium text-white">{divisionName}</span>
+              <span className="font-medium text-[var(--ink)]">{divisionName}</span>
             ) : (
               "your division"
             )}
@@ -1699,7 +1698,7 @@ export function MatchScoring({
               <>
                 {" "}
                 · your team{" "}
-                <span className="font-medium text-white">{teamName}</span>
+                <span className="font-medium text-[var(--ink)]">{teamName}</span>
               </>
             ) : null}
             {" · "}
@@ -1707,13 +1706,13 @@ export function MatchScoring({
             {sharedDrafts ? " · live sync on" : null}
           </>
         }
-        badge={
-          loadingMatches
-            ? undefined
-            : {
-                label: "Matches",
-                value: String(nightMatches.length),
-              }
+        action={
+          loadingMatches ? undefined : (
+            <PanelHeaderCount
+              label="Matches"
+              value={String(nightMatches.length)}
+            />
+          )
         }
       />
 

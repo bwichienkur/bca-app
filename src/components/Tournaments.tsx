@@ -79,6 +79,7 @@ import {
 } from "./PartnerSearchField";
 import { PlayerDetail } from "./PlayerDetail";
 import { SearchField } from "./SearchField";
+import { IconAddButton } from "./PanelHeader";
 import { SectionCard } from "./SectionCard";
 import { SelectField } from "./SelectField";
 import { TournamentCalcuttaPanel } from "./TournamentCalcutta";
@@ -5554,12 +5555,12 @@ export function Tournaments({
       {browseSubTab === "browse" ? (
         <>
         <div className="space-y-3 border-b border-[var(--line)] px-3 py-3 sm:px-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
               Find an event
             </p>
-            <button
-              type="button"
+            <IconAddButton
+              label="Create event"
               onClick={() => {
                 setEditingId(null);
                 setForm(emptyForm());
@@ -5569,10 +5570,7 @@ export function Tournaments({
                 setView("create");
                 setError(null);
               }}
-              className="rounded-[var(--radius)] bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--felt-soft)]"
-            >
-              + Create
-            </button>
+            />
           </div>
           <SearchField
             embedded

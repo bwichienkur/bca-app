@@ -68,10 +68,10 @@ import { ScheduleList } from "./ScheduleList";
 import { ScheduleMatchDetail } from "./ScheduleMatchDetail";
 import { SearchField } from "./SearchField";
 import { SettingsScreen } from "./SettingsScreen";
+import { PanelHeader, PanelHeaderCount } from "./PanelHeader";
 import { SubTabCard } from "./SubTabCard";
 import { TeamDetail } from "./TeamDetail";
 import { TeamLineupTemplates } from "./TeamLineupTemplates";
-import { SectionCard } from "./SectionCard";
 import { TeamStandingSummary } from "./TeamStandingSummary";
 import { Tournaments } from "./Tournaments";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
@@ -1219,7 +1219,7 @@ export function LeagueApp() {
           type="button"
           onClick={() => setContextOpen((open) => !open)}
           aria-expanded={contextOpen}
-          className="flex w-full items-start justify-between gap-3 px-4 py-4 text-left md:px-6 md:py-5"
+          className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left md:px-6 md:py-5"
         >
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/65">
@@ -1246,7 +1246,7 @@ export function LeagueApp() {
               </p>
             )}
           </div>
-          <span className="mt-0.5 shrink-0 rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/85">
+          <span className="shrink-0 self-center rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/85">
             {contextOpen ? "Collapse ▴" : "Change ▾"}
           </span>
         </button>
@@ -1358,7 +1358,10 @@ export function LeagueApp() {
           <SubTabCard
             className="animate-panel"
             contentClassName={
-              tab === "score" || tab === "handicap" || tab === "my-team"
+              tab === "score" ||
+              tab === "handicap" ||
+              tab === "my-team" ||
+              tab === "schedule"
                 ? "p-0"
                 : "min-w-0 space-y-3 p-3 sm:p-4 [overflow-anchor:none]"
             }
@@ -1475,8 +1478,7 @@ export function LeagueApp() {
                     }
                     aria-hidden={myTeamSubTab !== "roster"}
                   >
-                    <SectionCard
-                      eyebrow="Team"
+                    <PanelHeader
                       title="Roster"
                       description={
                         myTeam?.players.length
@@ -1488,13 +1490,13 @@ export function LeagueApp() {
                             )}`
                           : "Player statistics and Fargo ratings"
                       }
-                      badge={
-                        myTeam?.players.length
-                          ? {
-                              label: "Players",
-                              value: String(myTeam.players.length),
-                            }
-                          : undefined
+                      action={
+                        myTeam?.players.length ? (
+                          <PanelHeaderCount
+                            label="Players"
+                            value={String(myTeam.players.length)}
+                          />
+                        ) : undefined
                       }
                     />
                     <TeamDetail
@@ -1519,8 +1521,7 @@ export function LeagueApp() {
                       />
                     ) : (
                       <div className="space-y-3">
-                        <SectionCard
-                          eyebrow="Team"
+                        <PanelHeader
                           title="Lineups"
                           description={`Save ${scoringFormat.playersPerTeam}-player orders for league night. Load them from Handicap or Score.`}
                         />
@@ -1564,14 +1565,15 @@ export function LeagueApp() {
                 />
               ) : (
                 <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
-                  <SectionCard
-                    eyebrow="League"
+                  <PanelHeader
                     title="Team standings"
                     description="Tap a team to view player statistics. Use back to return to the league grid."
-                    badge={{
-                      label: "Teams",
-                      value: String(filteredTeamRows.length),
-                    }}
+                    action={
+                      <PanelHeaderCount
+                        label="Teams"
+                        value={String(filteredTeamRows.length)}
+                      />
+                    }
                   />
                   <DataTable
                     headers={teamReport.headers}
@@ -1612,22 +1614,23 @@ export function LeagueApp() {
               )
             ) : tab === "players" && playersWithRatings ? (
               <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
-                <SectionCard
-                  eyebrow="Players"
+                <PanelHeader
                   title="Division players"
                   description={
                     <>
                       Standings and Fargo ratings for everyone in{" "}
-                      <span className="font-medium text-white">
+                      <span className="font-medium text-[var(--ink)]">
                         {selectedDivision.name}
                       </span>
                       . Filter the grid below to find someone quickly.
                     </>
                   }
-                  badge={{
-                    label: "Players",
-                    value: String(filteredPlayerRows.length),
-                  }}
+                  action={
+                    <PanelHeaderCount
+                      label="Players"
+                      value={String(filteredPlayerRows.length)}
+                    />
+                  }
                 />
                 <DataTable
                   headers={playersWithRatings.headers}
