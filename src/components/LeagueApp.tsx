@@ -13,12 +13,14 @@ import {
   defaultTabForPillar,
   HOME_SECTIONS,
   LEAGUE_SECTIONS,
+  MANAGE_SECTIONS,
   pillarForTab,
   pillarShowsPlayContext,
   tabBelongsToPillar,
 } from "@/lib/app-nav";
 import { DEFAULT_LEAGUE_ID } from "@/lib/constants";
 import { canAccessLmsFromPublicUser } from "@/lib/lms-access";
+import { scheduleHasMatchTonight } from "@/lib/match-night";
 import { normalizeTeamName } from "@/lib/matchups";
 import { enrichPlayersWithRatings } from "@/lib/players";
 import {
@@ -64,6 +66,7 @@ import {
 import { LoadingState } from "./LoadingState";
 import { LmsOperator } from "./LmsOperator";
 import { LoginScreen, type AuthUser } from "./LoginScreen";
+import { ManageCreateLeague } from "./ManageCreateLeague";
 import { MatchScoring } from "./MatchScoring";
 import { SearchIcon } from "./NavIcons";
 import { PlayerSearch } from "./PlayerSearch";
@@ -153,9 +156,13 @@ export function LeagueApp() {
   );
   const [selectedDivision, setSelectedDivision] =
     useState<DivisionSummary | null>(null);
+  const urlHadExplicitTabRef = useRef(false);
+  const didAutoNightLandRef = useRef(false);
   const [tab, setTabState] = useState<ReportTab>(() => {
     if (typeof window === "undefined") return "events";
-    return readAppUrlState().tab ?? "events";
+    const state = readAppUrlState();
+    urlHadExplicitTabRef.current = Boolean(state.tab || state.eventId);
+    return state.tab ?? "events";
   });
   const [deepLinkEventId, setDeepLinkEventId] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
@@ -252,26 +259,45 @@ export function LeagueApp() {
   const [, startTransition] = useTransition();
   const filterAnchor = useViewportAnchor<HTMLDivElement>();
 
-  const selectPillar = useCallback(
-    (pillar: AppPillar) => {
-      if (tabBelongsToPillar(tab, pillar)) return;
-      const next = defaultTabForPillar(pillar, {
-        hasDivision: Boolean(selectedDivision?.id ?? prefs?.divisionId),
-        hasTeam: Boolean(prefs?.teamName),
-        canManage: showManagePillar,
-      });
-      startTransition(() => setTab(next));
-    },
+  const hasMatchTonight = useMemo(
+    () => scheduleHasMatchTonight(schedule, prefs?.teamName),
+    [schedule, prefs?.teamName],
+  );
+
+  const leagueDefaultOptions = useMemo(
+    () => ({
+      hasDivision: Boolean(selectedDivision?.id ?? prefs?.divisionId),
+      hasTeam: Boolean(prefs?.teamName),
+      canManage: showManagePillar,
+      hasMatchTonight,
+    }),
     [
-      tab,
       selectedDivision?.id,
       prefs?.divisionId,
       prefs?.teamName,
       showManagePillar,
-      setTab,
-      startTransition,
+      hasMatchTonight,
     ],
   );
+
+  const selectPillar = useCallback(
+    (pillar: AppPillar) => {
+      if (tabBelongsToPillar(tab, pillar)) return;
+      const next = defaultTabForPillar(pillar, leagueDefaultOptions);
+      startTransition(() => setTab(next));
+    },
+    [tab, leagueDefaultOptions, setTab, startTransition],
+  );
+
+  // Match night: if the user opened the app on the default Home tab (no deep
+  // link), jump to Score once the schedule confirms a match tonight.
+  useEffect(() => {
+    if (didAutoNightLandRef.current || urlHadExplicitTabRef.current) return;
+    if (!hasMatchTonight || !selectedDivision) return;
+    if (tab !== "events") return;
+    didAutoNightLandRef.current = true;
+    startTransition(() => setTab("score"));
+  }, [hasMatchTonight, selectedDivision, tab, setTab, startTransition]);
 
   const persist = (next: UserPreferences) => {
     setPrefs(next);
@@ -602,6 +628,7 @@ export function LeagueApp() {
       tab === "score" ||
       tab === "events" ||
       tab === "lms" ||
+      tab === "create-league" ||
       tab === "account"
     ) {
       setLoadingReport(false);
@@ -1025,6 +1052,7 @@ export function LeagueApp() {
                   defaultTabForPillar("league", {
                     hasDivision: true,
                     hasTeam: true,
+                    hasMatchTonight: false,
                   }),
                 );
               } else {
@@ -1063,8 +1091,10 @@ export function LeagueApp() {
           activePillar={activePillar}
           showManage
           onSelectPillar={selectPillar}
-          leagueSection={activePillar === "league" ? tab : null}
-          onSelectLeagueSection={selectLeagueSection}
+          activeSection={
+            activePillar === "league" || activePillar === "manage" ? tab : null
+          }
+          onSelectSection={selectLeagueSection}
         />
 
         <div className="min-w-0 flex-1">
@@ -1336,6 +1366,13 @@ export function LeagueApp() {
             activeId={tab}
             onSelect={selectLeagueSection}
           />
+        ) : activePillar === "manage" ? (
+          <SectionChipNav
+            aria-label="Manage sections"
+            sections={MANAGE_SECTIONS}
+            activeId={tab === "lms" ? "lms" : "create-league"}
+            onSelect={(next) => startTransition(() => setTab(next))}
+          />
         ) : activePillar === "home" ? (
           <SectionChipNav
             aria-label="Home sections"
@@ -1354,12 +1391,20 @@ export function LeagueApp() {
             tab === "players" ||
             tab === "events" ||
             tab === "lms" ||
+            tab === "create-league" ||
             tab === "account"
               ? "mt-0 space-y-0"
               : "space-y-6",
           ].join(" ")}
         >
-          {tab === "account" && user ? (
+          {tab === "create-league" ? (
+            <ManageCreateLeague
+              signedIn={Boolean(user)}
+              onRequestLogin={() => setScreen("login")}
+              canOpenLms={showManagePillar}
+              onOpenLms={() => startTransition(() => setTab("lms"))}
+            />
+          ) : tab === "account" && user ? (
             <SettingsScreen
               user={user}
               prefs={prefs}
@@ -1368,12 +1413,7 @@ export function LeagueApp() {
               membershipError={membershipError}
               onClose={() =>
                 startTransition(() =>
-                  setTab(
-                    defaultTabForPillar("league", {
-                      hasDivision: Boolean(selectedDivision),
-                      hasTeam: Boolean(prefs.teamName),
-                    }),
-                  ),
+                  setTab(defaultTabForPillar("league", leagueDefaultOptions)),
                 )
               }
               onUserUpdate={(nextUser) => {
@@ -1416,6 +1456,7 @@ export function LeagueApp() {
                 startTransition(() =>
                   setTab(
                     defaultTabForPillar("league", {
+                      ...leagueDefaultOptions,
                       hasDivision: Boolean(division ?? selectedDivision),
                       hasTeam: Boolean(next.teamName),
                     }),
@@ -1457,16 +1498,27 @@ export function LeagueApp() {
               />
             ) : (
               <EmptyState
-                title="League management"
-                body="Connect a League Operator login in Account to manage FargoRate LMS divisions. Create-your-own league tools will live here too."
+                title="Fargo LMS tools"
+                body="Connect a League Operator login in Account to manage FargoRate divisions. You can still create a Tableside league from the Create tab without LMS."
                 action={
-                  <button
-                    type="button"
-                    onClick={openAccount}
-                    className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
-                  >
-                    {user ? "Open Account" : "Sign in"}
-                  </button>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        startTransition(() => setTab("create-league"))
+                      }
+                      className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+                    >
+                      Create a league
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openAccount}
+                      className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)]"
+                    >
+                      {user ? "Open Account" : "Sign in"}
+                    </button>
+                  </div>
                 }
               />
             )

@@ -34,6 +34,7 @@ export const REPORT_TABS: { id: ReportTab; label: string }[] = [
   { id: "events", label: "Events" },
   { id: "score", label: "Score" },
   { id: "lms", label: "Fargo LMS" },
+  { id: "create-league", label: "Create league" },
   { id: "search", label: "Search" },
   { id: "account", label: "Account" },
 ];

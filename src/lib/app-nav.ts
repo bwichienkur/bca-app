@@ -65,6 +65,7 @@ export const LEAGUE_SECTIONS: NavSection[] = [
 
 /** Manage leaf destinations (provider-specific ops live here). */
 export const MANAGE_SECTIONS: NavSection[] = [
+  { id: "create-league", label: "Create league", shortLabel: "Create" },
   { id: "lms", label: "Fargo LMS", shortLabel: "LMS" },
 ];
 
@@ -82,6 +83,7 @@ const TAB_TO_PILLAR: Record<ReportTab, AppPillar> = {
   handicap: "league",
   players: "league",
   lms: "manage",
+  "create-league": "manage",
   account: "account",
 };
 
@@ -102,19 +104,28 @@ export function sectionsForPillar(pillar: AppPillar): NavSection[] {
   }
 }
 
+export type DefaultTabOptions = {
+  hasDivision?: boolean;
+  hasTeam?: boolean;
+  canManage?: boolean;
+  /** Division schedule includes a match for tonight (optionally for my team). */
+  hasMatchTonight?: boolean;
+};
+
 /** Default leaf when entering a pillar (or when current tab is outside it). */
 export function defaultTabForPillar(
   pillar: AppPillar,
-  options?: { hasDivision?: boolean; hasTeam?: boolean; canManage?: boolean },
+  options?: DefaultTabOptions,
 ): ReportTab {
   switch (pillar) {
     case "home":
       return "events";
     case "league":
-      if (options?.hasDivision) return "score";
+      if (options?.hasMatchTonight) return "score";
+      if (options?.hasDivision) return "schedule";
       return "standings";
     case "manage":
-      return "lms";
+      return "create-league";
     case "account":
       return "account";
   }
@@ -127,4 +138,9 @@ export function tabBelongsToPillar(tab: ReportTab, pillar: AppPillar): boolean {
 /** Context card (league/division/team) is for League play, not Home/Account. */
 export function pillarShowsPlayContext(pillar: AppPillar): boolean {
   return pillar === "league";
+}
+
+/** Tabs that don't use NavTabIcon leaf map. */
+export function sectionUsesLeafIcon(tab: ReportTab): boolean {
+  return tab !== "search" && tab !== "account" && tab !== "create-league";
 }

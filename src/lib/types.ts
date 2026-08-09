@@ -135,6 +135,7 @@ export type ReportTab =
   | "search"
   | "score"
   | "lms"
+  | "create-league"
   | "account";
 
 /** Top-level app pillars (mobile bottom bar / desktop side rail). */

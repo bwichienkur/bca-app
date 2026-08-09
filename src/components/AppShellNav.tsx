@@ -4,6 +4,8 @@ import type { AppPillar, ReportTab } from "@/lib/types";
 import {
   APP_PILLARS,
   LEAGUE_SECTIONS,
+  MANAGE_SECTIONS,
+  sectionUsesLeafIcon,
   type NavSection,
 } from "@/lib/app-nav";
 import { PillarIcon, NavTabIcon } from "./NavIcons";
@@ -13,6 +15,22 @@ type PillarNavProps = {
   showManage: boolean;
   onSelectPillar: (pillar: AppPillar) => void;
 };
+
+function LeafIcon({
+  id,
+  className,
+}: {
+  id: ReportTab;
+  className?: string;
+}) {
+  if (!sectionUsesLeafIcon(id)) return null;
+  return (
+    <NavTabIcon
+      id={id as Exclude<ReportTab, "search" | "account" | "create-league">}
+      className={className}
+    />
+  );
+}
 
 export function PillarBottomNav({
   activePillar,
@@ -73,15 +91,28 @@ export function PillarSideNav({
   activePillar,
   showManage,
   onSelectPillar,
-  leagueSection,
-  onSelectLeagueSection,
+  activeSection,
+  onSelectSection,
 }: PillarNavProps & {
-  leagueSection: ReportTab | null;
-  onSelectLeagueSection: (tab: ReportTab) => void;
+  activeSection: ReportTab | null;
+  onSelectSection: (tab: ReportTab) => void;
 }) {
   const pillars = APP_PILLARS.filter(
     (item) => item.id !== "manage" || showManage,
   );
+  const nested =
+    activePillar === "league"
+      ? LEAGUE_SECTIONS
+      : activePillar === "manage"
+        ? MANAGE_SECTIONS
+        : null;
+  const nestedLabel =
+    activePillar === "league"
+      ? "League tools"
+      : activePillar === "manage"
+        ? "Manage tools"
+        : null;
+
   return (
     <aside className="sticky top-4 hidden w-56 shrink-0 self-start md:block">
       <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
@@ -110,20 +141,20 @@ export function PillarSideNav({
         })}
       </nav>
 
-      {activePillar === "league" ? (
+      {nested && nestedLabel ? (
         <div className="mt-5 border-t border-[var(--line)] pt-4">
           <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-            League tools
+            {nestedLabel}
           </p>
-          <nav aria-label="League sections" className="mt-2 space-y-0.5">
-            {LEAGUE_SECTIONS.map((section) => {
-              const active = section.id === leagueSection;
+          <nav aria-label={nestedLabel} className="mt-2 space-y-0.5">
+            {nested.map((section) => {
+              const active = section.id === activeSection;
               return (
                 <button
                   key={section.id}
                   type="button"
                   aria-current={active ? "page" : undefined}
-                  onClick={() => onSelectLeagueSection(section.id)}
+                  onClick={() => onSelectSection(section.id)}
                   className={[
                     "flex w-full items-center gap-2 rounded-[var(--radius)] px-2.5 py-1.5 text-left text-[13px] font-semibold transition",
                     active
@@ -131,10 +162,7 @@ export function PillarSideNav({
                       : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
                   ].join(" ")}
                 >
-                  <NavTabIcon
-                    id={section.id as Exclude<ReportTab, "search" | "account">}
-                    className="h-3.5 w-3.5 shrink-0"
-                  />
+                  <LeafIcon id={section.id} className="h-3.5 w-3.5 shrink-0" />
                   <span className="min-w-0 truncate">{section.label}</span>
                 </button>
               );
@@ -179,12 +207,7 @@ export function SectionChipNav({
                   : "bg-[var(--surface)]/90 text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
               ].join(" ")}
             >
-              {section.id !== "search" && section.id !== "account" ? (
-                <NavTabIcon
-                  id={section.id as Exclude<ReportTab, "search" | "account">}
-                  className="h-3.5 w-3.5"
-                />
-              ) : null}
+              <LeafIcon id={section.id} className="h-3.5 w-3.5" />
               {section.shortLabel ?? section.label}
             </button>
           );

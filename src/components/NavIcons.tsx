@@ -164,7 +164,7 @@ function AccountPillarIcon({ className }: IconProps) {
   );
 }
 
-type LeafNavId = Exclude<ReportTab, "search" | "account">;
+type LeafNavId = Exclude<ReportTab, "search" | "account" | "create-league">;
 
 const NAV_ICONS: Record<LeafNavId, (props: IconProps) => ReactNode> = {
   "my-team": MyTeamIcon,

@@ -10,6 +10,7 @@ const REPORT_TABS: ReportTab[] = [
   "search",
   "score",
   "lms",
+  "create-league",
   "account",
 ];
 
