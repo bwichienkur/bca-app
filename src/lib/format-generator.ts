@@ -311,7 +311,7 @@ export function defaultFormatPicks(): FormatGeneratorPicks {
 
 function normalizePicks(picks: FormatGeneratorPicks): FormatGeneratorPicks {
   const structure = picks.structure;
-  let players =
+  const players =
     structure === "doubles"
       ? 2
       : Math.min(10, Math.max(2, Math.round(picks.playersPerTeam) || 4));
