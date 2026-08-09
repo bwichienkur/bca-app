@@ -1,11 +1,14 @@
 /**
- * Easy in-app scoring + handicap format generator.
- * Maps a few picks → LMS FormatTemplate DSL + app LeagueScoringFormat + division hints.
+ * Configurable scoring + handicap format generator.
+ *
+ * Axes are independent (structure × game × race × Fargo HC × team scoring).
+ * “Night styles” like Tuesday / matrix are just common presets of those axes.
  */
 
 import { formatScoringSummary } from "@/lib/division-scoring-config";
 import {
   serializeFormatTemplate,
+  type FormatGameKind,
   type FormatTemplateModel,
 } from "@/lib/lms-format-template";
 import {
@@ -13,21 +16,39 @@ import {
   buildRoundRobinTemplate,
   buildTuesdayRacesTemplate,
 } from "@/lib/lms-scoresheet-presets";
-import {
-  FORMAT_PALM_BEACH_5,
-  FORMAT_TUESDAY_9BALL_R6_HOT,
-  type LeagueScoringFormat,
-} from "@/lib/scoring-formats";
+import type { LeagueScoringFormat } from "@/lib/scoring-formats";
+import type { FargoHandicapType, PointSystem } from "@/lib/handicap";
 
-export type NightStyle = "tuesday-races" | "matrix" | "team-race" | "doubles";
-export type HandicapMode = "r6-hot" | "round-hc" | "none";
+/** How lineup slots become matchups. */
+export type MatchStructure = "slot-races" | "round-robin" | "doubles";
+
+/** Per-game race model (independent of Fargo expected-points HC). */
+export type RaceModel = "none" | "fixed" | "r6-hot";
+
+/** FargoRate expected-points handicap (LMS / calculator). */
+export type FargoHcMode = "none" | FargoHandicapType;
+
+/** How individual results become team night points. */
+export type TeamScoringMode = "match-win" | "round-points";
 
 export type FormatGeneratorPicks = {
   playersPerTeam: number;
-  nightStyle: NightStyle;
-  handicapMode: HandicapMode;
-  /** 8 or 9 for matrix nights; ignored otherwise. */
-  gameBall?: "8" | "9";
+  /** Defaults to playersPerTeam for round-robin / slot-races. */
+  rounds?: number;
+  structure: MatchStructure;
+  gameKind: FormatGameKind;
+  gameBall: "8" | "9" | "10" | "any";
+  raceModel: RaceModel;
+  /** Used when raceModel === "fixed". */
+  fixedRaceTo: number;
+  fargoHc: FargoHcMode;
+  /** LMS FargoHandicapType: 0 = Fargo Rating, 1 = Effective Rating */
+  fargoRatingBasis: "0" | "1";
+  handicapPercent: number;
+  handicapCap: number;
+  teamScoring: TeamScoringMode;
+  pointSystem: PointSystem;
+  matchPointsRound: boolean;
 };
 
 export type DivisionFormatHints = {
@@ -36,10 +57,14 @@ export type DivisionFormatHints = {
   PointsForWin: string;
   UseHandicap: string;
   HandicapMode: string;
+  FargoHandicapType: string;
+  HandicapPercentage: string;
+  MaximumAllowedHandicap: string;
   MatchWinForRound: string;
   AllScoresRequired: string;
   FormatTemplate: string;
-  /** Human-readable LMS field guidance. */
+  /** App-facing fargoRateHandicapType string for /format API consumers. */
+  fargoRateHandicapType: string;
   notes: string[];
 };
 
@@ -52,6 +77,7 @@ export type FormatGeneratorResult = {
   divisionHints: DivisionFormatHints;
   title: string;
   bullets: string[];
+  warnings: string[];
   matchups: Array<{
     round: number;
     games: Array<{
@@ -63,162 +89,374 @@ export type FormatGeneratorResult = {
   }>;
 };
 
-export const NIGHT_STYLE_OPTIONS: Array<{
-  id: NightStyle;
+export const STRUCTURE_OPTIONS: Array<{
+  id: MatchStructure;
   label: string;
   description: string;
 }> = [
   {
-    id: "tuesday-races",
-    label: "Singles races",
-    description: "One race match per lineup slot (Tue 9-Ball style)",
+    id: "slot-races",
+    label: "Slot matches",
+    description: "One match per lineup slot (Home1 vs Away1, …)",
   },
   {
-    id: "matrix",
-    label: "Round-robin matrix",
-    description: "Everyone plays everyone · points per game/round",
-  },
-  {
-    id: "team-race",
-    label: "Team race night",
-    description: "Full round-robin of race matches",
+    id: "round-robin",
+    label: "Round-robin",
+    description: "Every home slot plays every away slot",
   },
   {
     id: "doubles",
-    label: "Doubles race",
-    description: "Home pair vs visitor pair",
+    label: "Doubles",
+    description: "Home pair vs visitor pair (2 per side)",
   },
 ];
 
-export const HANDICAP_MODE_OPTIONS: Array<{
-  id: HandicapMode;
+export const GAME_KIND_OPTIONS: Array<{
+  id: FormatGameKind;
   label: string;
   description: string;
 }> = [
   {
-    id: "r6-hot",
-    label: "R6 Hot chart",
-    description: "Asymmetric race-to from Fargo difference",
+    id: "S",
+    label: "Singles (points)",
+    description: "Score pad / points per game",
   },
   {
-    id: "round-hc",
-    label: "Round handicap",
-    description: "Expected-points HC games awarded per round",
+    id: "R",
+    label: "Race",
+    description: "Race-to target (fixed or chart)",
   },
   {
-    id: "none",
-    label: "No handicap",
-    description: "Even races / no HC games",
+    id: "D",
+    label: "Scotch / doubles game",
+    description: "Two players per side on a game",
   },
 ];
 
-function buildScoringFormat(picks: FormatGeneratorPicks): LeagueScoringFormat {
-  const n = picks.playersPerTeam;
+export const RACE_MODEL_OPTIONS: Array<{
+  id: RaceModel;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "none",
+    label: "No race chart",
+    description: "Points games, or race length unused",
+  },
+  {
+    id: "fixed",
+    label: "Fixed race-to",
+    description: "Same race length for everyone (set below)",
+  },
+  {
+    id: "r6-hot",
+    label: "R6 Hot chart",
+    description: "Asymmetric race from Fargo difference",
+  },
+];
 
-  if (picks.nightStyle === "tuesday-races" || picks.handicapMode === "r6-hot") {
-    if (picks.nightStyle === "tuesday-races" || picks.nightStyle === "team-race") {
-      return {
-        ...FORMAT_TUESDAY_9BALL_R6_HOT,
-        id: `gen-r6-${n}`,
-        label: `R6 Hot ${n}-player`,
-        description: `${n} singles races. Race from R6 Hot. 1 team point per match win.`,
-        playersPerTeam: n,
-        matchesPerNight: n,
-        raceMode:
-          picks.handicapMode === "none" ? "fixed-race" : "fargo-race-chart",
-        raceChartId: picks.handicapMode === "none" ? undefined : "r6-hot",
-        fixedRaceWin: picks.handicapMode === "none" ? 6 : undefined,
-        teamPointMode: "match-win",
-        matchPointsRound: false,
-        pointSystem: "1",
-      };
-    }
-  }
+export const FARGO_HC_OPTIONS: Array<{
+  id: FargoHcMode;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "none",
+    label: "No Fargo HC games",
+    description: "No expected-points games awarded",
+  },
+  {
+    id: "RoundBased",
+    label: "Round-based",
+    description: "HC calculated each round from matchups",
+  },
+  {
+    id: "MatchBased",
+    label: "Match-based",
+    description: "HC per individual scoresheet game",
+  },
+  {
+    id: "FullMatchBased",
+    label: "Full-match",
+    description: "One HC for the whole night",
+  },
+];
 
-  if (picks.nightStyle === "doubles") {
-    return {
-      id: "gen-doubles-race",
-      label: "Doubles race",
-      description: "Home pair vs visitor pair. Fixed or chart race.",
+export const TEAM_SCORING_OPTIONS: Array<{
+  id: TeamScoringMode;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "match-win",
+    label: "1 pt per match win",
+    description: "Individual match winner earns a team point",
+  },
+  {
+    id: "round-points",
+    label: "Round points",
+    description: "Round wins (+ optional match-points round)",
+  },
+];
+
+/** Common bundles — optional shortcuts, not separate systems. */
+export type FormatPresetId =
+  | "tuesday-r6"
+  | "matrix-round-hc"
+  | "team-race-fixed"
+  | "doubles-race";
+
+export const FORMAT_PRESETS: Array<{
+  id: FormatPresetId;
+  label: string;
+  description: string;
+  picks: Partial<FormatGeneratorPicks>;
+}> = [
+  {
+    id: "tuesday-r6",
+    label: "Tuesday 9-Ball",
+    description: "Slot races · R6 Hot · match wins",
+    picks: {
+      playersPerTeam: 4,
+      structure: "slot-races",
+      gameKind: "R",
+      gameBall: "9",
+      raceModel: "r6-hot",
+      fargoHc: "none",
+      teamScoring: "match-win",
+      pointSystem: "1",
+      matchPointsRound: false,
+    },
+  },
+  {
+    id: "matrix-round-hc",
+    label: "Matrix + round HC",
+    description: "Round-robin · points · round-based Fargo HC",
+    picks: {
+      playersPerTeam: 5,
+      structure: "round-robin",
+      gameKind: "S",
+      gameBall: "8",
+      raceModel: "fixed",
+      fixedRaceTo: 10,
+      fargoHc: "RoundBased",
+      teamScoring: "round-points",
+      pointSystem: "10",
+      matchPointsRound: true,
+    },
+  },
+  {
+    id: "team-race-fixed",
+    label: "Team race",
+    description: "Full RR races · fixed race-to · match wins",
+    picks: {
+      playersPerTeam: 5,
+      structure: "round-robin",
+      gameKind: "R",
+      gameBall: "any",
+      raceModel: "fixed",
+      fixedRaceTo: 13,
+      fargoHc: "none",
+      teamScoring: "match-win",
+      pointSystem: "1",
+      matchPointsRound: false,
+    },
+  },
+  {
+    id: "doubles-race",
+    label: "Doubles",
+    description: "Pair vs pair · fixed race",
+    picks: {
       playersPerTeam: 2,
-      matchesPerNight: 1,
-      teamPointMode: "match-win",
-      pointsPerMatchWin: 1,
-      raceMode:
-        picks.handicapMode === "r6-hot" ? "fargo-race-chart" : "fixed-race",
-      raceChartId: picks.handicapMode === "r6-hot" ? "r6-hot" : undefined,
-      fixedRaceWin: picks.handicapMode === "r6-hot" ? undefined : 17,
-      matchPointsRound: false,
+      structure: "doubles",
+      gameKind: "R",
+      gameBall: "9",
+      raceModel: "fixed",
+      fixedRaceTo: 17,
+      fargoHc: "none",
+      teamScoring: "match-win",
       pointSystem: "1",
-    };
-  }
-
-  if (picks.nightStyle === "team-race") {
-    return {
-      id: `gen-team-race-${n}`,
-      label: `Team race ${n}-player`,
-      description: `${n}×${n} race matches. Match wins count for the team.`,
-      playersPerTeam: n,
-      matchesPerNight: n * n,
-      teamPointMode: "match-win",
-      pointsPerMatchWin: 1,
-      raceMode:
-        picks.handicapMode === "r6-hot" ? "fargo-race-chart" : "fixed-race",
-      raceChartId: picks.handicapMode === "r6-hot" ? "r6-hot" : undefined,
-      fixedRaceWin: picks.handicapMode === "r6-hot" ? undefined : 13,
       matchPointsRound: false,
-      pointSystem: "1",
-    };
-  }
+    },
+  },
+];
 
-  // Matrix points night (Palm Beach–like)
+export function defaultFormatPicks(): FormatGeneratorPicks {
   return {
-    ...FORMAT_PALM_BEACH_5,
-    id: `gen-matrix-${n}`,
-    label: `Matrix ${n}-player`,
-    description: `${n}-player round-robin. Points pad with round wins${
-      picks.handicapMode === "round-hc" ? " and round HC" : ""
-    }.`,
-    playersPerTeam: n,
-    matchesPerNight: n,
-    teamPointMode: "round-points",
-    raceMode: "fixed-race",
-    fixedRaceWin: 10,
-    fixedRaceMaxLoss: 7,
-    matchPointsRound: true,
-    pointSystem: picks.handicapMode === "none" ? "10" : "10",
+    playersPerTeam: 4,
+    structure: "slot-races",
+    gameKind: "R",
+    gameBall: "9",
+    raceModel: "r6-hot",
+    fixedRaceTo: 7,
+    fargoHc: "none",
+    fargoRatingBasis: "0",
+    handicapPercent: 100,
+    handicapCap: 50,
+    teamScoring: "match-win",
+    pointSystem: "1",
+    matchPointsRound: false,
   };
+}
+
+function normalizePicks(picks: FormatGeneratorPicks): FormatGeneratorPicks {
+  const structure = picks.structure;
+  let players =
+    structure === "doubles"
+      ? 2
+      : Math.min(10, Math.max(2, Math.round(picks.playersPerTeam) || 4));
+
+  let gameKind = picks.gameKind;
+  if (structure === "doubles" && gameKind === "S") {
+    gameKind = "R";
+  }
+
+  let raceModel = picks.raceModel;
+  if (gameKind === "S" && raceModel === "r6-hot") {
+    // Chart races need race games; keep selection but warn — still allow fixed for pad.
+    raceModel = picks.raceModel;
+  }
+
+  const rounds = Math.min(
+    10,
+    Math.max(1, Math.round(picks.rounds ?? players) || players),
+  );
+
+  return {
+    ...picks,
+    playersPerTeam: players,
+    rounds: structure === "doubles" ? 1 : rounds,
+    gameKind,
+    raceModel,
+    fixedRaceTo: Math.min(21, Math.max(1, Math.round(picks.fixedRaceTo) || 7)),
+    handicapPercent: Math.min(
+      100,
+      Math.max(50, Math.round(picks.handicapPercent) || 100),
+    ),
+    handicapCap: Math.min(
+      100,
+      Math.max(0, Math.round(picks.handicapCap) || 50),
+    ),
+  };
+}
+
+function collectWarnings(picks: FormatGeneratorPicks): string[] {
+  const warnings: string[] = [];
+  if (picks.gameKind === "S" && picks.raceModel === "r6-hot") {
+    warnings.push(
+      "R6 Hot is a race chart — works best with Race games. Points games will still use a fixed score pad unless you switch game kind to Race.",
+    );
+  }
+  if (picks.raceModel === "r6-hot" && picks.fargoHc !== "none") {
+    warnings.push(
+      "Using R6 Hot and Fargo HC games together is unusual — chart already handicaps via race-to. Double-check you want both.",
+    );
+  }
+  if (picks.gameKind === "R" && picks.teamScoring === "round-points") {
+    warnings.push(
+      "Race nights usually use 1 pt per match win; round-points is more common for points pads.",
+    );
+  }
+  if (picks.fargoHc !== "none" && picks.pointSystem === "1" && picks.gameKind === "S") {
+    warnings.push(
+      "Round/match HC with point system 1 is weak for points pads — consider 10 or 17.",
+    );
+  }
+  return warnings;
+}
+
+function gameTypeToken(ball: FormatGeneratorPicks["gameBall"]): string {
+  if (ball === "8") return "8";
+  if (ball === "9") return "9";
+  if (ball === "10") return "10";
+  return "0";
 }
 
 function buildModel(picks: FormatGeneratorPicks): FormatTemplateModel {
   const n = picks.playersPerTeam;
-  const ball = picks.gameBall ?? "9";
+  const rounds = picks.rounds ?? n;
+  const gt = gameTypeToken(picks.gameBall);
+  const raceLength = String(
+    picks.raceModel === "fixed"
+      ? picks.fixedRaceTo
+      : picks.raceModel === "r6-hot"
+        ? 6
+        : picks.fixedRaceTo,
+  );
 
-  switch (picks.nightStyle) {
-    case "tuesday-races":
-      return buildTuesdayRacesTemplate(n);
-    case "doubles":
-      return buildDoublesRaceTemplate(
-        picks.handicapMode === "r6-hot" ? "6" : "17",
-      );
-    case "team-race":
-      return buildRoundRobinTemplate({
-        players: n,
-        rounds: n,
-        kind: "R",
-        raceSheetBreaks: true,
-        gameType: ball,
-        raceLength: picks.handicapMode === "r6-hot" ? "6" : "13",
-      });
-    case "matrix":
-    default:
-      return buildRoundRobinTemplate({
-        players: n,
-        rounds: n,
-        kind: "S",
-        gameType: ball,
-      });
+  if (picks.structure === "doubles") {
+    return buildDoublesRaceTemplate(raceLength);
   }
+
+  if (picks.structure === "slot-races") {
+    const model = buildTuesdayRacesTemplate(n);
+    // Apply kind / ball / race length to each game.
+    return {
+      ...model,
+      rounds: model.rounds.map((round) => ({
+        ...round,
+        games: round.games.map((game) => ({
+          ...game,
+          kind: picks.gameKind === "D" ? "R" : picks.gameKind,
+          gameType: gt,
+          raceLength:
+            picks.gameKind === "R" || picks.raceModel !== "none"
+              ? raceLength
+              : game.raceLength,
+        })),
+      })),
+    };
+  }
+
+  // round-robin
+  return buildRoundRobinTemplate({
+    players: n,
+    rounds,
+    kind: picks.gameKind === "D" ? "S" : picks.gameKind,
+    raceSheetBreaks: picks.gameKind === "R",
+    gameType: gt,
+    raceLength,
+  });
+}
+
+function buildScoringFormat(picks: FormatGeneratorPicks): LeagueScoringFormat {
+  const n = picks.playersPerTeam;
+  const games =
+    picks.structure === "doubles"
+      ? 1
+      : picks.structure === "slot-races"
+        ? n
+        : n * (picks.rounds ?? n);
+
+  const chartRace = picks.raceModel === "r6-hot";
+
+  return {
+    id: `gen-${picks.structure}-${picks.gameKind}-${picks.raceModel}-${picks.fargoHc}-${n}`,
+    label: `${n}-player ${picks.structure}`,
+    description: "Generated from Format tab picks.",
+    playersPerTeam: n,
+    matchesPerNight: Math.max(1, games),
+    teamPointMode: picks.teamScoring,
+    pointsPerMatchWin: 1,
+    raceMode: chartRace ? "fargo-race-chart" : "fixed-race",
+    raceChartId: chartRace ? "r6-hot" : undefined,
+    fixedRaceWin: chartRace ? undefined : picks.fixedRaceTo,
+    fixedRaceMaxLoss:
+      !chartRace && picks.gameKind === "S"
+        ? Math.max(1, picks.fixedRaceTo - 3)
+        : undefined,
+    matchPointsRound:
+      picks.teamScoring === "round-points" ? picks.matchPointsRound : false,
+    pointSystem: picks.pointSystem === "TRIOS" ? "10" : picks.pointSystem,
+  };
+}
+
+function lmsHandicapMode(picks: FormatGeneratorPicks): string {
+  if (picks.fargoHc === "none") return "0";
+  if (picks.fargoHc === "RoundBased") return "2";
+  if (picks.fargoHc === "MatchBased") return "1";
+  if (picks.fargoHc === "FullMatchBased") return "1";
+  return "0";
 }
 
 function buildDivisionHints(
@@ -227,53 +465,51 @@ function buildDivisionHints(
   dsl: string,
   scoring: LeagueScoringFormat,
 ): DivisionFormatHints {
-  const useHc = picks.handicapMode === "none" ? "0" : "1";
-  // LMS: 0 Fixed, 1 by match, 2 by round (Fargo)
-  const hcMode =
-    picks.handicapMode === "round-hc"
-      ? "2"
-      : picks.handicapMode === "r6-hot"
-        ? "0"
-        : "0";
-  const matchWin =
-    scoring.teamPointMode === "match-win" ? "0" : "1";
-  const pointsForWin = scoring.pointSystem;
-
+  const useHc = picks.fargoHc === "none" ? "0" : "1";
   const notes: string[] = [];
-  if (picks.handicapMode === "r6-hot") {
+
+  if (picks.raceModel === "r6-hot") {
     notes.push(
-      "App uses R6 Hot race targets from Fargo. LMS Race Length in the template is a placeholder — chart wins at score time.",
+      "App applies R6 Hot race targets from Fargo at score time. Template RL is a placeholder — LMS UseHandicap stays off unless you also pick Fargo HC games.",
     );
-    notes.push("Set division scoring so match wins count (not round points).");
-  } else if (picks.handicapMode === "round-hc") {
+  }
+  if (picks.fargoHc !== "none") {
     notes.push(
-      "Set Handicap mode to “Calculated by round (Fargo)” and Use handicap = Yes.",
+      `Fargo expected-points HC: ${picks.fargoHc}. Rating basis ${picks.fargoRatingBasis === "1" ? "Effective" : "Fargo"}, ${picks.handicapPercent}%, cap ${picks.handicapCap}.`,
     );
+  }
+  if (picks.raceModel === "fixed" && picks.gameKind === "R") {
+    notes.push(`Fixed race-to ${picks.fixedRaceTo} written into GAME RL tokens.`);
+  }
+  if (picks.fargoHc === "FullMatchBased") {
     notes.push(
-      `Points for game win ≈ ${pointsForWin} to match expected-points HC.`,
+      "LMS HandicapMode has no dedicated Full-match value — hints use “by match”; app scoring uses FullMatchBased.",
     );
-  } else {
-    notes.push("Use handicap = No for even play.");
   }
 
   return {
     NumberOfPlayers: String(model.playerCount),
     NumberOfRounds: String(model.rounds.length),
-    PointsForWin: pointsForWin,
+    PointsForWin: scoring.pointSystem,
     UseHandicap: useHc,
-    HandicapMode: hcMode,
-    MatchWinForRound: matchWin,
+    HandicapMode: lmsHandicapMode(picks),
+    FargoHandicapType: picks.fargoRatingBasis,
+    HandicapPercentage: `${picks.handicapPercent}%`,
+    MaximumAllowedHandicap: String(picks.handicapCap),
+    MatchWinForRound: scoring.teamPointMode === "match-win" ? "0" : "1",
     AllScoresRequired: "1",
     FormatTemplate: dsl,
+    fargoRateHandicapType:
+      picks.fargoHc === "none" ? "RoundBased" : picks.fargoHc,
     notes,
   };
 }
 
-function matchupLabel(game: FormatTemplateModel["rounds"][number]["games"][number]): string {
-  const home =
-    game.breakTeam === 1 ? game.breakPlayers : game.otherPlayers;
-  const away =
-    game.breakTeam === 1 ? game.otherPlayers : game.breakPlayers;
+function matchupLabel(
+  game: FormatTemplateModel["rounds"][number]["games"][number],
+): string {
+  const home = game.breakTeam === 1 ? game.breakPlayers : game.otherPlayers;
+  const away = game.breakTeam === 1 ? game.otherPlayers : game.breakPlayers;
   const fmt = (refs: typeof home) =>
     refs
       .map((r) => `${r.side === "H" ? "Home" : "Away"}${r.index}`)
@@ -281,17 +517,22 @@ function matchupLabel(game: FormatTemplateModel["rounds"][number]["games"][numbe
   return `${fmt(home)} vs ${fmt(away)}`;
 }
 
+function titleFor(picks: FormatGeneratorPicks): string {
+  const structure =
+    STRUCTURE_OPTIONS.find((o) => o.id === picks.structure)?.label ??
+    picks.structure;
+  const race =
+    RACE_MODEL_OPTIONS.find((o) => o.id === picks.raceModel)?.label ??
+    picks.raceModel;
+  const hc =
+    FARGO_HC_OPTIONS.find((o) => o.id === picks.fargoHc)?.label ?? picks.fargoHc;
+  return `${structure} · ${race} · ${hc}`;
+}
+
 export function generateLeagueFormat(
   picks: FormatGeneratorPicks,
 ): FormatGeneratorResult {
-  const normalized: FormatGeneratorPicks = {
-    ...picks,
-    playersPerTeam:
-      picks.nightStyle === "doubles"
-        ? 2
-        : Math.min(10, Math.max(2, Math.round(picks.playersPerTeam) || 5)),
-  };
-
+  const normalized = normalizePicks(picks);
   const model = buildModel(normalized);
   const dsl = serializeFormatTemplate(model);
   const scoringFormat = buildScoringFormat(normalized);
@@ -301,19 +542,21 @@ export function generateLeagueFormat(
     dsl,
     scoringFormat,
   );
+  const warnings = collectWarnings(normalized);
 
-  const styleLabel =
-    NIGHT_STYLE_OPTIONS.find((o) => o.id === normalized.nightStyle)?.label ??
-    normalized.nightStyle;
-  const hcLabel =
-    HANDICAP_MODE_OPTIONS.find((o) => o.id === normalized.handicapMode)
-      ?.label ?? normalized.handicapMode;
+  const raceLabel =
+    normalized.raceModel === "fixed"
+      ? `Fixed race-to ${normalized.fixedRaceTo}`
+      : RACE_MODEL_OPTIONS.find((o) => o.id === normalized.raceModel)?.label;
 
   const bullets = [
-    `${normalized.playersPerTeam} players per side`,
-    `${model.rounds.length} rounds · ${model.rounds.reduce((s, r) => s + r.games.length, 0)} games`,
-    `Scoring: ${formatScoringSummary(scoringFormat)}`,
-    `Handicap: ${hcLabel}`,
+    `${normalized.playersPerTeam} players per side · ${model.rounds.length} rounds · ${model.rounds.reduce((s, r) => s + r.games.length, 0)} games`,
+    `Structure: ${STRUCTURE_OPTIONS.find((o) => o.id === normalized.structure)?.label}`,
+    `Games: ${GAME_KIND_OPTIONS.find((o) => o.id === normalized.gameKind)?.label} · ${normalized.gameBall === "any" ? "any ball" : `${normalized.gameBall}-ball`}`,
+    `Race: ${raceLabel}`,
+    `Fargo HC: ${FARGO_HC_OPTIONS.find((o) => o.id === normalized.fargoHc)?.label}`,
+    `Team scoring: ${TEAM_SCORING_OPTIONS.find((o) => o.id === normalized.teamScoring)?.label} · points system ${normalized.pointSystem}`,
+    `App scoring: ${formatScoringSummary(scoringFormat)}`,
     ...divisionHints.notes,
   ];
 
@@ -324,8 +567,9 @@ export function generateLeagueFormat(
     scoringFormat,
     scoringSummary: formatScoringSummary(scoringFormat),
     divisionHints,
-    title: `${styleLabel} · ${hcLabel}`,
+    title: titleFor(normalized),
     bullets,
+    warnings,
     matchups: model.rounds.map((round, index) => ({
       round: index + 1,
       games: round.games.map((game) => ({
@@ -343,11 +587,11 @@ export function generateLeagueFormat(
   };
 }
 
-export function defaultFormatPicks(): FormatGeneratorPicks {
-  return {
-    playersPerTeam: 4,
-    nightStyle: "tuesday-races",
-    handicapMode: "r6-hot",
-    gameBall: "9",
-  };
+export function applyFormatPreset(
+  id: FormatPresetId,
+  base: FormatGeneratorPicks = defaultFormatPicks(),
+): FormatGeneratorPicks {
+  const preset = FORMAT_PRESETS.find((row) => row.id === id);
+  if (!preset) return base;
+  return normalizePicks({ ...base, ...preset.picks });
 }

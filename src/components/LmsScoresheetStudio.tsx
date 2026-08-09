@@ -1,15 +1,25 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
+  applyFormatPreset,
   defaultFormatPicks,
+  FARGO_HC_OPTIONS,
+  FORMAT_PRESETS,
+  GAME_KIND_OPTIONS,
   generateLeagueFormat,
-  HANDICAP_MODE_OPTIONS,
-  NIGHT_STYLE_OPTIONS,
+  RACE_MODEL_OPTIONS,
+  STRUCTURE_OPTIONS,
+  TEAM_SCORING_OPTIONS,
   type FormatGeneratorPicks,
-  type HandicapMode,
-  type NightStyle,
+  type FormatPresetId,
+  type FargoHcMode,
+  type MatchStructure,
+  type RaceModel,
+  type TeamScoringMode,
 } from "@/lib/format-generator";
+import type { FormatGameKind } from "@/lib/lms-format-template";
+import type { PointSystem } from "@/lib/handicap";
 import { FormatScoresheetPreview } from "./FormatScoresheetPreview";
 import { SelectField } from "./SelectField";
 
@@ -48,6 +58,14 @@ function ChoiceCard({
   );
 }
 
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+      {children}
+    </p>
+  );
+}
+
 export function LmsScoresheetStudio() {
   const [picks, setPicks] = useState<FormatGeneratorPicks>(() =>
     defaultFormatPicks(),
@@ -61,12 +79,13 @@ export function LmsScoresheetStudio() {
   const patch = (partial: Partial<FormatGeneratorPicks>) =>
     setPicks((prev) => {
       const next = { ...prev, ...partial };
-      if (next.nightStyle === "doubles") next.playersPerTeam = 2;
-      if (next.nightStyle === "tuesday-races" && next.handicapMode === "round-hc") {
-        next.handicapMode = "r6-hot";
-      }
+      if (next.structure === "doubles") next.playersPerTeam = 2;
       return next;
     });
+
+  const applyPreset = (id: FormatPresetId) => {
+    setPicks((prev) => applyFormatPreset(id, prev));
+  };
 
   const copyText = async (text: string, which: "dsl" | "hints") => {
     try {
@@ -84,6 +103,9 @@ export function LmsScoresheetStudio() {
     `PointsForWin=${result.divisionHints.PointsForWin}`,
     `UseHandicap=${result.divisionHints.UseHandicap}`,
     `HandicapMode=${result.divisionHints.HandicapMode}`,
+    `FargoHandicapType=${result.divisionHints.FargoHandicapType}`,
+    `HandicapPercentage=${result.divisionHints.HandicapPercentage}`,
+    `MaximumAllowedHandicap=${result.divisionHints.MaximumAllowedHandicap}`,
     `MatchWinForRound=${result.divisionHints.MatchWinForRound}`,
     "",
     ...result.divisionHints.notes,
@@ -93,9 +115,15 @@ export function LmsScoresheetStudio() {
   ].join("\n");
 
   const playerOptions =
-    picks.nightStyle === "doubles"
+    picks.structure === "doubles"
       ? [{ value: "2", label: "2 (doubles)" }]
-      : [3, 4, 5, 6].map((n) => ({ value: String(n), label: String(n) }));
+      : [2, 3, 4, 5, 6].map((n) => ({ value: String(n), label: String(n) }));
+
+  const showFixedRace =
+    picks.raceModel === "fixed" ||
+    (picks.raceModel === "none" && picks.gameKind === "S");
+  const showHcDetails = picks.fargoHc !== "none";
+  const showRoundPointsExtras = picks.teamScoring === "round-points";
 
   return (
     <section className="space-y-4">
@@ -104,18 +132,31 @@ export function LmsScoresheetStudio() {
           Scoring & handicap format
         </p>
         <p className="mt-0.5 text-xs text-[var(--muted)]">
-          Pick team size, night style, and handicap. We generate a consistent LMS
-          scoresheet template plus the app scoring rules — so Score and Handicap
-          tabs match what you put in LMS.
+          Structure, race, and Fargo HC are independent. Presets are shortcuts —
+          mix any combination below. We generate an LMS template plus app scoring
+          rules so Score and Handicap stay aligned.
         </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,18rem)_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,20rem)_1fr]">
         <div className="space-y-4">
+          <div className="space-y-2">
+            <SectionLabel>Presets (optional)</SectionLabel>
+            <div className="grid gap-1.5">
+              {FORMAT_PRESETS.map((preset) => (
+                <ChoiceCard
+                  key={preset.id}
+                  selected={false}
+                  title={preset.label}
+                  description={preset.description}
+                  onClick={() => applyPreset(preset.id)}
+                />
+              ))}
+            </div>
+          </div>
+
           <label className="block space-y-1.5">
-            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-              Players per side
-            </span>
+            <SectionLabel>Players per side</SectionLabel>
             <SelectField
               aria-label="Players per side"
               value={String(picks.playersPerTeam)}
@@ -123,42 +164,38 @@ export function LmsScoresheetStudio() {
               onChange={(value) =>
                 patch({ playersPerTeam: Number(value) || 4 })
               }
-              disabled={picks.nightStyle === "doubles"}
+              disabled={picks.structure === "doubles"}
             />
           </label>
 
-          {picks.nightStyle === "matrix" || picks.nightStyle === "team-race" ? (
+          {picks.structure === "round-robin" ? (
             <label className="block space-y-1.5">
-              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                Game
-              </span>
+              <SectionLabel>Rounds</SectionLabel>
               <SelectField
-                aria-label="Game ball"
-                value={picks.gameBall ?? "9"}
-                options={[
-                  { value: "9", label: "9-Ball" },
-                  { value: "8", label: "8-Ball" },
-                ]}
+                aria-label="Rounds"
+                value={String(picks.rounds ?? picks.playersPerTeam)}
+                options={[1, 2, 3, 4, 5, 6].map((n) => ({
+                  value: String(n),
+                  label: String(n),
+                }))}
                 onChange={(value) =>
-                  patch({ gameBall: value === "8" ? "8" : "9" })
+                  patch({ rounds: Number(value) || picks.playersPerTeam })
                 }
               />
             </label>
           ) : null}
 
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-              Night style
-            </p>
+            <SectionLabel>Structure</SectionLabel>
             <div className="grid gap-1.5">
-              {NIGHT_STYLE_OPTIONS.map((option) => (
+              {STRUCTURE_OPTIONS.map((option) => (
                 <ChoiceCard
                   key={option.id}
-                  selected={picks.nightStyle === option.id}
+                  selected={picks.structure === option.id}
                   title={option.label}
                   description={option.description}
                   onClick={() =>
-                    patch({ nightStyle: option.id as NightStyle })
+                    patch({ structure: option.id as MatchStructure })
                   }
                 />
               ))}
@@ -166,37 +203,188 @@ export function LmsScoresheetStudio() {
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-              Handicap
-            </p>
+            <SectionLabel>Game kind</SectionLabel>
             <div className="grid gap-1.5">
-              {HANDICAP_MODE_OPTIONS.filter((option) => {
-                if (
-                  picks.nightStyle === "tuesday-races" &&
-                  option.id === "round-hc"
-                ) {
-                  return false;
-                }
-                if (
-                  picks.nightStyle === "matrix" &&
-                  option.id === "r6-hot"
-                ) {
-                  return false;
-                }
-                return true;
-              }).map((option) => (
+              {GAME_KIND_OPTIONS.map((option) => (
                 <ChoiceCard
                   key={option.id}
-                  selected={picks.handicapMode === option.id}
+                  selected={picks.gameKind === option.id}
                   title={option.label}
                   description={option.description}
                   onClick={() =>
-                    patch({ handicapMode: option.id as HandicapMode })
+                    patch({ gameKind: option.id as FormatGameKind })
                   }
                 />
               ))}
             </div>
           </div>
+
+          <label className="block space-y-1.5">
+            <SectionLabel>Ball</SectionLabel>
+            <SelectField
+              aria-label="Game ball"
+              value={picks.gameBall}
+              options={[
+                { value: "8", label: "8-Ball" },
+                { value: "9", label: "9-Ball" },
+                { value: "10", label: "10-Ball" },
+                { value: "any", label: "Any / unspecified" },
+              ]}
+              onChange={(value) =>
+                patch({
+                  gameBall:
+                    value === "8" || value === "10" || value === "any"
+                      ? value
+                      : "9",
+                })
+              }
+            />
+          </label>
+
+          <div className="space-y-2">
+            <SectionLabel>Race</SectionLabel>
+            <div className="grid gap-1.5">
+              {RACE_MODEL_OPTIONS.map((option) => (
+                <ChoiceCard
+                  key={option.id}
+                  selected={picks.raceModel === option.id}
+                  title={option.label}
+                  description={option.description}
+                  onClick={() => patch({ raceModel: option.id as RaceModel })}
+                />
+              ))}
+            </div>
+          </div>
+
+          {showFixedRace ? (
+            <label className="block space-y-1.5">
+              <SectionLabel>
+                {picks.gameKind === "S" ? "Score pad / race length" : "Race to"}
+              </SectionLabel>
+              <SelectField
+                aria-label="Fixed race to"
+                value={String(picks.fixedRaceTo)}
+                options={[5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 21].map((n) => ({
+                  value: String(n),
+                  label: String(n),
+                }))}
+                onChange={(value) =>
+                  patch({ fixedRaceTo: Number(value) || 7 })
+                }
+              />
+            </label>
+          ) : null}
+
+          <div className="space-y-2">
+            <SectionLabel>Fargo handicap</SectionLabel>
+            <div className="grid gap-1.5">
+              {FARGO_HC_OPTIONS.map((option) => (
+                <ChoiceCard
+                  key={option.id}
+                  selected={picks.fargoHc === option.id}
+                  title={option.label}
+                  description={option.description}
+                  onClick={() => patch({ fargoHc: option.id as FargoHcMode })}
+                />
+              ))}
+            </div>
+          </div>
+
+          {showHcDetails ? (
+            <div className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-3">
+              <label className="block space-y-1.5">
+                <SectionLabel>Rating basis</SectionLabel>
+                <SelectField
+                  aria-label="Fargo rating basis"
+                  value={picks.fargoRatingBasis}
+                  options={[
+                    { value: "0", label: "Fargo Rating" },
+                    { value: "1", label: "Effective Rating" },
+                  ]}
+                  onChange={(value) =>
+                    patch({ fargoRatingBasis: value === "1" ? "1" : "0" })
+                  }
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <SectionLabel>Handicap %</SectionLabel>
+                <SelectField
+                  aria-label="Handicap percent"
+                  value={String(picks.handicapPercent)}
+                  options={[50, 60, 70, 75, 80, 90, 100].map((n) => ({
+                    value: String(n),
+                    label: `${n}%`,
+                  }))}
+                  onChange={(value) =>
+                    patch({ handicapPercent: Number(value) || 100 })
+                  }
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <SectionLabel>HC cap</SectionLabel>
+                <SelectField
+                  aria-label="Handicap cap"
+                  value={String(picks.handicapCap)}
+                  options={[0, 10, 20, 30, 40, 50, 75, 100].map((n) => ({
+                    value: String(n),
+                    label: String(n),
+                  }))}
+                  onChange={(value) =>
+                    patch({ handicapCap: Number(value) || 50 })
+                  }
+                />
+              </label>
+            </div>
+          ) : null}
+
+          <div className="space-y-2">
+            <SectionLabel>Team scoring</SectionLabel>
+            <div className="grid gap-1.5">
+              {TEAM_SCORING_OPTIONS.map((option) => (
+                <ChoiceCard
+                  key={option.id}
+                  selected={picks.teamScoring === option.id}
+                  title={option.label}
+                  description={option.description}
+                  onClick={() =>
+                    patch({ teamScoring: option.id as TeamScoringMode })
+                  }
+                />
+              ))}
+            </div>
+          </div>
+
+          {showRoundPointsExtras ? (
+            <div className="space-y-3">
+              <label className="block space-y-1.5">
+                <SectionLabel>Point system</SectionLabel>
+                <SelectField
+                  aria-label="Point system"
+                  value={picks.pointSystem}
+                  options={[
+                    { value: "1", label: "1" },
+                    { value: "10", label: "10" },
+                    { value: "17", label: "17" },
+                    { value: "TRIOS", label: "TRIOS" },
+                  ]}
+                  onChange={(value) =>
+                    patch({ pointSystem: value as PointSystem })
+                  }
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[var(--ink)]">
+                <input
+                  type="checkbox"
+                  checked={picks.matchPointsRound}
+                  onChange={(event) =>
+                    patch({ matchPointsRound: event.target.checked })
+                  }
+                  className="size-4 accent-[var(--felt)]"
+                />
+                Include match-points round
+              </label>
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-3">
@@ -210,6 +398,14 @@ export function LmsScoresheetStudio() {
               </p>
             </div>
 
+            {result.warnings.length ? (
+              <ul className="space-y-1 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--amber)_10%,var(--surface))] px-3 py-2.5 text-xs text-[var(--ink)] sm:px-4">
+                {result.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            ) : null}
+
             <ul className="space-y-1.5 border-b border-[var(--line)] px-3 py-3 text-sm text-[var(--ink)] sm:px-4">
               {result.bullets.map((bullet) => (
                 <li key={bullet} className="flex gap-2">
@@ -222,9 +418,7 @@ export function LmsScoresheetStudio() {
             </ul>
 
             <div className="space-y-3 px-3 py-3 sm:px-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                Night matchups
-              </p>
+              <SectionLabel>Night matchups</SectionLabel>
               <div className="space-y-2">
                 {result.matchups.map((block) => (
                   <div
@@ -248,7 +442,7 @@ export function LmsScoresheetStudio() {
                           </span>
                           {game.raceLength ? (
                             <span className="rounded-md bg-[color-mix(in_srgb,var(--felt)_14%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--felt-deep)]">
-                              {picks.handicapMode === "r6-hot"
+                              {picks.raceModel === "r6-hot"
                                 ? "Race from R6 Hot"
                                 : `Race to ${game.raceLength}`}
                             </span>
@@ -316,8 +510,9 @@ export function LmsScoresheetStudio() {
                 the hint block).
               </li>
               <li>
-                In the app, Score and Handicap follow the same night style when
-                the division signals match (or set scoring format in Account).
+                In the app, Score and Handicap follow the same race + Fargo HC
+                picks when the division signals match (or set scoring format in
+                Account).
               </li>
             </ol>
           </div>
