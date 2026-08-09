@@ -939,11 +939,7 @@ export function LmsOperator({
   useEffect(() => {
     if (!user || !configured || !opDivisionId) return;
     if (screen.type !== "list") return;
-    if (
-      !["teams", "players", "locations", "schedule", "scoresheet"].includes(
-        subTab,
-      )
-    )
+    if (!["teams", "players", "locations", "schedule"].includes(subTab))
       return;
 
     let cancelled = false;
@@ -962,8 +958,6 @@ export function LmsOperator({
             refreshTeams(),
             refreshLocations(),
           ]);
-        } else if (subTab === "scoresheet") {
-          await refreshSettings(opDivisionId);
         }
       } catch (error) {
         if (!cancelled) {
@@ -1342,7 +1336,12 @@ export function LmsOperator({
     return <LoadingState label="Checking league operator…" />;
   }
 
-  const needsDivision = !["home", "playoff", "division"].includes(subTab);
+  const needsDivision = ![
+    "home",
+    "playoff",
+    "division",
+    "scoresheet",
+  ].includes(subTab);
 
   /* ---------- Edit / create popup ---------- */
   const pageTitle =
@@ -2949,47 +2948,13 @@ export function LmsOperator({
         </section>
       ) : null}
 
-      {subTab === "scoresheet" && opDivisionId ? (
+      {subTab === "scoresheet" ? (
         <section className="space-y-3">
           <SectionHeader
-            title="Scoresheet"
-            description="Build a Home1 / Away1 scoresheet and get the LMS DSL — or paste DSL to preview the sheet."
+            title="Scoresheet sandbox"
+            description="Build or paste a template, then Generate a paper-style preview. Nothing is saved to a division."
           />
-          {sectionLoading && !settings ? (
-            <LoadingState label="Loading division format…" />
-          ) : (
-            <LmsScoresheetStudio
-              initialTemplate={
-                settings && typeof settings.FormatTemplate === "string"
-                  ? settings.FormatTemplate
-                  : ""
-              }
-              playerCountHint={
-                settings
-                  ? Number(settings.NumberOfPlayers) || undefined
-                  : undefined
-              }
-              divisionName={opDivisionName || null}
-              busy={busy}
-              onSaveToDivision={(template, meta) =>
-                void runAction(async () => {
-                  const next = {
-                    ...(settings ?? {}),
-                    FormatTemplate: template,
-                    NumberOfPlayers: String(meta.playerCount),
-                    NumberOfRounds: String(meta.rounds),
-                  };
-                  setSettings(next);
-                  await fetchJson("/api/lms/operator/settings", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ settings: next }),
-                  });
-                  await refreshSettings(opDivisionId);
-                }, "Scoresheet saved to division.")
-              }
-            />
-          )}
+          <LmsScoresheetStudio />
         </section>
       ) : null}
 

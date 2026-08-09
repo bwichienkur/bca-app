@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   clampPlayerCount,
   defaultFormatModel,
   emptyGame,
   emptyRound,
+  FORMAT_GAME_TYPE_OPTIONS,
+  FORMAT_MULTIPLIER_OPTIONS,
+  FORMAT_RACE_LENGTH_OPTIONS,
   parseFormatTemplate,
   serializeFormatTemplate,
   summarizeFormatModel,
@@ -14,6 +17,7 @@ import {
   type FormatPlayerRef,
   type FormatTemplateModel,
 } from "@/lib/lms-format-template";
+import { FormatScoresheetPreview } from "./FormatScoresheetPreview";
 import { SelectField } from "./SelectField";
 
 const inputClass =
@@ -56,47 +60,19 @@ function parseRef(value: string): FormatPlayerRef {
 }
 
 type LmsScoresheetStudioProps = {
-  /** Optional seed from the selected division’s FormatTemplate. */
-  initialTemplate?: string;
+  /** Optional starting player count for a blank sandbox. */
   playerCountHint?: number;
-  divisionName?: string | null;
-  busy?: boolean;
-  onSaveToDivision?: (
-    template: string,
-    meta: { playerCount: number; rounds: number },
-  ) => void;
 };
 
 export function LmsScoresheetStudio({
-  initialTemplate = "",
   playerCountHint,
-  divisionName,
-  busy = false,
-  onSaveToDivision,
 }: LmsScoresheetStudioProps) {
-  const [model, setModel] = useState<FormatTemplateModel>(() => {
-    if (initialTemplate.trim()) return parseFormatTemplate(initialTemplate);
-    return defaultFormatModel(playerCountHint || 5, playerCountHint || 5);
-  });
-  const [dslText, setDslText] = useState(() =>
-    serializeFormatTemplate(
-      initialTemplate.trim()
-        ? parseFormatTemplate(initialTemplate)
-        : defaultFormatModel(playerCountHint || 5, playerCountHint || 5),
-    ),
-  );
+  const initial = defaultFormatModel(playerCountHint || 5, playerCountHint || 5);
+  const [model, setModel] = useState<FormatTemplateModel>(() => initial);
+  const [dslText, setDslText] = useState(() => serializeFormatTemplate(initial));
   const [dslError, setDslError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-
-  // Reload when the division seed changes.
-  useEffect(() => {
-    const next = initialTemplate.trim()
-      ? parseFormatTemplate(initialTemplate)
-      : defaultFormatModel(playerCountHint || 5, playerCountHint || 5);
-    setModel(next);
-    setDslText(serializeFormatTemplate(next));
-    setDslError(null);
-  }, [initialTemplate, playerCountHint]);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const summary = useMemo(() => summarizeFormatModel(model), [model]);
   const allPlayerOptions = useMemo(
@@ -137,7 +113,9 @@ export function LmsScoresheetStudio({
 
   const updateRound = (
     roundId: string,
-    updater: (round: FormatTemplateModel["rounds"][number]) => FormatTemplateModel["rounds"][number],
+    updater: (
+      round: FormatTemplateModel["rounds"][number],
+    ) => FormatTemplateModel["rounds"][number],
   ) => {
     syncFromModel({
       ...model,
@@ -162,18 +140,13 @@ export function LmsScoresheetStudio({
 
   const applyDslText = (raw: string) => {
     setDslText(raw);
-    try {
-      const parsed = parseFormatTemplate(raw);
-      setModel(parsed);
-      setDslError(null);
-    } catch {
-      setDslError("Could not parse this DSL. Check ROUND / GAME lines.");
-    }
+    const parsed = parseFormatTemplate(raw);
+    setModel(parsed);
+    setDslError(null);
   };
 
   const resetDefault = () => {
-    const next = defaultFormatModel(model.playerCount, model.playerCount);
-    syncFromModel(next);
+    syncFromModel(defaultFormatModel(model.playerCount, model.playerCount));
   };
 
   const copyDsl = async () => {
@@ -190,12 +163,12 @@ export function LmsScoresheetStudio({
     <section className="space-y-4">
       <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/50 px-3 py-2.5">
         <p className="text-sm font-semibold text-[var(--ink)]">
-          Build a scoresheet ↔ get the LMS DSL
+          Scoresheet sandbox
         </p>
         <p className="mt-0.5 text-xs text-[var(--muted)]">
-          Edit the visual sheet (Home1, Away2, …) or paste DSL on the right —
-          they stay in sync. {summary}
-          {divisionName ? ` · ${divisionName}` : ""}
+          Edit the sheet or paste DSL — nothing is saved to a division. Click
+          Generate to see a paper-style preview with Home1 / Away1 slots.{" "}
+          {summary}
         </p>
       </div>
 
@@ -229,28 +202,20 @@ export function LmsScoresheetStudio({
         <button type="button" className={btnGhost} onClick={resetDefault}>
           Default Home/Away sheet
         </button>
-        {onSaveToDivision ? (
-          <button
-            type="button"
-            className={btnPrimary}
-            disabled={busy || Boolean(dslError)}
-            onClick={() =>
-              onSaveToDivision(serializeFormatTemplate(model), {
-                playerCount: model.playerCount,
-                rounds: model.rounds.length,
-              })
-            }
-          >
-            Save to division
-          </button>
-        ) : null}
+        <button
+          type="button"
+          className={btnPrimary}
+          disabled={model.rounds.every((round) => round.games.length === 0)}
+          onClick={() => setPreviewOpen(true)}
+        >
+          Generate
+        </button>
       </div>
 
       <div className="grid gap-3 xl:grid-cols-2">
-        {/* Visual scoresheet */}
         <div className="space-y-3">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-            Scoresheet preview
+            Build rounds & games
           </p>
           {model.rounds.map((round, roundIndex) => (
             <article
@@ -310,7 +275,9 @@ export function LmsScoresheetStudio({
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
                           G{gameIndex + 1} · {kindLabel(game.kind)}
-                          {game.kind === "R" ? ` · RL${game.raceLength || "7"}` : ""}
+                          {game.kind === "R"
+                            ? ` · RL${game.raceLength || "7"}`
+                            : ""}
                         </p>
                         <button
                           type="button"
@@ -318,7 +285,9 @@ export function LmsScoresheetStudio({
                           onClick={() =>
                             updateRound(round.id, (current) => ({
                               ...current,
-                              games: current.games.filter((g) => g.id !== game.id),
+                              games: current.games.filter(
+                                (g) => g.id !== game.id,
+                              ),
                             }))
                           }
                         >
@@ -409,6 +378,38 @@ export function LmsScoresheetStudio({
                             }
                           />
                         </label>
+                        <label className="space-y-1">
+                          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                            Game type
+                          </span>
+                          <SelectField
+                            aria-label="Game type"
+                            value={game.gameType || "0"}
+                            options={[...FORMAT_GAME_TYPE_OPTIONS]}
+                            onChange={(value) =>
+                              updateGame(round.id, game.id, (g) => ({
+                                ...g,
+                                gameType: value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="space-y-1">
+                          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                            Point multiplier
+                          </span>
+                          <SelectField
+                            aria-label="Point multiplier"
+                            value={game.multiplier || "1.00"}
+                            options={[...FORMAT_MULTIPLIER_OPTIONS]}
+                            onChange={(value) =>
+                              updateGame(round.id, game.id, (g) => ({
+                                ...g,
+                                multiplier: value,
+                              }))
+                            }
+                          />
+                        </label>
                         {game.kind === "R" ? (
                           <label className="space-y-1">
                             <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
@@ -417,15 +418,7 @@ export function LmsScoresheetStudio({
                             <SelectField
                               aria-label="Race length"
                               value={game.raceLength || "7"}
-                              options={[
-                                "3",
-                                "5",
-                                "7",
-                                "9",
-                                "11",
-                                "13",
-                                "15",
-                              ].map((value) => ({ value, label: value }))}
+                              options={FORMAT_RACE_LENGTH_OPTIONS}
                               onChange={(value) =>
                                 updateGame(round.id, game.id, (g) => ({
                                   ...g,
@@ -444,15 +437,28 @@ export function LmsScoresheetStudio({
           ))}
         </div>
 
-        {/* DSL panel */}
         <div className="space-y-2 xl:sticky xl:top-3 xl:self-start">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
               LMS template DSL
             </p>
-            <button type="button" className={btnGhost} onClick={() => void copyDsl()}>
-              {copied ? "Copied" : "Copy DSL"}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className={btnGhost}
+                onClick={() => void copyDsl()}
+              >
+                {copied ? "Copied" : "Copy DSL"}
+              </button>
+              <button
+                type="button"
+                className={btnPrimary}
+                disabled={model.rounds.every((round) => round.games.length === 0)}
+                onClick={() => setPreviewOpen(true)}
+              >
+                Generate
+              </button>
+            </div>
           </div>
           <textarea
             aria-label="LMS format template DSL"
@@ -465,12 +471,19 @@ export function LmsScoresheetStudio({
             <p className="text-xs text-[#b42318]">{dslError}</p>
           ) : (
             <p className="text-xs text-[var(--muted)]">
-              Tokens use H1/A1 in DSL; the preview shows them as Home1 / Away1.
-              Paste a template here to rebuild the scoresheet.
+              Tokens use H1/A1 in DSL; the builder and Generate preview show
+              Home1 / Away1. Paste a template to rebuild the sandbox.
             </p>
           )}
         </div>
       </div>
+
+      <FormatScoresheetPreview
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        model={model}
+        title="Generated scoresheet"
+      />
     </section>
   );
 }
