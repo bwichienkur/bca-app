@@ -21,6 +21,8 @@ type AccentRecordCardProps = {
   railClassName?: string;
   /** Soft hover treatment for tappable rows. */
   interactive?: boolean;
+  /** Hide the left accent rail (e.g. nested player rows under a team). */
+  showRail?: boolean;
   className?: string;
 };
 
@@ -28,6 +30,7 @@ export function AccentRecordCard({
   children,
   railClassName = accentRecordRailClass,
   interactive = false,
+  showRail = true,
   className = "",
 }: AccentRecordCardProps) {
   return (
@@ -40,7 +43,7 @@ export function AccentRecordCard({
         .filter(Boolean)
         .join(" ")}
     >
-      <span className={railClassName} aria-hidden />
+      {showRail ? <span className={railClassName} aria-hidden /> : null}
       <div className={accentRecordBodyClass}>{children}</div>
     </div>
   );

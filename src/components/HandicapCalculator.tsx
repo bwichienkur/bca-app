@@ -45,6 +45,7 @@ import { LoadLineupMenu } from "./LoadLineupMenu";
 import { LoadingState } from "./LoadingState";
 import { PlayerSelect } from "./PlayerSelect";
 import { SectionCard } from "./SectionCard";
+import { SubTabCard } from "./SubTabCard";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
 type CalculatorPayload = {
@@ -577,23 +578,30 @@ export function HandicapCalculator({
   const teamsReady = Boolean(homeTeam && awayTeam);
 
   return (
-    <section className="animate-panel space-y-4">
-      <IconSubTabs
-        aria-label="Handicap sections"
-        value={subTab}
-        onChange={(id) => startTransition(() => setSubTab(id))}
-        items={[
-          { id: "matchup", label: "Matchup", icon: MatchupSubIcon },
-          { id: "lineups", label: "Lineups", icon: LineupsSubIcon },
-          {
-            id: "rounds",
-            label:
-              scoringFormat.teamPointMode === "match-win" ? "Matches" : "Rounds",
-            icon: RoundsSubIcon,
-          },
-        ]}
-      />
-
+    <section className="animate-panel">
+      <SubTabCard
+        className="rounded-none border-0 shadow-none"
+        tabs={
+          <IconSubTabs
+            aria-label="Handicap sections"
+            value={subTab}
+            onChange={(id) => startTransition(() => setSubTab(id))}
+            className="rounded-none border-0 bg-transparent p-0"
+            items={[
+              { id: "matchup", label: "Matchup", icon: MatchupSubIcon },
+              { id: "lineups", label: "Lineups", icon: LineupsSubIcon },
+              {
+                id: "rounds",
+                label:
+                  scoringFormat.teamPointMode === "match-win"
+                    ? "Matches"
+                    : "Rounds",
+                icon: RoundsSubIcon,
+              },
+            ]}
+          />
+        }
+      >
       <div
         className={subTab === "matchup" ? "min-w-0 space-y-3" : "hidden"}
         aria-hidden={subTab !== "matchup"}
@@ -883,6 +891,7 @@ export function HandicapCalculator({
           />
         )}
       </div>
+      </SubTabCard>
     </section>
   );
 }

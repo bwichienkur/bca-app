@@ -15,6 +15,7 @@ import {
 } from "./IconSubTabs";
 import { TeamPlayerStats } from "./TeamPlayerStats";
 import { BackButton } from "./BackButton";
+import { SubTabCard } from "./SubTabCard";
 import { TeamStandingSummary } from "./TeamStandingSummary";
 
 type StandingCell = {
@@ -107,17 +108,21 @@ function MatchTeamPanel({
         </div>
       </div>
 
-      <div className="space-y-3 p-3">
-        <IconSubTabs
-          aria-label={`${teamName} sections`}
-          value={subTab}
-          onChange={setSubTab}
-          items={[
-            { id: "standing", label: "Standing", icon: StandingSubIcon },
-            { id: "players", label: "Players", icon: RosterSubIcon },
-          ]}
-        />
-
+      <SubTabCard
+        className="rounded-none border-0 border-t border-[var(--line)] shadow-none"
+        tabs={
+          <IconSubTabs
+            aria-label={`${teamName} sections`}
+            value={subTab}
+            onChange={setSubTab}
+            className="rounded-none border-0 bg-transparent p-0"
+            items={[
+              { id: "standing", label: "Standing", icon: StandingSubIcon },
+              { id: "players", label: "Players", icon: RosterSubIcon },
+            ]}
+          />
+        }
+      >
         {subTab === "standing" ? (
           standingCells ? (
             <TeamStandingSummary
@@ -161,7 +166,7 @@ function MatchTeamPanel({
               : "Player stats aren’t loaded yet."}
           </p>
         )}
-      </div>
+      </SubTabCard>
     </article>
   );
 }

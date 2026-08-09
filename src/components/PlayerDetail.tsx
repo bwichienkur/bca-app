@@ -32,6 +32,7 @@ import {
 } from "./IconSubTabs";
 import { SearchField } from "./SearchField";
 import { SectionCard } from "./SectionCard";
+import { SubTabCard } from "./SubTabCard";
 
 type PlayerDetailProps = {
   playerId: string;
@@ -827,24 +828,28 @@ export function PlayerDetail({
             <p className="text-sm text-[var(--muted)]">Loading profile…</p>
           )}
         </SectionCard>
-
-        <IconSubTabs
-          aria-label="Player detail sections"
-          value={section}
-          onChange={(id) => startTransition(() => setSection(id))}
-          items={[
-            { id: "stats", label: "Stats", icon: StatsSubIcon },
-            { id: "leagues", label: "Leagues", icon: LeaguesSubIcon },
-            { id: "matches", label: "Matches", icon: MatchesSubIcon },
-            {
-              id: "opponents",
-              label: "Opponents",
-              icon: OpponentsSubIcon,
-            },
-          ]}
-        />
       </div>
 
+      <SubTabCard
+        tabs={
+          <IconSubTabs
+            aria-label="Player detail sections"
+            value={section}
+            onChange={(id) => startTransition(() => setSection(id))}
+            className="rounded-none border-0 bg-transparent p-0"
+            items={[
+              { id: "stats", label: "Stats", icon: StatsSubIcon },
+              { id: "leagues", label: "Leagues", icon: LeaguesSubIcon },
+              { id: "matches", label: "Matches", icon: MatchesSubIcon },
+              {
+                id: "opponents",
+                label: "Opponents",
+                icon: OpponentsSubIcon,
+              },
+            ]}
+          />
+        }
+      >
       {loading ? (
         <p className="py-8 text-center text-sm text-[var(--muted)]">
           Loading player stats…
@@ -858,20 +863,26 @@ export function PlayerDetail({
       ) : null}
 
       {player && section === "stats" ? (
-        <div className="space-y-3">
-          <IconSubTabs
-            aria-label="Stats views"
-            value={statsSubTab}
-            onChange={(id) => startTransition(() => setStatsSubTab(id))}
-            items={[
-              { id: "overview", label: "Overview", icon: OverviewSubIcon },
-              {
-                id: "performance",
-                label: "By Rating",
-                icon: ByRatingSubIcon,
-              },
-            ]}
-          />
+        <SubTabCard
+          className="rounded-none border-0 shadow-none"
+          contentClassName="space-y-3 p-0 pt-3"
+          tabs={
+            <IconSubTabs
+              aria-label="Stats views"
+              value={statsSubTab}
+              onChange={(id) => startTransition(() => setStatsSubTab(id))}
+              className="rounded-none border-0 bg-transparent p-0"
+              items={[
+                { id: "overview", label: "Overview", icon: OverviewSubIcon },
+                {
+                  id: "performance",
+                  label: "By Rating",
+                  icon: ByRatingSubIcon,
+                },
+              ]}
+            />
+          }
+        >
 
           {statsSubTab === "overview" ? (
             <>
@@ -1019,7 +1030,7 @@ export function PlayerDetail({
               )}
             </SectionCard>
           )}
-        </div>
+        </SubTabCard>
       ) : null}
 
       {player && section === "leagues" ? (
@@ -1430,6 +1441,7 @@ export function PlayerDetail({
           ) : null}
         </SectionCard>
       ) : null}
+      </SubTabCard>
     </section>
   );
 }

@@ -47,11 +47,7 @@ import type {
   TableReport,
   UserPreferences,
 } from "@/lib/types";
-import {
-  PillarBottomNav,
-  PillarSideNav,
-  SectionChipNav,
-} from "./AppShellNav";
+import { PillarBottomNav, PillarSideNav } from "./AppShellNav";
 import { DataTable } from "./DataTable";
 import { EmptyState } from "./EmptyState";
 import { HandicapCalculator } from "./HandicapCalculator";
@@ -66,12 +62,13 @@ import { LmsOperator } from "./LmsOperator";
 import { LoginScreen, type AuthUser } from "./LoginScreen";
 import { ManageCreateLeague } from "./ManageCreateLeague";
 import { MatchScoring } from "./MatchScoring";
-import { SearchIcon } from "./NavIcons";
+import { NavTabIcon, SearchIcon } from "./NavIcons";
 import { PlayerSearch } from "./PlayerSearch";
 import { ScheduleList } from "./ScheduleList";
 import { ScheduleMatchDetail } from "./ScheduleMatchDetail";
 import { SearchField } from "./SearchField";
 import { SettingsScreen } from "./SettingsScreen";
+import { SubTabCard } from "./SubTabCard";
 import { TeamDetail } from "./TeamDetail";
 import { TeamLineupTemplates } from "./TeamLineupTemplates";
 import { SectionCard } from "./SectionCard";
@@ -1174,7 +1171,7 @@ export function LeagueApp() {
                 aria-label={
                   refreshing ? "Resyncing league data" : "Resync league data"
                 }
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)] disabled:opacity-60"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[var(--felt)] text-white transition hover:bg-[var(--felt-soft)] disabled:opacity-60"
               >
                 <ResyncIcon
                   className={["h-4 w-4", refreshing ? "animate-spin" : ""].join(
@@ -1356,339 +1353,285 @@ export function LeagueApp() {
       </section>
       ) : null}
 
-      <section className="animate-rise animate-delay-2 space-y-1.5">
+      <section className="animate-rise animate-delay-2 min-w-0">
         {activePillar === "league" ? (
-          <SectionChipNav
-            aria-label="League sections"
-            sections={LEAGUE_SECTIONS}
-            activeId={tab}
-            onSelect={selectLeagueSection}
-          />
-        ) : null}
-
-        <div
-          className={[
-            "animate-panel min-w-0 [overflow-anchor:none]",
-            tab === "score" ||
-            tab === "players" ||
-            tab === "events" ||
-            tab === "lms" ||
-            tab === "create-league" ||
-            tab === "account"
-              ? "mt-0 space-y-0"
-              : "space-y-6",
-          ].join(" ")}
-        >
-          {tab === "create-league" ? (
-            <ManageCreateLeague
-              signedIn={Boolean(user)}
-              onRequestLogin={() => setScreen("login")}
-              canOpenLms={showManagePillar}
-              onOpenLms={() => startTransition(() => setTab("lms"))}
-            />
-          ) : tab === "account" && user ? (
-            <SettingsScreen
-              user={user}
-              prefs={prefs}
-              membership={membership}
-              loadingMembership={loadingMembership}
-              membershipError={membershipError}
-              onClose={() =>
-                startTransition(() =>
-                  setTab(defaultTabForPillar("league", leagueDefaultOptions)),
-                )
-              }
-              onUserUpdate={(nextUser) => {
-                setUser(nextUser);
-              }}
-              onRefreshMembership={() => {
-                if (!user.lmsId) return;
-                void loadMembership({
-                  fresh: true,
-                  prefsOverride: prefs,
-                }).then((next) => {
-                  if (next?.teams.length) {
-                    applyMembershipDefaults(next, prefs, user.name);
-                  }
-                });
-              }}
-              onSave={(next) => {
-                persist(next);
-                const league =
-                  membership?.leagues.find(
-                    (item) => item.id === next.leagueId,
-                  ) ?? null;
-                const division =
-                  membership?.divisions.find(
-                    (item) => item.id === next.divisionId,
-                  ) ?? null;
-                if (league) {
-                  setSelectedLeague(league);
-                  setLeagues(membership?.leagues ?? [league]);
-                  setLeagueQuery(league.name);
-                }
-                if (division) {
-                  setSelectedDivision(division);
-                  setDivisions(
-                    (membership?.divisions ?? []).filter(
-                      (item) => item.leagueId === division.leagueId,
-                    ),
-                  );
-                }
-                startTransition(() =>
-                  setTab(
-                    defaultTabForPillar("league", {
-                      ...leagueDefaultOptions,
-                      hasDivision: Boolean(division ?? selectedDivision),
-                      hasTeam: Boolean(next.teamName),
-                    }),
+          <SubTabCard
+            className="animate-panel"
+            contentClassName={
+              tab === "score" || tab === "handicap" || tab === "my-team"
+                ? "p-0"
+                : "min-w-0 space-y-3 p-3 sm:p-4 [overflow-anchor:none]"
+            }
+            tabs={
+              <IconSubTabs
+                aria-label="League sections"
+                value={tab}
+                onChange={selectLeagueSection}
+                columns={3}
+                className="rounded-none border-0 bg-transparent p-0"
+                items={LEAGUE_SECTIONS.map((section) => ({
+                  id: section.id,
+                  label: section.shortLabel ?? section.label,
+                  icon: ({ className }: { className?: string }) => (
+                    <NavTabIcon
+                      id={
+                        section.id as Exclude<
+                          ReportTab,
+                          "search" | "account" | "create-league"
+                        >
+                      }
+                      className={className}
+                    />
                   ),
-                );
-              }}
-              onSignOut={() => void signOut()}
-            />
-          ) : tab === "search" ? (
-            <PlayerSearch initialQuery={playerSearchQuery} />
-          ) : tab === "events" ? (
-            <Tournaments
-              user={user}
-              authLoading={authLoading}
-              playerFargo={
-                prefs.playerId
-                  ? (myTeam?.players.find((p) => p.id === prefs.playerId)
-                      ?.fargoRating ?? null)
-                  : null
-              }
-              deepLinkEventId={deepLinkEventId}
-              onDeepLinkEventIdChange={onDeepLinkEventIdChange}
-              onRequestLogin={() => setScreen("login")}
-              onFindPlayer={(name) => {
-                setPlayerSearchQuery(name);
-                startTransition(() => setTab("search"));
-              }}
-            />
-          ) : tab === "lms" ? (
-            showManagePillar ? (
-              <LmsOperator
-                leagueId={prefs.leagueId}
-                leagueName={prefs.leagueName}
-                divisionId={selectedDivision?.id ?? prefs.divisionId}
-                divisionName={selectedDivision?.name ?? prefs.divisionName}
+                }))}
+              />
+            }
+          >
+            {tab === "score" ? (
+              <MatchScoring
+                divisionId={selectedDivision?.id ?? null}
+                divisionName={selectedDivision?.name ?? null}
+                teamId={prefs.teamId}
+                teamName={prefs.teamName}
+                scoringFormatId={prefs.scoringFormatId}
                 user={user}
                 authLoading={authLoading}
                 onRequestLogin={() => setScreen("login")}
+                onRequestContext={() => setContextOpen(true)}
               />
-            ) : (
+            ) : !selectedDivision ? (
               <EmptyState
-                title="Fargo LMS tools"
-                body="Connect a League Operator login in Account to manage FargoRate divisions. You can still create a Tableside league from the Create tab without LMS."
-                action={
-                  <div className="flex flex-wrap justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        startTransition(() => setTab("create-league"))
-                      }
-                      className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
-                    >
-                      Create a league
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openAccount}
-                      className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)]"
-                    >
-                      {user ? "Open Account" : "Sign in"}
-                    </button>
-                  </div>
-                }
-              />
-            )
-          ) : tab === "score" ? (
-            <MatchScoring
-              divisionId={selectedDivision?.id ?? null}
-              divisionName={selectedDivision?.name ?? null}
-              teamId={prefs.teamId}
-              teamName={prefs.teamName}
-              scoringFormatId={prefs.scoringFormatId}
-              user={user}
-              authLoading={authLoading}
-              onRequestLogin={() => setScreen("login")}
-              onRequestContext={() => setContextOpen(true)}
-            />
-          ) : !selectedDivision ? (
-            <EmptyState
-              title="Choose a division to continue"
-              body="Home and Search work without a division. League tools need league, division, and team from the context card."
-              action={
-                <button
-                  type="button"
-                  onClick={() => setContextOpen(true)}
-                  className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
-                >
-                  Choose division
-                </button>
-              }
-            />
-          ) : tab === "handicap" ? (
-            <HandicapCalculator
-              divisionId={selectedDivision.id}
-              divisionName={selectedDivision.name}
-              prefs={prefs}
-              refreshToken={refreshToken}
-            />
-          ) : loadingReport ? (
-            <LoadingState label="Pulling report from LMS…" />
-          ) : tab === "my-team" ? (
-            prefs.teamName ? (
-              <section className="space-y-4">
-                <IconSubTabs
-                  aria-label="My team sections"
-                  value={myTeamSubTab}
-                  onChange={(id) =>
-                    startTransition(() => setMyTeamSubTab(id))
-                  }
-                  items={[
-                    {
-                      id: "standing",
-                      label: "Standing",
-                      icon: StandingSubIcon,
-                    },
-                    { id: "roster", label: "Roster", icon: RosterSubIcon },
-                    {
-                      id: "lineups",
-                      label: "Lineups",
-                      icon: LineupsSubIcon,
-                    },
-                  ]}
-                />
-
-                <div
-                  className={
-                    myTeamSubTab === "standing" ? "min-w-0" : "hidden"
-                  }
-                  aria-hidden={myTeamSubTab !== "standing"}
-                >
-                  {myStandingCells ? (
-                    <TeamStandingSummary
-                      cells={myStandingCells}
-                      teamName={prefs.teamName}
-                    />
-                  ) : (
-                    <EmptyState
-                      title="Standing unavailable"
-                      body="Team standings will show here once the division report loads."
-                    />
-                  )}
-                </div>
-
-                <div
-                  className={
-                    myTeamSubTab === "roster" ? "min-w-0 space-y-3" : "hidden"
-                  }
-                  aria-hidden={myTeamSubTab !== "roster"}
-                >
-                  <SectionCard
-                    eyebrow="Team"
-                    title="Roster"
-                    description={
-                      myTeam?.players.length
-                        ? `${myTeam.players.length} rostered · avg Fargo ${Math.round(
-                            myTeam.players.reduce(
-                              (sum, player) => sum + player.fargoRating,
-                              0,
-                            ) / myTeam.players.length,
-                          )}`
-                        : "Player statistics and Fargo ratings"
-                    }
-                    badge={
-                      myTeam?.players.length
-                        ? {
-                            label: "Players",
-                            value: String(myTeam.players.length),
-                          }
-                        : undefined
-                    }
-                  />
-                  <TeamDetail
-                    teamName={prefs.teamName}
-                    team={myTeam}
-                    playersByTeam={playersByTeam}
-                    isMyTeam
-                    embedded
-                  />
-                </div>
-
-                <div
-                  className={myTeamSubTab === "lineups" ? "min-w-0" : "hidden"}
-                  aria-hidden={myTeamSubTab !== "lineups"}
-                >
-                  {myTeam && selectedDivision ? (
-                    <TeamLineupTemplates
-                      divisionId={selectedDivision.id}
-                      team={myTeam}
-                      slots={scoringFormat.playersPerTeam}
-                      embedded
-                    />
-                  ) : (
-                    <div className="space-y-3">
-                      <SectionCard
-                        eyebrow="Team"
-                        title="Lineups"
-                        description={`Save ${scoringFormat.playersPerTeam}-player orders for league night. Load them from Handicap or Score.`}
-                      />
-                      <EmptyState
-                        title="Team roster needed"
-                        body="Lineup templates need your team’s roster from this division."
-                      />
-                    </div>
-                  )}
-                </div>
-              </section>
-            ) : (
-              <EmptyState
-                title="Set your team"
-                body="Pick My team on the context card to see roster, standing, and lineup templates."
+                title="Choose a division to continue"
+                body="Home and Search work without a division. League tools need league, division, and team from the context card."
                 action={
                   <button
                     type="button"
                     onClick={() => setContextOpen(true)}
                     className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
                   >
-                    Set my team
+                    Choose division
                   </button>
                 }
               />
-            )
-          ) : tab === "standings" && teamReport ? (
-            selectedTeamName ? (
-              <TeamDetail
-                teamName={selectedTeamName}
-                team={detailTeam}
-                playersByTeam={playersByTeam}
-                isMyTeam={
-                  normalizeTeamName(prefs.teamName ?? "") ===
-                  normalizeTeamName(selectedTeamName)
-                }
-                onClose={() => setSelectedTeamName(null)}
-                onSetAsMyTeam={
-                  detailTeam ? () => setMyTeam(detailTeam) : undefined
-                }
+            ) : tab === "handicap" ? (
+              <HandicapCalculator
+                divisionId={selectedDivision.id}
+                divisionName={selectedDivision.name}
+                prefs={prefs}
+                refreshToken={refreshToken}
               />
-            ) : (
+            ) : loadingReport ? (
+              <LoadingState label="Pulling report from LMS…" />
+            ) : tab === "my-team" ? (
+              prefs.teamName ? (
+                <SubTabCard
+                  className="rounded-none border-0 shadow-none"
+                  tabs={
+                    <IconSubTabs
+                      aria-label="My team sections"
+                      value={myTeamSubTab}
+                      onChange={(id) =>
+                        startTransition(() => setMyTeamSubTab(id))
+                      }
+                      className="rounded-none border-0 bg-transparent p-0"
+                      items={[
+                        {
+                          id: "standing",
+                          label: "Standing",
+                          icon: StandingSubIcon,
+                        },
+                        { id: "roster", label: "Roster", icon: RosterSubIcon },
+                        {
+                          id: "lineups",
+                          label: "Lineups",
+                          icon: LineupsSubIcon,
+                        },
+                      ]}
+                    />
+                  }
+                >
+                  <div
+                    className={
+                      myTeamSubTab === "standing" ? "min-w-0" : "hidden"
+                    }
+                    aria-hidden={myTeamSubTab !== "standing"}
+                  >
+                    {myStandingCells ? (
+                      <TeamStandingSummary
+                        cells={myStandingCells}
+                        teamName={prefs.teamName}
+                      />
+                    ) : (
+                      <EmptyState
+                        title="Standing unavailable"
+                        body="Team standings will show here once the division report loads."
+                      />
+                    )}
+                  </div>
+
+                  <div
+                    className={
+                      myTeamSubTab === "roster" ? "min-w-0 space-y-3" : "hidden"
+                    }
+                    aria-hidden={myTeamSubTab !== "roster"}
+                  >
+                    <SectionCard
+                      eyebrow="Team"
+                      title="Roster"
+                      description={
+                        myTeam?.players.length
+                          ? `${myTeam.players.length} rostered · avg Fargo ${Math.round(
+                              myTeam.players.reduce(
+                                (sum, player) => sum + player.fargoRating,
+                                0,
+                              ) / myTeam.players.length,
+                            )}`
+                          : "Player statistics and Fargo ratings"
+                      }
+                      badge={
+                        myTeam?.players.length
+                          ? {
+                              label: "Players",
+                              value: String(myTeam.players.length),
+                            }
+                          : undefined
+                      }
+                    />
+                    <TeamDetail
+                      teamName={prefs.teamName}
+                      team={myTeam}
+                      playersByTeam={playersByTeam}
+                      isMyTeam
+                      embedded
+                    />
+                  </div>
+
+                  <div
+                    className={myTeamSubTab === "lineups" ? "min-w-0" : "hidden"}
+                    aria-hidden={myTeamSubTab !== "lineups"}
+                  >
+                    {myTeam && selectedDivision ? (
+                      <TeamLineupTemplates
+                        divisionId={selectedDivision.id}
+                        team={myTeam}
+                        slots={scoringFormat.playersPerTeam}
+                        embedded
+                      />
+                    ) : (
+                      <div className="space-y-3">
+                        <SectionCard
+                          eyebrow="Team"
+                          title="Lineups"
+                          description={`Save ${scoringFormat.playersPerTeam}-player orders for league night. Load them from Handicap or Score.`}
+                        />
+                        <EmptyState
+                          title="Team roster needed"
+                          body="Lineup templates need your team’s roster from this division."
+                        />
+                      </div>
+                    )}
+                  </div>
+                </SubTabCard>
+              ) : (
+                <EmptyState
+                  title="Set your team"
+                  body="Pick My team on the context card to see roster, standing, and lineup templates."
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => setContextOpen(true)}
+                      className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+                    >
+                      Set my team
+                    </button>
+                  }
+                />
+              )
+            ) : tab === "standings" && teamReport ? (
+              selectedTeamName ? (
+                <TeamDetail
+                  teamName={selectedTeamName}
+                  team={detailTeam}
+                  playersByTeam={playersByTeam}
+                  isMyTeam={
+                    normalizeTeamName(prefs.teamName ?? "") ===
+                    normalizeTeamName(selectedTeamName)
+                  }
+                  onClose={() => setSelectedTeamName(null)}
+                  onSetAsMyTeam={
+                    detailTeam ? () => setMyTeam(detailTeam) : undefined
+                  }
+                />
+              ) : (
+                <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
+                  <SectionCard
+                    eyebrow="League"
+                    title="Team standings"
+                    description="Tap a team to view player statistics. Use back to return to the league grid."
+                    badge={{
+                      label: "Teams",
+                      value: String(filteredTeamRows.length),
+                    }}
+                  />
+                  <DataTable
+                    headers={teamReport.headers}
+                    rows={filteredTeamRows}
+                    stickyFirst
+                    compact
+                    toolbar={
+                      <SearchField
+                        embedded
+                        value={filterQuery}
+                        anchorRef={filterAnchor.ref}
+                        onBeforeChange={filterAnchor.mark}
+                        onChange={setFilterQuery}
+                        placeholder="Filter teams…"
+                      />
+                    }
+                    isRowSelected={(row) =>
+                      Boolean(
+                        prefs.teamName &&
+                          normalizeTeamName(
+                            row[teamNameIndex(teamReport.headers)] ?? "",
+                          ) === normalizeTeamName(prefs.teamName),
+                      )
+                    }
+                    onRowClick={(row) => {
+                      const name =
+                        row[teamNameIndex(teamReport.headers)]?.trim() ?? "";
+                      const matched = divisionTeams.find(
+                        (team) =>
+                          normalizeTeamName(team.name) ===
+                          normalizeTeamName(name),
+                      );
+                      setSelectedTeamName(matched?.name ?? name);
+                    }}
+                    emptyText="No teams match your filter."
+                  />
+                </section>
+              )
+            ) : tab === "players" && playersWithRatings ? (
               <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
                 <SectionCard
-                  eyebrow="League"
-                  title="Team standings"
-                  description="Tap a team to view player statistics. Use back to return to the league grid."
+                  eyebrow="Players"
+                  title="Division players"
+                  description={
+                    <>
+                      Standings and Fargo ratings for everyone in{" "}
+                      <span className="font-medium text-white">
+                        {selectedDivision.name}
+                      </span>
+                      . Filter the grid below to find someone quickly.
+                    </>
+                  }
                   badge={{
-                    label: "Teams",
-                    value: String(filteredTeamRows.length),
+                    label: "Players",
+                    value: String(filteredPlayerRows.length),
                   }}
                 />
                 <DataTable
-                  headers={teamReport.headers}
-                  rows={filteredTeamRows}
+                  headers={playersWithRatings.headers}
+                  rows={filteredPlayerRows}
                   stickyFirst
                   compact
                   toolbar={
@@ -1698,117 +1641,193 @@ export function LeagueApp() {
                       anchorRef={filterAnchor.ref}
                       onBeforeChange={filterAnchor.mark}
                       onChange={setFilterQuery}
-                      placeholder="Filter teams…"
+                      placeholder="Filter players…"
                     />
                   }
-                  isRowSelected={(row) =>
-                    Boolean(
-                      prefs.teamName &&
-                        normalizeTeamName(
-                          row[teamNameIndex(teamReport.headers)] ?? "",
-                        ) === normalizeTeamName(prefs.teamName),
-                    )
-                  }
-                  onRowClick={(row) => {
-                    const name =
-                      row[teamNameIndex(teamReport.headers)]?.trim() ?? "";
-                    const matched = divisionTeams.find(
-                      (team) =>
-                        normalizeTeamName(team.name) ===
-                        normalizeTeamName(name),
-                    );
-                    setSelectedTeamName(matched?.name ?? name);
-                  }}
-                  emptyText="No teams match your filter."
+                  emptyText="No players match your filter."
                 />
               </section>
-            )
-          ) : tab === "players" && playersWithRatings ? (
-            <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
-              <SectionCard
-                eyebrow="Players"
-                title="Division players"
-                description={
-                  <>
-                    Standings and Fargo ratings for everyone in{" "}
-                    <span className="font-medium text-white">
-                      {selectedDivision.name}
-                    </span>
-                    . Filter the grid below to find someone quickly.
-                  </>
+            ) : tab === "schedule" && schedule ? (
+              !prefs.teamName ? (
+                <EmptyState
+                  title="Set My team for schedule"
+                  body="Schedule always uses your selected team from the context card."
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => setContextOpen(true)}
+                      className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+                    >
+                      Set my team
+                    </button>
+                  }
+                />
+              ) : selectedScheduleMatch ? (
+                <ScheduleMatchDetail
+                  key={`${selectedScheduleMatch.date}-${selectedScheduleMatch.match.matchId ?? selectedScheduleMatch.match.home}-${selectedScheduleMatch.match.away}`}
+                  date={selectedScheduleMatch.date}
+                  match={selectedScheduleMatch.match}
+                  homeTeam={findDivisionTeam(selectedScheduleMatch.match.home)}
+                  awayTeam={findDivisionTeam(selectedScheduleMatch.match.away)}
+                  playersByTeam={playersByTeam}
+                  homeStandingCells={standingCellsForTeam(
+                    teamReport,
+                    selectedScheduleMatch.match.home,
+                  )}
+                  awayStandingCells={standingCellsForTeam(
+                    teamReport,
+                    selectedScheduleMatch.match.away,
+                  )}
+                  myTeamName={prefs.teamName}
+                  onClose={() => setSelectedScheduleMatch(null)}
+                />
+              ) : (
+                <ScheduleList
+                  days={schedule}
+                  teamName={prefs.teamName}
+                  divisionName={selectedDivision?.name ?? prefs.divisionName}
+                  teamReport={teamReport}
+                  onMatchClick={(match, day) =>
+                    setSelectedScheduleMatch({ match, date: day.date })
+                  }
+                />
+              )
+            ) : (
+              <EmptyState title="Nothing to show yet" />
+            )}
+          </SubTabCard>
+        ) : (
+          <div className="animate-panel min-w-0 space-y-0 [overflow-anchor:none]">
+            {tab === "create-league" ? (
+              <ManageCreateLeague
+                signedIn={Boolean(user)}
+                onRequestLogin={() => setScreen("login")}
+                canOpenLms={showManagePillar}
+                onOpenLms={() => startTransition(() => setTab("lms"))}
+              />
+            ) : tab === "account" && user ? (
+              <SettingsScreen
+                user={user}
+                prefs={prefs}
+                membership={membership}
+                loadingMembership={loadingMembership}
+                membershipError={membershipError}
+                onClose={() =>
+                  startTransition(() =>
+                    setTab(defaultTabForPillar("league", leagueDefaultOptions)),
+                  )
                 }
-                badge={{
-                  label: "Players",
-                  value: String(filteredPlayerRows.length),
+                onUserUpdate={(nextUser) => {
+                  setUser(nextUser);
+                }}
+                onRefreshMembership={() => {
+                  if (!user.lmsId) return;
+                  void loadMembership({
+                    fresh: true,
+                    prefsOverride: prefs,
+                  }).then((next) => {
+                    if (next?.teams.length) {
+                      applyMembershipDefaults(next, prefs, user.name);
+                    }
+                  });
+                }}
+                onSave={(next) => {
+                  persist(next);
+                  const league =
+                    membership?.leagues.find(
+                      (item) => item.id === next.leagueId,
+                    ) ?? null;
+                  const division =
+                    membership?.divisions.find(
+                      (item) => item.id === next.divisionId,
+                    ) ?? null;
+                  if (league) {
+                    setSelectedLeague(league);
+                    setLeagues(membership?.leagues ?? [league]);
+                    setLeagueQuery(league.name);
+                  }
+                  if (division) {
+                    setSelectedDivision(division);
+                    setDivisions(
+                      (membership?.divisions ?? []).filter(
+                        (item) => item.leagueId === division.leagueId,
+                      ),
+                    );
+                  }
+                  startTransition(() =>
+                    setTab(
+                      defaultTabForPillar("league", {
+                        ...leagueDefaultOptions,
+                        hasDivision: Boolean(division ?? selectedDivision),
+                        hasTeam: Boolean(next.teamName),
+                      }),
+                    ),
+                  );
+                }}
+                onSignOut={() => void signOut()}
+              />
+            ) : tab === "search" ? (
+              <PlayerSearch initialQuery={playerSearchQuery} />
+            ) : tab === "events" ? (
+              <Tournaments
+                user={user}
+                authLoading={authLoading}
+                playerFargo={
+                  prefs.playerId
+                    ? (myTeam?.players.find((p) => p.id === prefs.playerId)
+                        ?.fargoRating ?? null)
+                    : null
+                }
+                deepLinkEventId={deepLinkEventId}
+                onDeepLinkEventIdChange={onDeepLinkEventIdChange}
+                onRequestLogin={() => setScreen("login")}
+                onFindPlayer={(name) => {
+                  setPlayerSearchQuery(name);
+                  startTransition(() => setTab("search"));
                 }}
               />
-              <DataTable
-                headers={playersWithRatings.headers}
-                rows={filteredPlayerRows}
-                stickyFirst
-                compact
-                toolbar={
-                  <SearchField
-                    embedded
-                    value={filterQuery}
-                    anchorRef={filterAnchor.ref}
-                    onBeforeChange={filterAnchor.mark}
-                    onChange={setFilterQuery}
-                    placeholder="Filter players…"
-                  />
-                }
-                emptyText="No players match your filter."
-              />
-            </section>
-          ) : tab === "schedule" && schedule ? (
-            !prefs.teamName ? (
-              <EmptyState
-                title="Set My team for schedule"
-                body="Schedule always uses your selected team from the context card."
-                action={
-                  <button
-                    type="button"
-                    onClick={() => setContextOpen(true)}
-                    className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
-                  >
-                    Set my team
-                  </button>
-                }
-              />
-            ) : selectedScheduleMatch ? (
-              <ScheduleMatchDetail
-                key={`${selectedScheduleMatch.date}-${selectedScheduleMatch.match.matchId ?? selectedScheduleMatch.match.home}-${selectedScheduleMatch.match.away}`}
-                date={selectedScheduleMatch.date}
-                match={selectedScheduleMatch.match}
-                homeTeam={findDivisionTeam(selectedScheduleMatch.match.home)}
-                awayTeam={findDivisionTeam(selectedScheduleMatch.match.away)}
-                playersByTeam={playersByTeam}
-                homeStandingCells={standingCellsForTeam(
-                  teamReport,
-                  selectedScheduleMatch.match.home,
-                )}
-                awayStandingCells={standingCellsForTeam(
-                  teamReport,
-                  selectedScheduleMatch.match.away,
-                )}
-                myTeamName={prefs.teamName}
-                onClose={() => setSelectedScheduleMatch(null)}
-              />
+            ) : tab === "lms" ? (
+              showManagePillar ? (
+                <LmsOperator
+                  leagueId={prefs.leagueId}
+                  leagueName={prefs.leagueName}
+                  divisionId={selectedDivision?.id ?? prefs.divisionId}
+                  divisionName={selectedDivision?.name ?? prefs.divisionName}
+                  user={user}
+                  authLoading={authLoading}
+                  onRequestLogin={() => setScreen("login")}
+                />
+              ) : (
+                <EmptyState
+                  title="Fargo LMS tools"
+                  body="Connect a League Operator login in Account to manage FargoRate divisions. You can still create a Tableside league from the Create tab without LMS."
+                  action={
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          startTransition(() => setTab("create-league"))
+                        }
+                        className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+                      >
+                        Create a league
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openAccount}
+                        className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)]"
+                      >
+                        {user ? "Open Account" : "Sign in"}
+                      </button>
+                    </div>
+                  }
+                />
+              )
             ) : (
-              <ScheduleList
-                days={schedule}
-                teamName={prefs.teamName}
-                divisionName={selectedDivision?.name ?? prefs.divisionName}
-                teamReport={teamReport}
-                onMatchClick={(match, day) =>
-                  setSelectedScheduleMatch({ match, date: day.date })
-                }
-              />
-            )
-          ) : (
-            <EmptyState title="Nothing to show yet" />
-          )}
-        </div>
+              <EmptyState title="Nothing to show yet" />
+            )}
+          </div>
+        )}
       </section>
         </div>
       </div>

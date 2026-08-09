@@ -5,7 +5,6 @@ import {
   APP_PILLARS,
   LEAGUE_SECTIONS,
   sectionUsesLeafIcon,
-  type NavSection,
 } from "@/lib/app-nav";
 import { PillarIcon, NavTabIcon } from "./NavIcons";
 
@@ -160,48 +159,5 @@ export function PillarSideNav({
         </div>
       ) : null}
     </aside>
-  );
-}
-
-export function SectionChipNav({
-  sections,
-  activeId,
-  onSelect,
-  "aria-label": ariaLabel,
-}: {
-  sections: NavSection[];
-  activeId: ReportTab;
-  onSelect: (id: ReportTab) => void;
-  "aria-label": string;
-}) {
-  return (
-    <nav
-      aria-label={ariaLabel}
-      data-report-tabs
-      className="sticky top-0 z-20 -mx-1 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 py-1 backdrop-blur md:hidden"
-    >
-      <div className="flex gap-1 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {sections.map((section) => {
-          const active = section.id === activeId;
-          return (
-            <button
-              key={section.id}
-              type="button"
-              aria-current={active ? "page" : undefined}
-              onClick={() => onSelect(section.id)}
-              className={[
-                "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold transition",
-                active
-                  ? "bg-[var(--felt)] text-white shadow-sm"
-                  : "bg-[var(--surface)]/90 text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
-              ].join(" ")}
-            >
-              <LeafIcon id={section.id} className="h-3.5 w-3.5" />
-              {section.shortLabel ?? section.label}
-            </button>
-          );
-        })}
-      </div>
-    </nav>
   );
 }
