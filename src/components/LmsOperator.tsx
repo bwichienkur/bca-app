@@ -342,7 +342,7 @@ function SectionHeader({
   onAdd?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3">
+    <div className="flex items-center justify-between gap-3">
       <div className="min-w-0 flex-1">
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
           {title}
@@ -354,7 +354,7 @@ function SectionHeader({
       {onAdd ? (
         <button
           type="button"
-          className={`${btnAdd} h-9 shrink-0 px-3`}
+          className={`${btnAdd} h-9 shrink-0 self-center px-3`}
           onClick={onAdd}
         >
           + Add
@@ -2238,7 +2238,7 @@ export function LmsOperator({
 
       {subTab === "home" ? (
         <section className="space-y-4">
-          <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
                 Division home
@@ -2250,11 +2250,11 @@ export function LmsOperator({
             </div>
             <button
               type="button"
-              className={`${btnPrimary} min-h-11 min-w-[8.5rem] shrink-0 px-5`}
+              className={`${btnPrimary} h-9 shrink-0 self-center px-3`}
               disabled={busy || homeLoading || (!opLeagueId && !opDivisionId)}
               onClick={() => void refreshAllOperatorData()}
             >
-              {busy ? "Refreshing…" : "Refresh data"}
+              {busy ? "Refreshing…" : "Refresh"}
             </button>
           </div>
           {!opDivisionId ? (
@@ -2530,7 +2530,7 @@ export function LmsOperator({
           <ul className={accentRecordListClass}>
             {filteredLocations.map((loc) => (
               <AccentRecordCard key={loc.id}>
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-[var(--ink)]">
                       {loc.name}
@@ -2849,7 +2849,7 @@ export function LmsOperator({
           ) : (
             <ul className={accentRecordListClass}>
               <AccentRecordCard>
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-[var(--ink)]">
                       {String(settings.Name ?? opDivisionName)}
@@ -2907,7 +2907,7 @@ export function LmsOperator({
           <ul className={accentRecordListClass}>
             {filteredDivisions.map((division) => (
               <AccentRecordCard key={division.id}>
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center justify-between gap-2">
                   <button
                     type="button"
                     className="min-w-0 flex-1 text-left"
@@ -2965,7 +2965,7 @@ export function LmsOperator({
             <ul className={accentRecordListClass}>
               {playoffList.map((division) => (
                 <AccentRecordCard key={division.id}>
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center justify-between gap-2">
                     <button
                       type="button"
                       className="min-w-0 flex-1 text-left"

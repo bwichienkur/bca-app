@@ -36,6 +36,7 @@ import {
 } from "./AccentRecordCard";
 import { EmptyState } from "./EmptyState";
 import { LoadingState } from "./LoadingState";
+import { IconAddButton, PanelHeader } from "./PanelHeader";
 import {
   PartnerSearchField,
   type PartnerPick,
@@ -54,28 +55,6 @@ const btnDelete =
   "inline-flex items-center justify-center rounded-[var(--radius)] bg-[#b42318] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
 const btnPrimary =
   "inline-flex items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
-
-/** Compact felt + control — stays on the right of section subheaders. */
-const btnIconAdd =
-  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] text-white transition hover:bg-[var(--felt-soft)] disabled:opacity-50";
-
-function PlusIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 20 20"
-      fill="none"
-      aria-hidden
-      className={className}
-    >
-      <path
-        d="M10 4v12M4 10h12"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
 
 function ChevronIcon({
   className,
@@ -425,27 +404,15 @@ export function EntryTeamsPresetsPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-            Entry teams
-          </p>
-          <p className="mt-0.5 text-xs text-[var(--muted)]">
-            You stay captain · 2+ players · reuse on Entry
-          </p>
-        </div>
-        {!composing ? (
-          <button
-            type="button"
-            onClick={startCreate}
-            className={btnIconAdd}
-            title="Add team"
-            aria-label="Add team"
-          >
-            <PlusIcon className="h-4 w-4" />
-          </button>
-        ) : null}
-      </div>
+      <PanelHeader
+        title="Entry teams"
+        description="You stay captain · 2+ players · reuse on Entry"
+        action={
+          !composing ? (
+            <IconAddButton label="Add team" onClick={startCreate} />
+          ) : null
+        }
+      />
 
       {msg ? (
         <p className="text-xs text-[var(--felt-deep)]">{msg}</p>
@@ -875,28 +842,15 @@ export function TemplatesPresetsPanel({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-            Event templates
-          </p>
-          <p className="mt-0.5 text-xs text-[var(--muted)]">
-            Preset format, eligibility, venue, and pay settings. Dates and flyer
-            stay blank when you use one.
-          </p>
-        </div>
-        {!composing ? (
-          <button
-            type="button"
-            onClick={startCreate}
-            className={btnIconAdd}
-            title="Add template"
-            aria-label="Add template"
-          >
-            <PlusIcon className="h-4 w-4" />
-          </button>
-        ) : null}
-      </div>
+      <PanelHeader
+        title="Event templates"
+        description="Preset format, eligibility, venue, and pay settings. Dates and flyer stay blank when you use one."
+        action={
+          !composing ? (
+            <IconAddButton label="Add template" onClick={startCreate} />
+          ) : null
+        }
+      />
 
       {msg ? (
         <p className="text-xs text-[var(--felt-deep)]">{msg}</p>
@@ -1363,7 +1317,7 @@ export function TemplatesPresetsPanel({
           {templates.map((template) => (
             <li key={template.id}>
               <AccentRecordCard>
-                <div className="flex items-start gap-2">
+                <div className="flex items-center gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-[var(--ink)] [overflow-wrap:anywhere]">
                       {template.name}
@@ -1525,28 +1479,24 @@ export function MyEntriesPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-            My entries
-          </p>
-          <p className="mt-0.5 text-xs text-[var(--muted)]">
-            Your spots as captain or teammate
-          </p>
-        </div>
-        <button
-          type="button"
-          disabled={loading || !signedIn}
-          onClick={() => void loadEntries()}
-          title={loading ? "Refreshing…" : "Refresh entries"}
-          aria-label={loading ? "Refreshing entries" : "Refresh entries"}
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--felt)] text-white transition hover:bg-[var(--felt-soft)] disabled:opacity-50"
-        >
-          <RefreshIcon
-            className={["h-4 w-4", loading ? "animate-spin" : ""].join(" ")}
-          />
-        </button>
-      </div>
+      <PanelHeader
+        title="My entries"
+        description="Your spots as captain or teammate"
+        action={
+          <button
+            type="button"
+            disabled={loading || !signedIn}
+            onClick={() => void loadEntries()}
+            title={loading ? "Refreshing…" : "Refresh entries"}
+            aria-label={loading ? "Refreshing entries" : "Refresh entries"}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--felt)] text-white transition hover:bg-[var(--felt-soft)] disabled:opacity-50"
+          >
+            <RefreshIcon
+              className={["h-4 w-4", loading ? "animate-spin" : ""].join(" ")}
+            />
+          </button>
+        }
+      />
 
       {error ? (
         <p className="rounded-[var(--radius)] border border-[var(--danger)]/40 bg-[var(--danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">

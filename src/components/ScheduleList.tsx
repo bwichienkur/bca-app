@@ -12,7 +12,7 @@ import {
   UpcomingSubIcon,
 } from "./IconSubTabs";
 import { MatchListCard } from "./MatchListCard";
-import { SectionCard } from "./SectionCard";
+import { PanelHeader, PanelHeaderCount } from "./PanelHeader";
 import { SubTabCard } from "./SubTabCard";
 
 type ScheduleListProps = {
@@ -111,31 +111,9 @@ export function ScheduleList({
   }
 
   return (
-    <section className="animate-rise space-y-3">
-      <SectionCard
-        eyebrow="Schedule"
-        title="Your schedule"
-        description={
-          <>
-            {teamName ? (
-              <>
-                Upcoming and past matchups for{" "}
-                <span className="font-medium text-white">{teamName}</span>
-              </>
-            ) : (
-              "Division schedule"
-            )}
-            {divisionName ? <> · {divisionName}</> : null}
-            . Use Score to open a scoresheet.
-          </>
-        }
-        badge={{
-          label: view === "upcoming" ? "Upcoming" : "Past",
-          value: String(visibleMatches.length),
-        }}
-      />
-
+    <section className="animate-rise">
       <SubTabCard
+        className="rounded-none border-0 shadow-none"
         tabs={
           <IconSubTabs
             aria-label="Schedule time range"
@@ -159,6 +137,31 @@ export function ScheduleList({
           />
         }
       >
+        <PanelHeader
+          title="Your schedule"
+          description={
+            <>
+              {teamName ? (
+                <>
+                  Upcoming and past matchups for{" "}
+                  <span className="font-medium text-[var(--ink)]">
+                    {teamName}
+                  </span>
+                </>
+              ) : (
+                "Division schedule"
+              )}
+              {divisionName ? <> · {divisionName}</> : null}
+              . Use Score to open a scoresheet.
+            </>
+          }
+          action={
+            <PanelHeaderCount
+              label={view === "upcoming" ? "Upcoming" : "Past"}
+              value={String(visibleMatches.length)}
+            />
+          }
+        />
         {!visibleMatches.length ? (
           <EmptyState
             title={

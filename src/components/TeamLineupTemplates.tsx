@@ -14,7 +14,7 @@ import {
 } from "./AccentRecordCard";
 import { DraggableLineupList } from "./DraggableLineupList";
 import { EmptyState } from "./EmptyState";
-import { SectionCard } from "./SectionCard";
+import { IconAddButton, PanelHeader, PanelHeaderCount } from "./PanelHeader";
 
 const DEFAULT_LINEUP_NAME = "Default lineup";
 
@@ -441,36 +441,24 @@ export function TeamLineupTemplates({
   }
 
   const header = (
-    <SectionCard
-      eyebrow="Team"
+    <PanelHeader
       title="Lineups"
       description={`Save ${slots}-player orders for league night. Load them from Handicap or Score.`}
-      badge={
-        mode === "library"
-          ? {
-              label: "Saved",
-              value: loading ? "—" : String(teamPresets.length),
-            }
-          : { label: "Filled", value: `${filled}/${slots}` }
+      action={
+        mode === "library" ? (
+          <IconAddButton label="Add lineup" onClick={openNew} />
+        ) : (
+          <PanelHeaderCount label="Filled" value={`${filled}/${slots}`} />
+        )
       }
     />
   );
 
   const library = (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-[var(--muted)]">
-          Default is used first; add more for alternate nights.
-        </p>
-        <button
-          type="button"
-          onClick={openNew}
-          className="inline-flex items-center gap-1.5 rounded-[var(--radius)] bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--felt-soft)]"
-        >
-          <PlusIcon className="h-3.5 w-3.5" />
-          Add
-        </button>
-      </div>
+      <p className="text-xs text-[var(--muted)]">
+        Default is used first; add more for alternate nights.
+      </p>
 
       {status && mode === "library" ? (
         <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">

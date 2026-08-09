@@ -3,7 +3,7 @@
 import { normalizeTeamName } from "@/lib/matchups";
 import type { DivisionTeam, PlayersByTeamReport, RosterPlayer } from "@/lib/types";
 import { BackButton } from "./BackButton";
-import { SectionCard } from "./SectionCard";
+import { PanelHeader, PanelHeaderCount } from "./PanelHeader";
 import { TeamPlayerStats } from "./TeamPlayerStats";
 
 type TeamDetailProps = {
@@ -94,34 +94,40 @@ export function TeamDetail({
     <div className="space-y-3">
       {onClose ? <BackButton onClick={onClose} /> : null}
 
-      <SectionCard
-        eyebrow={isMyTeam ? "My team" : "Team detail"}
+      <PanelHeader
         title={teamName}
         description={
           team
-            ? `${team.players.length} rostered${avg != null ? ` · avg Fargo ${avg}` : ""}`
-            : undefined
+            ? `${isMyTeam ? "My team · " : ""}${team.players.length} rostered${avg != null ? ` · avg Fargo ${avg}` : ""}`
+            : isMyTeam
+              ? "My team"
+              : "Team detail"
         }
-        badge={
-          team?.players.length
-            ? { label: "Players", value: String(team.players.length) }
-            : undefined
+        action={
+          team?.players.length ? (
+            <PanelHeaderCount
+              label="Players"
+              value={String(team.players.length)}
+            />
+          ) : onSetAsMyTeam && !isMyTeam ? (
+            <button
+              type="button"
+              onClick={onSetAsMyTeam}
+              className="rounded-[var(--radius)] bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white"
+            >
+              Set as my team
+            </button>
+          ) : undefined
         }
       />
-
-      {onSetAsMyTeam && !isMyTeam ? (
+      {onSetAsMyTeam && !isMyTeam && team?.players.length ? (
         <button
           type="button"
           onClick={onSetAsMyTeam}
-          className="rounded-full bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white"
+          className="rounded-[var(--radius)] bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white"
         >
           Set as my team
         </button>
-      ) : null}
-      {isMyTeam ? (
-        <p className="inline-flex rounded-full bg-[var(--felt)]/20 px-3 py-1.5 text-xs font-semibold text-[var(--felt-deep)]">
-          My team ✓
-        </p>
       ) : null}
 
       {stats}
