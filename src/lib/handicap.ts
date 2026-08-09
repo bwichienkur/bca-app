@@ -39,19 +39,82 @@ export type DivisionFormat = {
   handicapPercent: number;
 };
 
+export type RoundHandicapMatchup = {
+  homeIndexes: number[];
+  awayIndexes: number[];
+  homeRating: number;
+  awayRating: number;
+  gameType: string;
+  raceLength?: number | null;
+  /** Per-game expected points (team one / team two). */
+  teamOneExpected?: number;
+  teamTwoExpected?: number;
+  /** MatchBased: games awarded on this individual game. */
+  teamOneGames?: number;
+  teamTwoGames?: number;
+};
+
 export type RoundHandicapResult = {
   round: number;
   teamOne: number;
   teamTwo: number;
   teamOneExpected: number;
   teamTwoExpected: number;
-  matchups: {
-    homeIndexes: number[];
-    awayIndexes: number[];
-    homeRating: number;
-    awayRating: number;
-  }[];
+  matchups: RoundHandicapMatchup[];
+  /** Label override for UI (e.g. "Night" for FullMatchBased). */
+  label?: string;
 };
+
+function normalizeHandicapType(value: string | undefined | null): FargoHandicapType {
+  const raw = (value ?? "RoundBased").trim();
+  if (/fullmatch/i.test(raw)) return "FullMatchBased";
+  if (/^matchbased$/i.test(raw) || raw === "MatchBased") return "MatchBased";
+  return "RoundBased";
+}
+
+function gameMatchup(
+  game: ParsedGame,
+  teamOneRatings: number[],
+  teamTwoRatings: number[],
+  pointSystem: string,
+): RoundHandicapMatchup & {
+  teamOneExpected: number;
+  teamTwoExpected: number;
+} {
+  const homeRatings = game.homePlayers.map(
+    (index) => teamOneRatings[index - 1] ?? 0,
+  );
+  const awayRatings = game.awayPlayers.map(
+    (index) => teamTwoRatings[index - 1] ?? 0,
+  );
+  const homeRating = average(homeRatings);
+  const awayRating = average(awayRatings);
+  const scores = expectedGameScores(homeRating, awayRating, pointSystem);
+  return {
+    homeIndexes: game.homePlayers,
+    awayIndexes: game.awayPlayers,
+    homeRating,
+    awayRating,
+    gameType: game.gameType,
+    raceLength: game.raceLength ?? null,
+    teamOneExpected: scores.teamOne,
+    teamTwoExpected: scores.teamTwo,
+  };
+}
+
+function awardFromExpected(
+  teamOneExpected: number,
+  teamTwoExpected: number,
+  handicapPercent: number,
+  handicapCap: number,
+): { teamOne: number; teamTwo: number } {
+  const diff = Math.abs(teamOneExpected - teamTwoExpected);
+  const points = applyCapAndPercent(diff, handicapPercent, handicapCap);
+  return {
+    teamOne: teamOneExpected >= teamTwoExpected ? 0 : points,
+    teamTwo: teamTwoExpected >= teamOneExpected ? 0 : points,
+  };
+}
 
 function winProbability(ratingOne: number, ratingTwo: number): number {
   return 1.0 / (1 + Math.pow(2, (ratingTwo - ratingOne) / 100.0));
@@ -175,43 +238,177 @@ export function calculateRoundBasedHandicaps(options: {
     const matchups: RoundHandicapResult["matchups"] = [];
 
     for (const game of round.games) {
-      const homeRatings = game.homePlayers.map(
-        (index) => teamOneRatings[index - 1] ?? 0,
+      const matchup = gameMatchup(
+        game,
+        teamOneRatings,
+        teamTwoRatings,
+        pointSystem,
       );
-      const awayRatings = game.awayPlayers.map(
-        (index) => teamTwoRatings[index - 1] ?? 0,
-      );
-      const homeRating = average(homeRatings);
-      const awayRating = average(awayRatings);
-      const scores = expectedGameScores(homeRating, awayRating, pointSystem);
-      teamOneExpected += scores.teamOne;
-      teamTwoExpected += scores.teamTwo;
-      matchups.push({
-        homeIndexes: game.homePlayers,
-        awayIndexes: game.awayPlayers,
-        homeRating,
-        awayRating,
-      });
+      teamOneExpected += matchup.teamOneExpected;
+      teamTwoExpected += matchup.teamTwoExpected;
+      matchups.push(matchup);
     }
 
-    const diff = Math.abs(teamOneExpected - teamTwoExpected);
-    const points = applyCapAndPercent(diff, handicapPercent, handicapCap);
+    const award = awardFromExpected(
+      teamOneExpected,
+      teamTwoExpected,
+      handicapPercent,
+      handicapCap,
+    );
 
     return {
       round: round.roundNumber,
-      teamOne:
-        teamOneExpected >= teamTwoExpected
-          ? 0
-          : points,
-      teamTwo:
-        teamTwoExpected >= teamOneExpected
-          ? 0
-          : points,
+      teamOne: award.teamOne,
+      teamTwo: award.teamTwo,
       teamOneExpected,
       teamTwoExpected,
       matchups,
     };
   });
+}
+
+/**
+ * One handicap for the whole night — sum expected points across every game.
+ */
+export function calculateFullMatchBasedHandicaps(options: {
+  format: ParsedMatchFormat;
+  teamOneRatings: number[];
+  teamTwoRatings: number[];
+  pointSystem: string;
+  handicapPercent?: number;
+  handicapCap?: number;
+}): RoundHandicapResult[] {
+  const {
+    format,
+    teamOneRatings,
+    teamTwoRatings,
+    pointSystem,
+    handicapPercent = 1,
+    handicapCap = 50,
+  } = options;
+
+  let teamOneExpected = 0;
+  let teamTwoExpected = 0;
+  const matchups: RoundHandicapResult["matchups"] = [];
+
+  for (const round of format.rounds) {
+    for (const game of round.games) {
+      const matchup = gameMatchup(
+        game,
+        teamOneRatings,
+        teamTwoRatings,
+        pointSystem,
+      );
+      teamOneExpected += matchup.teamOneExpected;
+      teamTwoExpected += matchup.teamTwoExpected;
+      matchups.push(matchup);
+    }
+  }
+
+  const award = awardFromExpected(
+    teamOneExpected,
+    teamTwoExpected,
+    handicapPercent,
+    handicapCap,
+  );
+
+  return [
+    {
+      round: 1,
+      label: "Night",
+      teamOne: award.teamOne,
+      teamTwo: award.teamTwo,
+      teamOneExpected,
+      teamTwoExpected,
+      matchups,
+    },
+  ];
+}
+
+/**
+ * Handicap each individual scoresheet game on its own expected-points edge.
+ */
+export function calculateMatchBasedHandicaps(options: {
+  format: ParsedMatchFormat;
+  teamOneRatings: number[];
+  teamTwoRatings: number[];
+  pointSystem: string;
+  handicapPercent?: number;
+  handicapCap?: number;
+}): RoundHandicapResult[] {
+  const {
+    format,
+    teamOneRatings,
+    teamTwoRatings,
+    pointSystem,
+    handicapPercent = 1,
+    handicapCap = 50,
+  } = options;
+
+  const results: RoundHandicapResult[] = [];
+  let sequence = 0;
+
+  for (const round of format.rounds) {
+    for (const game of round.games) {
+      sequence += 1;
+      const matchup = gameMatchup(
+        game,
+        teamOneRatings,
+        teamTwoRatings,
+        pointSystem,
+      );
+      const award = awardFromExpected(
+        matchup.teamOneExpected,
+        matchup.teamTwoExpected,
+        handicapPercent,
+        handicapCap,
+      );
+      results.push({
+        round: sequence,
+        label: `R${round.roundNumber} · G${sequence}`,
+        teamOne: award.teamOne,
+        teamTwo: award.teamTwo,
+        teamOneExpected: matchup.teamOneExpected,
+        teamTwoExpected: matchup.teamTwoExpected,
+        matchups: [
+          {
+            ...matchup,
+            teamOneGames: award.teamOne,
+            teamTwoGames: award.teamTwo,
+          },
+        ],
+      });
+    }
+  }
+
+  return results;
+}
+
+/** Dispatch to the calculator matching LMS `fargoRateHandicapType`. */
+export function calculateDivisionHandicaps(options: {
+  format: ParsedMatchFormat;
+  teamOneRatings: number[];
+  teamTwoRatings: number[];
+  pointSystem: string;
+  handicapPercent?: number;
+  handicapCap?: number;
+  fargoRateHandicapType?: string | null;
+}): RoundHandicapResult[] {
+  const type = normalizeHandicapType(options.fargoRateHandicapType);
+  if (type === "FullMatchBased") {
+    return calculateFullMatchBasedHandicaps(options);
+  }
+  if (type === "MatchBased") {
+    return calculateMatchBasedHandicaps(options);
+  }
+  return calculateRoundBasedHandicaps(options);
+}
+
+export function handicapTypeLabel(value: string | null | undefined): string {
+  const type = normalizeHandicapType(value);
+  if (type === "FullMatchBased") return "Full-match HC";
+  if (type === "MatchBased") return "Per-match HC";
+  return "Round HC";
 }
 
 /** Build a default n-player round-robin if division format is unavailable. */

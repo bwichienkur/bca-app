@@ -605,6 +605,18 @@ function UnratedBadge() {
   );
 }
 
+/** Paid via Stripe Checkout (app), not organizer/door toggle alone. */
+function AppPaidBadge() {
+  return (
+    <span
+      className="inline-flex shrink-0 items-center rounded-md bg-[color-mix(in_srgb,var(--felt)_18%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--felt-deep)]"
+      title="Paid through the app"
+    >
+      App
+    </span>
+  );
+}
+
 function signupStatusBadge(
   status: TournamentRegistration["status"],
 ): ReactNode {
@@ -5062,6 +5074,9 @@ export function Tournaments({
                               ) : null}
 
                               <div className="flex shrink-0 items-center gap-1">
+                                {reg.paid && reg.stripePaymentIntentId ? (
+                                  <AppPaidBadge />
+                                ) : null}
                                 <button
                                   type="button"
                                   disabled={saving}
@@ -5104,7 +5119,13 @@ export function Tournaments({
                                       ? `Mark ${title} unpaid`
                                       : `Mark ${title} paid`
                                   }
-                                  title={reg.paid ? "Paid" : "Mark paid"}
+                                  title={
+                                    reg.paid
+                                      ? reg.stripePaymentIntentId
+                                        ? "Paid in app"
+                                        : "Paid"
+                                      : "Mark paid"
+                                  }
                                 >
                                   {reg.paid ? "Paid" : "Pay"}
                                 </button>

@@ -13,20 +13,22 @@ import {
 import { createPortal } from "react-dom";
 import { DEFAULT_PLAYERS_PER_TEAM } from "@/lib/constants";
 import {
+  chartRaceTargets,
   formatScoringSummary,
   resolveScoringFormat,
 } from "@/lib/division-scoring-config";
 import {
   buildDefaultFivePlayerFormat,
-  calculateRoundBasedHandicaps,
+  calculateDivisionHandicaps,
+  handicapTypeLabel,
   type ParsedMatchFormat,
   type RoundHandicapResult,
 } from "@/lib/handicap";
-import { findWeeklyMatchupForTeam } from "@/lib/matchups";
 import {
   loadTeamLineupPresets,
 } from "@/lib/lineup-sync";
 import { loadLineupPresets } from "@/lib/preferences";
+import type { LeagueScoringFormat } from "@/lib/scoring-formats";
 import type {
   CalculatorMatchup,
   DivisionTeam,
@@ -35,17 +37,10 @@ import type {
   UserPreferences,
 } from "@/lib/types";
 import { EmptyState } from "./EmptyState";
-import {
-  IconSubTabs,
-  LineupsSubIcon,
-  MatchupSubIcon,
-  RoundsSubIcon,
-} from "./IconSubTabs";
 import { LoadLineupMenu } from "./LoadLineupMenu";
 import { LoadingState } from "./LoadingState";
 import { PlayerSelect } from "./PlayerSelect";
 import { PanelHeader, PanelHeaderCount } from "./PanelHeader";
-import { SubTabCard } from "./SubTabCard";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
 type CalculatorPayload = {
@@ -73,7 +68,7 @@ type HandicapCalculatorProps = {
 
 type LineupSlot = RosterPlayer | null;
 type LineupSide = "home" | "away";
-type HandicapSubTab = "matchup" | "lineups" | "rounds";
+type CalculatorStep = 1 | 2 | 3;
 
 type DragState = {
   side: LineupSide;
@@ -88,8 +83,103 @@ function ContentCard({ children }: { children: ReactNode }) {
   );
 }
 
+function StepSection({
+  step,
+  title,
+  summary,
+  open,
+  locked,
+  lockedHint,
+  onToggle,
+  children,
+}: {
+  step: CalculatorStep;
+  title: string;
+  summary?: string;
+  open: boolean;
+  locked: boolean;
+  lockedHint?: string;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      className={[
+        "overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]",
+        locked ? "opacity-70" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <button
+        type="button"
+        disabled={locked}
+        aria-expanded={open && !locked}
+        onClick={onToggle}
+        className="flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-[var(--surface-2)] disabled:cursor-not-allowed disabled:hover:bg-transparent sm:px-4"
+      >
+        <span
+          className={[
+            "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sm font-semibold tabular-nums",
+            open && !locked
+              ? "bg-[var(--felt)] text-white"
+              : locked
+                ? "bg-[var(--surface-2)] text-[var(--muted)]"
+                : "bg-[var(--surface-2)] text-[var(--felt-deep)]",
+          ].join(" ")}
+        >
+          {step}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-[family-name:var(--font-display)] text-base font-semibold leading-tight text-[var(--ink)]">
+            {title}
+          </p>
+          {locked && lockedHint ? (
+            <p className="mt-0.5 text-xs text-[var(--muted)]">{lockedHint}</p>
+          ) : summary ? (
+            <p className="mt-0.5 truncate text-xs text-[var(--muted)]">
+              {summary}
+            </p>
+          ) : null}
+        </div>
+        {!locked ? (
+          <span
+            aria-hidden
+            className={[
+              "text-[var(--muted)] transition",
+              open ? "rotate-180" : "",
+            ].join(" ")}
+          >
+            ▾
+          </span>
+        ) : null}
+      </button>
+      {open && !locked ? (
+        <div className="space-y-3 border-t border-[var(--line)] p-3 sm:p-4">
+          {children}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function gameTypeLabel(gameType: string): string {
+  if (gameType === "D") return "Doubles";
+  if (gameType === "R") return "Race";
+  return "Singles";
+}
+
 function playerLabel(player: RosterPlayer): string {
   return `${player.firstName} ${player.lastName}`.trim();
+}
+
+function playerNames(indexes: number[], players: RosterPlayer[]): string {
+  return indexes
+    .map((index) => {
+      const player = players[index - 1];
+      return player ? playerLabel(player) : `P${index}`;
+    })
+    .join(" / ");
 }
 
 /** Centered 2×3 grip — unicode ⠿ sits optically off-center in most fonts. */
@@ -181,14 +271,6 @@ function isComplete(lineup: LineupSlot[], slots: number): boolean {
   return lineup.length === slots && lineup.every(Boolean);
 }
 
-function defaultTopLineup(team: DivisionTeam | null, slots: number): LineupSlot[] {
-  if (!team) return emptyLineup(slots);
-  const top = [...team.players]
-    .sort((a, b) => b.fargoRating - a.fargoRating)
-    .slice(0, slots);
-  return Array.from({ length: slots }, (_, index) => top[index] ?? null);
-}
-
 function lineupFromIds(
   team: DivisionTeam | null,
   ids: string[],
@@ -223,8 +305,9 @@ export function HandicapCalculator({
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [dropTarget, setDropTarget] = useState<DragState | null>(null);
   const [mobileSide, setMobileSide] = useState<LineupSide>("home");
-  const [activeRound, setActiveRound] = useState(1);
-  const [subTab, setSubTab] = useState<HandicapSubTab>("matchup");
+  const [openStep, setOpenStep] = useState<CalculatorStep>(1);
+  const prevTeamsReady = useRef(false);
+  const prevLineupsReady = useRef(false);
   const [, startTransition] = useTransition();
 
   useEffect(() => {
@@ -281,7 +364,6 @@ export function HandicapCalculator({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [divisionId, prefs.teamId, refreshToken]);
 
   const scoringFormat = useMemo(
@@ -326,19 +408,19 @@ export function HandicapCalculator({
     [data],
   );
 
+  const sheetFormat: ParsedMatchFormat = useMemo(() => {
+    if (data?.parsedFormat.rounds.length) return data.parsedFormat;
+    return buildDefaultFivePlayerFormat(slots);
+  }, [data?.parsedFormat, slots]);
+
   const results: RoundHandicapResult[] | null = useMemo(() => {
     if (!data || !homeTeam || !awayTeam) return null;
     if (!isComplete(homeLineup, slots) || !isComplete(awayLineup, slots)) {
       return null;
     }
 
-    const format =
-      data.parsedFormat.rounds.length > 0
-        ? data.parsedFormat
-        : buildDefaultFivePlayerFormat(slots);
-
-    return calculateRoundBasedHandicaps({
-      format,
+    return calculateDivisionHandicaps({
+      format: sheetFormat,
       teamOneRatings: compactPlayers(homeLineup).map(
         (player) => player.fargoRating,
       ),
@@ -348,6 +430,7 @@ export function HandicapCalculator({
       pointSystem: data.format.pointSystem || scoringFormat.pointSystem || "10",
       handicapPercent: data.format.handicapPercent ?? 1,
       handicapCap: data.format.handicapCap ?? 50,
+      fargoRateHandicapType: data.format.fargoRateHandicapType,
     });
   }, [
     data,
@@ -357,77 +440,49 @@ export function HandicapCalculator({
     awayLineup,
     slots,
     scoringFormat.pointSystem,
+    sheetFormat,
   ]);
 
-  useEffect(() => {
-    if (!results?.length) return;
-    setActiveRound((current) =>
-      results.some((item) => item.round === current)
-        ? current
-        : results[0]!.round,
-    );
-  }, [results]);
+  const teamsReady = Boolean(homeTeam && awayTeam);
+  const lineupsReady = Boolean(
+    teamsReady &&
+      isComplete(homeLineup, slots) &&
+      isComplete(awayLineup, slots) &&
+      results,
+  );
 
-  function lineupForTeam(
-    team: DivisionTeam | null,
-    slotCount: number,
-  ): LineupSlot[] {
-    if (!team) return emptyLineup(slotCount);
-    const teamPresets = loadLineupPresets().filter(
-      (preset) =>
-        preset.divisionId === divisionId &&
-        preset.teamId === team.id &&
-        preset.playerIds.length === slotCount,
-    );
-    const saved =
-      teamPresets.find(
-        (preset) =>
-          preset.name.trim().toLowerCase() === "default lineup",
-      ) ?? teamPresets[0];
-    return saved
-      ? lineupFromIds(team, saved.playerIds, slotCount)
-      : defaultTopLineup(team, slotCount);
-  }
+  useEffect(() => {
+    if (teamsReady && !prevTeamsReady.current) {
+      setOpenStep(2);
+    }
+    if (!teamsReady) {
+      setOpenStep(1);
+    }
+    prevTeamsReady.current = teamsReady;
+  }, [teamsReady]);
+
+  useEffect(() => {
+    if (lineupsReady && !prevLineupsReady.current) {
+      setOpenStep(3);
+    }
+    if (teamsReady && !lineupsReady && openStep === 3) {
+      setOpenStep(2);
+    }
+    prevLineupsReady.current = Boolean(lineupsReady);
+  }, [lineupsReady, teamsReady, openStep]);
 
   function seedTeams(payload: CalculatorPayload) {
     const slotCount =
       payload.playersPerTeam ||
       payload.parsedFormat.numOfPlayers ||
       DEFAULT_PLAYERS_PER_TEAM;
-    const myId =
-      prefs.teamId &&
-      payload.teams.some((team) => team.id === prefs.teamId)
-        ? prefs.teamId
-        : null;
-    const matchup = myId
-      ? findWeeklyMatchupForTeam(payload.matchups, myId)
-      : null;
-
-    if (matchup) {
-      const home =
-        payload.teams.find((item) => item.id === matchup.homeTeamId) ?? null;
-      const away =
-        payload.teams.find((item) => item.id === matchup.awayTeamId) ?? null;
-      setHomeTeamId(home?.id ?? null);
-      setAwayTeamId(away?.id ?? null);
-      setHomeLineup(lineupForTeam(home, slotCount));
-      setAwayLineup(lineupForTeam(away, slotCount));
-      return;
-    }
-
-    if (myId) {
-      const mine = payload.teams.find((item) => item.id === myId) ?? null;
-      setHomeTeamId(myId);
-      setAwayTeamId(null);
-      setHomeLineup(lineupForTeam(mine, slotCount));
-      setAwayLineup(emptyLineup(slotCount));
-      return;
-    }
-
     setHomeTeamId(null);
     setAwayTeamId(null);
     setHomeLineup(emptyLineup(slotCount));
     setAwayLineup(emptyLineup(slotCount));
+    setOpenStep(1);
+    prevTeamsReady.current = false;
+    prevLineupsReady.current = false;
   }
 
   const chooseHome = (team: DivisionTeam | null) => {
@@ -437,7 +492,7 @@ export function HandicapCalculator({
       return;
     }
     setHomeTeamId(team.id);
-    setHomeLineup(lineupForTeam(team, slots));
+    setHomeLineup(emptyLineup(slots));
   };
 
   const chooseAway = (team: DivisionTeam | null) => {
@@ -447,7 +502,7 @@ export function HandicapCalculator({
       return;
     }
     setAwayTeamId(team.id);
-    setAwayLineup(lineupForTeam(team, slots));
+    setAwayLineup(emptyLineup(slots));
   };
 
   const setSlotPlayer = (
@@ -551,8 +606,6 @@ export function HandicapCalculator({
         }
       : null;
 
-  const activeResult =
-    results?.find((item) => item.round === activeRound) ?? results?.[0] ?? null;
   const roundTotals = results
     ? results.reduce(
         (acc, item) => ({
@@ -563,104 +616,92 @@ export function HandicapCalculator({
       )
     : null;
 
-  const lineupsReady = Boolean(results && activeResult);
-  const formatMeta = `${formatScoringSummary(scoringFormat)} · ${
-    data.format.fargoRateHandicapType || "RoundBased"
-  } HC`;
+  const formatMeta = `${formatScoringSummary(scoringFormat)} · ${handicapTypeLabel(
+    data.format.fargoRateHandicapType,
+  )}`;
   const homeFilled = filledCount(
     homeLineup.length === slots ? homeLineup : emptyLineup(slots),
   );
   const awayFilled = filledCount(
     awayLineup.length === slots ? awayLineup : emptyLineup(slots),
   );
-  const teamsReady = Boolean(homeTeam && awayTeam);
+  const teamSummary =
+    homeTeam && awayTeam
+      ? `${homeTeam.name} vs ${awayTeam.name}`
+      : homeTeam
+        ? `${homeTeam.name} · pick away`
+        : awayTeam
+          ? `Pick home · ${awayTeam.name}`
+          : "No teams selected";
+  const lineupSummary = teamsReady
+    ? `${homeFilled + awayFilled}/${slots * 2} slots filled`
+    : undefined;
+  const sheetSummary =
+    lineupsReady && roundTotals
+      ? scoringFormat.raceMode === "fargo-race-chart"
+        ? `Race chart · Home +${roundTotals.home} · Away +${roundTotals.away}`
+        : `HC games · Home +${roundTotals.home} · Away +${roundTotals.away}`
+      : undefined;
+
+  const toggleStep = (step: CalculatorStep) => {
+    startTransition(() => {
+      setOpenStep((current) => (current === step ? current : step));
+    });
+  };
 
   return (
-    <section className="animate-panel">
-      <SubTabCard
-        className="rounded-none border-0 shadow-none"
-        tabs={
-          <IconSubTabs
-            aria-label="Handicap sections"
-            value={subTab}
-            onChange={(id) => startTransition(() => setSubTab(id))}
-            className="rounded-none border-0 bg-transparent p-0"
-            items={[
-              { id: "matchup", label: "Matchup", icon: MatchupSubIcon },
-              { id: "lineups", label: "Lineups", icon: LineupsSubIcon },
-              {
-                id: "rounds",
-                label:
-                  scoringFormat.teamPointMode === "match-win"
-                    ? "Matches"
-                    : "Rounds",
-                icon: RoundsSubIcon,
-              },
-            ]}
-          />
-        }
-      >
-      <div
-        className={subTab === "matchup" ? "min-w-0 space-y-3" : "hidden"}
-        aria-hidden={subTab !== "matchup"}
-      >
-        <PanelHeader
-          title="Matchup"
-          description={formatMeta}
-          action={<PanelHeaderCount label="Sides" value={String(slots)} />}
-        />
-        <ContentCard>
-          <div className="relative z-20 grid gap-2.5 sm:grid-cols-2">
-            <Typeahead
-              label="Home"
-              placeholder="Select home team"
-              value={homeOption}
-              options={teamOptions.filter((option) => option.id !== awayTeamId)}
-              onChange={(option) => chooseHome(option?.value ?? null)}
-            />
-            <Typeahead
-              label="Away"
-              placeholder="Select away team"
-              value={awayOption}
-              options={teamOptions.filter((option) => option.id !== homeTeamId)}
-              onChange={(option) => chooseAway(option?.value ?? null)}
-            />
-          </div>
-          {!teamsReady ? (
-            <EmptyState
-              title="Pick home and away"
-              body="Choose any two teams in this division to build lineups and calculate round handicaps."
-            />
-          ) : null}
-        </ContentCard>
-      </div>
+    <section className="animate-panel space-y-3 p-3 sm:p-4">
+      <PanelHeader
+        title="Handicap"
+        description={formatMeta}
+        action={<PanelHeaderCount label="Sides" value={String(slots)} />}
+      />
 
-      <div
-        className={subTab === "lineups" ? "min-w-0 space-y-3" : "hidden"}
-        aria-hidden={subTab !== "lineups"}
+      <StepSection
+        step={1}
+        title="Teams"
+        summary={teamSummary}
+        open={openStep === 1}
+        locked={false}
+        onToggle={() => toggleStep(1)}
       >
-        <PanelHeader
-          title="Lineups"
-          description={
-            teamsReady
-              ? `Pick ${slots} players per side · drag ⠿ to reorder`
-              : "Select a matchup first, then build both sides"
-          }
-          action={
-            teamsReady ? (
-              <PanelHeaderCount
-                label="Filled"
-                value={`${homeFilled + awayFilled}/${slots * 2}`}
-              />
-            ) : undefined
-          }
-        />
-        {!homeTeam || !awayTeam ? (
-          <EmptyState
-            title="Waiting on matchup"
-            body="Home and away teams unlock the lineup builders."
+        <div className="relative z-20 grid gap-2.5 sm:grid-cols-2">
+          <Typeahead
+            label="Home"
+            placeholder="Select home team"
+            value={homeOption}
+            options={teamOptions.filter((option) => option.id !== awayTeamId)}
+            onChange={(option) => chooseHome(option?.value ?? null)}
           />
+          <Typeahead
+            label="Away"
+            placeholder="Select away team"
+            value={awayOption}
+            options={teamOptions.filter((option) => option.id !== homeTeamId)}
+            onChange={(option) => chooseAway(option?.value ?? null)}
+          />
+        </div>
+        {!teamsReady ? (
+          <p className="text-sm text-[var(--muted)]">
+            Pick both sides to unlock lineups.
+          </p>
         ) : (
+          <p className="text-sm text-[var(--felt-deep)]">
+            Both teams set — continue to lineups.
+          </p>
+        )}
+      </StepSection>
+
+      <StepSection
+        step={2}
+        title="Lineups"
+        summary={lineupSummary}
+        open={openStep === 2}
+        locked={!teamsReady}
+        lockedHint="Select home and away first"
+        onToggle={() => toggleStep(2)}
+      >
+        {homeTeam && awayTeam ? (
           <div className="grid gap-3 xl:grid-cols-2">
             <div
               role="tablist"
@@ -723,7 +764,7 @@ export function HandicapCalculator({
               <LineupPicker
                 side="home"
                 title={homeTeam.name}
-                subtitle="Home · pick players · drag ⠿ to reorder"
+                subtitle="Home · empty slots · drag ⠿ to reorder"
                 roster={homeTeam.players}
                 lineup={
                   homeLineup.length === slots
@@ -756,7 +797,7 @@ export function HandicapCalculator({
               <LineupPicker
                 side="away"
                 title={awayTeam.name}
-                subtitle="Away · pick players · drag ⠿ to reorder"
+                subtitle="Away · empty slots · drag ⠿ to reorder"
                 roster={awayTeam.players}
                 lineup={
                   awayLineup.length === slots
@@ -783,243 +824,340 @@ export function HandicapCalculator({
               />
             </div>
           </div>
-        )}
-      </div>
+        ) : null}
+      </StepSection>
 
-      <div
-        className={subTab === "rounds" ? "min-w-0 space-y-3" : "hidden"}
-        aria-hidden={subTab !== "rounds"}
+      <StepSection
+        step={3}
+        title="Scoresheet"
+        summary={sheetSummary}
+        open={openStep === 3}
+        locked={!lineupsReady}
+        lockedHint={`Fill all ${slots} slots on both sides`}
+        onToggle={() => toggleStep(3)}
       >
-        <PanelHeader
-          title={
-            scoringFormat.teamPointMode === "match-win"
-              ? "Match handicaps"
-              : "Round handicaps"
-          }
-          description={
-            lineupsReady && roundTotals
-              ? scoringFormat.raceMode === "fargo-race-chart"
-                ? `Expected match edge · Home +${roundTotals.home} · Away +${roundTotals.away}`
-                : `Games awarded · Home +${roundTotals.home} · Away +${roundTotals.away}`
-              : teamsReady
-                ? `Finish both ${slots}-player lineups to see ${
-                    scoringFormat.teamPointMode === "match-win"
-                      ? "match"
-                      : "round"
-                  } results`
-                : "Results appear after both lineups are set"
-          }
-          action={
-            lineupsReady && results ? (
-              <PanelHeaderCount
-                label={
-                  scoringFormat.teamPointMode === "match-win"
-                    ? "Matches"
-                    : "Rounds"
-                }
-                value={String(results.length)}
-              />
-            ) : undefined
-          }
-        />
-        {!teamsReady ? (
-          <EmptyState
-            title="Waiting on matchup"
-            body="Pick home and away, then complete both lineups."
+        {lineupsReady && results && homeTeam && awayTeam ? (
+          <ScoresheetPanel
+            results={results}
+            sheetFormat={sheetFormat}
+            scoringFormat={scoringFormat}
+            handicapType={data.format.fargoRateHandicapType}
+            homeName={homeTeam.name}
+            awayName={awayTeam.name}
+            homePlayers={compactPlayers(homeLineup)}
+            awayPlayers={compactPlayers(awayLineup)}
+            roundTotals={roundTotals}
           />
-        ) : lineupsReady && activeResult && results && homeTeam && awayTeam ? (
-          <div className="space-y-3">
-            <div
-              role="tablist"
-              aria-label="Rounds"
-              className="grid gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
-              style={{
-                gridTemplateColumns: `repeat(${results.length}, minmax(0, 1fr))`,
-              }}
-            >
-              {results.map((result) => {
-                const points = Math.max(result.teamOne, result.teamTwo);
-                const selected = result.round === activeResult.round;
-                const sideLabel =
-                  result.teamOne > 0 ? "H" : result.teamTwo > 0 ? "A" : "—";
-                return (
-                  <button
-                    key={result.round}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    onClick={() => setActiveRound(result.round)}
-                    className={[
-                      "min-w-0 rounded-md px-1 py-1.5 text-center transition",
-                      selected
-                        ? "bg-[var(--felt)] text-white shadow-sm"
-                        : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
-                    ].join(" ")}
-                  >
-                    <p className="text-[11px] font-semibold leading-none sm:text-xs">
-                      R{result.round}
-                    </p>
-                    <p
-                      className={[
-                        "mt-0.5 text-[10px] font-semibold tabular-nums leading-none",
-                        selected ? "text-white/85" : "text-[var(--muted)]",
-                      ].join(" ")}
-                    >
-                      {points === 0 ? "even" : `${sideLabel}+${points}`}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-
-            <RoundHandicapCard
-              result={activeResult}
-              homeName={homeTeam.name}
-              awayName={awayTeam.name}
-              homePlayers={compactPlayers(homeLineup)}
-              awayPlayers={compactPlayers(awayLineup)}
-            />
-          </div>
-        ) : (
-          <EmptyState
-            title="Lineups incomplete"
-            body={`Fill all ${slots} slots on both sides to calculate round handicaps.`}
-          />
-        )}
-      </div>
-      </SubTabCard>
+        ) : null}
+      </StepSection>
     </section>
   );
 }
 
-function RoundHandicapCard({
-  result,
+function ScoresheetPanel({
+  results,
+  sheetFormat,
+  scoringFormat,
+  handicapType,
   homeName,
   awayName,
   homePlayers,
   awayPlayers,
+  roundTotals,
 }: {
-  result: RoundHandicapResult;
+  results: RoundHandicapResult[];
+  sheetFormat: ParsedMatchFormat;
+  scoringFormat: LeagueScoringFormat;
+  handicapType: string;
   homeName: string;
   awayName: string;
   homePlayers: RosterPlayer[];
   awayPlayers: RosterPlayer[];
+  roundTotals: { home: number; away: number } | null;
 }) {
-  const points = Math.max(result.teamOne, result.teamTwo);
-  const homeGets = result.teamOne > 0;
-  const awayGets = result.teamTwo > 0;
-  const recipientName = homeGets ? homeName : awayGets ? awayName : null;
+  const chartMode = scoringFormat.raceMode === "fargo-race-chart";
+  const matchWinMode = scoringFormat.teamPointMode === "match-win";
+  const typeLabel = handicapTypeLabel(handicapType);
+  const isFullMatch = /fullmatch/i.test(handicapType || "");
+  const isMatchBased = !isFullMatch && /matchbased/i.test(handicapType || "");
+  const flatMatchups = results.flatMap((result) => result.matchups);
+
+  type SheetGame = {
+    game: {
+      homePlayers: number[];
+      awayPlayers: number[];
+      gameType: string;
+      raceLength?: number | null;
+    };
+    matchup: (typeof flatMatchups)[number];
+    gameIndex: number;
+  };
+
+  type SheetBlock = {
+    key: string;
+    title: string;
+    result: RoundHandicapResult | null;
+    games: SheetGame[];
+  };
+
+  const roundsForSheet: SheetBlock[] = (() => {
+    if (!sheetFormat.rounds.length) {
+      return results.map((result) => ({
+        key: `result-${result.round}`,
+        title:
+          result.label ??
+          (matchWinMode ? `Match ${result.round}` : `Round ${result.round}`),
+        result,
+        games: result.matchups.map((matchup, gameIndex) => ({
+          game: {
+            homePlayers: matchup.homeIndexes,
+            awayPlayers: matchup.awayIndexes,
+            gameType: matchup.gameType,
+            raceLength: matchup.raceLength,
+          },
+          matchup,
+          gameIndex,
+        })),
+      }));
+    }
+
+    let cursor = 0;
+    return sheetFormat.rounds.map((round) => {
+      const roundResult =
+        !isFullMatch && !isMatchBased
+          ? (results.find((item) => item.round === round.roundNumber) ?? null)
+          : null;
+
+      const games: SheetGame[] = round.games.map((game, gameIndex) => {
+        const fromFlat = flatMatchups[cursor] ?? null;
+        cursor += 1;
+        const fromRound = roundResult?.matchups[gameIndex] ?? null;
+        const matchup =
+          fromRound ??
+          fromFlat ??
+          ({
+            homeIndexes: game.homePlayers,
+            awayIndexes: game.awayPlayers,
+            homeRating: averageRating(homePlayers, game.homePlayers),
+            awayRating: averageRating(awayPlayers, game.awayPlayers),
+            gameType: game.gameType,
+            raceLength: game.raceLength,
+          } as (typeof flatMatchups)[number]);
+
+        // MatchBased: attach that game’s result HC onto the matchup row.
+        const matchResult = isMatchBased
+          ? (results[cursor - 1] ?? null)
+          : null;
+        const annotated = matchResult
+          ? {
+              ...matchup,
+              teamOneGames: matchResult.teamOne,
+              teamTwoGames: matchResult.teamTwo,
+            }
+          : matchup;
+
+        return { game, matchup: annotated, gameIndex };
+      });
+
+      return {
+        key: `round-${round.roundNumber}`,
+        title: matchWinMode
+          ? `Match block ${round.roundNumber}`
+          : `Round ${round.roundNumber}`,
+        result: roundResult,
+        games,
+      };
+    });
+  })();
 
   return (
-    <article className="animate-rise overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-sm">
-      <div className="flex items-center gap-3 px-3.5 py-3 sm:px-4">
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
-            Round {result.round}
-          </p>
-          <p className="mt-0.5 truncate font-[family-name:var(--font-display)] text-lg leading-tight text-[var(--felt-deep)]">
-            {points === 0
-              ? "Even — no games"
-              : `${recipientName} gets +${points}`}
-          </p>
-        </div>
-        <div
-          className={[
-            "shrink-0 text-right",
-            points === 0 ? "opacity-70" : "",
-          ].join(" ")}
-        >
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-            Games
-          </p>
-          <p
-            className={[
-              "tabular-nums text-2xl font-semibold leading-none",
-              points === 0 ? "text-[var(--muted)]" : "text-[var(--ink)]",
-            ].join(" ")}
-          >
-            {points === 0 ? "0" : `+${points}`}
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2 border-y border-[var(--line)] bg-[var(--surface-2)] px-3.5 py-2.5 sm:px-4">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2.5">
         <div className="min-w-0">
-          <p
-            className={[
-              "truncate text-[10px] font-semibold uppercase tracking-[0.12em]",
-              homeGets ? "text-[var(--amber)]" : "text-[var(--muted)]",
-            ].join(" ")}
-          >
-            Home{homeGets ? " · gets" : ""}
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+            {typeLabel}
+            {chartMode ? " · race chart" : ""}
           </p>
-          <p className="mt-0.5 truncate text-xs font-medium text-[var(--ink)]">
+          <p className="mt-0.5 font-[family-name:var(--font-display)] text-base font-semibold text-[var(--ink)]">
             {homeName}
-          </p>
-          <p className="mt-0.5 tabular-nums text-sm font-semibold text-[var(--felt-deep)]">
-            {result.teamOneExpected.toFixed(1)}
-          </p>
-        </div>
-        <div className="pb-0.5 text-center">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-            Exp
-          </p>
-        </div>
-        <div className="min-w-0 text-right">
-          <p
-            className={[
-              "truncate text-[10px] font-semibold uppercase tracking-[0.12em]",
-              awayGets ? "text-[var(--amber)]" : "text-[var(--muted)]",
-            ].join(" ")}
-          >
-            Away{awayGets ? " · gets" : ""}
-          </p>
-          <p className="mt-0.5 truncate text-xs font-medium text-[var(--ink)]">
+            <span className="mx-1.5 text-[var(--muted)]">vs</span>
             {awayName}
           </p>
-          <p className="mt-0.5 tabular-nums text-sm font-semibold text-[var(--felt-deep)]">
-            {result.teamTwoExpected.toFixed(1)}
-          </p>
         </div>
+        {roundTotals ? (
+          <div className="text-right">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+              {chartMode ? "Edge" : "HC games"}
+            </p>
+            <p className="tabular-nums text-sm font-semibold text-[var(--felt-deep)]">
+              H +{roundTotals.home} · A +{roundTotals.away}
+            </p>
+          </div>
+        ) : null}
       </div>
 
-      <ul className="divide-y divide-[var(--line)]">
-        {result.matchups.map((matchup, index) => {
-          const home = homePlayers[matchup.homeIndexes[0] - 1] ?? null;
-          const away = awayPlayers[matchup.awayIndexes[0] - 1] ?? null;
+      <div className="space-y-3">
+        {roundsForSheet.map((block) => {
+          const points = block.result
+            ? Math.max(block.result.teamOne, block.result.teamTwo)
+            : 0;
+          const homeGets = (block.result?.teamOne ?? 0) > 0;
+          const awayGets = (block.result?.teamTwo ?? 0) > 0;
+          const recipient = homeGets ? homeName : awayGets ? awayName : null;
+
           return (
-            <li
-              key={`${result.round}-${index}`}
-              className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3.5 py-2.5 sm:px-4"
+            <article
+              key={block.key}
+              className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]"
             >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-[var(--ink)]">
-                  {home ? playerLabel(home) : `H${matchup.homeIndexes[0]}`}
-                </p>
-                <p className="tabular-nums text-xs text-[var(--muted)]">
-                  {Math.round(matchup.homeRating)}
-                </p>
+              <div className="flex items-center gap-3 border-b border-[var(--line)] bg-[var(--surface-2)] px-3 py-2.5 sm:px-3.5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
+                    {block.title}
+                  </p>
+                  {block.result && !chartMode && !isMatchBased ? (
+                    <p className="mt-0.5 truncate text-sm font-semibold text-[var(--felt-deep)]">
+                      {points === 0
+                        ? "Even — no games"
+                        : `${recipient} gets +${points}`}
+                    </p>
+                  ) : null}
+                  {block.result && (chartMode || isMatchBased) ? (
+                    <p className="mt-0.5 truncate text-sm text-[var(--muted)]">
+                      Exp {block.result.teamOneExpected.toFixed(1)} –{" "}
+                      {block.result.teamTwoExpected.toFixed(1)}
+                    </p>
+                  ) : null}
+                </div>
+                {block.result && !chartMode && !isMatchBased ? (
+                  <p className="tabular-nums text-xl font-semibold text-[var(--ink)]">
+                    {points === 0 ? "0" : `+${points}`}
+                  </p>
+                ) : null}
               </div>
-              <span
-                aria-hidden
-                className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]"
-              >
-                vs
-              </span>
-              <div className="min-w-0 text-right">
-                <p className="truncate text-sm font-medium text-[var(--ink)]">
-                  {away ? playerLabel(away) : `A${matchup.awayIndexes[0]}`}
-                </p>
-                <p className="tabular-nums text-xs text-[var(--muted)]">
-                  {Math.round(matchup.awayRating)}
-                </p>
-              </div>
-            </li>
+
+              <ul className="divide-y divide-[var(--line)]">
+                {block.games.map(({ game, matchup, gameIndex }) => {
+                  const race = resolveRaceDisplay({
+                    scoringFormat,
+                    matchup,
+                    raceLength: game.raceLength,
+                  });
+                  const perGameHc =
+                    matchup.teamOneGames != null || matchup.teamTwoGames != null
+                      ? Math.max(
+                          matchup.teamOneGames ?? 0,
+                          matchup.teamTwoGames ?? 0,
+                        )
+                      : null;
+                  const perGameSide =
+                    (matchup.teamOneGames ?? 0) > 0
+                      ? "H"
+                      : (matchup.teamTwoGames ?? 0) > 0
+                        ? "A"
+                        : null;
+
+                  return (
+                    <li
+                      key={`${block.key}-g${gameIndex}`}
+                      className="px-3 py-2.5 sm:px-3.5"
+                    >
+                      <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                          G{gameIndex + 1}
+                        </span>
+                        <span className="rounded-md bg-[var(--surface-2)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--ink)]">
+                          {gameTypeLabel(matchup.gameType || game.gameType)}
+                        </span>
+                        {race ? (
+                          <span className="rounded-md bg-[color-mix(in_srgb,var(--felt)_14%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--felt-deep)]">
+                            {race}
+                          </span>
+                        ) : null}
+                        {perGameHc != null ? (
+                          <span className="rounded-md bg-[var(--surface-2)] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-[var(--muted)]">
+                            {perGameHc === 0
+                              ? "HC even"
+                              : `HC ${perGameSide}+${perGameHc}`}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-[var(--ink)]">
+                            {playerNames(matchup.homeIndexes, homePlayers)}
+                          </p>
+                          <p className="tabular-nums text-xs text-[var(--muted)]">
+                            {Math.round(matchup.homeRating)}
+                          </p>
+                        </div>
+                        <span
+                          aria-hidden
+                          className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]"
+                        >
+                          vs
+                        </span>
+                        <div className="min-w-0 text-right">
+                          <p className="truncate text-sm font-medium text-[var(--ink)]">
+                            {playerNames(matchup.awayIndexes, awayPlayers)}
+                          </p>
+                          <p className="tabular-nums text-xs text-[var(--muted)]">
+                            {Math.round(matchup.awayRating)}
+                          </p>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </article>
           );
         })}
-      </ul>
-    </article>
+      </div>
+    </div>
   );
+}
+
+function averageRating(players: RosterPlayer[], indexes: number[]): number {
+  if (!indexes.length) return 0;
+  const ratings = indexes.map(
+    (index) => players[index - 1]?.fargoRating ?? 0,
+  );
+  return ratings.reduce((sum, value) => sum + value, 0) / ratings.length;
+}
+
+function resolveRaceDisplay({
+  scoringFormat,
+  matchup,
+  raceLength,
+}: {
+  scoringFormat: LeagueScoringFormat;
+  matchup: {
+    homeRating: number;
+    awayRating: number;
+    raceLength?: number | null;
+  };
+  raceLength?: number | null;
+}): string | null {
+  if (scoringFormat.raceMode === "fargo-race-chart" && scoringFormat.raceChartId) {
+    const targets = chartRaceTargets(
+      scoringFormat.raceChartId,
+      matchup.homeRating,
+      matchup.awayRating,
+    );
+    return `Race ${targets.raceOne}–${targets.raceTwo}`;
+  }
+  const fromTemplate = raceLength ?? matchup.raceLength;
+  if (fromTemplate != null && fromTemplate > 0) {
+    return `Race to ${fromTemplate}`;
+  }
+  if (scoringFormat.raceMode === "fixed-race" && scoringFormat.fixedRaceWin) {
+    const loss = scoringFormat.fixedRaceMaxLoss;
+    return loss
+      ? `Race to ${scoringFormat.fixedRaceWin} (max loss ${loss})`
+      : `Race to ${scoringFormat.fixedRaceWin}`;
+  }
+  return null;
 }
 
 function LineupPicker({
