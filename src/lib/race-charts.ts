@@ -33,6 +33,21 @@ const CHARTS: Record<RaceChartId, RaceBand[]> = {
   "r6-hot": R6_HOT_BANDS,
 };
 
+export function formatRacePair(race: RacePair): string {
+  return `${race.higher} to ${race.lower}`;
+}
+
+/** Rows for printing the R6 Hot chart on a scoresheet. */
+export function r6HotChartRows(): Array<{ ratingDiff: string; playThis: string }> {
+  return R6_HOT_BANDS.map((band) => ({
+    ratingDiff:
+      band.maxDiff === Number.POSITIVE_INFINITY
+        ? `${band.minDiff} & up`
+        : `${band.minDiff} – ${band.maxDiff}`,
+    playThis: formatRacePair(band.race),
+  }));
+}
+
 export function raceForRatingDiff(
   chartId: RaceChartId,
   ratingDiff: number,
@@ -60,8 +75,4 @@ export function raceTargetsForPlayers(
   if (ratingA === ratingB) return { raceA: higher, raceB: higher, diff };
   if (ratingA > ratingB) return { raceA: higher, raceB: lower, diff };
   return { raceA: lower, raceB: higher, diff };
-}
-
-export function formatRacePair(race: RacePair): string {
-  return `${race.higher} to ${race.lower}`;
 }

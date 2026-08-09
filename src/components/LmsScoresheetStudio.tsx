@@ -166,9 +166,9 @@ export function LmsScoresheetStudio({
           Scoresheet sandbox
         </p>
         <p className="mt-0.5 text-xs text-[var(--muted)]">
-          Edit the sheet or paste DSL — nothing is saved to a division. Click
-          Generate to see a paper-style preview with Home1 / Away1 slots.{" "}
-          {summary}
+          Edit the sheet or paste DSL — nothing is saved to a division. Generate
+          opens a paper preview (Tuesday 9-Ball / R6 Hot layout for race
+          nights). {summary}
         </p>
       </div>
 
