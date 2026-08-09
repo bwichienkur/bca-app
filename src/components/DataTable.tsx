@@ -26,6 +26,10 @@ type DataTableProps = {
 
 type ColumnKind = "rank" | "name" | "stat";
 
+/** Sticky accent rail width — matches AccentRecordCard’s felt edge. */
+const RAIL_REM = 0.25;
+const RAIL_STYLE = { width: `${RAIL_REM}rem`, minWidth: `${RAIL_REM}rem` };
+
 function compareValues(a: string, b: string): number {
   const aTrim = (a ?? "").trim();
   const bTrim = (b ?? "").trim();
@@ -189,7 +193,7 @@ export function DataTable({
     const totalRem = columnMeta.reduce((sum, column) => {
       const value = Number.parseFloat(column.width);
       return sum + (Number.isFinite(value) ? value : 4);
-    }, 0);
+    }, RAIL_REM);
     return `${totalRem}rem`;
   }, [columnMeta]);
 
@@ -230,16 +234,14 @@ export function DataTable({
     setSortDirection("asc");
   };
 
-  const cellPad = compact
-    ? "px-2 py-2 md:px-2.5"
-    : "px-2.5 py-3 md:px-3.5";
+  const cellPad = compact ? "px-2 py-1.5 md:px-2.5" : "px-2.5 py-2 md:px-3";
   const tableText = compact
     ? "text-xs md:text-[13px]"
     : "text-[13px] md:text-sm";
 
   const shellClass = flush
     ? "bg-[var(--surface)]"
-    : "overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]";
+    : "overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] shadow-[var(--shadow)]";
 
   return (
     <div className={shellClass}>
@@ -249,145 +251,181 @@ export function DataTable({
         </div>
       ) : null}
       <div className="overflow-x-auto">
-      <table
-        className={[
-          "w-full table-fixed border-separate border-spacing-0 text-left",
-          tableText,
-        ].join(" ")}
-        style={{ minWidth: tableMinWidth }}
-      >
-        <colgroup>
-          {columnMeta.map((column, index) => (
-            <col key={`col-${index}`} style={{ width: column.width }} />
-          ))}
-        </colgroup>
-        <thead className="bg-[var(--felt-soft)] text-white">
-          <tr>
-            {headers.map((header, index) => {
-              const active = sortColumn === index;
-              const isSticky = index === stickyIndex;
-              const isFirst = index === 0;
-              const isLast = index === headers.length - 1;
-              return (
-                <th
-                  key={`${header}-${index}`}
-                  aria-sort={
-                    active
-                      ? sortDirection === "asc"
-                        ? "ascending"
-                        : "descending"
-                      : "none"
-                  }
-                  className={[
-                    "border-b border-[var(--felt-soft)] font-semibold tracking-wide text-white",
-                    cellPad,
-                    isSticky
-                      ? "sticky left-0 z-10 bg-[var(--felt-soft)] shadow-[4px_0_10px_rgba(0,0,0,0.28)]"
-                      : "bg-[var(--felt-soft)]",
-                    !flush && !toolbar && isFirst
-                      ? "rounded-tl-[calc(var(--radius)-1px)]"
-                      : "",
-                    !flush && !toolbar && isLast
-                      ? "rounded-tr-[calc(var(--radius)-1px)]"
-                      : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleSort(index)}
-                    title={
+        <table
+          className={[
+            "w-full table-fixed border-separate border-spacing-0 text-left",
+            tableText,
+          ].join(" ")}
+          style={{ minWidth: tableMinWidth }}
+        >
+          <colgroup>
+            <col style={RAIL_STYLE} />
+            {columnMeta.map((column, index) => (
+              <col key={`col-${index}`} style={{ width: column.width }} />
+            ))}
+          </colgroup>
+          <thead>
+            <tr className="bg-[var(--surface-2)]">
+              <th
+                aria-hidden
+                className="sticky left-0 z-20 border-b border-[var(--line)] p-0"
+                style={RAIL_STYLE}
+              >
+                <span className="block h-full min-h-[2.25rem] w-full bg-[var(--felt)]" />
+              </th>
+              {headers.map((header, index) => {
+                const active = sortColumn === index;
+                const isSticky = index === stickyIndex;
+                return (
+                  <th
+                    key={`${header}-${index}`}
+                    aria-sort={
                       active
                         ? sortDirection === "asc"
-                          ? "Sorted ascending — click for descending"
-                          : "Sorted descending — click to clear sort"
-                        : "Sort column"
+                          ? "ascending"
+                          : "descending"
+                        : "none"
                     }
-                    className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-0.5 py-0.5 transition hover:text-[var(--amber)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                    className={[
+                      "border-b border-[var(--line)] font-semibold tracking-wide text-[var(--muted)]",
+                      cellPad,
+                      isSticky
+                        ? "sticky z-10 bg-[var(--surface-2)] shadow-[4px_0_10px_rgba(0,0,0,0.18)]"
+                        : "bg-[var(--surface-2)]",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    style={
+                      isSticky ? { left: `${RAIL_REM}rem` } : undefined
+                    }
                   >
-                    <span>{header}</span>
+                    <button
+                      type="button"
+                      onClick={() => toggleSort(index)}
+                      title={
+                        active
+                          ? sortDirection === "asc"
+                            ? "Sorted ascending — click for descending"
+                            : "Sorted descending — click to clear sort"
+                          : "Sort column"
+                      }
+                      className={[
+                        "inline-flex items-center gap-1 whitespace-nowrap rounded-md px-0.5 py-0.5 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--felt-soft)]",
+                        active
+                          ? "text-[var(--felt-deep)]"
+                          : "text-[var(--muted)] hover:text-[var(--ink)]",
+                      ].join(" ")}
+                    >
+                      <span className="text-[11px] uppercase tracking-[0.12em]">
+                        {header}
+                      </span>
+                      <span
+                        className={[
+                          "shrink-0 text-[10px] leading-none",
+                          active ? "opacity-100" : "opacity-45",
+                        ].join(" ")}
+                        aria-hidden
+                      >
+                        {active ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}
+                      </span>
+                    </button>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedRows.map(({ row, index: originalIndex }, displayIndex) => {
+              const selected = isRowSelected
+                ? isRowSelected(row)
+                : selectedRowIndex === originalIndex;
+              const clickable = Boolean(onRowClick);
+              const rowBg = selected
+                ? "bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))]"
+                : "bg-[color-mix(in_srgb,var(--surface)_88%,transparent)]";
+              const stickyBg = selected
+                ? "bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))]"
+                : "bg-[color-mix(in_srgb,var(--surface)_96%,var(--paper))]";
+              const hoverBg = clickable
+                ? "group-hover:bg-[color-mix(in_srgb,var(--felt)_8%,var(--surface))]"
+                : "";
+              const hoverStickyBg = clickable
+                ? "group-hover:bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]"
+                : "";
+              return (
+                <tr
+                  key={`${originalIndex}-${displayIndex}`}
+                  onClick={
+                    onRowClick
+                      ? () => onRowClick(row, originalIndex)
+                      : undefined
+                  }
+                  className={[
+                    "group",
+                    clickable ? "cursor-pointer" : "",
+                    selected
+                      ? "relative z-[1]"
+                      : "",
+                  ].join(" ")}
+                >
+                  <td
+                    aria-hidden
+                    className={[
+                      "sticky left-0 z-[2] border-b border-[var(--line)] p-0",
+                      selected
+                        ? "border-[color-mix(in_srgb,var(--felt)_45%,var(--line))]"
+                        : "",
+                    ].join(" ")}
+                    style={RAIL_STYLE}
+                  >
                     <span
                       className={[
-                        "shrink-0 text-[10px] leading-none",
-                        active ? "opacity-100" : "opacity-45",
+                        "block h-full min-h-[2.25rem] w-full bg-[var(--felt)]",
+                        selected ? "opacity-100" : "opacity-90",
                       ].join(" ")}
-                      aria-hidden
-                    >
-                      {active ? (sortDirection === "asc" ? "▲" : "▼") : "↕"}
-                    </span>
-                  </button>
-                </th>
+                    />
+                  </td>
+                  {headers.map((_, cellIndex) => {
+                    const kind = columnMeta[cellIndex]?.kind ?? "stat";
+                    const isSticky = cellIndex === stickyIndex;
+                    const value = row[cellIndex] ?? "";
+                    return (
+                      <td
+                        key={cellIndex}
+                        title={kind === "name" ? value : undefined}
+                        className={[
+                          "border-b border-[var(--line)] transition-colors",
+                          cellPad,
+                          isSticky ? stickyBg : rowBg,
+                          hoverBg,
+                          isSticky ? hoverStickyBg : "",
+                          isSticky
+                            ? "sticky z-[1] font-semibold text-[var(--ink)] shadow-[4px_0_10px_rgba(0,0,0,0.16)]"
+                            : kind === "rank"
+                              ? "tabular-nums font-medium text-[var(--muted)]"
+                              : "tabular-nums font-semibold text-[var(--ink)]",
+                          kind === "name"
+                            ? "truncate whitespace-nowrap font-semibold text-[var(--ink)]"
+                            : "whitespace-nowrap",
+                          selected
+                            ? "border-[color-mix(in_srgb,var(--felt)_35%,var(--line))]"
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        style={
+                          isSticky ? { left: `${RAIL_REM}rem` } : undefined
+                        }
+                      >
+                        {value}
+                      </td>
+                    );
+                  })}
+                </tr>
               );
             })}
-          </tr>
-        </thead>
-        <tbody>
-          {sortedRows.map(({ row, index: originalIndex }, displayIndex) => {
-            const selected = isRowSelected
-              ? isRowSelected(row)
-              : selectedRowIndex === originalIndex;
-            const clickable = Boolean(onRowClick);
-            const rowBg = selected
-              ? "bg-[color-mix(in_srgb,var(--felt)_22%,var(--surface))]"
-              : displayIndex % 2 === 0
-                ? "bg-[var(--surface)]"
-                : "bg-[var(--surface-2)]";
-            return (
-              <tr
-                key={`${originalIndex}-${displayIndex}`}
-                onClick={
-                  onRowClick ? () => onRowClick(row, originalIndex) : undefined
-                }
-                className={[
-                  clickable
-                    ? "cursor-pointer transition hover:bg-[color-mix(in_srgb,var(--amber)_16%,var(--surface))]"
-                    : "",
-                ].join(" ")}
-              >
-                {headers.map((_, cellIndex) => {
-                  const kind = columnMeta[cellIndex]?.kind ?? "stat";
-                  const isSticky = cellIndex === stickyIndex;
-                  const isFirst = cellIndex === 0;
-                  const isLastRow = displayIndex === sortedRows.length - 1;
-                  const value = row[cellIndex] ?? "";
-                  return (
-                    <td
-                      key={cellIndex}
-                      title={kind === "name" ? value : undefined}
-                      className={[
-                        "border-b border-[var(--line)]",
-                        cellPad,
-                        rowBg,
-                        isSticky
-                          ? "sticky left-0 z-[1] font-semibold text-[var(--ink)] shadow-[4px_0_10px_rgba(0,0,0,0.22)]"
-                          : kind === "rank"
-                            ? "tabular-nums font-medium text-[var(--muted)]"
-                            : "tabular-nums font-semibold text-[var(--ink)]",
-                        kind === "name"
-                          ? "truncate whitespace-nowrap font-semibold text-[var(--ink)]"
-                          : "whitespace-nowrap",
-                        !flush && isLastRow && isFirst
-                          ? "rounded-bl-[calc(var(--radius)-1px)]"
-                          : "",
-                        !flush &&
-                        isLastRow &&
-                        cellIndex === headers.length - 1
-                          ? "rounded-br-[calc(var(--radius)-1px)]"
-                          : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                    >
-                      {value}
-                    </td>
-                  );
-                })}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+          </tbody>
+        </table>
       </div>
     </div>
   );
