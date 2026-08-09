@@ -20,8 +20,47 @@ import {
 } from "@/lib/format-generator";
 import type { FormatGameKind } from "@/lib/lms-format-template";
 import type { PointSystem } from "@/lib/handicap";
+import {
+  parseRaceChartId,
+  raceChartMeta,
+  type RaceChartBase,
+  type RaceChartId,
+  type RaceChartIntensity,
+} from "@/lib/race-charts";
 import { FormatScoresheetPreview } from "./FormatScoresheetPreview";
 import { SelectField } from "./SelectField";
+
+const CHART_BASE_OPTIONS: RaceChartBase[] = [
+  2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+];
+const CHART_INTENSITY_OPTIONS: Array<{
+  id: RaceChartIntensity;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "hot",
+    label: "Hot",
+    description: "Most handicap — closest to even odds",
+  },
+  {
+    id: "medium",
+    label: "Medium",
+    description: "Moderate spot for the underdog",
+  },
+  {
+    id: "mild",
+    label: "Mild",
+    description: "Lightest handicap",
+  },
+];
+
+function chartIdFromParts(
+  base: RaceChartBase,
+  intensity: RaceChartIntensity,
+): RaceChartId {
+  return parseRaceChartId(`r${base}-${intensity}`);
+}
 
 const btnPrimary =
   "inline-flex items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
@@ -122,6 +161,8 @@ export function LmsScoresheetStudio() {
   const showFixedRace =
     picks.raceModel === "fixed" ||
     (picks.raceModel === "none" && picks.gameKind === "S");
+  const showFargoChart = picks.raceModel === "fargo-chart";
+  const chartMeta = raceChartMeta(picks.raceChartId);
   const showHcDetails = picks.fargoHc !== "none";
   const showRoundPointsExtras = picks.teamScoring === "round-points";
 
@@ -273,6 +314,53 @@ export function LmsScoresheetStudio() {
                 }
               />
             </label>
+          ) : null}
+
+          {showFargoChart ? (
+            <div className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-3">
+              <label className="block space-y-1.5">
+                <SectionLabel>Chart (even race)</SectionLabel>
+                <SelectField
+                  aria-label="Fargo race chart base"
+                  value={String(chartMeta.base)}
+                  options={CHART_BASE_OPTIONS.map((n) => ({
+                    value: String(n),
+                    label: `R${n}`,
+                  }))}
+                  onChange={(value) => {
+                    const base = (Number(value) || 6) as RaceChartBase;
+                    patch({
+                      raceChartId: chartIdFromParts(base, chartMeta.intensity),
+                    });
+                  }}
+                />
+              </label>
+              <div className="space-y-2">
+                <SectionLabel>Intensity</SectionLabel>
+                <div className="grid gap-1.5">
+                  {CHART_INTENSITY_OPTIONS.map((option) => (
+                    <ChoiceCard
+                      key={option.id}
+                      selected={chartMeta.intensity === option.id}
+                      title={option.label}
+                      description={option.description}
+                      onClick={() =>
+                        patch({
+                          raceChartId: chartIdFromParts(
+                            chartMeta.base,
+                            option.id,
+                          ),
+                        })
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
+              <p className="text-xs text-[var(--muted)]">
+                Using {chartMeta.label}. Score and paper preview look up
+                race-to from this chart.
+              </p>
+            </div>
           ) : null}
 
           <div className="space-y-2">
@@ -442,8 +530,8 @@ export function LmsScoresheetStudio() {
                           </span>
                           {game.raceLength ? (
                             <span className="rounded-md bg-[color-mix(in_srgb,var(--felt)_14%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--felt-deep)]">
-                              {picks.raceModel === "r6-hot"
-                                ? "Race from R6 Hot"
+                              {picks.raceModel === "fargo-chart"
+                                ? `Race from ${chartMeta.label}`
                                 : `Race to ${game.raceLength}`}
                             </span>
                           ) : null}
@@ -524,6 +612,9 @@ export function LmsScoresheetStudio() {
         onClose={() => setPaperOpen(false)}
         model={result.model}
         title="Paper-style preview"
+        raceChartId={
+          picks.raceModel === "fargo-chart" ? picks.raceChartId : undefined
+        }
       />
     </section>
   );
