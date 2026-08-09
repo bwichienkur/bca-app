@@ -27,27 +27,32 @@ export const MEMBERSHIP_STORAGE_KEY = "tableside.membership.v1";
 
 export const REPORT_TABS: { id: ReportTab; label: string }[] = [
   { id: "my-team", label: "Team" },
-  { id: "standings", label: "League" },
+  { id: "standings", label: "Standings" },
   { id: "players", label: "Players" },
   { id: "schedule", label: "Schedule" },
   { id: "handicap", label: "Handicap" },
   { id: "events", label: "Events" },
   { id: "score", label: "Score" },
-  { id: "lms", label: "LMS" },
+  { id: "lms", label: "Fargo LMS" },
+  { id: "create-league", label: "Create league" },
   { id: "search", label: "Search" },
+  { id: "account", label: "Account" },
 ];
 
-/** Primary destination nav — Search lives in the header instead. */
+/**
+ * @deprecated Prefer APP_PILLARS / LEAGUE_SECTIONS from app-nav.
+ * Kept for any leftover imports during the shell migration.
+ */
 export const PRIMARY_NAV_TABS: {
-  id: Exclude<ReportTab, "search">;
+  id: Exclude<ReportTab, "search" | "account">;
   label: string;
 }[] = [
-  { id: "my-team", label: "Team" },
-  { id: "standings", label: "League" },
-  { id: "players", label: "Players" },
-  { id: "schedule", label: "Schedule" },
-  { id: "handicap", label: "Handicap" },
-  { id: "events", label: "Events" },
   { id: "score", label: "Score" },
-  { id: "lms", label: "LMS" },
+  { id: "schedule", label: "Schedule" },
+  { id: "standings", label: "Standings" },
+  { id: "my-team", label: "Team" },
+  { id: "handicap", label: "Handicap" },
+  { id: "players", label: "Players" },
+  { id: "events", label: "Events" },
+  { id: "lms", label: "Fargo LMS" },
 ];

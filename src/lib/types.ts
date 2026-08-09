@@ -134,7 +134,12 @@ export type ReportTab =
   | "events"
   | "search"
   | "score"
-  | "lms";
+  | "lms"
+  | "create-league"
+  | "account";
+
+/** Top-level app pillars (mobile bottom bar / desktop side rail). */
+export type AppPillar = "home" | "league" | "manage" | "account";
 
 export type MembershipTeam = {
   teamId: string;

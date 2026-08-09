@@ -1,31 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchAllDivisions, groupLeagues } from "@/lib/lms";
+import { requireAppUserOrBridge } from "@/lib/app-auth";
+import {
+  createLeague,
+  leagueStoreMode,
+  listLeaguesForOwner,
+} from "@/lib/leagues/store";
+import type { CreateTablesideLeagueInput } from "@/lib/leagues/types";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const q = (request.nextUrl.searchParams.get("q") ?? "").trim().toLowerCase();
-    const entries = await fetchAllDivisions();
-    let leagues = groupLeagues(entries);
-
-    if (q) {
-      leagues = leagues.filter(
-        (league) =>
-          league.name.toLowerCase().includes(q) ||
-          league.state.toLowerCase().includes(q),
-      );
-    } else {
-      // Avoid dumping every public league into the mobile UI.
-      leagues = leagues.slice(0, 40);
-    }
-
-    return NextResponse.json({ leagues, total: leagues.length });
+    const user = await requireAppUserOrBridge();
+    const leagues = await listLeaguesForOwner(user.id);
+    return NextResponse.json({
+      leagues,
+      store: leagueStoreMode(),
+    });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json(
-      { error: "Failed to load leagues from FargoRate LMS." },
-      { status: 502 },
-    );
+    const message =
+      error instanceof Error ? error.message : "Failed to load leagues.";
+    const status = /sign in|session|auth/i.test(message) ? 401 : 502;
+    return NextResponse.json({ error: message, leagues: [] }, { status });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const user = await requireAppUserOrBridge();
+    const body = (await request.json()) as CreateTablesideLeagueInput;
+    const league = await createLeague({
+      ownerUserId: user.id,
+      ownerName: user.name,
+      ownerEmail: user.email,
+      body,
+    });
+    return NextResponse.json({ league, store: leagueStoreMode() });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to create league.";
+    const status = /sign in|session|auth/i.test(message)
+      ? 401
+      : /at least 3/i.test(message)
+        ? 400
+        : 502;
+    return NextResponse.json({ error: message }, { status });
   }
 }
