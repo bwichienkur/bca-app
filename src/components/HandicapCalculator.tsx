@@ -364,7 +364,6 @@ export function HandicapCalculator({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [divisionId, prefs.teamId, refreshToken]);
 
   const scoringFormat = useMemo(
