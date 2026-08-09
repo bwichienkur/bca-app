@@ -342,7 +342,7 @@ function SectionHeader({
   onAdd?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-2">
+    <div className="flex items-start justify-between gap-3">
       <div className="min-w-0 flex-1">
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
           {title}
@@ -354,7 +354,7 @@ function SectionHeader({
       {onAdd ? (
         <button
           type="button"
-          className={`${btnAdd} min-h-11 min-w-[8.5rem] shrink-0 px-5`}
+          className={`${btnAdd} h-9 shrink-0 px-3`}
           onClick={onAdd}
         >
           + Add
@@ -2413,7 +2413,7 @@ export function LmsOperator({
                       ) : (
                         team.players.map((player) => (
                           <li key={player.id}>
-                            <AccentRecordCard>
+                            <AccentRecordCard showRail={false}>
                               <div className="flex items-center justify-between gap-3">
                                 <span className="min-w-0 flex-1 text-sm font-medium text-[var(--ink)]">
                                   {player.name}

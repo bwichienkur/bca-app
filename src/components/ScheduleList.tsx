@@ -13,6 +13,7 @@ import {
 } from "./IconSubTabs";
 import { MatchListCard } from "./MatchListCard";
 import { SectionCard } from "./SectionCard";
+import { SubTabCard } from "./SubTabCard";
 
 type ScheduleListProps = {
   days: ScheduleDay[];
@@ -134,75 +135,80 @@ export function ScheduleList({
         }}
       />
 
-      <IconSubTabs
-        aria-label="Schedule time range"
-        value={view}
-        onChange={setView}
-        items={[
-          {
-            id: "upcoming",
-            label: "Upcoming",
-            icon: UpcomingSubIcon,
-            count: upcomingMatches.length,
-          },
-          {
-            id: "past",
-            label: "Past",
-            icon: PastSubIcon,
-            count: pastMatches.length,
-          },
-        ]}
-      />
-
-      {!visibleMatches.length ? (
-        <EmptyState
-          title={
-            view === "upcoming" ? "No upcoming matches" : "No past matches"
-          }
-          body={
-            view === "upcoming"
-              ? "Matches stay here through their scheduled day, then move to Past."
-              : "Past match days will show up here after they pass."
-          }
-        />
-      ) : (
-        <div className="space-y-2.5">
-          {visibleMatches.map((item, index) => {
-            const { match, day } = item;
-            const isMyMatch = Boolean(
-              myTeam &&
-                (normalizeTeamName(match.home) === myTeam ||
-                  normalizeTeamName(match.away) === myTeam),
-            );
-            return (
-              <MatchListCard
-                key={item.key}
-                className="animate-rise"
-                style={{ animationDelay: `${Math.min(index, 6) * 0.04}s` }}
-                homeName={match.home}
-                awayName={match.away}
-                meta={formatScheduleDate(day.date)}
-                location={match.location || undefined}
-                ctaLabel="View"
-                isMyMatch={isMyMatch}
-                homeRank={rankForTeam(teamRanks, match.home)}
-                awayRank={rankForTeam(teamRanks, match.away)}
-                emphasizeHome={
-                  Boolean(
-                    myTeam && normalizeTeamName(match.home) === myTeam,
-                  )
-                }
-                emphasizeAway={
-                  Boolean(
-                    myTeam && normalizeTeamName(match.away) === myTeam,
-                  )
-                }
-                onClick={() => onMatchClick?.(match, day)}
-              />
-            );
-          })}
-        </div>
-      )}
+      <SubTabCard
+        tabs={
+          <IconSubTabs
+            aria-label="Schedule time range"
+            value={view}
+            onChange={setView}
+            className="rounded-none border-0 bg-transparent p-0"
+            items={[
+              {
+                id: "upcoming",
+                label: "Upcoming",
+                icon: UpcomingSubIcon,
+                count: upcomingMatches.length,
+              },
+              {
+                id: "past",
+                label: "Past",
+                icon: PastSubIcon,
+                count: pastMatches.length,
+              },
+            ]}
+          />
+        }
+      >
+        {!visibleMatches.length ? (
+          <EmptyState
+            title={
+              view === "upcoming" ? "No upcoming matches" : "No past matches"
+            }
+            body={
+              view === "upcoming"
+                ? "Matches stay here through their scheduled day, then move to Past."
+                : "Past match days will show up here after they pass."
+            }
+          />
+        ) : (
+          <div className="space-y-2.5">
+            {visibleMatches.map((item, index) => {
+              const { match, day } = item;
+              const isMyMatch = Boolean(
+                myTeam &&
+                  (normalizeTeamName(match.home) === myTeam ||
+                    normalizeTeamName(match.away) === myTeam),
+              );
+              return (
+                <MatchListCard
+                  key={item.key}
+                  className="animate-rise"
+                  style={{ animationDelay: `${Math.min(index, 6) * 0.04}s` }}
+                  homeName={match.home}
+                  awayName={match.away}
+                  meta={formatScheduleDate(day.date)}
+                  location={match.location || undefined}
+                  ctaLabel="View"
+                  isMyMatch={isMyMatch}
+                  homeRank={rankForTeam(teamRanks, match.home)}
+                  awayRank={rankForTeam(teamRanks, match.away)}
+                  emphasizeHome={
+                    Boolean(
+                      myTeam && normalizeTeamName(match.home) === myTeam,
+                    )
+                  }
+                  emphasizeAway={
+                    Boolean(
+                      myTeam && normalizeTeamName(match.away) === myTeam,
+                    )
+                  }
+                  onClick={() => onMatchClick?.(match, day)}
+                />
+              );
+            })}
+          </div>
+        )}
+      </SubTabCard>
     </section>
   );
 }

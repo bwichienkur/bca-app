@@ -55,6 +55,28 @@ const btnDelete =
 const btnPrimary =
   "inline-flex items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
 
+/** Compact felt + control — stays on the right of section subheaders. */
+const btnIconAdd =
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] text-white transition hover:bg-[var(--felt-soft)] disabled:opacity-50";
+
+function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden
+      className={className}
+    >
+      <path
+        d="M10 4v12M4 10h12"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function ChevronIcon({
   className,
   open,
@@ -403,8 +425,8 @@ export function EntryTeamsPresetsPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
             Entry teams
           </p>
@@ -413,8 +435,14 @@ export function EntryTeamsPresetsPanel({
           </p>
         </div>
         {!composing ? (
-          <button type="button" onClick={startCreate} className={btnPrimary}>
-            + Add
+          <button
+            type="button"
+            onClick={startCreate}
+            className={btnIconAdd}
+            title="Add team"
+            aria-label="Add team"
+          >
+            <PlusIcon className="h-4 w-4" />
           </button>
         ) : null}
       </div>
@@ -641,7 +669,7 @@ export function EntryTeamsPresetsPanel({
                     >
                       {roster.map((member, index) => (
                         <li key={`${team.id}-${member.name}-${index}`}>
-                          <AccentRecordCard>
+                          <AccentRecordCard showRail={false}>
                             <div className="flex min-w-0 items-center justify-between gap-3">
                               <span className="min-w-0 flex-1 text-sm font-medium text-[var(--ink)]">
                                 <span className="mr-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
@@ -847,19 +875,25 @@ export function TemplatesPresetsPanel({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
             Event templates
           </p>
-          <p className="mt-1 text-sm text-[var(--muted)]">
+          <p className="mt-0.5 text-xs text-[var(--muted)]">
             Preset format, eligibility, venue, and pay settings. Dates and flyer
             stay blank when you use one.
           </p>
         </div>
         {!composing ? (
-          <button type="button" onClick={startCreate} className={btnPrimary}>
-            + Add
+          <button
+            type="button"
+            onClick={startCreate}
+            className={btnIconAdd}
+            title="Add template"
+            aria-label="Add template"
+          >
+            <PlusIcon className="h-4 w-4" />
           </button>
         ) : null}
       </div>
@@ -1491,8 +1525,8 @@ export function MyEntriesPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div className="min-w-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
             My entries
           </p>
@@ -1506,7 +1540,7 @@ export function MyEntriesPanel({
           onClick={() => void loadEntries()}
           title={loading ? "Refreshing…" : "Refresh entries"}
           aria-label={loading ? "Refreshing entries" : "Refresh entries"}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)] disabled:opacity-50"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--felt)] text-white transition hover:bg-[var(--felt-soft)] disabled:opacity-50"
         >
           <RefreshIcon
             className={["h-4 w-4", loading ? "animate-spin" : ""].join(" ")}
