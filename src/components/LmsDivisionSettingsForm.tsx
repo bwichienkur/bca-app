@@ -605,7 +605,7 @@ export function LmsDivisionSettingsForm({
 
       <SettingsBlock
         title="Format"
-        description="Match format template. Use the Scoresheet tab for a full visual builder."
+        description="Match format template for this division. The Sheet tab is a separate sandbox for previewing DSL."
       >
         <div className="space-y-3">
           <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/40 p-3">
@@ -613,8 +613,8 @@ export function LmsDivisionSettingsForm({
               Scoresheet builder
             </p>
             <p className="mt-1 text-xs text-[var(--muted)]">
-              Build Home1 / Away1 style sheets and copy or save the LMS DSL from
-              the Scoresheet tab — or open the quick builder here.
+              Build rounds and games here to update this division’s template, or
+              use the Sheet tab sandbox to preview what a sheet looks like.
             </p>
             <button
               type="button"
