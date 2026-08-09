@@ -342,19 +342,19 @@ function SectionHeader({
   onAdd?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-wrap items-start justify-between gap-2">
       <div className="min-w-0 flex-1">
-        <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)] sm:text-xl">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
           {title}
-        </h3>
+        </p>
         {description ? (
-          <p className="mt-1 text-sm text-[var(--muted)]">{description}</p>
+          <p className="mt-0.5 text-xs text-[var(--muted)]">{description}</p>
         ) : null}
       </div>
       {onAdd ? (
         <button
           type="button"
-          className={`${btnAdd} w-full min-h-11 min-w-[8.5rem] shrink-0 px-5 sm:w-auto`}
+          className={`${btnAdd} min-h-11 min-w-[8.5rem] shrink-0 px-5`}
           onClick={onAdd}
         >
           + Add
@@ -2207,14 +2207,19 @@ export function LmsOperator({
         </label>
       </section>
 
-      <IconSubTabs
-        aria-label="LMS sections"
-        items={subItems}
-        value={subTab}
-        onChange={setSubTab}
-        columns={4}
-      />
+      <section className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        <div className="border-b border-[var(--line)] bg-[var(--surface-2)] p-0.5">
+          <IconSubTabs
+            aria-label="LMS sections"
+            items={subItems}
+            value={subTab}
+            onChange={setSubTab}
+            columns={4}
+            className="rounded-none border-0 bg-transparent p-0"
+          />
+        </div>
 
+        <div className="space-y-3 p-3 sm:p-4">
       {notice ? (
         <p className="text-sm font-medium text-[var(--felt)]">{notice}</p>
       ) : null}
@@ -2225,27 +2230,27 @@ export function LmsOperator({
       ) : null}
 
       {needsDivision && !opDivisionId ? (
-        <section className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
+        <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-4 text-sm text-[var(--muted)]">
           Choose a division above to manage this section. Division and Playoff
           lists work from the league alone.
-        </section>
+        </div>
       ) : null}
 
       {subTab === "home" ? (
         <section className="space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--ink)] sm:text-xl">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
                 Division home
-              </h3>
-              <p className="mt-1 text-sm text-[var(--muted)]">
+              </p>
+              <p className="mt-0.5 text-xs text-[var(--muted)]">
                 Upcoming and missed matches. Lists are cached for 24 hours; edits
                 refresh automatically.
               </p>
             </div>
             <button
               type="button"
-              className={`${btnPrimary} w-full min-h-11 min-w-[8.5rem] shrink-0 px-5 sm:w-auto`}
+              className={`${btnPrimary} min-h-11 min-w-[8.5rem] shrink-0 px-5`}
               disabled={busy || homeLoading || (!opLeagueId && !opDivisionId)}
               onClick={() => void refreshAllOperatorData()}
             >
@@ -2992,6 +2997,8 @@ export function LmsOperator({
           )}
         </section>
       ) : null}
+        </div>
+      </section>
 
       {editPopup}
       {pendingConfirm ? (

@@ -5501,20 +5501,23 @@ export function Tournaments({
         description="Browse local brackets by venue and Fargo cap, or create your own night."
       />
 
-      <IconSubTabs
-        aria-label="Events sections"
-        value={browseSubTab}
-        onChange={setBrowseSubTab}
-        items={[
-          { id: "browse", label: "Browse", icon: OverviewSubIcon },
-          { id: "entries", label: "Entries", icon: UpcomingSubIcon },
-          { id: "teams", label: "Teams", icon: RosterSubIcon },
-          { id: "templates", label: "Templates", icon: LineupsSubIcon },
-        ]}
-      />
+      <SurfaceCard>
+        <div className="border-b border-[var(--line)] bg-[var(--surface-2)] p-0.5">
+          <IconSubTabs
+            aria-label="Events sections"
+            value={browseSubTab}
+            onChange={setBrowseSubTab}
+            className="rounded-none border-0 bg-transparent p-0"
+            items={[
+              { id: "browse", label: "Browse", icon: OverviewSubIcon },
+              { id: "entries", label: "Entries", icon: UpcomingSubIcon },
+              { id: "teams", label: "Teams", icon: RosterSubIcon },
+              { id: "templates", label: "Templates", icon: LineupsSubIcon },
+            ]}
+          />
+        </div>
 
       {browseSubTab === "entries" ? (
-        <SurfaceCard>
           <div className="p-3 sm:p-4">
             <MyEntriesPanel
               signedIn={Boolean(user)}
@@ -5523,11 +5526,9 @@ export function Tournaments({
               onOpenEvent={(eventId) => void openDetail(eventId)}
             />
           </div>
-        </SurfaceCard>
       ) : null}
 
       {browseSubTab === "teams" ? (
-        <SurfaceCard>
           <div className="p-3 sm:p-4">
             <EntryTeamsPresetsPanel
               signedIn={Boolean(user)}
@@ -5537,11 +5538,9 @@ export function Tournaments({
               onRequestLogin={onRequestLogin}
             />
           </div>
-        </SurfaceCard>
       ) : null}
 
       {browseSubTab === "templates" ? (
-        <SurfaceCard>
           <div className="p-3 sm:p-4">
             <TemplatesPresetsPanel
               signedIn={Boolean(user)}
@@ -5550,11 +5549,10 @@ export function Tournaments({
               onUseTemplate={useTemplateForCreate}
             />
           </div>
-        </SurfaceCard>
       ) : null}
 
       {browseSubTab === "browse" ? (
-      <SurfaceCard>
+        <>
         <div className="space-y-3 border-b border-[var(--line)] px-3 py-3 sm:px-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
@@ -5847,8 +5845,9 @@ export function Tournaments({
             </div>
           )}
         </div>
-      </SurfaceCard>
+        </>
       ) : null}
+      </SurfaceCard>
 
       {flyerPreview ? (
         <FlyerLightbox
