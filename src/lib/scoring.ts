@@ -84,6 +84,12 @@ export type GameScoreState = {
   breakingTeam: 1 | 2;
   teamOneHandicap: number | null;
   teamTwoHandicap: number | null;
+  /**
+   * Per-side race-to targets (Fargo race charts). When set, completion uses
+   * asymmetric race rules instead of fixed maxWin/maxLoss.
+   */
+  raceTargetOne?: number | null;
+  raceTargetTwo?: number | null;
 };
 
 export type ScoringDraft = {
@@ -195,24 +201,59 @@ export function syncLineupToGames(
 /** Legal race scores for the score pad (no 8/9 — jump to race-to win). */
 export const RACE_SCORE_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 7, 10] as const;
 
+export type GameWinnerOptions = {
+  maxScore?: number;
+  maxLosingScore?: number;
+  raceTargetOne?: number | null;
+  raceTargetTwo?: number | null;
+};
+
+function resolvedRaceTargets(
+  game: GameScoreState | undefined,
+  options?: GameWinnerOptions,
+): { raceOne: number; raceTwo: number } | null {
+  const raceOne = options?.raceTargetOne ?? game?.raceTargetOne;
+  const raceTwo = options?.raceTargetTwo ?? game?.raceTargetTwo;
+  if (
+    raceOne == null ||
+    raceTwo == null ||
+    !Number.isFinite(raceOne) ||
+    !Number.isFinite(raceTwo) ||
+    raceOne <= 0 ||
+    raceTwo <= 0
+  ) {
+    return null;
+  }
+  return { raceOne: Math.round(raceOne), raceTwo: Math.round(raceTwo) };
+}
+
 /**
- * A game is complete only when one side reaches the race win score (typically 10)
- * and the other is at or under the max losing score (typically 7).
+ * A game is complete when one side reaches its race target.
+ * Fixed-race nights use maxWin + maxLoss (e.g. 10 / 7). Chart races use
+ * per-side raceTargetOne / raceTargetTwo (possibly asymmetric).
  */
 export function gameWinner(
   game: GameScoreState | undefined,
-  options?: { maxScore?: number; maxLosingScore?: number },
+  options?: GameWinnerOptions,
 ): 1 | 2 | null {
   if (!game) return null;
   if (game.teamOneScore == null || game.teamTwoScore == null) return null;
+  const one = game.teamOneScore;
+  const two = game.teamTwoScore;
+
+  const race = resolvedRaceTargets(game, options);
+  if (race) {
+    if (one >= race.raceOne && two < race.raceTwo) return 1;
+    if (two >= race.raceTwo && one < race.raceOne) return 2;
+    return null;
+  }
+
   const maxWin =
     options?.maxScore && options.maxScore > 0 ? options.maxScore : 10;
   const maxLoss =
     options?.maxLosingScore != null && options.maxLosingScore >= 0
       ? options.maxLosingScore
       : 7;
-  const one = game.teamOneScore;
-  const two = game.teamTwoScore;
   if (one === maxWin && two <= maxLoss) return 1;
   if (two === maxWin && one <= maxLoss) return 2;
   return null;
@@ -432,7 +473,10 @@ export function tallyBoardRoundWins(
  * Board-level round tally from draft game keys (`${round}-${gameIndex}`).
  * Includes the final match-points round when decided.
  */
-export function tallyDraftRounds(draft: ScoringDraft): {
+export function tallyDraftRounds(
+  draft: ScoringDraft,
+  options: BoardRoundTallyOptions = {},
+): {
   teamOneRoundWins: number;
   teamTwoRoundWins: number;
   roundsStarted: number;
@@ -451,7 +495,10 @@ export function tallyDraftRounds(draft: ScoringDraft): {
       teamTwoHandicap: game.teamTwoHandicap,
     });
   }
-  return tallyBoardRoundWins(games, { useGameHandicaps: true });
+  return tallyBoardRoundWins(games, {
+    useGameHandicaps: true,
+    ...options,
+  });
 }
 
 export type DraftBoardSummary = {
@@ -477,15 +524,41 @@ export function draftHasStartedPlay(draft: ScoringDraft | null | undefined): boo
   );
 }
 
+export type SummarizeDraftOptions = {
+  /** When "match-win", team points = individual match wins (no R6). */
+  teamPointMode?: "round-points" | "match-win";
+  includeMatchPointsRound?: boolean;
+};
+
 export function summarizeDraftForBoard(
   draft: ScoringDraft,
   submittedAt: string | null = null,
+  options: SummarizeDraftOptions = {},
 ): DraftBoardSummary {
   const games = tallyDraft(draft);
-  const rounds = tallyDraftRounds(draft);
   const gamesStarted = Object.values(draft.games).filter(
     (game) => gamePlayStatus(game) !== "not-started",
   ).length;
+
+  if (options.teamPointMode === "match-win") {
+    return {
+      matchId: draft.matchId,
+      teamOneGameWins: games.teamOneWins,
+      teamTwoGameWins: games.teamTwoWins,
+      teamOneRoundWins: games.teamOneWins,
+      teamTwoRoundWins: games.teamTwoWins,
+      gamesScored: games.scored,
+      gamesStarted,
+      roundsStarted: games.scored,
+      updatedAt: draft.updatedAt,
+      submittedAt,
+      status: submittedAt ? "submitted" : "in_progress",
+    };
+  }
+
+  const rounds = tallyDraftRounds(draft, {
+    includeMatchPointsRound: options.includeMatchPointsRound,
+  });
   return {
     matchId: draft.matchId,
     teamOneGameWins: games.teamOneWins,
@@ -1056,22 +1129,38 @@ export function applyQuickWin(
     maxScore: number;
     maxLosingScore: number;
     adornment?: WinAdornment;
+    raceTargetOne?: number | null;
+    raceTargetTwo?: number | null;
   },
 ): GameScoreState {
   const adornment = options.adornment ?? "";
-  const winScore = options.maxScore;
+  const race = resolvedRaceTargets(game, options);
+  const winScore =
+    race != null
+      ? winner === 1
+        ? race.raceOne
+        : race.raceTwo
+      : options.maxScore;
+  const maxLoserScore =
+    race != null
+      ? winner === 1
+        ? Math.max(0, race.raceTwo - 1)
+        : Math.max(0, race.raceOne - 1)
+      : options.maxLosingScore;
   const currentLoser =
     winner === 1 ? (game.teamTwoScore ?? 0) : (game.teamOneScore ?? 0);
   const loseScore =
     adornment === "WZ"
       ? 0
-      : Math.min(Math.max(0, currentLoser), options.maxLosingScore);
+      : Math.min(Math.max(0, currentLoser), maxLoserScore);
   return {
     ...game,
     teamOneScore: winner === 1 ? winScore : loseScore,
     teamTwoScore: winner === 2 ? winScore : loseScore,
     winAdornment: adornment,
     isWinZip: adornment === "WZ",
+    raceTargetOne: options.raceTargetOne ?? game.raceTargetOne,
+    raceTargetTwo: options.raceTargetTwo ?? game.raceTargetTwo,
   };
 }
 
@@ -1080,17 +1169,51 @@ export function applyRaceScore(
   game: GameScoreState,
   side: 1 | 2,
   value: number,
-  options: { maxScore: number; maxLosingScore: number },
+  options: {
+    maxScore: number;
+    maxLosingScore: number;
+    raceTargetOne?: number | null;
+    raceTargetTwo?: number | null;
+    allowedScores?: readonly number[];
+  },
 ): GameScoreState {
+  const race = resolvedRaceTargets(game, options);
   const maxWin = options.maxScore > 0 ? options.maxScore : 10;
   const maxLoss = options.maxLosingScore >= 0 ? options.maxLosingScore : 7;
-  const allowed = new Set<number>(RACE_SCORE_OPTIONS);
+  const allowed = new Set<number>(
+    options.allowedScores ??
+      (race
+        ? Array.from(
+            {
+              length:
+                (side === 1 ? race.raceOne : race.raceTwo) + 1,
+            },
+            (_, i) => i,
+          )
+        : RACE_SCORE_OPTIONS),
+  );
   const picked = allowed.has(value) ? value : 0;
 
   let teamOneScore = game.teamOneScore ?? 0;
   let teamTwoScore = game.teamTwoScore ?? 0;
 
-  if (side === 1) {
+  if (race) {
+    if (side === 1) {
+      teamOneScore = Math.min(picked, race.raceOne);
+      if (teamOneScore >= race.raceOne) {
+        teamTwoScore = Math.min(teamTwoScore, Math.max(0, race.raceTwo - 1));
+      } else if (teamTwoScore >= race.raceTwo) {
+        teamOneScore = Math.min(teamOneScore, Math.max(0, race.raceOne - 1));
+      }
+    } else {
+      teamTwoScore = Math.min(picked, race.raceTwo);
+      if (teamTwoScore >= race.raceTwo) {
+        teamOneScore = Math.min(teamOneScore, Math.max(0, race.raceOne - 1));
+      } else if (teamOneScore >= race.raceOne) {
+        teamTwoScore = Math.min(teamTwoScore, Math.max(0, race.raceTwo - 1));
+      }
+    }
+  } else if (side === 1) {
     teamOneScore = picked;
     if (picked === maxWin) {
       teamTwoScore = Math.min(teamTwoScore, maxLoss);
@@ -1110,8 +1233,17 @@ export function applyRaceScore(
     ...game,
     teamOneScore,
     teamTwoScore,
+    raceTargetOne: options.raceTargetOne ?? game.raceTargetOne,
+    raceTargetTwo: options.raceTargetTwo ?? game.raceTargetTwo,
   };
-  if (!gameWinner(next, { maxScore: maxWin, maxLosingScore: maxLoss })) {
+  if (
+    !gameWinner(next, {
+      maxScore: maxWin,
+      maxLosingScore: maxLoss,
+      raceTargetOne: next.raceTargetOne,
+      raceTargetTwo: next.raceTargetTwo,
+    })
+  ) {
     next.winAdornment = "";
     next.isWinZip = false;
   }

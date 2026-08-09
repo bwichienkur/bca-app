@@ -17,6 +17,8 @@ export type ParsedGame = {
   homePlayers: number[]; // 1-based indexes into lineup
   awayPlayers: number[];
   gameType: "S" | "D" | "R" | string;
+  /** Race length from `RL` token when present (GAME R). */
+  raceLength?: number | null;
 };
 
 export type ParsedRound = {
@@ -99,7 +101,8 @@ export function parseDivisionTemplate(template: string): ParsedMatchFormat {
 
   const lines = template.split(/\r?\n/);
   for (const line of lines) {
-    if (/^ROUND\s+/i.test(line.trim())) {
+    const trimmed = line.trim();
+    if (/^ROUND\s+/i.test(trimmed)) {
       if (current) rounds.push(current);
       roundNumber += 1;
       current = { roundNumber, games: [] };
@@ -108,19 +111,27 @@ export function parseDivisionTemplate(template: string): ParsedMatchFormat {
 
     if (!current) continue;
 
-    if (/GAME S/i.test(line)) {
-      const homePlayers = (line.match(/H\d+/g) ?? []).map((token) =>
-        parseInt(token.slice(1), 10),
-      );
-      const awayPlayers = (line.match(/A\d+/g) ?? []).map((token) =>
-        parseInt(token.slice(1), 10),
-      );
-      current.games.push({
-        homePlayers,
-        awayPlayers,
-        gameType: "S",
-      });
-    }
+    const gameMatch = /^GAME\s+([SRD])\b(.*)$/i.exec(trimmed);
+    if (!gameMatch) continue;
+
+    const gameType = gameMatch[1]!.toUpperCase();
+    const rest = gameMatch[2] ?? "";
+    const homePlayers = (rest.match(/H\d+/gi) ?? []).map((token) =>
+      parseInt(token.slice(1), 10),
+    );
+    const awayPlayers = (rest.match(/A\d+/gi) ?? []).map((token) =>
+      parseInt(token.slice(1), 10),
+    );
+    const raceToken = /RL(\d+)/i.exec(rest);
+    const raceLength = raceToken ? Number(raceToken[1]) : null;
+
+    current.games.push({
+      homePlayers: homePlayers.length ? homePlayers : [1],
+      awayPlayers: awayPlayers.length ? awayPlayers : [1],
+      gameType,
+      raceLength:
+        raceLength != null && Number.isFinite(raceLength) ? raceLength : null,
+    });
   }
 
   if (current) rounds.push(current);
@@ -218,6 +229,7 @@ export function buildDefaultFivePlayerFormat(
         homePlayers: [home],
         awayPlayers: [away],
         gameType: "S",
+        raceLength: null,
       });
     }
     parsedRounds.push({ roundNumber: r + 1, games });

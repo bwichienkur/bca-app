@@ -19,6 +19,14 @@ import {
   pushRemoteDraft,
 } from "@/lib/draft-sync";
 import {
+  applyFormatRaceTargets,
+  formatScoringSummary,
+  padRaceLimits,
+  raceScoreOptions,
+  resolveScoringFormat,
+} from "@/lib/division-scoring-config";
+import type { LeagueScoringFormat } from "@/lib/scoring-formats";
+import {
   applyQuickWin,
   applyRaceScore,
   buildVerticalMatchPayload,
@@ -66,6 +74,8 @@ type MatchScoringProps = {
   divisionName: string | null;
   teamId: string | null;
   teamName: string | null;
+  /** Explicit prefs format id, or null for auto. */
+  scoringFormatId?: string | null;
   user: AuthUser | null;
   authLoading?: boolean;
   onRequestLogin: () => void;
@@ -130,13 +140,25 @@ function pickDefaultNightKey(keys: string[]): string | null {
   return sorted[sorted.length - 1] ?? null;
 }
 
+function boardSummaryOptions(format: LeagueScoringFormat) {
+  return {
+    teamPointMode: format.teamPointMode,
+    includeMatchPointsRound: format.matchPointsRound,
+  } as const;
+}
+
 function mergeBoardSummary(
   remote: DraftBoardSummary | undefined,
   local: ScoringDraft | null,
+  format: LeagueScoringFormat,
 ): DraftBoardSummary | null {
   if (!local && !remote) return null;
   if (!local) return remote ?? null;
-  const fromLocal = summarizeDraftForBoard(local, null);
+  const fromLocal = summarizeDraftForBoard(
+    local,
+    null,
+    boardSummaryOptions(format),
+  );
   if (!remote) return fromLocal;
   if (remote.submittedAt) return remote;
   const localTs = Date.parse(fromLocal.updatedAt);
@@ -195,6 +217,7 @@ export function MatchScoring({
   divisionName,
   teamId,
   teamName,
+  scoringFormatId = null,
   user,
   authLoading = false,
   onRequestLogin,
@@ -537,9 +560,24 @@ export function MatchScoring({
       const locked = submittedLocked || !canScore;
       sheetLockedRef.current = locked;
 
-      const nextDraft = chosen
+      const formatForMatch = resolveScoringFormat({
+        prefsFormatId: scoringFormatId,
+        divisionName: divisionName ?? data.match.divisionName,
+        playersPerTeam:
+          data.match.matchFormat?.teamOnePlayers.length ||
+          data.match.numberOfSets ||
+          null,
+        pointsForWin: data.match.pointsForWin ?? null,
+        matchWinCountsAsRound: data.match.matchWinCountsAsRound ?? null,
+      });
+      const synced = chosen
         ? syncLineupToGames(normalizeDraftScores(chosen), data.match)
         : emptyDraft(data.match);
+      const nextDraft = applyFormatRaceTargets(
+        data.match,
+        synced,
+        formatForMatch,
+      );
 
       baseUpdatedAtRef.current = remoteDraft?.updatedAt ?? null;
       dirtyRef.current = false;
@@ -563,7 +601,11 @@ export function MatchScoring({
           .catch(() => undefined);
         setDraftSummaries((prev) => ({
           ...prev,
-          [matchId]: summarizeDraftForBoard(nextDraft, null),
+          [matchId]: summarizeDraftForBoard(
+            nextDraft,
+            null,
+            boardSummaryOptions(formatForMatch),
+          ),
         }));
       } else {
         // Keep a local copy for the night board even when the sheet is locked.
@@ -578,6 +620,7 @@ export function MatchScoring({
               submittedLocked
                 ? (submittedAt ?? new Date().toISOString())
                 : null,
+              boardSummaryOptions(formatForMatch),
             ),
         }));
       }
@@ -660,6 +703,46 @@ export function MatchScoring({
     return () => window.clearInterval(timer);
   }, [view, match]);
 
+  const scoringFormat = useMemo(
+    () =>
+      resolveScoringFormat({
+        prefsFormatId: scoringFormatId,
+        divisionName: divisionName ?? match?.divisionName,
+        playersPerTeam:
+          match?.matchFormat?.teamOnePlayers.length ||
+          match?.numberOfSets ||
+          null,
+        pointsForWin: match?.pointsForWin ?? null,
+        matchWinCountsAsRound: match?.matchWinCountsAsRound ?? null,
+      }),
+    [
+      scoringFormatId,
+      divisionName,
+      match?.divisionName,
+      match?.matchFormat?.teamOnePlayers.length,
+      match?.numberOfSets,
+      match?.pointsForWin,
+      match?.matchWinCountsAsRound,
+    ],
+  );
+
+  // Keep race-chart targets in sync with lineups / format.
+  useEffect(() => {
+    if (!match || !draft) return;
+    const stamped = applyFormatRaceTargets(match, draft, scoringFormat);
+    if (stamped === draft) return;
+    draftRef.current = stamped;
+    setDraft(stamped);
+    if (!sheetLockedRef.current) saveDraft(stamped);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-stamp on lineup/format/match identity
+  }, [
+    match?.id,
+    scoringFormat.id,
+    scoringFormat.raceMode,
+    draft?.teamOneLineup,
+    draft?.teamTwoLineup,
+  ]);
+
   const totals = useMemo(
     () => (draft ? tallyDraft(draft) : null),
     [draft],
@@ -680,7 +763,9 @@ export function MatchScoring({
     [match, draft, roundHandicaps],
   );
 
-  const includeMatchPointsRound = match?.matchWinCountsAsRound !== false;
+  const includeMatchPointsRound =
+    scoringFormat.matchPointsRound && match?.matchWinCountsAsRound !== false;
+  const matchWinTeamPoints = scoringFormat.teamPointMode === "match-win";
 
   const matchPointsTally = useMemo(() => {
     if (!match || !draft || !includeMatchPointsRound) return null;
@@ -717,6 +802,12 @@ export function MatchScoring({
   }, [roundHandicaps]);
 
   const roundWins = useMemo(() => {
+    if (matchWinTeamPoints) {
+      return {
+        teamOne: totals?.teamOneWins ?? 0,
+        teamTwo: totals?.teamTwoWins ?? 0,
+      };
+    }
     let teamOne = 0;
     let teamTwo = 0;
     for (const round of roundPointTallies) {
@@ -726,7 +817,7 @@ export function MatchScoring({
     if (matchPointsTally?.roundWinner === 1) teamOne += 1;
     if (matchPointsTally?.roundWinner === 2) teamTwo += 1;
     return { teamOne, teamTwo };
-  }, [matchPointsTally, roundPointTallies]);
+  }, [matchPointsTally, matchWinTeamPoints, roundPointTallies, totals]);
 
   // Live point totals from R1–R5 only (R6 is awarded later, not a separate sum).
   const matchPointTotals = useMemo(
@@ -806,7 +897,11 @@ export function MatchScoring({
     setSubmitNeedsReview(false);
     setDraftSummaries((prev) => ({
       ...prev,
-      [currentMatch.id]: summarizeDraftForBoard(currentDraft, submittedAt),
+      [currentMatch.id]: summarizeDraftForBoard(
+        currentDraft,
+        submittedAt,
+        boardSummaryOptions(scoringFormat),
+      ),
     }));
     setView({ mode: "list" });
     setMatch(null);
@@ -990,8 +1085,14 @@ export function MatchScoring({
           teamTwoName={match.teamTwoName}
           mySide={match.mySide}
           roundWins={roundWins}
-          roundsAvailable={roundsAvailable}
+          roundsAvailable={
+            matchWinTeamPoints
+              ? Math.max(totals?.total ?? 0, rounds.length)
+              : roundsAvailable
+          }
           includeMatchPointsRound={includeMatchPointsRound}
+          matchWinTeamPoints={matchWinTeamPoints}
+          formatHint={formatScoringSummary(scoringFormat)}
           pointTotals={matchPointTotals}
           gameWins={{
             teamOne: totals?.teamOneWins ?? 0,
@@ -1322,7 +1423,7 @@ export function MatchScoring({
                 ) : null}
               </div>
 
-              {activeRoundPoints ? (
+              {activeRoundPoints && !matchWinTeamPoints ? (
                 <RoundPointsBoard
                   tally={activeRoundPoints}
                   teamOneName={match.teamOneName}
@@ -1331,6 +1432,17 @@ export function MatchScoring({
                   isHandicapped={match.isHandicapped}
                   matchPointsRound={isMatchPointsRound}
                 />
+              ) : null}
+              {matchWinTeamPoints && !isMatchPointsRound ? (
+                <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--muted)]">
+                  {scoringFormat.label}: each individual match win is{" "}
+                  {scoringFormat.pointsPerMatchWin} team point
+                  {scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}
+                  {scoringFormat.raceMode === "fargo-race-chart"
+                    ? " · race from the R6 Hot chart"
+                    : ""}
+                  .
+                </p>
               ) : null}
 
               {isMatchPointsRound ? (
@@ -1509,6 +1621,7 @@ export function MatchScoring({
               open={Boolean(!sheetLocked && activeGame && padGame)}
               match={match}
               game={padGame}
+              scoringFormat={scoringFormat}
               roundNumber={activeGame?.roundNumber ?? activeRound}
               gameIndex={activeGame?.gameIndex ?? 1}
               onClose={() => setActiveGame(null)}
@@ -1589,6 +1702,8 @@ export function MatchScoring({
                 <span className="font-medium text-white">{teamName}</span>
               </>
             ) : null}
+            {" · "}
+            {formatScoringSummary(scoringFormat)}
             {sharedDrafts ? " · live sync on" : null}
           </>
         }
@@ -1691,6 +1806,7 @@ export function MatchScoring({
                 const summary = mergeBoardSummary(
                   draftSummaries[item.id],
                   localDraft,
+                  scoringFormat,
                 );
                 const boardStatus = boardStatusFor(item, summary, localDraft);
                 const isMyMatch = item.mySide != null;
@@ -1732,6 +1848,8 @@ const MatchScoreboard = memo(function MatchScoreboard({
   roundWins,
   roundsAvailable,
   includeMatchPointsRound,
+  matchWinTeamPoints = false,
+  formatHint,
   pointTotals,
   gameWins,
   gamesPlayed,
@@ -1747,6 +1865,8 @@ const MatchScoreboard = memo(function MatchScoreboard({
   roundWins: { teamOne: number; teamTwo: number };
   roundsAvailable: number;
   includeMatchPointsRound: boolean;
+  matchWinTeamPoints?: boolean;
+  formatHint?: string;
   pointTotals: { teamOne: number; teamTwo: number };
   gameWins: { teamOne: number; teamTwo: number };
   gamesPlayed: number;
@@ -1861,7 +1981,11 @@ const MatchScoreboard = memo(function MatchScoreboard({
           {dateLabel}
           {location ? ` · ${location}` : ""}
         </p>
-        {includeMatchPointsRound ? (
+        {matchWinTeamPoints ? (
+          <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40">
+            Match wins
+          </p>
+        ) : includeMatchPointsRound ? (
           <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40">
             R1–5 + pts
           </p>
@@ -1875,7 +1999,7 @@ const MatchScoreboard = memo(function MatchScoreboard({
 
       <div className="mt-3 rounded-[var(--radius)] bg-black/30 px-2.5 py-2.5 ring-1 ring-white/10 sm:px-3.5 sm:py-3">
         {metricRow({
-          label: "Rounds",
+          label: matchWinTeamPoints ? "Match pts" : "Rounds",
           one: roundWins.teamOne,
           two: roundWins.teamTwo,
           emphasis: "hero",
@@ -1887,19 +2011,30 @@ const MatchScoreboard = memo(function MatchScoreboard({
 
         <div className="mx-auto mt-2 h-px w-[min(100%,16rem)] bg-gradient-to-r from-transparent via-white/18 to-transparent" />
 
-        {metricRow({
-          label: "Points",
-          one: pointTotals.teamOne,
-          two: pointTotals.teamTwo,
-          emphasis: "secondary",
-        })}
+        {matchWinTeamPoints ? (
+          metricRow({
+            label: "Race games",
+            one: pointTotals.teamOne,
+            two: pointTotals.teamTwo,
+            emphasis: "secondary",
+          })
+        ) : (
+          metricRow({
+            label: "Points",
+            one: pointTotals.teamOne,
+            two: pointTotals.teamTwo,
+            emphasis: "secondary",
+          })
+        )}
 
-        {metricRow({
-          label: "Games",
-          one: gameWins.teamOne,
-          two: gameWins.teamTwo,
-          emphasis: "tertiary",
-        })}
+        {!matchWinTeamPoints
+          ? metricRow({
+              label: "Games",
+              one: gameWins.teamOne,
+              two: gameWins.teamTwo,
+              emphasis: "tertiary",
+            })
+          : null}
       </div>
 
       <div className="mt-2.5 space-y-1.5">
@@ -1918,6 +2053,8 @@ const MatchScoreboard = memo(function MatchScoreboard({
             <p>
               HC {handicapTotals.teamOne}–{handicapTotals.teamTwo}
             </p>
+          ) : formatHint ? (
+            <p className="truncate text-white/40">{formatHint}</p>
           ) : (
             <p className="text-white/35">Match scoreboard</p>
           )}
@@ -2574,6 +2711,7 @@ function ScorePad({
   open,
   match,
   game,
+  scoringFormat,
   roundNumber,
   gameIndex,
   onClose,
@@ -2582,6 +2720,7 @@ function ScorePad({
   open: boolean;
   match: ScoringMatchDetail;
   game: GameScoreState | null | undefined;
+  scoringFormat: LeagueScoringFormat;
   roundNumber: number;
   gameIndex: number;
   onClose: () => void;
@@ -2593,9 +2732,6 @@ function ScorePad({
   const [discardOpen, setDiscardOpen] = useState(false);
   const [spacerPx, setSpacerPx] = useState(104);
   const scoresRef = useRef<HTMLDivElement | null>(null);
-  const maxWin = match.maxScore > 0 ? match.maxScore : 10;
-  const maxLoss = match.maxLosingScore >= 0 ? match.maxLosingScore : 7;
-
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -2653,10 +2789,24 @@ function ScorePad({
   const dirty = !gameScoreEqual(local, baseline);
   const p1 = findPlayer(match.teamOnePlayers, local.teamOnePlayerId);
   const p2 = findPlayer(match.teamTwoPlayers, local.teamTwoPlayerId);
-  const winner = gameWinner(local, {
+  const localLimits = padRaceLimits(
+    scoringFormat,
+    match,
+    local.raceTargetOne,
+    local.raceTargetTwo,
+  );
+  const raceTargetOne = localLimits.raceTargetOne;
+  const raceTargetTwo = localLimits.raceTargetTwo;
+  const maxWin = localLimits.maxWin;
+  const maxLoss = localLimits.maxLoss;
+  const chartMode = localLimits.chartMode;
+  const winnerOpts = {
     maxScore: maxWin,
     maxLosingScore: maxLoss,
-  });
+    raceTargetOne,
+    raceTargetTwo,
+  };
+  const winner = gameWinner(local, winnerOpts);
 
   const commit = (next: GameScoreState) => {
     setLocal(next);
@@ -2675,6 +2825,17 @@ function ScorePad({
   };
 
   const scoreOptionsFor = (side: 1 | 2) => {
+    if (chartMode && raceTargetOne != null && raceTargetTwo != null) {
+      const target = side === 1 ? raceTargetOne : raceTargetTwo;
+      const otherTarget = side === 1 ? raceTargetTwo : raceTargetOne;
+      const other =
+        side === 1 ? (local.teamTwoScore ?? 0) : (local.teamOneScore ?? 0);
+      const options = raceScoreOptions(target);
+      if (other >= otherTarget) {
+        return options.filter((value) => value < target);
+      }
+      return options;
+    }
     const other =
       side === 1 ? (local.teamTwoScore ?? 0) : (local.teamOneScore ?? 0);
     if (other === maxWin) {
@@ -2688,6 +2849,9 @@ function ScorePad({
       applyRaceScore(local, side, value, {
         maxScore: maxWin,
         maxLosingScore: maxLoss,
+        raceTargetOne,
+        raceTargetTwo,
+        allowedScores: scoreOptionsFor(side),
       }),
     );
   };
@@ -2704,6 +2868,8 @@ function ScorePad({
       applyQuickWin(local, side, {
         maxScore: maxWin,
         maxLosingScore: maxLoss,
+        raceTargetOne,
+        raceTargetTwo,
         adornment: local.winAdornment,
       }),
     );
@@ -2719,11 +2885,13 @@ function ScorePad({
         ? match.teamOneName
         : match.teamTwoName;
     const options = scoreOptionsFor(side);
-    const selectValue = options.includes(
-      score as (typeof RACE_SCORE_OPTIONS)[number],
-    )
-      ? score
-      : 0;
+    const selectValue = options.includes(score) ? score : 0;
+    const raceTo =
+      chartMode && raceTargetOne != null && raceTargetTwo != null
+        ? side === 1
+          ? raceTargetOne
+          : raceTargetTwo
+        : maxWin;
     return {
       score,
       name,
@@ -2732,7 +2900,8 @@ function ScorePad({
       isWinner: winner === side,
       options,
       selectValue,
-      progress: Math.min(1, score / Math.max(maxWin, 1)),
+      raceTo,
+      progress: Math.min(1, score / Math.max(raceTo, 1)),
     };
   };
 
@@ -2740,10 +2909,7 @@ function ScorePad({
   const right = sideMeta(2);
 
   const setAdornment = (code: WinAdornment) => {
-    const currentWinner = gameWinner(local, {
-      maxScore: maxWin,
-      maxLosingScore: maxLoss,
-    });
+    const currentWinner = gameWinner(local, winnerOpts);
     if (!currentWinner) {
       commit({
         ...local,
@@ -2756,6 +2922,8 @@ function ScorePad({
       applyQuickWin(local, currentWinner, {
         maxScore: maxWin,
         maxLosingScore: maxLoss,
+        raceTargetOne,
+        raceTargetTwo,
         adornment: code,
       }),
     );
@@ -2794,9 +2962,21 @@ function ScorePad({
               {right.name}
             </p>
             <p className="mt-1 text-xs text-[var(--muted)]">
-              Race to {maxWin}
-              <span className="text-[var(--line-strong)]"> · </span>
-              max loss {maxLoss}
+              {chartMode &&
+              raceTargetOne != null &&
+              raceTargetTwo != null ? (
+                <>
+                  Race {raceTargetOne}–{raceTargetTwo}
+                  <span className="text-[var(--line-strong)]"> · </span>
+                  R6 Hot
+                </>
+              ) : (
+                <>
+                  Race to {maxWin}
+                  <span className="text-[var(--line-strong)]"> · </span>
+                  max loss {maxLoss}
+                </>
+              )}
               {winner ? (
                 <>
                   <span className="text-[var(--line-strong)]"> · </span>
@@ -2904,7 +3084,7 @@ function ScorePad({
                       />
                     </div>
                     <p className="mt-1 text-center text-[10px] tabular-nums text-[var(--muted)]">
-                      {meta.score}/{maxWin}
+                      {meta.score}/{meta.raceTo}
                     </p>
                   </div>
                 );

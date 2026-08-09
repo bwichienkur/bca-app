@@ -13,6 +13,10 @@ import {
 import { createPortal } from "react-dom";
 import { DEFAULT_PLAYERS_PER_TEAM } from "@/lib/constants";
 import {
+  formatScoringSummary,
+  resolveScoringFormat,
+} from "@/lib/division-scoring-config";
+import {
   buildDefaultFivePlayerFormat,
   calculateRoundBasedHandicaps,
   type ParsedMatchFormat,
@@ -203,7 +207,7 @@ function compactPlayers(lineup: LineupSlot[]): RosterPlayer[] {
 
 export function HandicapCalculator({
   divisionId,
-  divisionName: _divisionName,
+  divisionName,
   prefs,
   refreshToken = 0,
 }: HandicapCalculatorProps) {
@@ -279,9 +283,30 @@ export function HandicapCalculator({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [divisionId, prefs.teamId, refreshToken]);
 
+  const scoringFormat = useMemo(
+    () =>
+      resolveScoringFormat({
+        prefsFormatId: prefs.scoringFormatId,
+        divisionName,
+        playersPerTeam:
+          data?.playersPerTeam || data?.parsedFormat.numOfPlayers || null,
+        pointsForWin: data?.format.pointSystem
+          ? Number(data.format.pointSystem) || null
+          : null,
+      }),
+    [
+      data?.format.pointSystem,
+      data?.parsedFormat.numOfPlayers,
+      data?.playersPerTeam,
+      divisionName,
+      prefs.scoringFormatId,
+    ],
+  );
+
   const slots =
     data?.playersPerTeam ||
     data?.parsedFormat.numOfPlayers ||
+    scoringFormat.playersPerTeam ||
     DEFAULT_PLAYERS_PER_TEAM;
 
   const homeTeam =
@@ -319,11 +344,19 @@ export function HandicapCalculator({
       teamTwoRatings: compactPlayers(awayLineup).map(
         (player) => player.fargoRating,
       ),
-      pointSystem: data.format.pointSystem || "10",
+      pointSystem: data.format.pointSystem || scoringFormat.pointSystem || "10",
       handicapPercent: data.format.handicapPercent ?? 1,
       handicapCap: data.format.handicapCap ?? 50,
     });
-  }, [data, homeTeam, awayTeam, homeLineup, awayLineup, slots]);
+  }, [
+    data,
+    homeTeam,
+    awayTeam,
+    homeLineup,
+    awayLineup,
+    slots,
+    scoringFormat.pointSystem,
+  ]);
 
   useEffect(() => {
     if (!results?.length) return;
@@ -532,9 +565,9 @@ export function HandicapCalculator({
     : null;
 
   const lineupsReady = Boolean(results && activeResult);
-  const formatMeta = `${data.format.pointSystem || "10"}-point · ${slots}/side · ${
+  const formatMeta = `${formatScoringSummary(scoringFormat)} · ${
     data.format.fargoRateHandicapType || "RoundBased"
-  }`;
+  } HC`;
   const homeFilled = filledCount(
     homeLineup.length === slots ? homeLineup : emptyLineup(slots),
   );
@@ -552,7 +585,12 @@ export function HandicapCalculator({
         items={[
           { id: "matchup", label: "Matchup", icon: MatchupSubIcon },
           { id: "lineups", label: "Lineups", icon: LineupsSubIcon },
-          { id: "rounds", label: "Rounds", icon: RoundsSubIcon },
+          {
+            id: "rounds",
+            label:
+              scoringFormat.teamPointMode === "match-win" ? "Matches" : "Rounds",
+            icon: RoundsSubIcon,
+          },
         ]}
       />
 
@@ -750,17 +788,33 @@ export function HandicapCalculator({
       >
         <SectionCard
           eyebrow="Handicap"
-          title="Round handicaps"
+          title={
+            scoringFormat.teamPointMode === "match-win"
+              ? "Match handicaps"
+              : "Round handicaps"
+          }
           description={
             lineupsReady && roundTotals
-              ? `Games awarded · Home +${roundTotals.home} · Away +${roundTotals.away}`
+              ? scoringFormat.raceMode === "fargo-race-chart"
+                ? `Expected match edge · Home +${roundTotals.home} · Away +${roundTotals.away}`
+                : `Games awarded · Home +${roundTotals.home} · Away +${roundTotals.away}`
               : teamsReady
-                ? `Finish both ${slots}-player lineups to see round results`
-                : "Round results appear after both lineups are set"
+                ? `Finish both ${slots}-player lineups to see ${
+                    scoringFormat.teamPointMode === "match-win"
+                      ? "match"
+                      : "round"
+                  } results`
+                : "Results appear after both lineups are set"
           }
           badge={
             lineupsReady && results
-              ? { label: "Rounds", value: String(results.length) }
+              ? {
+                  label:
+                    scoringFormat.teamPointMode === "match-win"
+                      ? "Matches"
+                      : "Rounds",
+                  value: String(results.length),
+                }
               : undefined
           }
         />
