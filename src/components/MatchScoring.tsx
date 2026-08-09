@@ -26,6 +26,7 @@ import {
   resolveScoringFormat,
 } from "@/lib/division-scoring-config";
 import type { LeagueScoringFormat } from "@/lib/scoring-formats";
+import { raceChartMeta } from "@/lib/race-charts";
 import {
   applyQuickWin,
   applyRaceScore,
@@ -1439,7 +1440,7 @@ export function MatchScoring({
                   {scoringFormat.pointsPerMatchWin} team point
                   {scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}
                   {scoringFormat.raceMode === "fargo-race-chart"
-                    ? " · race from the R6 Hot chart"
+                    ? ` · race from the ${raceChartMeta(scoringFormat.raceChartId ?? "r6-hot").label} chart`
                     : ""}
                   .
                 </p>
@@ -2967,7 +2968,7 @@ function ScorePad({
                 <>
                   Race {raceTargetOne}–{raceTargetTwo}
                   <span className="text-[var(--line-strong)]"> · </span>
-                  R6 Hot
+                  {raceChartMeta(scoringFormat.raceChartId ?? "r6-hot").label}
                 </>
               ) : (
                 <>

@@ -12,6 +12,7 @@ import {
   type LeagueScoringFormat,
 } from "@/lib/scoring-formats";
 import {
+  raceChartMeta,
   raceTargetsForPlayers,
   type RaceChartId,
 } from "@/lib/race-charts";
@@ -124,7 +125,7 @@ export function chartRaceTargets(
 export function formatScoringSummary(format: LeagueScoringFormat): string {
   const race =
     format.raceMode === "fargo-race-chart"
-      ? `R6 Hot race chart`
+      ? `${raceChartMeta(format.raceChartId ?? "r6-hot").label} race chart`
       : `race to ${format.fixedRaceWin ?? 10}`;
   const team =
     format.teamPointMode === "match-win"
@@ -145,7 +146,7 @@ function playerRating(
 
 /**
  * Stamp per-game race targets from the active scoring format onto a draft.
- * Chart formats get asymmetric R6 Hot targets; fixed-race clears them so
+ * Chart formats get asymmetric Fargo race-chart targets; fixed-race clears them so
  * maxWin/maxLoss rules apply.
  */
 export function applyFormatRaceTargets(

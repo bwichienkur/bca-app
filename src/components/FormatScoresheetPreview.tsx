@@ -7,7 +7,12 @@ import {
   type FormatGame,
   type FormatTemplateModel,
 } from "@/lib/lms-format-template";
-import { r6HotChartRows } from "@/lib/race-charts";
+import {
+  DEFAULT_RACE_CHART_ID,
+  raceChartMeta,
+  raceChartRows,
+  type RaceChartId,
+} from "@/lib/race-charts";
 
 const GAME_MARK_COUNT = 11;
 
@@ -65,10 +70,10 @@ export function detectSheetLayout(model: FormatTemplateModel): SheetLayoutKind {
   return "generic";
 }
 
-function layoutTitle(kind: SheetLayoutKind): string {
+function layoutTitle(kind: SheetLayoutKind, chartId?: RaceChartId): string {
   switch (kind) {
     case "tuesday-race":
-      return "Tuesday 9-Ball · R6 Hot";
+      return `Slot races · ${raceChartMeta(chartId ?? DEFAULT_RACE_CHART_ID).label}`;
     case "team-race-list":
       return "Team Race scoresheet";
     case "matrix":
@@ -103,9 +108,15 @@ function MarkCells({ count }: { count: number }) {
   );
 }
 
-/* ---------- Tuesday R6 Hot ---------- */
+/* ---------- Slot / Tuesday-style race sheet ---------- */
 
-function TuesdayRaceScoresheet({ model }: { model: FormatTemplateModel }) {
+function TuesdayRaceScoresheet({
+  model,
+  chartId = DEFAULT_RACE_CHART_ID,
+}: {
+  model: FormatTemplateModel;
+  chartId?: RaceChartId;
+}) {
   const matchups = model.rounds.flatMap((round) =>
     round.games.map((game) => ({
       key: game.id,
@@ -119,7 +130,8 @@ function TuesdayRaceScoresheet({ model }: { model: FormatTemplateModel }) {
       ),
     })),
   );
-  const chartRows = r6HotChartRows();
+  const chart = raceChartMeta(chartId);
+  const chartRows = raceChartRows(chartId);
 
   return (
     <article className="overflow-hidden rounded-sm border-2 border-[var(--ink)]/85 bg-[#fbf8f1] text-[var(--ink)] shadow-sm">
@@ -127,7 +139,7 @@ function TuesdayRaceScoresheet({ model }: { model: FormatTemplateModel }) {
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
-              Tuesday 9-Ball · R6 Hot
+              Slot races · {chart.label}
             </p>
             <p className="mt-0.5 font-[family-name:var(--font-display)] text-lg font-semibold">
               Match scoresheet
@@ -145,7 +157,7 @@ function TuesdayRaceScoresheet({ model }: { model: FormatTemplateModel }) {
         <p className="rounded-sm border border-[var(--ink)]/20 bg-white/70 px-2 py-1.5 text-[11px] leading-snug">
           <span className="font-semibold">Break:</span> lag for the opening
           break, then <span className="font-semibold">alternate</span>. Mark X
-          for each game won. Fill Race to from the R6 Hot chart.
+          for each game won. Fill Race to from the {chart.label} chart.
         </p>
       </header>
 
@@ -235,7 +247,7 @@ function TuesdayRaceScoresheet({ model }: { model: FormatTemplateModel }) {
       <footer className="grid gap-3 border-t-2 border-[var(--ink)]/85 px-3 py-3 sm:grid-cols-2 sm:px-4">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.12em]">
-            Race Chart — R6 Hot
+            Race Chart — {chart.label}
           </p>
           <table className="mt-2 w-full border-collapse text-[11px]">
             <thead>
@@ -808,10 +820,14 @@ function GenericScoresheet({ model }: { model: FormatTemplateModel }) {
   );
 }
 
-function renderLayout(model: FormatTemplateModel, kind: SheetLayoutKind) {
+function renderLayout(
+  model: FormatTemplateModel,
+  kind: SheetLayoutKind,
+  chartId?: RaceChartId,
+) {
   switch (kind) {
     case "tuesday-race":
-      return <TuesdayRaceScoresheet model={model} />;
+      return <TuesdayRaceScoresheet model={model} chartId={chartId} />;
     case "team-race-list":
       return <TeamRaceListScoresheet model={model} />;
     case "matrix":
@@ -828,11 +844,13 @@ export function FormatScoresheetPreview({
   open,
   onClose,
   title = "Scoresheet preview",
+  raceChartId,
 }: {
   model: FormatTemplateModel;
   open: boolean;
   onClose: () => void;
   title?: string;
+  raceChartId?: RaceChartId;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -852,6 +870,7 @@ export function FormatScoresheetPreview({
 
   const kind = detectSheetLayout(model);
   const summary = summarizeFormatModel(model);
+  const chartId = raceChartId ?? DEFAULT_RACE_CHART_ID;
 
   return (
     <div
@@ -874,7 +893,7 @@ export function FormatScoresheetPreview({
                 {title}
               </h2>
               <p className="mt-0.5 text-xs text-white/75">
-                {layoutTitle(kind)} · {summary}
+                {layoutTitle(kind, chartId)} · {summary}
               </p>
             </div>
             <button
@@ -886,7 +905,7 @@ export function FormatScoresheetPreview({
             </button>
           </div>
           <div className="max-h-[min(84dvh,58rem)] overflow-y-auto bg-[color-mix(in_srgb,var(--surface)_70%,#f3efe6)] p-3 sm:p-4">
-            {renderLayout(model, kind)}
+            {renderLayout(model, kind, chartId)}
           </div>
         </div>
       </div>

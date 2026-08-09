@@ -18,12 +18,18 @@ import {
 } from "@/lib/lms-scoresheet-presets";
 import type { LeagueScoringFormat } from "@/lib/scoring-formats";
 import type { FargoHandicapType, PointSystem } from "@/lib/handicap";
+import {
+  DEFAULT_RACE_CHART_ID,
+  parseRaceChartId,
+  raceChartMeta,
+  type RaceChartId,
+} from "@/lib/race-charts";
 
 /** How lineup slots become matchups. */
 export type MatchStructure = "slot-races" | "round-robin" | "doubles";
 
 /** Per-game race model (independent of Fargo expected-points HC). */
-export type RaceModel = "none" | "fixed" | "r6-hot";
+export type RaceModel = "none" | "fixed" | "fargo-chart";
 
 /** FargoRate expected-points handicap (LMS / calculator). */
 export type FargoHcMode = "none" | FargoHandicapType;
@@ -41,6 +47,8 @@ export type FormatGeneratorPicks = {
   raceModel: RaceModel;
   /** Used when raceModel === "fixed". */
   fixedRaceTo: number;
+  /** Used when raceModel === "fargo-chart" (e.g. r6-hot, r5-medium). */
+  raceChartId: RaceChartId;
   fargoHc: FargoHcMode;
   /** LMS FargoHandicapType: 0 = Fargo Rating, 1 = Effective Rating */
   fargoRatingBasis: "0" | "1";
@@ -149,9 +157,9 @@ export const RACE_MODEL_OPTIONS: Array<{
     description: "Same race length for everyone (set below)",
   },
   {
-    id: "r6-hot",
-    label: "R6 Hot chart",
-    description: "Asymmetric race from Fargo difference",
+    id: "fargo-chart",
+    label: "Fargo race chart",
+    description: "Asymmetric race-to from rating difference (pick chart below)",
   },
 ];
 
@@ -221,7 +229,8 @@ export const FORMAT_PRESETS: Array<{
       structure: "slot-races",
       gameKind: "R",
       gameBall: "9",
-      raceModel: "r6-hot",
+      raceModel: "fargo-chart",
+      raceChartId: "r6-hot",
       fargoHc: "none",
       teamScoring: "match-win",
       pointSystem: "1",
@@ -287,8 +296,9 @@ export function defaultFormatPicks(): FormatGeneratorPicks {
     structure: "slot-races",
     gameKind: "R",
     gameBall: "9",
-    raceModel: "r6-hot",
+    raceModel: "fargo-chart",
     fixedRaceTo: 7,
+    raceChartId: DEFAULT_RACE_CHART_ID,
     fargoHc: "none",
     fargoRatingBasis: "0",
     handicapPercent: 100,
@@ -311,11 +321,11 @@ function normalizePicks(picks: FormatGeneratorPicks): FormatGeneratorPicks {
     gameKind = "R";
   }
 
-  let raceModel = picks.raceModel;
-  if (gameKind === "S" && raceModel === "r6-hot") {
-    // Chart races need race games; keep selection but warn — still allow fixed for pad.
-    raceModel = picks.raceModel;
-  }
+  // Migrate legacy raceModel id from earlier Format tab builds.
+  const raceModel: RaceModel =
+    (picks.raceModel as string) === "r6-hot"
+      ? "fargo-chart"
+      : picks.raceModel;
 
   const rounds = Math.min(
     10,
@@ -328,6 +338,7 @@ function normalizePicks(picks: FormatGeneratorPicks): FormatGeneratorPicks {
     rounds: structure === "doubles" ? 1 : rounds,
     gameKind,
     raceModel,
+    raceChartId: parseRaceChartId(picks.raceChartId),
     fixedRaceTo: Math.min(21, Math.max(1, Math.round(picks.fixedRaceTo) || 7)),
     handicapPercent: Math.min(
       100,
@@ -342,14 +353,14 @@ function normalizePicks(picks: FormatGeneratorPicks): FormatGeneratorPicks {
 
 function collectWarnings(picks: FormatGeneratorPicks): string[] {
   const warnings: string[] = [];
-  if (picks.gameKind === "S" && picks.raceModel === "r6-hot") {
+  if (picks.gameKind === "S" && picks.raceModel === "fargo-chart") {
     warnings.push(
-      "R6 Hot is a race chart — works best with Race games. Points games will still use a fixed score pad unless you switch game kind to Race.",
+      "Fargo race charts work best with Race games. Points games will still use a fixed score pad unless you switch game kind to Race.",
     );
   }
-  if (picks.raceModel === "r6-hot" && picks.fargoHc !== "none") {
+  if (picks.raceModel === "fargo-chart" && picks.fargoHc !== "none") {
     warnings.push(
-      "Using R6 Hot and Fargo HC games together is unusual — chart already handicaps via race-to. Double-check you want both.",
+      "Using a Fargo race chart and Fargo HC games together is unusual — the chart already handicaps via race-to. Double-check you want both.",
     );
   }
   if (picks.gameKind === "R" && picks.teamScoring === "round-points") {
@@ -376,11 +387,15 @@ function buildModel(picks: FormatGeneratorPicks): FormatTemplateModel {
   const n = picks.playersPerTeam;
   const rounds = picks.rounds ?? n;
   const gt = gameTypeToken(picks.gameBall);
+  const chartBase =
+    picks.raceModel === "fargo-chart"
+      ? raceChartMeta(picks.raceChartId).base
+      : picks.fixedRaceTo;
   const raceLength = String(
     picks.raceModel === "fixed"
       ? picks.fixedRaceTo
-      : picks.raceModel === "r6-hot"
-        ? 6
+      : picks.raceModel === "fargo-chart"
+        ? chartBase
         : picks.fixedRaceTo,
   );
 
@@ -428,10 +443,10 @@ function buildScoringFormat(picks: FormatGeneratorPicks): LeagueScoringFormat {
         ? n
         : n * (picks.rounds ?? n);
 
-  const chartRace = picks.raceModel === "r6-hot";
+  const chartRace = picks.raceModel === "fargo-chart";
 
   return {
-    id: `gen-${picks.structure}-${picks.gameKind}-${picks.raceModel}-${picks.fargoHc}-${n}`,
+    id: `gen-${picks.structure}-${picks.gameKind}-${picks.raceModel}-${picks.raceChartId}-${picks.fargoHc}-${n}`,
     label: `${n}-player ${picks.structure}`,
     description: "Generated from Format tab picks.",
     playersPerTeam: n,
@@ -439,7 +454,7 @@ function buildScoringFormat(picks: FormatGeneratorPicks): LeagueScoringFormat {
     teamPointMode: picks.teamScoring,
     pointsPerMatchWin: 1,
     raceMode: chartRace ? "fargo-race-chart" : "fixed-race",
-    raceChartId: chartRace ? "r6-hot" : undefined,
+    raceChartId: chartRace ? picks.raceChartId : undefined,
     fixedRaceWin: chartRace ? undefined : picks.fixedRaceTo,
     fixedRaceMaxLoss:
       !chartRace && picks.gameKind === "S"
@@ -468,9 +483,10 @@ function buildDivisionHints(
   const useHc = picks.fargoHc === "none" ? "0" : "1";
   const notes: string[] = [];
 
-  if (picks.raceModel === "r6-hot") {
+  if (picks.raceModel === "fargo-chart") {
+    const chart = raceChartMeta(picks.raceChartId);
     notes.push(
-      "App applies R6 Hot race targets from Fargo at score time. Template RL is a placeholder — LMS UseHandicap stays off unless you also pick Fargo HC games.",
+      `App applies ${chart.label} race targets from Fargo at score time. Template RL is a placeholder — LMS UseHandicap stays off unless you also pick Fargo HC games.`,
     );
   }
   if (picks.fargoHc !== "none") {
@@ -517,16 +533,21 @@ function matchupLabel(
   return `${fmt(home)} vs ${fmt(away)}`;
 }
 
+function raceTitle(picks: FormatGeneratorPicks): string {
+  if (picks.raceModel === "fixed") return `Race to ${picks.fixedRaceTo}`;
+  if (picks.raceModel === "fargo-chart") {
+    return raceChartMeta(picks.raceChartId).label;
+  }
+  return "No race chart";
+}
+
 function titleFor(picks: FormatGeneratorPicks): string {
   const structure =
     STRUCTURE_OPTIONS.find((o) => o.id === picks.structure)?.label ??
     picks.structure;
-  const race =
-    RACE_MODEL_OPTIONS.find((o) => o.id === picks.raceModel)?.label ??
-    picks.raceModel;
   const hc =
     FARGO_HC_OPTIONS.find((o) => o.id === picks.fargoHc)?.label ?? picks.fargoHc;
-  return `${structure} · ${race} · ${hc}`;
+  return `${structure} · ${raceTitle(picks)} · ${hc}`;
 }
 
 export function generateLeagueFormat(
@@ -544,16 +565,11 @@ export function generateLeagueFormat(
   );
   const warnings = collectWarnings(normalized);
 
-  const raceLabel =
-    normalized.raceModel === "fixed"
-      ? `Fixed race-to ${normalized.fixedRaceTo}`
-      : RACE_MODEL_OPTIONS.find((o) => o.id === normalized.raceModel)?.label;
-
   const bullets = [
     `${normalized.playersPerTeam} players per side · ${model.rounds.length} rounds · ${model.rounds.reduce((s, r) => s + r.games.length, 0)} games`,
     `Structure: ${STRUCTURE_OPTIONS.find((o) => o.id === normalized.structure)?.label}`,
     `Games: ${GAME_KIND_OPTIONS.find((o) => o.id === normalized.gameKind)?.label} · ${normalized.gameBall === "any" ? "any ball" : `${normalized.gameBall}-ball`}`,
-    `Race: ${raceLabel}`,
+    `Race: ${raceTitle(normalized)}`,
     `Fargo HC: ${FARGO_HC_OPTIONS.find((o) => o.id === normalized.fargoHc)?.label}`,
     `Team scoring: ${TEAM_SCORING_OPTIONS.find((o) => o.id === normalized.teamScoring)?.label} · points system ${normalized.pointSystem}`,
     `App scoring: ${formatScoringSummary(scoringFormat)}`,
