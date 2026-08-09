@@ -17,6 +17,7 @@ import {
   type FormatPlayerRef,
   type FormatTemplateModel,
 } from "@/lib/lms-format-template";
+import { SCORESHEET_PRESETS } from "@/lib/lms-scoresheet-presets";
 import { FormatScoresheetPreview } from "./FormatScoresheetPreview";
 import { SelectField } from "./SelectField";
 
@@ -166,10 +167,29 @@ export function LmsScoresheetStudio({
           Scoresheet sandbox
         </p>
         <p className="mt-0.5 text-xs text-[var(--muted)]">
-          Edit the sheet or paste DSL — nothing is saved to a division. Generate
-          opens a paper preview (Tuesday 9-Ball / R6 Hot layout for race
-          nights). {summary}
+          Pick a league preset or paste DSL, then Generate a paper preview.
+          Layouts cover Tuesday R6 Hot, 5-player team race, 8/9-ball matrices,
+          and doubles. Nothing is saved to a division. {summary}
         </p>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+          League presets
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {SCORESHEET_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              title={preset.description}
+              className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-left text-[11px] font-semibold text-[var(--ink)] transition hover:border-[var(--felt)] hover:text-[var(--felt-deep)]"
+              onClick={() => syncFromModel(preset.build())}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
