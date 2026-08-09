@@ -45,7 +45,7 @@ function playerOptions(count: number, side: "H" | "A") {
     const n = i + 1;
     return {
       value: `${side}${n}`,
-      label: `${side === "H" ? "Home" : "Away"} player #${n}`,
+      label: `${side === "H" ? "Home" : "Away"}${n}`,
     };
   });
 }

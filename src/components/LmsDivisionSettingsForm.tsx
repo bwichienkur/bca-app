@@ -15,8 +15,6 @@ const btnDelete =
 
 type FormatTemplate = { id: string; name: string; template: string };
 
-type SettingsTab = "general" | "scoring" | "reporting" | "handicap" | "format";
-
 const YES_NO = [
   { value: "1", label: "Yes" },
   { value: "0", label: "No" },
@@ -108,6 +106,30 @@ function Field({
       </span>
       <div className="min-w-0">{children}</div>
     </label>
+  );
+}
+
+function SettingsBlock({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3">
+      <div>
+        <h3 className="font-[family-name:var(--font-display)] text-base font-semibold text-[var(--ink)]">
+          {title}
+        </h3>
+        {description ? (
+          <p className="mt-0.5 text-xs text-[var(--muted)]">{description}</p>
+        ) : null}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -250,7 +272,6 @@ export function LmsDivisionSettingsForm({
   onChange: (next: Record<string, unknown>) => void;
   onSave: () => void;
 }) {
-  const [tab, setTab] = useState<SettingsTab>("general");
   const [builderOpen, setBuilderOpen] = useState(false);
   const nameLen = asStr(settings.Name).length;
 
@@ -266,35 +287,12 @@ export function LmsDivisionSettingsForm({
   const patch = (partial: Record<string, unknown>) =>
     onChange({ ...settings, ...partial });
 
-  const tabs: { id: SettingsTab; label: string }[] = [
-    { id: "general", label: "General" },
-    { id: "scoring", label: "Scoring" },
-    { id: "reporting", label: "Report" },
-    { id: "handicap", label: "Handicap" },
-    { id: "format", label: "Format" },
-  ];
-
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5">
-        {tabs.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setTab(item.id)}
-            className={[
-              "rounded-[var(--radius)] px-2 py-2 text-xs font-semibold",
-              tab === item.id
-                ? "bg-[var(--felt)] text-white"
-                : "border border-[var(--line)] bg-[var(--surface-2)] text-[var(--muted)]",
-            ].join(" ")}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === "general" ? (
+      <SettingsBlock
+        title="General"
+        description="Name, game type, and division basics."
+      >
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={`Division name (${nameLen} / 255)`}>
             <input
@@ -371,20 +369,22 @@ export function LmsDivisionSettingsForm({
             <SelectField
               aria-label="Playoff division"
               value={
-                settings.IsPlayoff === true || asStr(settings.IsPlayoff) === "true"
+                settings.IsPlayoff === true ||
+                asStr(settings.IsPlayoff) === "true"
                   ? "1"
                   : "0"
               }
               options={YES_NO}
-              onChange={(value) =>
-                patch({ IsPlayoff: value === "1" })
-              }
+              onChange={(value) => patch({ IsPlayoff: value === "1" })}
             />
           </Field>
         </div>
-      ) : null}
+      </SettingsBlock>
 
-      {tab === "scoring" ? (
+      <SettingsBlock
+        title="Scoring"
+        description="Points, rounds, and tie rules."
+      >
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Points for game win">
             <input
@@ -474,9 +474,12 @@ export function LmsDivisionSettingsForm({
             />
           </Field>
         </div>
-      ) : null}
+      </SettingsBlock>
 
-      {tab === "reporting" ? (
+      <SettingsBlock
+        title="Reporting"
+        description="Standings columns and display options."
+      >
         <div className="space-y-4">
           <StandingsPicker
             label="Team standings order"
@@ -519,9 +522,12 @@ export function LmsDivisionSettingsForm({
             </Field>
           </div>
         </div>
-      ) : null}
+      </SettingsBlock>
 
-      {tab === "handicap" ? (
+      <SettingsBlock
+        title="Handicap"
+        description="Fargo handicap mode and caps."
+      >
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Use handicap scoring">
             <SelectField
@@ -595,24 +601,27 @@ export function LmsDivisionSettingsForm({
             />
           </Field>
         </div>
-      ) : null}
+      </SettingsBlock>
 
-      {tab === "format" ? (
+      <SettingsBlock
+        title="Format"
+        description="Match format template. Use the Scoresheet tab for a full visual builder."
+      >
         <div className="space-y-3">
           <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/40 p-3">
             <p className="text-sm font-semibold text-[var(--ink)]">
-              Visual scoresheet builder
+              Scoresheet builder
             </p>
             <p className="mt-1 text-xs text-[var(--muted)]">
-              Build rounds and games with player slots, then we translate that
-              into the LMS advanced template language for you.
+              Build Home1 / Away1 style sheets and copy or save the LMS DSL from
+              the Scoresheet tab — or open the quick builder here.
             </p>
             <button
               type="button"
               className={`${btnPrimary} mt-3 w-full sm:w-auto`}
               onClick={() => setBuilderOpen(true)}
             >
-              Open scoresheet builder
+              Open quick builder
             </button>
           </div>
 
@@ -635,23 +644,14 @@ export function LmsDivisionSettingsForm({
             />
           </Field>
 
-          <details className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3">
-            <summary className="cursor-pointer text-sm font-semibold text-[var(--ink)]">
-              Advanced template text (optional)
-            </summary>
-            <div className="mt-3 space-y-3">
-              <p className="text-xs text-[var(--muted)]">
-                This is the same language LMS saves. Prefer the visual builder
-                unless you need a raw edit.
-              </p>
-              <textarea
-                id="lms-format-template"
-                className={`${inputClass} min-h-40 font-mono text-xs`}
-                value={asStr(settings.FormatTemplate)}
-                onChange={(e) => patch({ FormatTemplate: e.target.value })}
-              />
-            </div>
-          </details>
+          <Field label="Advanced template text">
+            <textarea
+              id="lms-format-template"
+              className={`${inputClass} min-h-40 font-mono text-xs`}
+              value={asStr(settings.FormatTemplate)}
+              onChange={(e) => patch({ FormatTemplate: e.target.value })}
+            />
+          </Field>
 
           <details className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3">
             <summary className="cursor-pointer text-sm font-semibold text-[var(--ink)]">
@@ -699,7 +699,7 @@ export function LmsDivisionSettingsForm({
             </Field>
           </div>
         </div>
-      ) : null}
+      </SettingsBlock>
 
       {builderOpen ? (
         <LmsFormatTemplateBuilder
