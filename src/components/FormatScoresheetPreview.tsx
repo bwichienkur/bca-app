@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import {
   FORMAT_GAME_TYPE_OPTIONS,
   FORMAT_MULTIPLIER_OPTIONS,
@@ -10,6 +10,9 @@ import {
   type FormatPlayerRef,
   type FormatTemplateModel,
 } from "@/lib/lms-format-template";
+import { r6HotChartRows } from "@/lib/race-charts";
+
+const GAME_MARK_COUNT = 11;
 
 function playerSlotLabel(ref: FormatPlayerRef): string {
   return `${ref.side === "H" ? "Home" : "Away"}${ref.index}`;
@@ -32,6 +35,253 @@ function multiplierLabel(value: string): string | null {
   if (!Number.isFinite(n) || n === 1) return null;
   const match = FORMAT_MULTIPLIER_OPTIONS.find((row) => row.value === value);
   return match?.label ?? `${Math.round(n * 100)}%`;
+}
+
+/** True when the template is a night of singles races (Tuesday 9-Ball style). */
+function isRaceMatchNight(model: FormatTemplateModel): boolean {
+  const games = model.rounds.flatMap((round) => round.games);
+  if (games.length === 0) return false;
+  return games.every((game) => game.kind === "R" || game.kind === "S");
+}
+
+function homeAwayFromGame(game: FormatGame): {
+  homeLabel: string;
+  awayLabel: string;
+} {
+  const breakNames = game.breakPlayers.map(playerSlotLabel).join(" / ");
+  const otherNames = game.otherPlayers.map(playerSlotLabel).join(" / ");
+  if (game.breakTeam === 1) {
+    return { homeLabel: breakNames, awayLabel: otherNames };
+  }
+  return { homeLabel: otherNames, awayLabel: breakNames };
+}
+
+function BlankLine({ label, wide }: { label: string; wide?: boolean }) {
+  return (
+    <div className={["flex min-w-0 items-end gap-2", wide ? "flex-1" : ""].join(" ")}>
+      <span className="shrink-0 text-[11px] font-semibold text-[var(--ink)]">
+        {label}
+      </span>
+      <span className="mb-0.5 min-w-[6rem] flex-1 border-b border-[var(--ink)]/50" />
+    </div>
+  );
+}
+
+function MarkCell() {
+  return (
+    <td className="border border-[var(--ink)]/70 bg-white p-0">
+      <div className="mx-auto h-5 w-full min-w-[1.1rem] sm:h-6" />
+    </td>
+  );
+}
+
+function PlayerRaceRow({
+  side,
+  name,
+  shaded,
+}: {
+  side: "Home" | "Visitor";
+  name: string;
+  shaded?: boolean;
+}) {
+  return (
+    <tr className={shaded ? "bg-[var(--ink)]/[0.06]" : "bg-white"}>
+      <td className="border border-[var(--ink)]/70 px-1.5 py-1 align-middle sm:px-2">
+        <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--muted)]">
+          {side}
+        </p>
+        <p className="font-[family-name:var(--font-display)] text-sm font-semibold leading-tight text-[var(--ink)]">
+          {name}
+        </p>
+        <p className="mt-0.5 text-[10px] text-[var(--muted)]">
+          Fargo ______
+        </p>
+      </td>
+      <td className="w-12 border border-[var(--ink)]/70 bg-white px-1 py-1 text-center align-middle sm:w-14">
+        <div className="mx-auto h-7 w-8 rounded-sm border border-[var(--ink)]/40 bg-[#fbf8f1] sm:h-8 sm:w-9" />
+      </td>
+      {Array.from({ length: GAME_MARK_COUNT }).map((_, i) => (
+        <MarkCell key={i} />
+      ))}
+      <td className="w-10 border border-[var(--ink)]/70 bg-white px-1 py-1 align-middle sm:w-12">
+        <div className="mx-auto h-7 w-8 rounded-sm border border-[var(--ink)]/40 bg-[#fbf8f1] sm:h-8 sm:w-9" />
+      </td>
+    </tr>
+  );
+}
+
+function TuesdayRaceScoresheet({ model }: { model: FormatTemplateModel }) {
+  const matchups = model.rounds.flatMap((round, roundIndex) =>
+    round.games.map((game, gameIndex) => ({
+      key: `${round.id}-${game.id}`,
+      roundIndex,
+      gameIndex,
+      game,
+      ...homeAwayFromGame(game),
+    })),
+  );
+  const chartRows = r6HotChartRows();
+
+  return (
+    <article className="overflow-hidden rounded-sm border-2 border-[var(--ink)]/85 bg-[#fbf8f1] text-[var(--ink)] shadow-sm">
+      <header className="space-y-2.5 border-b-2 border-[var(--ink)]/85 px-3 py-3 sm:px-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
+              Tuesday 9-Ball · R6 Hot
+            </p>
+            <p className="mt-0.5 font-[family-name:var(--font-display)] text-lg font-semibold leading-tight">
+              Match scoresheet
+            </p>
+          </div>
+          <p className="max-w-[14rem] text-right text-[10px] leading-snug text-[var(--muted)]">
+            Circle the TOTAL for the match winner
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-x-4 gap-y-2">
+          <BlankLine label="Home Team:" wide />
+          <BlankLine label="Date:" />
+          <BlankLine label="Visiting Team:" wide />
+        </div>
+
+        <p className="rounded-sm border border-[var(--ink)]/20 bg-white/70 px-2 py-1.5 text-[11px] leading-snug text-[var(--ink)]">
+          <span className="font-semibold">Break:</span> players lag for the
+          opening break, then <span className="font-semibold">alternate</span>{" "}
+          thereafter. Mark an X under each game for the winner. Fill{" "}
+          <span className="font-semibold">Race to</span> from the R6 Hot chart
+          using Fargo difference.
+        </p>
+      </header>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[36rem] border-collapse text-left">
+          <thead>
+            <tr className="bg-[var(--ink)]/[0.08]">
+              <th className="border border-[var(--ink)]/70 px-1.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] sm:px-2">
+                Player / Fargo
+              </th>
+              <th className="border border-[var(--ink)]/70 px-1 py-1.5 text-center text-[10px] font-bold uppercase tracking-[0.08em]">
+                Race
+                <br />
+                to
+              </th>
+              <th
+                className="border border-[var(--ink)]/70 px-1 py-1.5 text-center text-[10px] font-bold uppercase tracking-[0.1em]"
+                colSpan={GAME_MARK_COUNT}
+              >
+                Games (X = win)
+              </th>
+              <th className="border border-[var(--ink)]/70 px-1 py-1.5 text-center text-[10px] font-bold uppercase tracking-[0.1em]">
+                Total
+              </th>
+            </tr>
+            <tr className="bg-[var(--ink)]/[0.04]">
+              <th className="border border-[var(--ink)]/70" />
+              <th className="border border-[var(--ink)]/70" />
+              {Array.from({ length: GAME_MARK_COUNT }).map((_, i) => (
+                <th
+                  key={i}
+                  className="border border-[var(--ink)]/70 px-0 py-0.5 text-center text-[9px] font-semibold tabular-nums text-[var(--muted)]"
+                >
+                  {i + 1}
+                </th>
+              ))}
+              <th className="border border-[var(--ink)]/70" />
+            </tr>
+          </thead>
+          <tbody>
+            {matchups.map((matchup, index) => (
+              <Fragment key={matchup.key}>
+                {index > 0 ? (
+                  <tr aria-hidden>
+                    <td
+                      colSpan={GAME_MARK_COUNT + 3}
+                      className="h-2 border-x border-[var(--ink)]/70 bg-[var(--ink)]/15 p-0"
+                    />
+                  </tr>
+                ) : null}
+                <PlayerRaceRow
+                  side="Home"
+                  name={matchup.homeLabel}
+                  shaded
+                />
+                <PlayerRaceRow
+                  side="Visitor"
+                  name={matchup.awayLabel}
+                />
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <footer className="grid gap-3 border-t-2 border-[var(--ink)]/85 px-3 py-3 sm:grid-cols-[1.1fr_1fr] sm:px-4">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em]">
+            Race Chart — R6 Hot
+          </p>
+          <p className="mt-0.5 text-[10px] text-[var(--muted)]">
+            Higher rating plays the higher number · lower plays the lower
+          </p>
+          <table className="mt-2 w-full border-collapse text-[11px]">
+            <thead>
+              <tr className="bg-[var(--ink)]/[0.06]">
+                <th className="border border-[var(--ink)]/50 px-2 py-1 text-left font-semibold">
+                  Rating dif
+                </th>
+                <th className="border border-[var(--ink)]/50 px-2 py-1 text-left font-semibold">
+                  Play this
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {chartRows.map((row) => (
+                <tr key={row.ratingDiff}>
+                  <td className="border border-[var(--ink)]/40 px-2 py-0.5 tabular-nums">
+                    {row.ratingDiff}
+                  </td>
+                  <td className="border border-[var(--ink)]/40 px-2 py-0.5 font-semibold">
+                    {row.playThis}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em]">
+              Match totals
+            </p>
+            <div className="mt-2 space-y-2">
+              <div className="flex items-end justify-between gap-2">
+                <span className="text-[12px] font-semibold">
+                  Home team matches won
+                </span>
+                <span className="inline-block h-8 w-12 rounded-sm border border-[var(--ink)]/50 bg-white" />
+              </div>
+              <div className="flex items-end justify-between gap-2">
+                <span className="text-[12px] font-semibold">
+                  Visiting team matches won
+                </span>
+                <span className="inline-block h-8 w-12 rounded-sm border border-[var(--ink)]/50 bg-white" />
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2 border-t border-[var(--ink)]/20 pt-2">
+            <BlankLine label="Home sig:" wide />
+            <BlankLine label="Visitor sig:" wide />
+          </div>
+          <p className="text-[10px] leading-snug text-[var(--muted)]">
+            Sandbox preview · lineup slots Home1… / Away1… · race-to filled from
+            chart after Fargos are known.
+          </p>
+        </div>
+      </footer>
+    </article>
+  );
 }
 
 function ScoreBox({ label }: { label?: string }) {
@@ -65,22 +315,18 @@ function RaceTrack({ length }: { length: number }) {
   );
 }
 
-function GameRow({
+function GenericGameRow({
   game,
   gameIndex,
 }: {
   game: FormatGame;
   gameIndex: number;
 }) {
-  const breakNames = game.breakPlayers.map(playerSlotLabel).join(" / ");
-  const otherNames = game.otherPlayers.map(playerSlotLabel).join(" / ");
+  const { homeLabel, awayLabel } = homeAwayFromGame(game);
   const homeIsBreak = game.breakTeam === 1;
-  const homeNames = homeIsBreak ? breakNames : otherNames;
-  const awayNames = homeIsBreak ? otherNames : breakNames;
   const gt = gameTypeLabel(game.gameType);
   const mult = multiplierLabel(game.multiplier);
-  const raceTo =
-    game.kind === "R" ? Number(game.raceLength) || 7 : null;
+  const raceTo = game.kind === "R" ? Number(game.raceLength) || 7 : null;
 
   return (
     <li className="border-b border-[var(--ink)]/15 px-3 py-2.5 last:border-b-0 sm:px-4">
@@ -109,15 +355,8 @@ function GameRow({
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
         <div className="min-w-0">
           <p className="truncate font-[family-name:var(--font-display)] text-sm font-semibold text-[var(--ink)]">
-            {homeNames}
+            {homeLabel}
           </p>
-          {homeIsBreak ? (
-            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--felt-deep)]">
-              Break
-            </p>
-          ) : (
-            <p className="text-[10px] text-[var(--muted)]">—</p>
-          )}
         </div>
         <div className="flex items-end gap-2">
           <ScoreBox label="H" />
@@ -128,38 +367,108 @@ function GameRow({
         </div>
         <div className="min-w-0 text-right">
           <p className="truncate font-[family-name:var(--font-display)] text-sm font-semibold text-[var(--ink)]">
-            {awayNames}
+            {awayLabel}
           </p>
-          {!homeIsBreak ? (
-            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--felt-deep)]">
-              Break
-            </p>
-          ) : (
-            <p className="text-[10px] text-[var(--muted)]">—</p>
-          )}
         </div>
       </div>
 
       {raceTo != null ? (
-        <div className="mt-2 space-y-1.5 border-t border-dashed border-[var(--ink)]/15 pt-2">
+        <div className="mt-2 border-t border-dashed border-[var(--ink)]/15 pt-2">
           <div className="grid grid-cols-2 gap-3">
             <RaceTrack length={raceTo} />
             <div className="flex justify-end">
               <RaceTrack length={raceTo} />
             </div>
           </div>
-          <p className="text-center text-[10px] text-[var(--muted)]">
-            Mark each race game won · first to {raceTo}
-          </p>
         </div>
       ) : null}
-
-      {game.kind === "D" ? (
-        <p className="mt-1.5 text-[10px] text-[var(--muted)]">
-          Scotch doubles — both players share the score boxes above.
-        </p>
-      ) : null}
     </li>
+  );
+}
+
+function GenericScoresheet({ model }: { model: FormatTemplateModel }) {
+  const totalGames = model.rounds.reduce(
+    (sum, round) => sum + round.games.length,
+    0,
+  );
+  const homeLineup = Array.from(
+    { length: model.playerCount },
+    (_, i) => `Home${i + 1}`,
+  );
+  const awayLineup = Array.from(
+    { length: model.playerCount },
+    (_, i) => `Away${i + 1}`,
+  );
+
+  return (
+    <article className="overflow-hidden rounded-sm border-2 border-[var(--ink)]/80 bg-[#fbf8f1] text-[var(--ink)] shadow-sm">
+      <header className="border-b-2 border-[var(--ink)]/80 px-3 py-3 sm:px-4">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
+          Match scoresheet
+        </p>
+        <p className="mt-0.5 font-[family-name:var(--font-display)] text-lg font-semibold leading-tight">
+          Home vs Away
+        </p>
+        <p className="mt-1 text-[11px] text-[var(--muted)]">
+          {model.playerCount} / side · {model.rounds.length} rounds ·{" "}
+          {totalGames} games
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-sm border border-[var(--ink)]/25 bg-white/70 px-2.5 py-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--felt-deep)]">
+              Home lineup
+            </p>
+            <ol className="mt-1 space-y-0.5 text-sm">
+              {homeLineup.map((name, i) => (
+                <li key={name} className="flex gap-2">
+                  <span className="w-5 tabular-nums text-[var(--muted)]">
+                    {i + 1}.
+                  </span>
+                  <span className="font-medium">{name}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+          <div className="rounded-sm border border-[var(--ink)]/25 bg-white/70 px-2.5 py-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--felt-deep)]">
+              Away lineup
+            </p>
+            <ol className="mt-1 space-y-0.5 text-sm">
+              {awayLineup.map((name, i) => (
+                <li key={name} className="flex gap-2">
+                  <span className="w-5 tabular-nums text-[var(--muted)]">
+                    {i + 1}.
+                  </span>
+                  <span className="font-medium">{name}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      </header>
+
+      {model.rounds.map((round, roundIndex) => (
+        <section
+          key={round.id}
+          className="border-b-2 border-[var(--ink)]/80 last:border-b-0"
+        >
+          <div className="bg-[var(--ink)]/[0.06] px-3 py-2 sm:px-4">
+            <h3 className="text-sm font-bold uppercase tracking-[0.12em]">
+              Round {roundIndex + 1}
+            </h3>
+          </div>
+          <ul>
+            {round.games.map((game, gameIndex) => (
+              <GenericGameRow
+                key={game.id}
+                game={game}
+                gameIndex={gameIndex}
+              />
+            ))}
+          </ul>
+        </section>
+      ))}
+    </article>
   );
 }
 
@@ -190,19 +499,8 @@ export function FormatScoresheetPreview({
 
   if (!open) return null;
 
-  const homeLineup = Array.from(
-    { length: model.playerCount },
-    (_, i) => `Home${i + 1}`,
-  );
-  const awayLineup = Array.from(
-    { length: model.playerCount },
-    (_, i) => `Away${i + 1}`,
-  );
   const summary = summarizeFormatModel(model);
-  const totalGames = model.rounds.reduce(
-    (sum, round) => sum + round.games.length,
-    0,
-  );
+  const tuesdayStyle = isRaceMatchNight(model);
 
   return (
     <div
@@ -216,7 +514,7 @@ export function FormatScoresheetPreview({
     >
       <div className="flex min-h-full justify-center px-3 py-6">
         <div
-          className="w-full max-w-2xl overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]"
+          className="w-full max-w-3xl overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]"
           onClick={(event) => event.stopPropagation()}
         >
           <div className="flex items-start justify-between gap-3 border-b border-[var(--line)] bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] px-4 py-3 text-white">
@@ -224,7 +522,11 @@ export function FormatScoresheetPreview({
               <h2 className="font-[family-name:var(--font-display)] text-xl font-semibold">
                 {title}
               </h2>
-              <p className="mt-0.5 text-xs text-white/75">{summary}</p>
+              <p className="mt-0.5 text-xs text-white/75">
+                {tuesdayStyle
+                  ? `${summary} · Tuesday / R6 Hot layout`
+                  : summary}
+              </p>
             </div>
             <button
               type="button"
@@ -235,126 +537,12 @@ export function FormatScoresheetPreview({
             </button>
           </div>
 
-          <div className="max-h-[min(80dvh,52rem)] space-y-3 overflow-y-auto bg-[color-mix(in_srgb,var(--surface)_70%,#f3efe6)] p-3 sm:p-4">
-            {/* Paper scoresheet */}
-            <article className="overflow-hidden rounded-sm border-2 border-[var(--ink)]/80 bg-[#fbf8f1] text-[var(--ink)] shadow-sm">
-              <header className="border-b-2 border-[var(--ink)]/80 px-3 py-3 sm:px-4">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
-                      Match scoresheet
-                    </p>
-                    <p className="mt-0.5 font-[family-name:var(--font-display)] text-lg font-semibold leading-tight">
-                      Home vs Away
-                    </p>
-                  </div>
-                  <div className="text-right text-[11px] text-[var(--muted)]">
-                    <p>{model.playerCount} / side</p>
-                    <p>
-                      {model.rounds.length} rounds · {totalGames} games
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-sm border border-[var(--ink)]/25 bg-white/70 px-2.5 py-2">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--felt-deep)]">
-                      Home lineup
-                    </p>
-                    <ol className="mt-1 space-y-0.5 text-sm">
-                      {homeLineup.map((name, i) => (
-                        <li key={name} className="flex gap-2">
-                          <span className="w-5 tabular-nums text-[var(--muted)]">
-                            {i + 1}.
-                          </span>
-                          <span className="font-medium">{name}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                  <div className="rounded-sm border border-[var(--ink)]/25 bg-white/70 px-2.5 py-2">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--felt-deep)]">
-                      Away lineup
-                    </p>
-                    <ol className="mt-1 space-y-0.5 text-sm">
-                      {awayLineup.map((name, i) => (
-                        <li key={name} className="flex gap-2">
-                          <span className="w-5 tabular-nums text-[var(--muted)]">
-                            {i + 1}.
-                          </span>
-                          <span className="font-medium">{name}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                </div>
-
-                <div className="mt-3 grid grid-cols-2 gap-3 border-t border-[var(--ink)]/20 pt-3">
-                  <div className="flex items-end justify-between gap-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                      Home total
-                    </span>
-                    <div className="h-9 w-14 rounded-sm border border-[var(--ink)]/40 bg-white" />
-                  </div>
-                  <div className="flex items-end justify-between gap-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                      Away total
-                    </span>
-                    <div className="h-9 w-14 rounded-sm border border-[var(--ink)]/40 bg-white" />
-                  </div>
-                </div>
-              </header>
-
-              {model.rounds.length === 0 ? (
-                <p className="px-4 py-8 text-center text-sm text-[var(--muted)]">
-                  No rounds in this template yet.
-                </p>
-              ) : (
-                model.rounds.map((round, roundIndex) => (
-                  <section
-                    key={round.id}
-                    className="border-b-2 border-[var(--ink)]/80 last:border-b-0"
-                  >
-                    <div className="flex items-center justify-between gap-2 bg-[var(--ink)]/[0.06] px-3 py-2 sm:px-4">
-                      <h3 className="text-sm font-bold uppercase tracking-[0.12em]">
-                        Round {roundIndex + 1}
-                      </h3>
-                      <div className="flex items-center gap-3 text-[11px]">
-                        <span className="inline-flex items-center gap-1.5">
-                          H
-                          <span className="inline-block h-6 w-8 rounded-sm border border-[var(--ink)]/35 bg-white" />
-                        </span>
-                        <span className="inline-flex items-center gap-1.5">
-                          A
-                          <span className="inline-block h-6 w-8 rounded-sm border border-[var(--ink)]/35 bg-white" />
-                        </span>
-                      </div>
-                    </div>
-                    {round.games.length === 0 ? (
-                      <p className="px-3 py-4 text-xs text-[var(--muted)] sm:px-4">
-                        No games in this round.
-                      </p>
-                    ) : (
-                      <ul>
-                        {round.games.map((game, gameIndex) => (
-                          <GameRow
-                            key={game.id}
-                            game={game}
-                            gameIndex={gameIndex}
-                          />
-                        ))}
-                      </ul>
-                    )}
-                  </section>
-                ))
-              )}
-
-              <footer className="border-t-2 border-[var(--ink)]/80 px-3 py-3 text-[10px] text-[var(--muted)] sm:px-4">
-                Sandbox preview · lineup slots are Home1… / Away1… · Singles,
-                Race (with race track), and Scotch doubles are laid out from the
-                template.
-              </footer>
-            </article>
+          <div className="max-h-[min(82dvh,56rem)] space-y-3 overflow-y-auto bg-[color-mix(in_srgb,var(--surface)_70%,#f3efe6)] p-3 sm:p-4">
+            {tuesdayStyle ? (
+              <TuesdayRaceScoresheet model={model} />
+            ) : (
+              <GenericScoresheet model={model} />
+            )}
           </div>
         </div>
       </div>
