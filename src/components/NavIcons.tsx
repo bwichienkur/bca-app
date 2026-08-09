@@ -1,4 +1,4 @@
-import type { ReportTab } from "@/lib/types";
+import type { AppPillar, ReportTab } from "@/lib/types";
 import type { ReactNode } from "react";
 
 type IconProps = { className?: string };
@@ -74,7 +74,6 @@ function ScheduleIcon({ className }: IconProps) {
 }
 
 function HandicapIcon({ className }: IconProps) {
-  // International-style accessibility / disability mark (wheelchair)
   return (
     <IconShell className={className}>
       <circle cx="14" cy="4.5" r="2" />
@@ -120,10 +119,54 @@ function LmsIcon({ className }: IconProps) {
   );
 }
 
-const NAV_ICONS: Record<
-  Exclude<ReportTab, "search">,
-  (props: IconProps) => ReactNode
-> = {
+function HomePillarIcon({ className }: IconProps) {
+  return (
+    <IconShell className={className}>
+      <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5z" />
+    </IconShell>
+  );
+}
+
+function LeaguePillarIcon({ className }: IconProps) {
+  return (
+    <IconShell className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3v18" />
+      <path d="M3 12h18" />
+      <path d="M5.5 7.5c2.2 1.4 4.3 2.1 6.5 2.1s4.3-.7 6.5-2.1" />
+      <path d="M5.5 16.5c2.2-1.4 4.3-2.1 6.5-2.1s4.3.7 6.5 2.1" />
+    </IconShell>
+  );
+}
+
+function ManagePillarIcon({ className }: IconProps) {
+  return (
+    <IconShell className={className}>
+      <path d="M12 3v3" />
+      <path d="M12 18v3" />
+      <path d="m5.6 5.6 2.1 2.1" />
+      <path d="m16.3 16.3 2.1 2.1" />
+      <path d="M3 12h3" />
+      <path d="M18 12h3" />
+      <path d="m5.6 18.4 2.1-2.1" />
+      <path d="m16.3 7.7 2.1-2.1" />
+      <circle cx="12" cy="12" r="3.2" />
+    </IconShell>
+  );
+}
+
+function AccountPillarIcon({ className }: IconProps) {
+  return (
+    <IconShell className={className}>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5.5 19.5a6.5 6.5 0 0 1 13 0" />
+    </IconShell>
+  );
+}
+
+type LeafNavId = Exclude<ReportTab, "search" | "account">;
+
+const NAV_ICONS: Record<LeafNavId, (props: IconProps) => ReactNode> = {
   "my-team": MyTeamIcon,
   standings: StandingsIcon,
   players: PlayersIcon,
@@ -134,13 +177,31 @@ const NAV_ICONS: Record<
   lms: LmsIcon,
 };
 
+const PILLAR_ICONS: Record<AppPillar, (props: IconProps) => ReactNode> = {
+  home: HomePillarIcon,
+  league: LeaguePillarIcon,
+  manage: ManagePillarIcon,
+  account: AccountPillarIcon,
+};
+
 export function NavTabIcon({
   id,
   className,
 }: {
-  id: Exclude<ReportTab, "search">;
+  id: LeafNavId;
   className?: string;
 }) {
   const Icon = NAV_ICONS[id];
+  return <Icon className={className} />;
+}
+
+export function PillarIcon({
+  id,
+  className,
+}: {
+  id: AppPillar;
+  className?: string;
+}) {
+  const Icon = PILLAR_ICONS[id];
   return <Icon className={className} />;
 }

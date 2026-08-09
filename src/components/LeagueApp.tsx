@@ -10,9 +10,14 @@ import {
 } from "react";
 import { readAppUrlState, writeAppUrlState } from "@/lib/app-url";
 import {
-  DEFAULT_LEAGUE_ID,
-  PRIMARY_NAV_TABS,
-} from "@/lib/constants";
+  defaultTabForPillar,
+  HOME_SECTIONS,
+  LEAGUE_SECTIONS,
+  pillarForTab,
+  pillarShowsPlayContext,
+  tabBelongsToPillar,
+} from "@/lib/app-nav";
+import { DEFAULT_LEAGUE_ID } from "@/lib/constants";
 import { canAccessLmsFromPublicUser } from "@/lib/lms-access";
 import { normalizeTeamName } from "@/lib/matchups";
 import { enrichPlayersWithRatings } from "@/lib/players";
@@ -30,6 +35,7 @@ import {
 import { resolveScoringFormat } from "@/lib/division-scoring-config";
 import { useViewportAnchor } from "@/lib/use-viewport-anchor";
 import type {
+  AppPillar,
   DivisionSummary,
   DivisionTeam,
   LeagueSummary,
@@ -41,6 +47,11 @@ import type {
   TableReport,
   UserPreferences,
 } from "@/lib/types";
+import {
+  PillarBottomNav,
+  PillarSideNav,
+  SectionChipNav,
+} from "./AppShellNav";
 import { DataTable } from "./DataTable";
 import { EmptyState } from "./EmptyState";
 import { HandicapCalculator } from "./HandicapCalculator";
@@ -54,7 +65,7 @@ import { LoadingState } from "./LoadingState";
 import { LmsOperator } from "./LmsOperator";
 import { LoginScreen, type AuthUser } from "./LoginScreen";
 import { MatchScoring } from "./MatchScoring";
-import { NavTabIcon, SearchIcon } from "./NavIcons";
+import { SearchIcon } from "./NavIcons";
 import { PlayerSearch } from "./PlayerSearch";
 import { ScheduleList } from "./ScheduleList";
 import { ScheduleMatchDetail } from "./ScheduleMatchDetail";
@@ -67,7 +78,7 @@ import { TeamStandingSummary } from "./TeamStandingSummary";
 import { Tournaments } from "./Tournaments";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
-type AppScreen = "main" | "login" | "settings";
+type AppScreen = "main" | "login";
 type MyTeamSubTab = "standing" | "roster" | "lineups";
 
 function ResyncIcon({ className }: { className?: string }) {
@@ -86,24 +97,6 @@ function ResyncIcon({ className }: { className?: string }) {
       <path d="M3 4v5h5" />
       <path d="M3 12a9 9 0 0 0 15.5 6.36" />
       <path d="M21 20v-5h-5" />
-    </svg>
-  );
-}
-
-function GearIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
     </svg>
   );
 }
@@ -161,8 +154,8 @@ export function LeagueApp() {
   const [selectedDivision, setSelectedDivision] =
     useState<DivisionSummary | null>(null);
   const [tab, setTabState] = useState<ReportTab>(() => {
-    if (typeof window === "undefined") return "standings";
-    return readAppUrlState().tab ?? "standings";
+    if (typeof window === "undefined") return "events";
+    return readAppUrlState().tab ?? "events";
   });
   const [deepLinkEventId, setDeepLinkEventId] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
@@ -174,12 +167,8 @@ export function LeagueApp() {
   const [screen, setScreen] = useState<AppScreen>("main");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const showLmsTab = canAccessLmsFromPublicUser(user);
-  const primaryNavTabs = useMemo(
-    () =>
-      PRIMARY_NAV_TABS.filter((item) => item.id !== "lms" || showLmsTab),
-    [showLmsTab],
-  );
+  const showManagePillar = canAccessLmsFromPublicUser(user);
+  const activePillar = pillarForTab(tab);
   const [membership, setMembership] = useState<MembershipSnapshot | null>(null);
   const [loadingMembership, setLoadingMembership] = useState(false);
   const [membershipError, setMembershipError] = useState<string | null>(null);
@@ -223,10 +212,10 @@ export function LeagueApp() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (tab === "lms" && !showLmsTab) {
-      setTab("standings");
+    if (tab === "account" && !user) {
+      setScreen("login");
     }
-  }, [authLoading, tab, showLmsTab, setTab]);
+  }, [authLoading, tab, user]);
 
   const onDeepLinkEventIdChange = useCallback((eventId: string | null) => {
     const nextId = eventId?.trim() || null;
@@ -241,27 +230,48 @@ export function LeagueApp() {
   useEffect(() => {
     const onPopState = () => {
       const state = readAppUrlState();
-      setTabState(state.tab ?? "standings");
+      setTabState(state.tab ?? "events");
       setDeepLinkEventId(state.eventId);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  // Stripe Connect return/refresh → open Settings to sync account status.
+  // Stripe Connect return/refresh → Account to sync account status.
   useEffect(() => {
     if (typeof window === "undefined" || authLoading) return;
     const params = new URLSearchParams(window.location.search);
     const stripe = params.get("stripe");
     if (stripe !== "return" && stripe !== "refresh") return;
-    if (user) setScreen("settings");
+    if (user) setTab("account");
     else setScreen("login");
-  }, [authLoading, user]);
+  }, [authLoading, user, setTab]);
   const teamReportKeyRef = useRef<string | null>(null);
   const playerReportKeyRef = useRef<string | null>(null);
   const scheduleKeyRef = useRef<string | null>(null);
   const [, startTransition] = useTransition();
   const filterAnchor = useViewportAnchor<HTMLDivElement>();
+
+  const selectPillar = useCallback(
+    (pillar: AppPillar) => {
+      if (tabBelongsToPillar(tab, pillar)) return;
+      const next = defaultTabForPillar(pillar, {
+        hasDivision: Boolean(selectedDivision?.id ?? prefs?.divisionId),
+        hasTeam: Boolean(prefs?.teamName),
+        canManage: showManagePillar,
+      });
+      startTransition(() => setTab(next));
+    },
+    [
+      tab,
+      selectedDivision?.id,
+      prefs?.divisionId,
+      prefs?.teamName,
+      showManagePillar,
+      setTab,
+      startTransition,
+    ],
+  );
 
   const persist = (next: UserPreferences) => {
     setPrefs(next);
@@ -591,7 +601,8 @@ export function LeagueApp() {
       tab === "search" ||
       tab === "score" ||
       tab === "events" ||
-      tab === "lms"
+      tab === "lms" ||
+      tab === "account"
     ) {
       setLoadingReport(false);
       return;
@@ -994,8 +1005,8 @@ export function LeagueApp() {
             setScreen("main");
             const basePrefs = prefs ?? loadPreferences();
             if (!nextUser.lmsId) {
-              // Tableside-only account — Settings to connect Fargo / Digital Pool.
-              setScreen("settings");
+              // Tableside-only account — Account pillar to connect Fargo / Digital Pool.
+              setTab("account");
               return;
             }
             void (async () => {
@@ -1010,8 +1021,14 @@ export function LeagueApp() {
                   basePrefs,
                   nextUser.name,
                 );
+                setTab(
+                  defaultTabForPillar("league", {
+                    hasDivision: true,
+                    hasTeam: true,
+                  }),
+                );
               } else {
-                setScreen("settings");
+                setTab("account");
               }
             })();
           }}
@@ -1020,84 +1037,86 @@ export function LeagueApp() {
     );
   }
 
-  if (screen === "settings" && user && prefs) {
-    return (
-      <main className="relative mx-auto min-h-dvh w-full max-w-7xl px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-4 md:px-6 lg:px-8">
-        <header className="mb-6">
-          <h1 className="font-[family-name:var(--font-display)] text-2xl leading-none tracking-tight text-[var(--felt-deep)] md:text-3xl">
-            Tableside
-          </h1>
-        </header>
-        <SettingsScreen
-          user={user}
-          prefs={prefs}
-          membership={membership}
-          loadingMembership={loadingMembership}
-          membershipError={membershipError}
-          onClose={() => setScreen("main")}
-          onUserUpdate={(nextUser) => {
-            setUser(nextUser);
-          }}
-          onRefreshMembership={() => {
-            if (!user.lmsId) return;
-            void loadMembership({
-              fresh: true,
-              prefsOverride: prefs,
-            }).then((next) => {
-              if (next?.teams.length) {
-                applyMembershipDefaults(next, prefs, user.name);
-              }
-            });
-          }}
-          onSave={(next) => {
-            persist(next);
-            const league =
-              membership?.leagues.find((item) => item.id === next.leagueId) ??
-              null;
-            const division =
-              membership?.divisions.find(
-                (item) => item.id === next.divisionId,
-              ) ?? null;
-            if (league) {
-              setSelectedLeague(league);
-              setLeagues(membership?.leagues ?? [league]);
-              setLeagueQuery(league.name);
-            }
-            if (division) {
-              setSelectedDivision(division);
-              setDivisions(
-                (membership?.divisions ?? []).filter(
-                  (item) => item.leagueId === division.leagueId,
-                ),
-              );
-            }
-            setScreen("main");
-          }}
-          onSignOut={() => void signOut()}
-        />
-      </main>
-    );
-  }
+  const showPlayContext = pillarShowsPlayContext(activePillar);
+  const openAccount = () => {
+    if (!user) {
+      setScreen("login");
+      return;
+    }
+    startTransition(() => setTab("account"));
+  };
+
+  const selectLeagueSection = (next: ReportTab) => {
+    startTransition(() => setTab(next));
+    if (
+      (next === "schedule" || next === "my-team" || next === "score") &&
+      !prefs.teamName
+    ) {
+      setContextOpen(true);
+    }
+  };
 
   return (
-    <main className="relative mx-auto min-h-dvh w-full max-w-7xl overflow-x-clip px-4 pb-[calc(1.5rem+var(--safe-bottom))] pt-4 md:px-6 lg:px-8">
+    <main className="relative mx-auto min-h-dvh w-full max-w-7xl overflow-x-clip px-4 pb-[calc(4.75rem+var(--safe-bottom))] pt-4 md:px-6 md:pb-[calc(1.5rem+var(--safe-bottom))] lg:px-8">
+      <div className="md:flex md:items-start md:gap-6 lg:gap-8">
+        <PillarSideNav
+          activePillar={activePillar}
+          showManage
+          onSelectPillar={selectPillar}
+          leagueSection={activePillar === "league" ? tab : null}
+          onSelectLeagueSection={selectLeagueSection}
+        />
+
+        <div className="min-w-0 flex-1">
       <header className="animate-rise mb-3 flex min-w-0 items-center justify-between gap-2 md:mb-4 md:gap-3">
-        <h1 className="min-w-0 shrink truncate font-[family-name:var(--font-display)] text-2xl leading-none tracking-tight text-[var(--felt-deep)] md:text-3xl">
-          Tableside
-        </h1>
+        <div className="min-w-0">
+          <h1 className="min-w-0 shrink truncate font-[family-name:var(--font-display)] text-2xl leading-none tracking-tight text-[var(--felt-deep)] md:text-3xl">
+            Tableside
+          </h1>
+          <p className="mt-1 hidden text-xs text-[var(--muted)] sm:block">
+            {activePillar === "home"
+              ? "Discover events nearby"
+              : activePillar === "league"
+                ? "Your league night tools"
+                : activePillar === "manage"
+                  ? "Run and create leagues"
+                  : "Profile and connections"}
+          </p>
+        </div>
         <div className="flex min-w-0 items-center justify-end gap-1.5 sm:gap-2">
           {user ? (
-            <div
-              title={`Signed in as ${user.name ?? user.email ?? "player"}`}
-              className="flex min-w-0 max-w-[2.25rem] items-center gap-2 rounded-full border border-[var(--felt)]/25 bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))] p-1 sm:max-w-[14rem] sm:px-2.5 sm:py-1.5"
+            <button
+              type="button"
+              onClick={openAccount}
+              title={`Account · ${user.name ?? user.email ?? "player"}`}
+              aria-label="Open account"
+              aria-current={tab === "account" ? "page" : undefined}
+              className={[
+                "flex min-w-0 max-w-[2.25rem] items-center gap-2 rounded-full border p-1 transition sm:max-w-[14rem] sm:px-2.5 sm:py-1.5",
+                tab === "account"
+                  ? "border-[var(--felt)] bg-[var(--felt)] text-white"
+                  : "border-[var(--felt)]/25 bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]",
+              ].join(" ")}
             >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--felt)] text-[10px] font-bold uppercase text-white sm:h-6 sm:w-6">
+              <span
+                className={[
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold uppercase sm:h-6 sm:w-6",
+                  tab === "account"
+                    ? "bg-white/20 text-white"
+                    : "bg-[var(--felt)] text-white",
+                ].join(" ")}
+              >
                 {(user.name ?? user.email ?? "?").trim().charAt(0) || "?"}
               </span>
-              <span className="hidden min-w-0 truncate text-xs font-semibold text-[var(--felt-deep)] sm:inline">
+              <span
+                className={[
+                  "hidden min-w-0 truncate text-xs font-semibold sm:inline",
+                  tab === "account" ? "text-white" : "text-[var(--felt-deep)]",
+                ].join(" ")}
+              >
                 {user.name ?? user.email ?? "Signed in"}
               </span>
-            </div>
+            </button>
           ) : null}
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <button
@@ -1118,33 +1137,25 @@ export function LeagueApp() {
             >
               <SearchIcon className="h-4 w-4" />
             </button>
-            <button
-              type="button"
-              onClick={() => void refreshCachedData()}
-              disabled={refreshing}
-              title="Resync league data from FargoRate"
-              aria-label={
-                refreshing ? "Resyncing league data" : "Resync league data"
-              }
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)] disabled:opacity-60"
-            >
-              <ResyncIcon
-                className={["h-4 w-4", refreshing ? "animate-spin" : ""].join(
-                  " ",
-                )}
-              />
-            </button>
-            {user ? (
+            {activePillar === "league" ? (
               <button
                 type="button"
-                onClick={() => setScreen("settings")}
-                title="Settings"
-                aria-label="Settings"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
+                onClick={() => void refreshCachedData()}
+                disabled={refreshing}
+                title="Resync league data from FargoRate"
+                aria-label={
+                  refreshing ? "Resyncing league data" : "Resync league data"
+                }
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--ink)] disabled:opacity-60"
               >
-                <GearIcon className="h-4 w-4" />
+                <ResyncIcon
+                  className={["h-4 w-4", refreshing ? "animate-spin" : ""].join(
+                    " ",
+                  )}
+                />
               </button>
-            ) : (
+            ) : null}
+            {!user ? (
               <button
                 type="button"
                 onClick={() => setScreen("login")}
@@ -1152,7 +1163,7 @@ export function LeagueApp() {
               >
                 Login
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </header>
@@ -1163,17 +1174,21 @@ export function LeagueApp() {
         </div>
       ) : null}
 
-      {user && loadingMembership ? (
+      {showPlayContext && user && loadingMembership ? (
         <p className="mb-3 text-xs text-[var(--muted)]">
           Loading your active BCAPL sessions…
         </p>
-      ) : user && membership && !membership.teams.length ? (
+      ) : showPlayContext &&
+        user &&
+        membership &&
+        !membership.teams.length ? (
         <p className="mb-3 text-xs text-[var(--muted)]">
-          No team memberships found in this league yet. Open Settings to scan
+          No team memberships found in this league yet. Open Account to scan
           another league or find all your teams.
         </p>
       ) : null}
 
+      {showPlayContext ? (
       <section className="animate-rise animate-delay-1 relative z-40 mb-2 overflow-visible rounded-[var(--radius)] border border-white/10 bg-[linear-gradient(135deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] text-white shadow-[var(--shadow)]">
         <button
           type="button"
@@ -1311,52 +1326,26 @@ export function LeagueApp() {
           </div>
         ) : null}
       </section>
+      ) : null}
 
       <section className="animate-rise animate-delay-2 space-y-1.5">
-        <div
-          data-report-tabs
-          className="sticky top-0 z-20 -mx-1 bg-[color-mix(in_srgb,var(--paper)_90%,transparent)] px-1 py-1 backdrop-blur"
-        >
-          <nav
-            aria-label="Reports"
-            className="grid grid-cols-3 gap-1.5 sm:gap-2"
-          >
-            {primaryNavTabs.map((item) => {
-              const active = tab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  aria-current={active ? "page" : undefined}
-                  onClick={() => {
-                    startTransition(() => {
-                      setTab(item.id);
-                    });
-                    if (
-                      (item.id === "schedule" ||
-                        item.id === "my-team" ||
-                        item.id === "score") &&
-                      !prefs.teamName
-                    ) {
-                      setContextOpen(true);
-                    }
-                  }}
-                  className={[
-                    "flex flex-col items-center justify-center gap-1 rounded-[var(--radius)] px-1.5 py-2 transition sm:py-2.5",
-                    active
-                      ? "bg-[var(--felt)] text-white shadow-sm"
-                      : "bg-[var(--surface)]/80 text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
-                  ].join(" ")}
-                >
-                  <NavTabIcon id={item.id} className="h-[18px] w-[18px]" />
-                  <span className="text-[11px] font-semibold leading-none tracking-tight sm:text-xs">
-                    {item.label}
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
+        {activePillar === "league" ? (
+          <SectionChipNav
+            aria-label="League sections"
+            sections={LEAGUE_SECTIONS}
+            activeId={tab}
+            onSelect={selectLeagueSection}
+          />
+        ) : activePillar === "home" ? (
+          <SectionChipNav
+            aria-label="Home sections"
+            sections={HOME_SECTIONS}
+            activeId={tab === "search" ? "search" : "events"}
+            onSelect={(next) => {
+              startTransition(() => setTab(next));
+            }}
+          />
+        ) : null}
 
         <div
           className={[
@@ -1364,12 +1353,78 @@ export function LeagueApp() {
             tab === "score" ||
             tab === "players" ||
             tab === "events" ||
-            tab === "lms"
+            tab === "lms" ||
+            tab === "account"
               ? "mt-0 space-y-0"
               : "space-y-6",
           ].join(" ")}
         >
-          {tab === "search" ? (
+          {tab === "account" && user ? (
+            <SettingsScreen
+              user={user}
+              prefs={prefs}
+              membership={membership}
+              loadingMembership={loadingMembership}
+              membershipError={membershipError}
+              onClose={() =>
+                startTransition(() =>
+                  setTab(
+                    defaultTabForPillar("league", {
+                      hasDivision: Boolean(selectedDivision),
+                      hasTeam: Boolean(prefs.teamName),
+                    }),
+                  ),
+                )
+              }
+              onUserUpdate={(nextUser) => {
+                setUser(nextUser);
+              }}
+              onRefreshMembership={() => {
+                if (!user.lmsId) return;
+                void loadMembership({
+                  fresh: true,
+                  prefsOverride: prefs,
+                }).then((next) => {
+                  if (next?.teams.length) {
+                    applyMembershipDefaults(next, prefs, user.name);
+                  }
+                });
+              }}
+              onSave={(next) => {
+                persist(next);
+                const league =
+                  membership?.leagues.find(
+                    (item) => item.id === next.leagueId,
+                  ) ?? null;
+                const division =
+                  membership?.divisions.find(
+                    (item) => item.id === next.divisionId,
+                  ) ?? null;
+                if (league) {
+                  setSelectedLeague(league);
+                  setLeagues(membership?.leagues ?? [league]);
+                  setLeagueQuery(league.name);
+                }
+                if (division) {
+                  setSelectedDivision(division);
+                  setDivisions(
+                    (membership?.divisions ?? []).filter(
+                      (item) => item.leagueId === division.leagueId,
+                    ),
+                  );
+                }
+                startTransition(() =>
+                  setTab(
+                    defaultTabForPillar("league", {
+                      hasDivision: Boolean(division ?? selectedDivision),
+                      hasTeam: Boolean(next.teamName),
+                    }),
+                  ),
+                );
+              }}
+              onSignOut={() => void signOut()}
+            />
+          ) : tab === "search" ? (
             <PlayerSearch initialQuery={playerSearchQuery} />
           ) : tab === "events" ? (
             <Tournaments
@@ -1390,15 +1445,31 @@ export function LeagueApp() {
               }}
             />
           ) : tab === "lms" ? (
-            <LmsOperator
-              leagueId={prefs.leagueId}
-              leagueName={prefs.leagueName}
-              divisionId={selectedDivision?.id ?? prefs.divisionId}
-              divisionName={selectedDivision?.name ?? prefs.divisionName}
-              user={user}
-              authLoading={authLoading}
-              onRequestLogin={() => setScreen("login")}
-            />
+            showManagePillar ? (
+              <LmsOperator
+                leagueId={prefs.leagueId}
+                leagueName={prefs.leagueName}
+                divisionId={selectedDivision?.id ?? prefs.divisionId}
+                divisionName={selectedDivision?.name ?? prefs.divisionName}
+                user={user}
+                authLoading={authLoading}
+                onRequestLogin={() => setScreen("login")}
+              />
+            ) : (
+              <EmptyState
+                title="League management"
+                body="Connect a League Operator login in Account to manage FargoRate LMS divisions. Create-your-own league tools will live here too."
+                action={
+                  <button
+                    type="button"
+                    onClick={openAccount}
+                    className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+                  >
+                    {user ? "Open Account" : "Sign in"}
+                  </button>
+                }
+              />
+            )
           ) : tab === "score" ? (
             <MatchScoring
               divisionId={selectedDivision?.id ?? null}
@@ -1414,7 +1485,7 @@ export function LeagueApp() {
           ) : !selectedDivision ? (
             <EmptyState
               title="Choose a division to continue"
-              body="Search works without a division. Score and reports need one from your context card."
+              body="Home and Search work without a division. League tools need league, division, and team from the context card."
               action={
                 <button
                   type="button"
@@ -1705,6 +1776,14 @@ export function LeagueApp() {
           )}
         </div>
       </section>
+        </div>
+      </div>
+
+      <PillarBottomNav
+        activePillar={activePillar}
+        showManage
+        onSelectPillar={selectPillar}
+      />
     </main>
   );
 }

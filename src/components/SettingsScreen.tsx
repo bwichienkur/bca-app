@@ -350,7 +350,7 @@ export function SettingsScreen({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
-            Settings
+            Account
           </p>
           <h2 className="mt-1 font-[family-name:var(--font-display)] text-3xl text-[var(--felt-deep)]">
             Your defaults
@@ -360,7 +360,7 @@ export function SettingsScreen({
             <span className="font-medium text-[var(--ink)]">
               {user.name ?? user.email ?? "Player"}
             </span>
-            . Connect FargoRate for Score, League Operator for the LMS tab,
+            . Connect FargoRate for Score, League Operator for Manage,
             Digital Pool for brackets, and Stripe for tournament entry fees.
           </p>
         </div>
@@ -445,7 +445,7 @@ export function SettingsScreen({
               </p>
               <p className="truncate text-xs text-[var(--muted)]">
                 {operatorLinked
-                  ? "Connected · LMS tab unlocked"
+                  ? "Connected · Manage unlocked"
                   : "Separate LMS web login"}
               </p>
             </div>
