@@ -49,18 +49,7 @@ export function SectionCard({
               "radial-gradient(120% 80% at 100% 0%, rgba(224,163,90,0.28), transparent 55%)",
           }}
         />
-        {headerAction ? (
-          <div className="absolute right-2.5 top-2.5 z-[1] sm:right-3 sm:top-3">
-            {headerAction}
-          </div>
-        ) : null}
-        <div
-          className={[
-            "relative flex min-w-0 items-center justify-between gap-3",
-            // Reserve corner space horizontally only — badge stays vertically centered.
-            headerAction ? "pr-8" : "",
-          ].join(" ")}
-        >
+        <div className="relative flex min-w-0 items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/65">
               {eyebrow}
@@ -72,6 +61,11 @@ export function SectionCard({
               <div className="mt-2 text-xs text-white/70">{description}</div>
             ) : null}
           </div>
+          {headerAction ? (
+            <div className="relative z-[1] shrink-0 self-center">
+              {headerAction}
+            </div>
+          ) : null}
           {badge ? (
             <div className="flex shrink-0 flex-col items-center justify-center rounded-[var(--radius)] bg-black/25 px-3.5 py-2.5 text-center ring-1 ring-white/15">
               <p className="text-[10px] font-semibold uppercase leading-none tracking-[0.14em] text-white/65">

@@ -41,7 +41,7 @@ export function PillarBottomNav({
   return (
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--line)] bg-[color-mix(in_srgb,var(--paper)_92%,transparent)] px-2 pb-[max(0.35rem,var(--safe-bottom))] pt-1.5 backdrop-blur md:hidden"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-[var(--line)] bg-[color-mix(in_srgb,var(--paper)_94%,transparent)] px-2 pb-[max(0.5rem,var(--safe-bottom))] pt-2 backdrop-blur-md md:hidden"
     >
       <div
         className="mx-auto grid max-w-lg gap-1"
@@ -58,7 +58,7 @@ export function PillarBottomNav({
               aria-current={active ? "page" : undefined}
               onClick={() => onSelectPillar(pillar.id)}
               className={[
-                "flex flex-col items-center justify-center gap-0.5 rounded-[var(--radius)] px-1 py-1.5 transition",
+                "flex flex-col items-center justify-center gap-1 rounded-[var(--radius)] px-1 py-1.5 transition",
                 active
                   ? "text-[var(--felt-deep)]"
                   : "text-[var(--muted)] hover:text-[var(--ink)]",
@@ -66,13 +66,13 @@ export function PillarBottomNav({
             >
               <span
                 className={[
-                  "inline-flex h-8 w-8 items-center justify-center rounded-full transition",
+                  "inline-flex h-9 w-9 items-center justify-center rounded-full transition",
                   active
-                    ? "bg-[color-mix(in_srgb,var(--felt)_22%,transparent)]"
+                    ? "bg-[color-mix(in_srgb,var(--felt)_28%,transparent)]"
                     : "bg-transparent",
                 ].join(" ")}
               >
-                <PillarIcon id={pillar.id} className="h-[18px] w-[18px]" />
+                <PillarIcon id={pillar.id} className="h-5 w-5" />
               </span>
               <span className="text-[10px] font-semibold leading-none tracking-tight">
                 {pillar.label}
