@@ -275,10 +275,10 @@ export function DataTable({
             <tr>
               <th
                 aria-hidden
-                className="sticky left-0 z-20 rounded-l-[var(--radius)] border border-r-0 border-[var(--line)] bg-[var(--surface-2)] p-0"
+                className="sticky left-0 z-20 rounded-l-[var(--radius)] border border-y border-l border-r-0 border-[var(--line)] bg-[var(--surface-2)] p-0"
                 style={RAIL_STYLE}
               >
-                <span className="block h-full min-h-[2.25rem] w-full rounded-l-[calc(var(--radius)-1px)] bg-[var(--felt)]" />
+                <span className="block h-full min-h-[2.25rem] w-full" />
               </th>
               {headers.map((header, index) => {
                 const active = sortColumn === index;
@@ -295,9 +295,11 @@ export function DataTable({
                         : "none"
                     }
                     className={[
-                      "border border-l-0 border-[var(--line)] bg-[var(--surface-2)] font-semibold tracking-wide",
+                      "border-y border-[var(--line)] bg-[var(--surface-2)] font-semibold tracking-wide",
+                      isLast
+                        ? "rounded-r-[var(--radius)] border-r border-[var(--line)]"
+                        : "border-r-0",
                       cellPad,
-                      isLast ? "rounded-r-[var(--radius)]" : "",
                       isSticky
                         ? "sticky z-10 shadow-[4px_0_10px_rgba(0,0,0,0.18)]"
                         : "",
@@ -357,7 +359,10 @@ export function DataTable({
                 ? "bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))]"
                 : "bg-[color-mix(in_srgb,var(--surface)_96%,var(--paper))]";
               const hoverBg = clickable
-                ? "group-hover:bg-[color-mix(in_srgb,var(--felt)_8%,var(--surface))] group-hover:border-[color-mix(in_srgb,var(--felt)_45%,var(--line))]"
+                ? "group-hover:bg-[color-mix(in_srgb,var(--felt)_8%,var(--surface))]"
+                : "";
+              const hoverEdge = clickable
+                ? "group-hover:border-[color-mix(in_srgb,var(--felt)_45%,var(--line))]"
                 : "";
               return (
                 <tr
@@ -375,10 +380,11 @@ export function DataTable({
                   <td
                     aria-hidden
                     className={[
-                      "sticky left-0 z-[2] rounded-l-[var(--radius)] border border-r-0 p-0 transition-colors",
+                      "sticky left-0 z-[2] rounded-l-[var(--radius)] border border-y border-l border-r-0 p-0 transition-colors",
                       edge,
                       rowBg,
                       hoverBg,
+                      hoverEdge,
                     ].join(" ")}
                     style={RAIL_STYLE}
                   >
@@ -394,12 +400,13 @@ export function DataTable({
                         key={cellIndex}
                         title={kind === "name" ? value : undefined}
                         className={[
-                          "border border-l-0 transition-colors",
+                          "border-y border-l-0 border-r-0 transition-colors",
                           edge,
+                          isLast ? "rounded-r-[var(--radius)] border-r" : "",
                           cellPad,
-                          isLast ? "rounded-r-[var(--radius)]" : "",
                           isSticky ? stickyBg : rowBg,
                           hoverBg,
+                          hoverEdge,
                           isSticky
                             ? "sticky z-[1] font-semibold text-[var(--ink)] shadow-[4px_0_10px_rgba(0,0,0,0.16)]"
                             : kind === "rank"

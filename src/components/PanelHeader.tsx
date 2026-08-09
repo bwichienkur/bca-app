@@ -66,7 +66,7 @@ export function IconAddButton({
   );
 }
 
-/** Compact count block for the right side of a PanelHeader. */
+/** Bordered count badge for the right side of a PanelHeader. */
 export function PanelHeaderCount({
   label,
   value,
@@ -75,11 +75,11 @@ export function PanelHeaderCount({
   value: string;
 }) {
   return (
-    <div className="text-right">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+    <div className="inline-flex min-w-[3.25rem] flex-col items-center justify-center rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/55 px-2.5 py-1.5 text-center">
+      <p className="text-[10px] font-semibold uppercase leading-none tracking-[0.14em] text-[var(--muted)]">
         {label}
       </p>
-      <p className="mt-0.5 font-[family-name:var(--font-display)] text-2xl font-semibold tabular-nums leading-none text-[var(--ink)]">
+      <p className="mt-1 font-[family-name:var(--font-display)] text-xl font-semibold tabular-nums leading-none text-[var(--ink)]">
         {value}
       </p>
     </div>
