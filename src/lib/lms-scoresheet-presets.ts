@@ -41,7 +41,7 @@ function game(
 }
 
 /** Classic slot rotation: round r, Home i vs Away ((i-1+r)%n)+1 */
-function roundRobinRounds(options: {
+export function buildRoundRobinTemplate(options: {
   players: number;
   rounds: number;
   kind: FormatGame["kind"];
@@ -76,8 +76,8 @@ function roundRobinRounds(options: {
   };
 }
 
-function tuesdayR6Hot(): FormatTemplateModel {
-  const n = 4;
+export function buildTuesdayRacesTemplate(players = 4): FormatTemplateModel {
+  const n = clampPlayerCount(players);
   return {
     playerCount: n,
     rounds: Array.from({ length: n }, (_, i) => {
@@ -95,7 +95,7 @@ function tuesdayR6Hot(): FormatTemplateModel {
   };
 }
 
-function doublesRace(): FormatTemplateModel {
+export function buildDoublesRaceTemplate(raceLength = "17"): FormatTemplateModel {
   return {
     playerCount: 2,
     rounds: [
@@ -115,7 +115,7 @@ function doublesRace(): FormatTemplateModel {
             ],
             breakTeam: 1,
             gameType: "9",
-            raceLength: "17",
+            raceLength,
             multiplier: "1.00",
           },
         ],
@@ -129,14 +129,14 @@ export const SCORESHEET_PRESETS: ScoresheetPreset[] = [
     id: "tuesday-r6-hot",
     label: "Tuesday 9-Ball (R6 Hot)",
     description: "4 singles races · lag then alternate · R6 Hot chart",
-    build: tuesdayR6Hot,
+    build: () => buildTuesdayRacesTemplate(4),
   },
   {
     id: "team-race-5",
     label: "5-Player Team Race",
     description: "25 races · max race to 13 · round-robin list",
     build: () =>
-      roundRobinRounds({
+      buildRoundRobinTemplate({
         players: 5,
         rounds: 5,
         kind: "R",
@@ -150,7 +150,7 @@ export const SCORESHEET_PRESETS: ScoresheetPreset[] = [
     label: "9-Ball Matrix (5)",
     description: "Side-by-side home/visitor · rounds 1–5 · points night",
     build: () =>
-      roundRobinRounds({
+      buildRoundRobinTemplate({
         players: 5,
         rounds: 5,
         kind: "S",
@@ -162,7 +162,7 @@ export const SCORESHEET_PRESETS: ScoresheetPreset[] = [
     label: "8-Ball Matrix (5)",
     description: "5×5 round-robin matrix with break markers",
     build: () =>
-      roundRobinRounds({
+      buildRoundRobinTemplate({
         players: 5,
         rounds: 5,
         kind: "S",
@@ -174,7 +174,7 @@ export const SCORESHEET_PRESETS: ScoresheetPreset[] = [
     label: "8-Ball Matrix (3)",
     description: "3×3 round-robin · home/visitor tables",
     build: () =>
-      roundRobinRounds({
+      buildRoundRobinTemplate({
         players: 3,
         rounds: 3,
         kind: "S",
@@ -185,7 +185,7 @@ export const SCORESHEET_PRESETS: ScoresheetPreset[] = [
     id: "doubles-race",
     label: "Doubles Race",
     description: "Home pair vs visitor pair · race track to 17",
-    build: doublesRace,
+    build: () => buildDoublesRaceTemplate("17"),
   },
 ];
 
