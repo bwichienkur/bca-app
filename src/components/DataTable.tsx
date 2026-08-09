@@ -238,25 +238,32 @@ export function DataTable({
   const tableText = compact
     ? "text-xs md:text-[13px]"
     : "text-[13px] md:text-sm";
+  const lastCol = headers.length - 1;
+  /** Tiny gap between card-shaped rows (matches dense accent lists). */
+  const rowGapRem = 0.2;
 
-  const shellClass = flush
-    ? "bg-[var(--surface)]"
-    : "overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] shadow-[var(--shadow)]";
+  const cardEdge = (selected: boolean) =>
+    selected
+      ? "border-[color-mix(in_srgb,var(--felt)_45%,var(--line))]"
+      : "border-[var(--line)]";
 
   return (
-    <div className={shellClass}>
+    <div className={flush ? "min-w-0" : "min-w-0 space-y-1.5"}>
       {toolbar ? (
-        <div className="border-b border-[var(--line)] bg-[var(--surface-2)]/55 px-3 py-2.5 sm:px-3.5">
+        <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/55 px-3 py-2.5 sm:px-3.5">
           {toolbar}
         </div>
       ) : null}
       <div className="overflow-x-auto">
         <table
           className={[
-            "w-full table-fixed border-separate border-spacing-0 text-left",
+            "w-full table-fixed border-separate text-left",
             tableText,
           ].join(" ")}
-          style={{ minWidth: tableMinWidth }}
+          style={{
+            minWidth: tableMinWidth,
+            borderSpacing: `0 ${rowGapRem}rem`,
+          }}
         >
           <colgroup>
             <col style={RAIL_STYLE} />
@@ -265,17 +272,18 @@ export function DataTable({
             ))}
           </colgroup>
           <thead>
-            <tr className="bg-[var(--surface-2)]">
+            <tr>
               <th
                 aria-hidden
-                className="sticky left-0 z-20 border-b border-[var(--line)] p-0"
+                className="sticky left-0 z-20 rounded-l-[var(--radius)] border border-r-0 border-[var(--line)] bg-[var(--surface-2)] p-0"
                 style={RAIL_STYLE}
               >
-                <span className="block h-full min-h-[2.25rem] w-full bg-[var(--felt)]" />
+                <span className="block h-full min-h-[2.25rem] w-full rounded-l-[calc(var(--radius)-1px)] bg-[var(--felt)]" />
               </th>
               {headers.map((header, index) => {
                 const active = sortColumn === index;
                 const isSticky = index === stickyIndex;
+                const isLast = index === lastCol;
                 return (
                   <th
                     key={`${header}-${index}`}
@@ -287,11 +295,12 @@ export function DataTable({
                         : "none"
                     }
                     className={[
-                      "border-b border-[var(--line)] font-semibold tracking-wide text-[var(--muted)]",
+                      "border border-l-0 border-[var(--line)] bg-[var(--surface-2)] font-semibold tracking-wide",
                       cellPad,
+                      isLast ? "rounded-r-[var(--radius)]" : "",
                       isSticky
-                        ? "sticky z-10 bg-[var(--surface-2)] shadow-[4px_0_10px_rgba(0,0,0,0.18)]"
-                        : "bg-[var(--surface-2)]",
+                        ? "sticky z-10 shadow-[4px_0_10px_rgba(0,0,0,0.18)]"
+                        : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}
@@ -340,6 +349,7 @@ export function DataTable({
                 ? isRowSelected(row)
                 : selectedRowIndex === originalIndex;
               const clickable = Boolean(onRowClick);
+              const edge = cardEdge(selected);
               const rowBg = selected
                 ? "bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))]"
                 : "bg-[color-mix(in_srgb,var(--surface)_88%,transparent)]";
@@ -347,10 +357,7 @@ export function DataTable({
                 ? "bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))]"
                 : "bg-[color-mix(in_srgb,var(--surface)_96%,var(--paper))]";
               const hoverBg = clickable
-                ? "group-hover:bg-[color-mix(in_srgb,var(--felt)_8%,var(--surface))]"
-                : "";
-              const hoverStickyBg = clickable
-                ? "group-hover:bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]"
+                ? "group-hover:bg-[color-mix(in_srgb,var(--felt)_8%,var(--surface))] group-hover:border-[color-mix(in_srgb,var(--felt)_45%,var(--line))]"
                 : "";
               return (
                 <tr
@@ -363,42 +370,36 @@ export function DataTable({
                   className={[
                     "group",
                     clickable ? "cursor-pointer" : "",
-                    selected
-                      ? "relative z-[1]"
-                      : "",
                   ].join(" ")}
                 >
                   <td
                     aria-hidden
                     className={[
-                      "sticky left-0 z-[2] border-b border-[var(--line)] p-0",
-                      selected
-                        ? "border-[color-mix(in_srgb,var(--felt)_45%,var(--line))]"
-                        : "",
+                      "sticky left-0 z-[2] rounded-l-[var(--radius)] border border-r-0 p-0 transition-colors",
+                      edge,
+                      rowBg,
+                      hoverBg,
                     ].join(" ")}
                     style={RAIL_STYLE}
                   >
-                    <span
-                      className={[
-                        "block h-full min-h-[2.25rem] w-full bg-[var(--felt)]",
-                        selected ? "opacity-100" : "opacity-90",
-                      ].join(" ")}
-                    />
+                    <span className="block h-full min-h-[2.25rem] w-full rounded-l-[calc(var(--radius)-1px)] bg-[var(--felt)]" />
                   </td>
                   {headers.map((_, cellIndex) => {
                     const kind = columnMeta[cellIndex]?.kind ?? "stat";
                     const isSticky = cellIndex === stickyIndex;
+                    const isLast = cellIndex === lastCol;
                     const value = row[cellIndex] ?? "";
                     return (
                       <td
                         key={cellIndex}
                         title={kind === "name" ? value : undefined}
                         className={[
-                          "border-b border-[var(--line)] transition-colors",
+                          "border border-l-0 transition-colors",
+                          edge,
                           cellPad,
+                          isLast ? "rounded-r-[var(--radius)]" : "",
                           isSticky ? stickyBg : rowBg,
                           hoverBg,
-                          isSticky ? hoverStickyBg : "",
                           isSticky
                             ? "sticky z-[1] font-semibold text-[var(--ink)] shadow-[4px_0_10px_rgba(0,0,0,0.16)]"
                             : kind === "rank"
@@ -407,9 +408,6 @@ export function DataTable({
                           kind === "name"
                             ? "truncate whitespace-nowrap font-semibold text-[var(--ink)]"
                             : "whitespace-nowrap",
-                          selected
-                            ? "border-[color-mix(in_srgb,var(--felt)_35%,var(--line))]"
-                            : "",
                         ]
                           .filter(Boolean)
                           .join(" ")}
