@@ -24,8 +24,14 @@ import {
 } from "./IconSubTabs";
 import { LoadingState } from "./LoadingState";
 import type { AuthUser } from "./LoginScreen";
+import {
+  IconAddButton,
+  IconRefreshButton,
+  PanelHeader,
+} from "./PanelHeader";
 import { SearchField } from "./SearchField";
 import { LmsDivisionSettingsForm } from "./LmsDivisionSettingsForm";
+import { SectionCard } from "./SectionCard";
 import { SelectField } from "./SelectField";
 
 type LmsSubTab =
@@ -336,31 +342,36 @@ function SectionHeader({
   title,
   description,
   onAdd,
+  onRefresh,
+  refreshing,
+  refreshDisabled,
 }: {
   title: string;
   description?: string;
   onAdd?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+  onRefresh?: () => void;
+  refreshing?: boolean;
+  refreshDisabled?: boolean;
 }) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-          {title}
-        </p>
-        {description ? (
-          <p className="mt-0.5 text-xs text-[var(--muted)]">{description}</p>
+  const action =
+    onAdd || onRefresh ? (
+      <div className="flex shrink-0 items-center gap-1.5">
+        {onRefresh ? (
+          <IconRefreshButton
+            label={refreshing ? "Refreshing…" : "Refresh"}
+            spinning={refreshing}
+            disabled={refreshing || refreshDisabled}
+            onClick={onRefresh}
+          />
+        ) : null}
+        {onAdd ? (
+          <IconAddButton label={`Add ${title.toLowerCase()}`} onClick={onAdd} />
         ) : null}
       </div>
-      {onAdd ? (
-        <button
-          type="button"
-          className={`${btnAdd} h-9 shrink-0 self-center px-3`}
-          onClick={onAdd}
-        >
-          + Add
-        </button>
-      ) : null}
-    </div>
+    ) : undefined;
+
+  return (
+    <PanelHeader title={title} description={description} action={action} />
   );
 }
 
@@ -2133,22 +2144,99 @@ export function LmsOperator({
       </div>
     );
 
+  const headerAdd = (() => {
+    switch (subTab) {
+      case "teams":
+        return opDivisionId
+          ? {
+              label: "Add team",
+              onClick: (event: ReactMouseEvent<HTMLButtonElement>) =>
+                void openEditTeam(null, event),
+            }
+          : null;
+      case "players":
+        return opDivisionId
+          ? {
+              label: "Add player",
+              onClick: (event: ReactMouseEvent<HTMLButtonElement>) =>
+                void openEditPlayer(null, event),
+            }
+          : null;
+      case "locations":
+        return opDivisionId
+          ? {
+              label: "Add location",
+              onClick: (event: ReactMouseEvent<HTMLButtonElement>) =>
+                void openEditLocation(null, event),
+            }
+          : null;
+      case "schedule":
+        return opDivisionId
+          ? {
+              label: "Add match",
+              onClick: (event: ReactMouseEvent<HTMLButtonElement>) =>
+                openEditMatch(null, event),
+            }
+          : null;
+      case "division":
+        return opLeagueId
+          ? {
+              label: "Add division",
+              onClick: (event: ReactMouseEvent<HTMLButtonElement>) => {
+                capturePopupAnchor(event);
+                setCreateSourceId(opDivisionId || divisions[0]?.id || "");
+                setCreateName("");
+                setCreateDescription("");
+                setScreen({ type: "create-division" });
+              },
+            }
+          : null;
+      case "playoff":
+        return opLeagueId
+          ? {
+              label: "Add playoff",
+              onClick: (event: ReactMouseEvent<HTMLButtonElement>) => {
+                capturePopupAnchor(event);
+                setSelectedTeamIds(new Set());
+                setScreen({ type: "create-playoff" });
+              },
+            }
+          : null;
+      default:
+        return null;
+    }
+  })();
+
   /* ---------- Main list chrome ---------- */
   return (
     <div className="space-y-3">
-      <header className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] px-4 py-4 text-white shadow-[var(--shadow)] sm:px-5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/65">
-          LMS operator
-        </p>
-        <h2 className="mt-1.5 break-words font-[family-name:var(--font-display)] text-2xl font-semibold leading-tight tracking-tight sm:text-3xl">
-          {opLeagueName || "Choose a league"}
-        </h2>
-        <p className="mt-1 break-words text-sm text-white/75">
-          {opDivisionName
+      <SectionCard
+        eyebrow="LMS operator"
+        title={opLeagueName || "Choose a league"}
+        description={
+          opDivisionName
             ? opDivisionName
-            : "Select a division to manage teams, players, locations, and schedule."}
-        </p>
-      </header>
+            : "Select a division to manage teams, players, locations, and schedule."
+        }
+        headerAction={
+          <div className="flex items-center gap-1.5">
+            <IconRefreshButton
+              label={busy ? "Refreshing…" : "Refresh operator data"}
+              spinning={busy}
+              disabled={busy || (!opLeagueId && !opDivisionId)}
+              onClick={() => void refreshAllOperatorData()}
+              className="bg-black/25 ring-1 ring-white/20 hover:bg-black/35"
+            />
+            {headerAdd ? (
+              <IconAddButton
+                label={headerAdd.label}
+                onClick={headerAdd.onClick}
+                className="bg-black/25 ring-1 ring-white/20 hover:bg-black/35"
+              />
+            ) : null}
+          </div>
+        }
+      />
 
       <section className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3">
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
@@ -2238,25 +2326,12 @@ export function LmsOperator({
 
       {subTab === "home" ? (
         <section className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                Division home
-              </p>
-              <p className="mt-0.5 text-xs text-[var(--muted)]">
-                Upcoming and missed matches. Lists are cached for 24 hours; edits
-                refresh automatically.
-              </p>
-            </div>
-            <button
-              type="button"
-              className={`${btnPrimary} h-9 shrink-0 self-center px-3`}
-              disabled={busy || homeLoading || (!opLeagueId && !opDivisionId)}
-              onClick={() => void refreshAllOperatorData()}
-            >
-              {busy ? "Refreshing…" : "Refresh"}
-            </button>
-          </div>
+          <SectionHeader
+            title="Division home"
+            description="Upcoming and missed matches. Lists are cached for 24 hours; edits refresh automatically."
+            onRefresh={() => void refreshAllOperatorData()}
+            refreshing={busy || homeLoading}
+          />
           {!opDivisionId ? (
             <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
               Choose a division above to see upcoming and missed matches.

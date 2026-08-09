@@ -1080,7 +1080,8 @@ export function LeagueApp() {
   };
 
   return (
-    <main className="relative mx-auto min-h-dvh w-full max-w-7xl overflow-x-clip px-4 pb-[calc(4.75rem+var(--safe-bottom))] pt-4 md:px-6 md:pb-[calc(1.5rem+var(--safe-bottom))] lg:px-8">
+    <>
+    <main className="relative mx-auto min-h-dvh w-full max-w-7xl px-4 pb-[calc(4.75rem+var(--safe-bottom))] pt-4 md:px-6 md:pb-[calc(1.5rem+var(--safe-bottom))] lg:px-8">
       <div className="md:flex md:items-start md:gap-6 lg:gap-8">
         <PillarSideNav
           activePillar={activePillar}
@@ -1092,7 +1093,7 @@ export function LeagueApp() {
           onSelectSection={selectLeagueSection}
         />
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 overflow-x-clip">
       <header className="animate-rise mb-3 flex min-w-0 items-center justify-between gap-2 md:mb-4 md:gap-3">
         <div className="min-w-0">
           <h1 className="min-w-0 shrink truncate font-[family-name:var(--font-display)] text-2xl leading-none tracking-tight text-[var(--felt-deep)] md:text-3xl">
@@ -1835,11 +1836,12 @@ export function LeagueApp() {
         </div>
       </div>
 
+    </main>
       <PillarBottomNav
         activePillar={activePillar}
         showManage
         onSelectPillar={selectPillar}
       />
-    </main>
+    </>
   );
 }

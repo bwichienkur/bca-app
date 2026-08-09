@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 
 /** Events-style muted subheader used inside subtab cards (not the blue hero band). */
 export function PanelHeader({
@@ -40,10 +40,12 @@ export function IconAddButton({
   onClick,
   label,
   disabled,
+  className = "",
 }: {
-  onClick: () => void;
+  onClick: (event: MouseEvent<HTMLButtonElement>) => void;
   label: string;
   disabled?: boolean;
+  className?: string;
 }) {
   return (
     <button
@@ -52,7 +54,12 @@ export function IconAddButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] text-white transition hover:bg-[var(--felt-soft)] disabled:opacity-50"
+      className={[
+        "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] text-white transition hover:bg-[var(--felt-soft)] disabled:opacity-50",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
       <svg viewBox="0 0 20 20" fill="none" aria-hidden className="h-4 w-4">
         <path
@@ -61,6 +68,53 @@ export function IconAddButton({
           strokeWidth="2.2"
           strokeLinecap="round"
         />
+      </svg>
+    </button>
+  );
+}
+
+/** Compact felt refresh control (Events Entries / LMS). */
+export function IconRefreshButton({
+  onClick,
+  label,
+  disabled,
+  spinning,
+  className = "",
+}: {
+  onClick: () => void;
+  label: string;
+  disabled?: boolean;
+  spinning?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      className={[
+        "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] text-white transition hover:bg-[var(--felt-soft)] disabled:opacity-50",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={["h-4 w-4", spinning ? "animate-spin" : ""].join(" ")}
+        aria-hidden
+      >
+        <path d="M21 12a9 9 0 0 0-15.5-6.36" />
+        <path d="M3 4v5h5" />
+        <path d="M3 12a9 9 0 0 0 15.5 6.36" />
+        <path d="M21 20v-5h-5" />
       </svg>
     </button>
   );
