@@ -181,20 +181,21 @@ const fieldClass =
 const labelClass =
   "mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]";
 
-/** Premium solid text actions for signup request rows. */
+/** Match LMS Add / Edit / Delete action buttons (solid fill, shared radius). */
 const signupActionBtn =
-  "inline-flex h-8 shrink-0 items-center justify-center rounded-[var(--radius)] px-3 text-[11px] font-semibold tracking-[0.04em] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(0,0,0,0.35)] transition-[filter,transform] hover:brightness-110 active:translate-y-px disabled:opacity-50";
-const signupApproveBtn = `${signupActionBtn} bg-[linear-gradient(180deg,#2f8fc2_0%,var(--felt)_45%,var(--felt-soft)_100%)] text-white`;
-const signupWaitlistBtn = `${signupActionBtn} bg-[linear-gradient(180deg,#edc48a_0%,var(--amber)_48%,#c4893f_100%)] text-[#1a140c]`;
-const signupRejectBtn = `${signupActionBtn} bg-[linear-gradient(180deg,#e0726a_0%,#c44a42_48%,#9e342e_100%)] text-white`;
-const signupRevertBtn = `${signupActionBtn} bg-[linear-gradient(180deg,#3d4b58_0%,#2a3540_48%,#222b35_100%)] text-[var(--ink)]`;
+  "inline-flex shrink-0 items-center justify-center rounded-[var(--radius)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
+const signupApproveBtn = `${signupActionBtn} bg-[var(--felt)]`;
+const signupWaitlistBtn = `${signupActionBtn} bg-[#a16207]`;
+const signupRejectBtn = `${signupActionBtn} bg-[#b42318]`;
+const signupRevertBtn =
+  "inline-flex shrink-0 items-center justify-center rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold text-[var(--ink)] disabled:opacity-50";
 const signupInlineIconBtn =
   "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt-deep)] transition hover:bg-[color-mix(in_srgb,var(--chalk)_18%,transparent)] hover:text-[var(--chalk)]";
 const signupBulkBtn =
-  "inline-flex h-9 flex-1 items-center justify-center rounded-[var(--radius)] px-3.5 text-[11px] font-semibold tracking-[0.04em] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(0,0,0,0.35)] transition-[filter,transform] hover:brightness-110 active:translate-y-px disabled:opacity-50 sm:flex-none";
-const signupBulkApproveBtn = `${signupBulkBtn} bg-[linear-gradient(180deg,#2f8fc2_0%,var(--felt)_45%,var(--felt-soft)_100%)] text-white`;
-const signupBulkWaitlistBtn = `${signupBulkBtn} bg-[linear-gradient(180deg,#edc48a_0%,var(--amber)_48%,#c4893f_100%)] text-[#1a140c]`;
-const signupBulkRejectBtn = `${signupBulkBtn} bg-[linear-gradient(180deg,#e0726a_0%,#c44a42_48%,#9e342e_100%)] text-white`;
+  "inline-flex flex-1 items-center justify-center rounded-[var(--radius)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:flex-none";
+const signupBulkApproveBtn = `${signupBulkBtn} bg-[var(--felt)]`;
+const signupBulkWaitlistBtn = `${signupBulkBtn} bg-[#a16207]`;
+const signupBulkRejectBtn = `${signupBulkBtn} bg-[#b42318]`;
 const fieldToggleBtn =
   "inline-flex h-7 w-[2.65rem] shrink-0 items-center justify-center rounded-[var(--radius)] px-1.5 text-[11px] font-semibold transition disabled:opacity-50";
 const fieldToggleIdle = `${fieldToggleBtn} border border-[var(--line)] bg-[var(--surface-2)] text-[var(--muted)] hover:text-[var(--ink)]`;
@@ -808,14 +809,12 @@ function SignupRequestRow({
   const memberCount = members?.length ?? 0;
 
   return (
-    <div
-      className={[
-        "px-3 py-2 sm:px-4",
-        status === "pending"
-          ? "bg-[color-mix(in_srgb,var(--amber)_7%,transparent)]"
-          : "",
-        selected ? "bg-[color-mix(in_srgb,var(--felt)_8%,transparent)]" : "",
-      ].join(" ")}
+    <AccentRecordCard
+      className={
+        selected
+          ? "border-[color-mix(in_srgb,var(--felt)_45%,var(--line))] bg-[color-mix(in_srgb,var(--felt)_8%,var(--surface))]"
+          : ""
+      }
     >
       <div className="flex items-start gap-1.5">
         {selectable ? (
@@ -915,49 +914,50 @@ function SignupRequestRow({
 
           {isTeam && expanded && members?.length ? (
             <ul
-              className="mt-2 space-y-1 border-t border-[var(--line)] pt-2 [overflow-anchor:none]"
+              className={`${accentRecordListClass} mt-3 border-t border-[var(--line)] pt-3 [overflow-anchor:none]`}
             >
               {members.map((member, index) => {
                 const unrated = member.rating == null;
                 return (
-                  <li
-                    key={`${member.name}-${index}`}
-                    className="flex min-w-0 items-center gap-2"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-[var(--ink)]">
-                        {member.name}
-                        {member.role ? (
-                          <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
-                            {member.role}
-                          </span>
+                  <li key={`${member.name}-${index}`}>
+                    <AccentRecordCard showRail={false}>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-[var(--ink)]">
+                            {member.name}
+                            {member.role ? (
+                              <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                                {member.role}
+                              </span>
+                            ) : null}
+                          </p>
+                          <p
+                            className={[
+                              "text-[11px] tabular-nums",
+                              unrated
+                                ? "font-semibold text-[var(--amber)]"
+                                : "text-[var(--muted)]",
+                            ].join(" ")}
+                          >
+                            {formatMemberRating(member.rating)}
+                          </p>
+                        </div>
+                        {member.playerId ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onOpenPlayer({
+                                id: member.playerId,
+                                name: member.name,
+                              })
+                            }
+                            className="shrink-0 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1 text-[11px] font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)]"
+                          >
+                            View
+                          </button>
                         ) : null}
-                      </p>
-                      <p
-                        className={[
-                          "text-[11px] tabular-nums",
-                          unrated
-                            ? "font-semibold text-[var(--amber)]"
-                            : "text-[var(--muted)]",
-                        ].join(" ")}
-                      >
-                        {formatMemberRating(member.rating)}
-                      </p>
-                    </div>
-                    {member.playerId ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onOpenPlayer({
-                            id: member.playerId,
-                            name: member.name,
-                          })
-                        }
-                        className="shrink-0 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1 text-[11px] font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)]"
-                      >
-                        View
-                      </button>
-                    ) : null}
+                      </div>
+                    </AccentRecordCard>
                   </li>
                 );
               })}
@@ -980,7 +980,7 @@ function SignupRequestRow({
           <span className="block">{submittedTime}</span>
         </time>
       </div>
-    </div>
+    </AccentRecordCard>
   );
 }
 
@@ -4721,7 +4721,7 @@ export function Tournaments({
                   ) : (
                     <ul
                       ref={signupListRef}
-                      className="divide-y divide-[var(--line)] [overflow-anchor:none]"
+                      className={`${accentRecordListClass} p-3 sm:p-4 [overflow-anchor:none]`}
                       style={
                         signupListMinHeight > 0
                           ? { minHeight: signupListMinHeight }
@@ -4953,23 +4953,23 @@ export function Tournaments({
                     </p>
                   ) : null}
 
-                  <ul
-                    ref={fieldListRef}
-                    className="divide-y divide-[var(--line)] [overflow-anchor:none]"
-                    style={
-                      fieldListMinHeight > 0
-                        ? { minHeight: fieldListMinHeight }
-                        : undefined
-                    }
-                  >
-                    {fieldEntries.length === 0 ? (
-                      <li className="px-4 py-6 text-center text-sm text-[var(--muted)]">
-                        {fieldStats.approved === 0
-                          ? "No approved entries yet — approve signups first."
-                          : "No entries match this filter."}
-                      </li>
-                    ) : (
-                      fieldEntries.map((reg) => {
+                  {fieldEntries.length === 0 ? (
+                    <p className="px-4 py-6 text-center text-sm text-[var(--muted)]">
+                      {fieldStats.approved === 0
+                        ? "No approved entries yet — approve signups first."
+                        : "No entries match this filter."}
+                    </p>
+                  ) : (
+                    <ul
+                      ref={fieldListRef}
+                      className={`${accentRecordListClass} p-3 sm:p-4 [overflow-anchor:none]`}
+                      style={
+                        fieldListMinHeight > 0
+                          ? { minHeight: fieldListMinHeight }
+                          : undefined
+                      }
+                    >
+                      {fieldEntries.map((reg) => {
                         const title = registrationCardTitle(reg);
                         const isTeam = isTeamRegistration(reg);
                         const displayRating = registrationDisplayRating(
@@ -4989,202 +4989,210 @@ export function Tournaments({
                           <li
                             key={reg.id}
                             data-roster-row={`field:${reg.id}`}
-                            className="px-2 py-1.5 sm:px-3"
                           >
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-10 shrink-0 font-[family-name:var(--font-display)] text-[13px] font-semibold tabular-nums leading-none text-[var(--felt-deep)]">
-                                {hasRating
-                                  ? displayRating.toLocaleString()
-                                  : "—"}
-                              </div>
+                            <AccentRecordCard>
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-10 shrink-0 font-[family-name:var(--font-display)] text-[13px] font-semibold tabular-nums leading-none text-[var(--felt-deep)]">
+                                  {hasRating
+                                    ? displayRating.toLocaleString()
+                                    : "—"}
+                                </div>
 
-                              <div className="flex min-w-0 flex-1 items-center gap-0.5">
-                                <div className="min-w-0 flex-1">
-                                  <p className="font-[family-name:var(--font-display)] text-[13px] font-semibold leading-snug tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
-                                    {title}
-                                  </p>
-                                  {isTeam ? (
-                                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                                      <p className="text-[11px] leading-tight text-[var(--muted)]">
-                                        {members.length} player
-                                        {members.length === 1 ? "" : "s"}
-                                        {hasRating ? " · team Fargo" : ""}
-                                      </p>
-                                      {rosterHasUnrated(members) ? (
-                                        <UnratedBadge />
-                                      ) : null}
-                                    </div>
+                                <div className="flex min-w-0 flex-1 items-center gap-0.5">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-[family-name:var(--font-display)] text-[13px] font-semibold leading-snug tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
+                                      {title}
+                                    </p>
+                                    {isTeam ? (
+                                      <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                                        <p className="text-[11px] leading-tight text-[var(--muted)]">
+                                          {members.length} player
+                                          {members.length === 1 ? "" : "s"}
+                                          {hasRating ? " · team Fargo" : ""}
+                                        </p>
+                                        {rosterHasUnrated(members) ? (
+                                          <UnratedBadge />
+                                        ) : null}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                  {!isTeam && registrationPlayerId(reg) ? (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        openSignupPlayer({
+                                          id: registrationPlayerId(reg),
+                                          name: reg.displayName,
+                                        })
+                                      }
+                                      className={signupInlineIconBtn}
+                                      aria-label={`View player history: ${reg.displayName}`}
+                                      title="Player history"
+                                    >
+                                      <EyeIcon className="h-3.5 w-3.5" />
+                                    </button>
+                                  ) : null}
+                                  {!isTeam && captainUnrated ? (
+                                    <FieldEstimatedFargoInput
+                                      disabled={saving}
+                                      onSave={(rating) =>
+                                        onUpdateRegistration(reg.id, {
+                                          ratingAtSignup: rating,
+                                        })
+                                      }
+                                    />
+                                  ) : null}
+                                  {isTeam && captainUnrated && !hasRating ? (
+                                    <FieldEstimatedFargoInput
+                                      disabled={saving}
+                                      onSave={(rating) =>
+                                        onUpdateRegistration(reg.id, {
+                                          ratingAtSignup: rating,
+                                        })
+                                      }
+                                    />
                                   ) : null}
                                 </div>
-                                {!isTeam && registrationPlayerId(reg) ? (
+
+                                {isTeam ? (
                                   <button
                                     type="button"
-                                    onClick={() =>
-                                      openSignupPlayer({
-                                        id: registrationPlayerId(reg),
-                                        name: reg.displayName,
-                                      })
+                                    onClick={(event) =>
+                                      toggleRosterExpand("field", reg.id, event)
                                     }
-                                    className={signupInlineIconBtn}
-                                    aria-label={`View player history: ${reg.displayName}`}
-                                    title="Player history"
+                                    className={teamExpandBtnClass(expanded)}
+                                    aria-expanded={expanded}
+                                    aria-label={
+                                      expanded
+                                        ? `Hide roster for ${title}`
+                                        : `Show roster for ${title}`
+                                    }
+                                    title={expanded ? "Hide roster" : "Roster"}
                                   >
-                                    <EyeIcon className="h-3.5 w-3.5" />
+                                    <TeamExpandIcon open={expanded} />
                                   </button>
                                 ) : null}
-                                {!isTeam && captainUnrated ? (
-                                  <FieldEstimatedFargoInput
+
+                                <div className="flex shrink-0 items-center gap-1">
+                                  {reg.paid && reg.stripePaymentIntentId ? (
+                                    <AppPaidBadge />
+                                  ) : null}
+                                  <button
+                                    type="button"
                                     disabled={saving}
-                                    onSave={(rating) =>
-                                      onUpdateRegistration(reg.id, {
-                                        ratingAtSignup: rating,
+                                    onClick={() =>
+                                      void onUpdateRegistration(reg.id, {
+                                        checkedIn: !reg.checkedIn,
                                       })
                                     }
-                                  />
-                                ) : null}
-                                {isTeam && captainUnrated && !hasRating ? (
-                                  <FieldEstimatedFargoInput
+                                    className={
+                                      reg.checkedIn
+                                        ? fieldToggleCheckedIn
+                                        : fieldToggleIdle
+                                    }
+                                    aria-pressed={reg.checkedIn}
+                                    aria-label={
+                                      reg.checkedIn
+                                        ? `Mark ${title} not checked in`
+                                        : `Check in ${title}`
+                                    }
+                                    title={
+                                      reg.checkedIn ? "Checked in" : "Check in"
+                                    }
+                                  >
+                                    In
+                                  </button>
+                                  <button
+                                    type="button"
                                     disabled={saving}
-                                    onSave={(rating) =>
-                                      onUpdateRegistration(reg.id, {
-                                        ratingAtSignup: rating,
+                                    onClick={() =>
+                                      void onUpdateRegistration(reg.id, {
+                                        paid: !reg.paid,
                                       })
                                     }
-                                  />
-                                ) : null}
+                                    className={
+                                      reg.paid
+                                        ? fieldTogglePaid
+                                        : fieldToggleIdle
+                                    }
+                                    aria-pressed={reg.paid}
+                                    aria-label={
+                                      reg.paid
+                                        ? `Mark ${title} unpaid`
+                                        : `Mark ${title} paid`
+                                    }
+                                    title={
+                                      reg.paid
+                                        ? reg.stripePaymentIntentId
+                                          ? "Paid in app"
+                                          : "Paid"
+                                        : "Mark paid"
+                                    }
+                                  >
+                                    {reg.paid ? "Paid" : "Pay"}
+                                  </button>
+                                </div>
                               </div>
 
-                              {isTeam ? (
-                                <button
-                                  type="button"
-                                  onClick={(event) =>
-                                    toggleRosterExpand("field", reg.id, event)
-                                  }
-                                  className={teamExpandBtnClass(expanded)}
-                                  aria-expanded={expanded}
-                                  aria-label={
-                                    expanded
-                                      ? `Hide roster for ${title}`
-                                      : `Show roster for ${title}`
-                                  }
-                                  title={expanded ? "Hide roster" : "Roster"}
+                              {isTeam && expanded ? (
+                                <ul
+                                  className={`${accentRecordListClass} mt-3 border-t border-[var(--line)] pt-3 [overflow-anchor:none]`}
                                 >
-                                  <TeamExpandIcon open={expanded} />
-                                </button>
+                                  {members.map((member, index) => {
+                                    const unrated = member.rating == null;
+                                    return (
+                                      <li key={`${reg.id}-m-${index}`}>
+                                        <AccentRecordCard showRail={false}>
+                                          <div className="flex min-w-0 items-center gap-2">
+                                            <div className="min-w-0 flex-1">
+                                              <p className="truncate text-sm font-medium text-[var(--ink)]">
+                                                {member.name}
+                                                {member.role ? (
+                                                  <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                                                    {member.role}
+                                                  </span>
+                                                ) : null}
+                                              </p>
+                                              <p
+                                                className={[
+                                                  "text-[11px] tabular-nums",
+                                                  unrated
+                                                    ? "font-semibold text-[var(--amber)]"
+                                                    : "text-[var(--muted)]",
+                                                ].join(" ")}
+                                              >
+                                                {formatMemberRating(
+                                                  member.rating,
+                                                )}
+                                              </p>
+                                            </div>
+                                            {member.playerId ? (
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  openSignupPlayer({
+                                                    id: member.playerId,
+                                                    name: member.name,
+                                                  })
+                                                }
+                                                className="shrink-0 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1 text-[11px] font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)]"
+                                              >
+                                                View
+                                              </button>
+                                            ) : null}
+                                          </div>
+                                        </AccentRecordCard>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
                               ) : null}
-
-                              <div className="flex shrink-0 items-center gap-1">
-                                {reg.paid && reg.stripePaymentIntentId ? (
-                                  <AppPaidBadge />
-                                ) : null}
-                                <button
-                                  type="button"
-                                  disabled={saving}
-                                  onClick={() =>
-                                    void onUpdateRegistration(reg.id, {
-                                      checkedIn: !reg.checkedIn,
-                                    })
-                                  }
-                                  className={
-                                    reg.checkedIn
-                                      ? fieldToggleCheckedIn
-                                      : fieldToggleIdle
-                                  }
-                                  aria-pressed={reg.checkedIn}
-                                  aria-label={
-                                    reg.checkedIn
-                                      ? `Mark ${title} not checked in`
-                                      : `Check in ${title}`
-                                  }
-                                  title={
-                                    reg.checkedIn ? "Checked in" : "Check in"
-                                  }
-                                >
-                                  In
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={saving}
-                                  onClick={() =>
-                                    void onUpdateRegistration(reg.id, {
-                                      paid: !reg.paid,
-                                    })
-                                  }
-                                  className={
-                                    reg.paid ? fieldTogglePaid : fieldToggleIdle
-                                  }
-                                  aria-pressed={reg.paid}
-                                  aria-label={
-                                    reg.paid
-                                      ? `Mark ${title} unpaid`
-                                      : `Mark ${title} paid`
-                                  }
-                                  title={
-                                    reg.paid
-                                      ? reg.stripePaymentIntentId
-                                        ? "Paid in app"
-                                        : "Paid"
-                                      : "Mark paid"
-                                  }
-                                >
-                                  {reg.paid ? "Paid" : "Pay"}
-                                </button>
-                              </div>
-                            </div>
-
-                            {isTeam && expanded ? (
-                              <ul className="mt-2 space-y-1 border-t border-[var(--line)] pt-2 [overflow-anchor:none]">
-                                {members.map((member, index) => {
-                                  const unrated = member.rating == null;
-                                  return (
-                                    <li
-                                      key={`${reg.id}-m-${index}`}
-                                      className="flex min-w-0 items-center gap-2 px-0.5"
-                                    >
-                                      <div className="min-w-0 flex-1">
-                                        <p className="truncate text-sm font-medium text-[var(--ink)]">
-                                          {member.name}
-                                          {member.role ? (
-                                            <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
-                                              {member.role}
-                                            </span>
-                                          ) : null}
-                                        </p>
-                                        <p
-                                          className={[
-                                            "text-[11px] tabular-nums",
-                                            unrated
-                                              ? "font-semibold text-[var(--amber)]"
-                                              : "text-[var(--muted)]",
-                                          ].join(" ")}
-                                        >
-                                          {formatMemberRating(member.rating)}
-                                        </p>
-                                      </div>
-                                      {member.playerId ? (
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            openSignupPlayer({
-                                              id: member.playerId,
-                                              name: member.name,
-                                            })
-                                          }
-                                          className="shrink-0 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-2 py-1 text-[11px] font-semibold text-[var(--ink)] transition hover:bg-[var(--surface-3)]"
-                                        >
-                                          View
-                                        </button>
-                                      ) : null}
-                                    </li>
-                                  );
-                                })}
-                              </ul>
-                            ) : null}
+                            </AccentRecordCard>
                           </li>
                         );
-                      })
-                    )}
-                  </ul>
+                      })}
+                    </ul>
+                  )}
                 </section>
               </div>
             ) : null}
