@@ -126,10 +126,14 @@ export function formatScoringSummary(format: LeagueScoringFormat): string {
   const race =
     format.raceMode === "fargo-race-chart"
       ? `${raceChartMeta(format.raceChartId ?? "r6-hot").label} race chart`
-      : `race to ${format.fixedRaceWin ?? 10}`;
+      : (format.fixedRaceWin ?? 10) <= 1
+        ? "single-game matchups"
+        : `race to ${format.fixedRaceWin ?? 10}`;
   const team =
     format.teamPointMode === "match-win"
-      ? "1 pt per match win"
+      ? format.teamRaceTo
+        ? `team race to ${format.teamRaceTo}`
+        : "1 pt per match win"
       : format.matchPointsRound
         ? "round pts + match-points round"
         : "round points";

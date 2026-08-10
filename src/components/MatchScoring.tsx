@@ -1104,6 +1104,7 @@ export function MatchScoring({
           }
           includeMatchPointsRound={includeMatchPointsRound}
           matchWinTeamPoints={matchWinTeamPoints}
+          teamRaceTo={scoringFormat.teamRaceTo}
           formatHint={formatScoringSummary(scoringFormat)}
           pointTotals={matchPointTotals}
           gameWins={{

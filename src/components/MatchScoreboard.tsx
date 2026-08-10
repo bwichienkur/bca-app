@@ -12,6 +12,8 @@ export type MatchScoreboardProps = {
   roundsAvailable: number;
   includeMatchPointsRound: boolean;
   matchWinTeamPoints?: boolean;
+  /** First-to team match points (e.g. 13). Used for badge + hero hint. */
+  teamRaceTo?: number | null;
   formatHint?: string;
   pointTotals: { teamOne: number; teamTwo: number };
   gameWins: { teamOne: number; teamTwo: number };
@@ -32,6 +34,7 @@ export const MatchScoreboard = memo(function MatchScoreboard({
   roundsAvailable,
   includeMatchPointsRound,
   matchWinTeamPoints = false,
+  teamRaceTo = null,
   formatHint,
   pointTotals,
   gameWins,
@@ -41,8 +44,20 @@ export const MatchScoreboard = memo(function MatchScoreboard({
   handicapTotals,
 }: MatchScoreboardProps) {
   const roundsDecided = roundWins.teamOne + roundWins.teamTwo;
+  const teamRaceTarget =
+    matchWinTeamPoints && teamRaceTo != null && teamRaceTo > 0
+      ? teamRaceTo
+      : null;
+  const heroAvailable = teamRaceTarget ?? roundsAvailable;
   const progress =
-    gamesTotal > 0 ? Math.min(1, gamesPlayed / gamesTotal) : 0;
+    teamRaceTarget != null
+      ? Math.min(
+          1,
+          Math.max(roundWins.teamOne, roundWins.teamTwo) / teamRaceTarget,
+        )
+      : gamesTotal > 0
+        ? Math.min(1, gamesPlayed / gamesTotal)
+        : 0;
   const playedRounds = includeMatchPointsRound
     ? Math.max(0, roundsAvailable - 1)
     : roundsAvailable;
@@ -156,7 +171,7 @@ export const MatchScoreboard = memo(function MatchScoreboard({
         </p>
         {matchWinTeamPoints ? (
           <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40">
-            Match wins
+            {teamRaceTarget ? `Race to ${teamRaceTarget}` : "Match wins"}
           </p>
         ) : includeMatchPointsRound && playedRounds > 0 ? (
           <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40">
@@ -177,37 +192,42 @@ export const MatchScoreboard = memo(function MatchScoreboard({
           two: roundWins.teamTwo,
           emphasis: "hero",
           hint:
-            roundsAvailable > 0
-              ? `${roundsDecided}/${roundsAvailable}`
+            heroAvailable > 0
+              ? teamRaceTarget
+                ? `first to ${teamRaceTarget}`
+                : `${roundsDecided}/${heroAvailable}`
               : undefined,
         })}
 
-        <div className="mx-auto mt-2 h-px w-[min(100%,16rem)] bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+        {matchWinTeamPoints && !teamRaceTarget ? (
+          <>
+            <div className="mx-auto mt-2 h-px w-[min(100%,16rem)] bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+            {metricRow({
+              label: "Race games",
+              one: pointTotals.teamOne,
+              two: pointTotals.teamTwo,
+              emphasis: "secondary",
+            })}
+          </>
+        ) : null}
 
-        {matchWinTeamPoints ? (
-          metricRow({
-            label: "Race games",
-            one: pointTotals.teamOne,
-            two: pointTotals.teamTwo,
-            emphasis: "secondary",
-          })
-        ) : (
-          metricRow({
-            label: "Points",
-            one: pointTotals.teamOne,
-            two: pointTotals.teamTwo,
-            emphasis: "secondary",
-          })
-        )}
-
-        {!matchWinTeamPoints
-          ? metricRow({
+        {!matchWinTeamPoints ? (
+          <>
+            <div className="mx-auto mt-2 h-px w-[min(100%,16rem)] bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+            {metricRow({
+              label: "Points",
+              one: pointTotals.teamOne,
+              two: pointTotals.teamTwo,
+              emphasis: "secondary",
+            })}
+            {metricRow({
               label: "Games",
               one: gameWins.teamOne,
               two: gameWins.teamTwo,
               emphasis: "tertiary",
-            })
-          : null}
+            })}
+          </>
+        ) : null}
       </div>
 
       <div className="mt-2.5 space-y-1.5">

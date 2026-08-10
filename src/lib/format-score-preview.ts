@@ -204,7 +204,9 @@ export function buildPreviewMatch(args: {
   const scoring = result.scoringFormat;
   const fixedWin = scoring.fixedRaceWin ?? picks.fixedRaceTo ?? 10;
   const fixedLoss =
-    scoring.fixedRaceMaxLoss ?? Math.max(1, fixedWin - 3);
+    scoring.fixedRaceMaxLoss != null && scoring.fixedRaceMaxLoss >= 0
+      ? scoring.fixedRaceMaxLoss
+      : Math.max(0, fixedWin - 1);
   const handicapped = picks.fargoHc !== "none";
   const defaults = defaultPreviewSlots(n);
 
@@ -321,6 +323,7 @@ export function previewFormatSignature(
     picks.raceModel,
     picks.raceChartId,
     picks.fixedRaceTo,
+    picks.teamRaceTo ?? "",
     picks.teamScoring,
     picks.matchPointsRound,
     picks.pointSystem,

@@ -479,21 +479,31 @@ export function LmsScoresheetStudio() {
 
           {showFixedRace ? (
             <SelectBlock
-              label={picks.gameKind === "S" ? "Score pad" : "Race to"}
+              label={
+                picks.fixedRaceTo <= 1
+                  ? "Per game"
+                  : picks.gameKind === "S"
+                    ? "Score pad"
+                    : "Race to"
+              }
               info={{
                 summary:
-                  picks.gameKind === "S"
-                    ? "Points pad length / max race value for fixed-race games."
-                    : "Same race length for every matchup.",
+                  picks.fixedRaceTo <= 1
+                    ? "Single-game matchups: mark W/L only (1 game = 1 match point when using match wins)."
+                    : picks.gameKind === "S"
+                      ? "Points pad length / max race value for fixed-race games."
+                      : "Same race length for every matchup (not the team race target).",
               }}
             >
               <SelectField
                 aria-label="Fixed race to"
                 value={String(picks.fixedRaceTo)}
-                options={[5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 21].map((n) => ({
-                  value: String(n),
-                  label: String(n),
-                }))}
+                options={[1, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 21].map(
+                  (n) => ({
+                    value: String(n),
+                    label: n === 1 ? "1 · single game" : String(n),
+                  }),
+                )}
                 onChange={(value) =>
                   patch({ fixedRaceTo: Number(value) || 7 })
                 }
@@ -669,10 +679,44 @@ export function LmsScoresheetStudio() {
                 label: option.label,
               }))}
               onChange={(value) =>
-                patch({ teamScoring: value as TeamScoringMode })
+                patch({
+                  teamScoring: value as TeamScoringMode,
+                  ...(value !== "match-win" ? { teamRaceTo: null } : {}),
+                })
               }
             />
           </SelectBlock>
+
+          {picks.teamScoring === "match-win" ? (
+            <SelectBlock
+              label="Team race to"
+              info={{
+                summary:
+                  "Optional first-to team match points (e.g. 13 on a 5×5 sheet). Each matchup still awards 1 point; this is the night target, not the per-player race.",
+              }}
+            >
+              <SelectField
+                aria-label="Team race to"
+                value={
+                  picks.teamRaceTo != null && picks.teamRaceTo > 0
+                    ? String(picks.teamRaceTo)
+                    : "off"
+                }
+                options={[
+                  { value: "off", label: "Off" },
+                  ...[7, 9, 11, 13, 15, 17].map((n) => ({
+                    value: String(n),
+                    label: String(n),
+                  })),
+                ]}
+                onChange={(value) =>
+                  patch({
+                    teamRaceTo: value === "off" ? null : Number(value) || null,
+                  })
+                }
+              />
+            </SelectBlock>
+          ) : null}
 
           {showRoundPointsExtras ? (
             <>
