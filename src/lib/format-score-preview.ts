@@ -13,7 +13,9 @@ import type { FormatTemplateModel } from "@/lib/lms-format-template";
 import {
   emptyDraft,
   gameKey,
+  gameWinner,
   parsedFormatFromMatch,
+  playerDisplayName,
   type FormatGame,
   type FormatPlayerSlot,
   type FormatRound,
@@ -29,19 +31,61 @@ import type { LeagueScoringFormat } from "@/lib/scoring-formats";
 const DEFAULT_HOME_RATINGS = [620, 580, 540, 500, 460, 420];
 const DEFAULT_AWAY_RATINGS = [600, 560, 520, 480, 440, 400];
 
+/** Same shape as PartnerSearchField's PartnerPick (kept here to avoid lib→UI imports). */
+export type PreviewPartnerPick = {
+  displayName: string;
+  ratingAtSignup: number | null;
+  fargoPlayerId: string | null;
+  readableId: string | null;
+};
+
+export type PreviewLineupSlot = {
+  pick: PreviewPartnerPick;
+  fargo: number;
+};
+
+export type PlayerNightStat = {
+  playerId: string;
+  side: 1 | 2;
+  slotIndex: number;
+  name: string;
+  fargo: number | null;
+  points: number;
+  wins: number;
+  losses: number;
+  games: number;
+};
+
+export function emptyPartnerPick(): PreviewPartnerPick {
+  return {
+    displayName: "",
+    ratingAtSignup: null,
+    fargoPlayerId: null,
+    readableId: null,
+  };
+}
+
 export function makePreviewPlayer(
   side: "H" | "A",
   index: number,
-  fargoRating: number,
+  slot: PreviewLineupSlot,
 ): ScoringPlayer {
-  const label = side === "H" ? "Home" : "Away";
+  const fallback = side === "H" ? `Home ${index}` : `Away ${index}`;
+  const name = slot.pick.displayName.trim() || fallback;
+  const parts = name.split(/\s+/).filter(Boolean);
+  const firstName = parts[0] || fallback;
+  const lastName = parts.length > 1 ? parts.slice(1).join(" ") : "";
+  const readable =
+    slot.pick.readableId != null && slot.pick.readableId !== ""
+      ? Number(slot.pick.readableId)
+      : index;
   return {
     id: `${side.toLowerCase()}-${index}`,
-    readableId: index,
-    firstName: label,
-    lastName: String(index),
+    readableId: Number.isFinite(readable) ? readable : index,
+    firstName,
+    lastName,
     nickname: null,
-    fargoRating,
+    fargoRating: slot.fargo,
     handicap: null,
     showOnRoster: true,
   };
@@ -61,6 +105,33 @@ export function defaultPreviewRatings(count: number): {
       (_, i) => DEFAULT_AWAY_RATINGS[i] ?? 490 - i * 20,
     ),
   };
+}
+
+export function defaultPreviewSlots(count: number): {
+  home: PreviewLineupSlot[];
+  away: PreviewLineupSlot[];
+} {
+  const ratings = defaultPreviewRatings(count);
+  return {
+    home: ratings.home.map((fargo) => ({
+      pick: emptyPartnerPick(),
+      fargo,
+    })),
+    away: ratings.away.map((fargo) => ({
+      pick: emptyPartnerPick(),
+      fargo,
+    })),
+  };
+}
+
+export function resizePreviewSlots(
+  prev: PreviewLineupSlot[],
+  count: number,
+  side: "H" | "A",
+): PreviewLineupSlot[] {
+  const defaults = defaultPreviewSlots(count);
+  const fallback = side === "H" ? defaults.home : defaults.away;
+  return Array.from({ length: count }, (_, i) => prev[i] ?? fallback[i]!);
 }
 
 function slot(side: "H" | "A", index: number): FormatPlayerSlot {
@@ -125,22 +196,23 @@ export function handicapPercentMultiplier(percent: number): number {
 export function buildPreviewMatch(args: {
   picks: FormatGeneratorPicks;
   result: FormatGeneratorResult;
-  homeRatings: number[];
-  awayRatings: number[];
+  homeSlots: PreviewLineupSlot[];
+  awaySlots: PreviewLineupSlot[];
 }): ScoringMatchDetail {
-  const { picks, result, homeRatings, awayRatings } = args;
+  const { picks, result, homeSlots, awaySlots } = args;
   const n = result.model.playerCount;
   const scoring = result.scoringFormat;
   const fixedWin = scoring.fixedRaceWin ?? picks.fixedRaceTo ?? 10;
   const fixedLoss =
     scoring.fixedRaceMaxLoss ?? Math.max(1, fixedWin - 3);
   const handicapped = picks.fargoHc !== "none";
+  const defaults = defaultPreviewSlots(n);
 
   const teamOnePlayers = Array.from({ length: n }, (_, i) =>
-    makePreviewPlayer("H", i + 1, homeRatings[i] ?? 500),
+    makePreviewPlayer("H", i + 1, homeSlots[i] ?? defaults.home[i]!),
   );
   const teamTwoPlayers = Array.from({ length: n }, (_, i) =>
-    makePreviewPlayer("A", i + 1, awayRatings[i] ?? 500),
+    makePreviewPlayer("A", i + 1, awaySlots[i] ?? defaults.away[i]!),
   );
 
   return {
@@ -267,6 +339,74 @@ export function gameSlotLabel(
     homeSlot: game ? `H${game.playerOne.index}` : "H?",
     awaySlot: game ? `A${game.playerTwo.index}` : "A?",
   };
+}
+
+/** Per-player points and W-L across every scored game on the night. */
+export function tallyPlayerNight(
+  match: ScoringMatchDetail,
+  draft: ScoringDraft,
+): { home: PlayerNightStat[]; away: PlayerNightStat[] } {
+  const byId = new Map<string, PlayerNightStat>();
+
+  const seed = (player: ScoringPlayer, side: 1 | 2, slotIndex: number) => {
+    byId.set(player.id, {
+      playerId: player.id,
+      side,
+      slotIndex,
+      name: playerDisplayName(player),
+      fargo: player.fargoRating,
+      points: 0,
+      wins: 0,
+      losses: 0,
+      games: 0,
+    });
+  };
+
+  match.teamOnePlayers.forEach((player, index) => seed(player, 1, index + 1));
+  match.teamTwoPlayers.forEach((player, index) => seed(player, 2, index + 1));
+
+  for (const round of match.matchFormat?.rounds ?? []) {
+    for (const game of round.games) {
+      const state = draft.games[gameKey(round.roundNumber, game.index)];
+      if (!state) continue;
+      const winner = gameWinner(state, {
+        raceTargetOne: state.raceTargetOne,
+        raceTargetTwo: state.raceTargetTwo,
+        maxScore: match.maxScore,
+        maxLosingScore: match.maxLosingScore,
+      });
+      const mult = game.multiplier > 0 ? game.multiplier : 1;
+      const oneId = state.teamOnePlayerId;
+      const twoId = state.teamTwoPlayerId;
+      const one = oneId ? byId.get(oneId) : null;
+      const two = twoId ? byId.get(twoId) : null;
+      const oneScore = state.teamOneScore ?? 0;
+      const twoScore = state.teamTwoScore ?? 0;
+      const played = oneScore > 0 || twoScore > 0 || winner != null;
+      if (!played) continue;
+
+      if (one) {
+        one.points += oneScore * mult;
+        one.games += 1;
+        if (winner === 1) one.wins += 1;
+        if (winner === 2) one.losses += 1;
+      }
+      if (two) {
+        two.points += twoScore * mult;
+        two.games += 1;
+        if (winner === 2) two.wins += 1;
+        if (winner === 1) two.losses += 1;
+      }
+    }
+  }
+
+  const home = match.teamOnePlayers
+    .map((player) => byId.get(player.id)!)
+    .filter(Boolean);
+  const away = match.teamTwoPlayers
+    .map((player) => byId.get(player.id)!)
+    .filter(Boolean);
+  return { home, away };
 }
 
 export { gameKey };
