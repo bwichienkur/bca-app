@@ -17,6 +17,7 @@ import {
   MATCH_POINTS_TAB_LABEL,
   playerDisplayName,
   tallyAllRoundPoints,
+  tallyAllRoundsByGameWins,
   tallyDraft,
   tallyMatchPointsRound,
   type GameScoreState,
@@ -400,6 +401,10 @@ export function FormatScoreSandbox({
   );
 
   const winTally = useMemo(() => tallyDraft(draft), [draft]);
+  const matchWinRoundTallies = useMemo(
+    () => (matchWinMode ? tallyAllRoundsByGameWins(match, draft) : []),
+    [matchWinMode, match, draft],
+  );
   const playerNight = useMemo(
     () => tallyPlayerNight(match, draft),
     [match, draft],
@@ -643,10 +648,15 @@ export function FormatScoreSandbox({
               }}
             >
               {rounds.map((round) => {
-                const tally =
+                const pointsTally =
                   roundTallies.find(
                     (item) => item.roundNumber === round.roundNumber,
                   ) ?? null;
+                const matchWinsTally =
+                  matchWinRoundTallies.find(
+                    (item) => item.roundNumber === round.roundNumber,
+                  ) ?? null;
+                const tally = matchWinMode ? matchWinsTally : pointsTally;
                 const active = round.roundNumber === activeRound;
                 const decided = tally?.roundWinner != null;
                 return (
