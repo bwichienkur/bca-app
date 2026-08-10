@@ -1,6 +1,13 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   applyFormatPreset,
   defaultFormatPicks,
@@ -37,10 +44,23 @@ const CHART_BASE_OPTIONS: RaceChartBase[] = [
 const CHART_INTENSITY_OPTIONS: Array<{
   id: RaceChartIntensity;
   label: string;
+  description: string;
 }> = [
-  { id: "hot", label: "Hot — most handicap" },
-  { id: "medium", label: "Medium" },
-  { id: "mild", label: "Mild — lightest handicap" },
+  {
+    id: "hot",
+    label: "Hot",
+    description: "Most handicap — closest to even odds",
+  },
+  {
+    id: "medium",
+    label: "Medium",
+    description: "Moderate spot for the underdog",
+  },
+  {
+    id: "mild",
+    label: "Mild",
+    description: "Lightest handicap",
+  },
 ];
 
 function chartIdFromParts(
@@ -50,10 +70,6 @@ function chartIdFromParts(
   return parseRaceChartId(`r${base}-${intensity}`);
 }
 
-function optionLabel(label: string, description?: string): string {
-  return description ? `${label} — ${description}` : label;
-}
-
 const btnPrimary =
   "inline-flex items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
 const btnGhost =
@@ -61,11 +77,128 @@ const btnGhost =
 const inputClass =
   "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none ring-[var(--felt)] focus:ring-2";
 
-function FieldLabel({ children }: { children: ReactNode }) {
+type InfoItem = { label: string; description: string };
+
+function FieldInfo({
+  label,
+  summary,
+  items,
+}: {
+  label: string;
+  /** One-line field explanation when there are no option rows. */
+  summary?: string;
+  items?: InfoItem[];
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLSpanElement | null>(null);
+  const tipId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   return (
-    <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-      {children}
+    <span
+      ref={rootRef}
+      className="relative inline-flex"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        className="inline-flex size-4 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[10px] font-bold leading-none text-[var(--muted)] hover:border-[var(--felt)] hover:text-[var(--felt-deep)]"
+        aria-label={`About ${label}`}
+        aria-expanded={open}
+        aria-controls={tipId}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setOpen((value) => !value);
+        }}
+      >
+        i
+      </button>
+      {open ? (
+        <span
+          id={tipId}
+          role="tooltip"
+          className="absolute left-0 top-[calc(100%+0.35rem)] z-30 w-[min(18rem,calc(100vw-2.5rem))] rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-2.5 text-left shadow-[var(--shadow)]"
+        >
+          {summary ? (
+            <p className="text-xs leading-snug text-[var(--muted)]">{summary}</p>
+          ) : null}
+          {items?.length ? (
+            <ul className={summary ? "mt-2 space-y-1.5" : "space-y-1.5"}>
+              {items.map((item) => (
+                <li key={item.label} className="text-xs leading-snug">
+                  <span className="font-semibold text-[var(--ink)]">
+                    {item.label}
+                  </span>
+                  <span className="text-[var(--muted)]">
+                    {" "}
+                    — {item.description}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </span>
+      ) : null}
     </span>
+  );
+}
+
+function FieldLabel({
+  children,
+  info,
+}: {
+  children: ReactNode;
+  info?: { summary?: string; items?: InfoItem[] };
+}) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+        {children}
+      </span>
+      {info ? (
+        <FieldInfo
+          label={typeof children === "string" ? children : "field"}
+          summary={info.summary}
+          items={info.items}
+        />
+      ) : null}
+    </span>
+  );
+}
+
+function SelectBlock({
+  label,
+  info,
+  children,
+}: {
+  label: string;
+  info?: { summary?: string; items?: InfoItem[] };
+  children: ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <FieldLabel info={info}>{label}</FieldLabel>
+      {children}
+    </div>
   );
 }
 
@@ -144,24 +277,37 @@ export function LmsScoresheetStudio() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,20rem)_1fr]">
         <div className="space-y-3">
-          <label className="block space-y-1.5">
-            <FieldLabel>Preset</FieldLabel>
+          <SelectBlock
+            label="Preset"
+            info={{
+              summary: "Optional shortcut that fills the fields below.",
+              items: FORMAT_PRESETS.map((preset) => ({
+                label: preset.label,
+                description: preset.description,
+              })),
+            }}
+          >
             <SelectField
               aria-label="Format preset"
               value=""
               placeholder="Apply a common setup…"
               options={FORMAT_PRESETS.map((preset) => ({
                 value: preset.id,
-                label: optionLabel(preset.label, preset.description),
+                label: preset.label,
               }))}
               onChange={(value) => {
                 if (value) applyPreset(value as FormatPresetId);
               }}
             />
-          </label>
+          </SelectBlock>
 
-          <label className="block space-y-1.5">
-            <FieldLabel>Players per side</FieldLabel>
+          <SelectBlock
+            label="Players per side"
+            info={{
+              summary:
+                "How many players from each team are in the lineup for the night.",
+            }}
+          >
             <SelectField
               aria-label="Players per side"
               value={String(picks.playersPerTeam)}
@@ -171,26 +317,38 @@ export function LmsScoresheetStudio() {
               }
               disabled={picks.structure === "doubles"}
             />
-          </label>
+          </SelectBlock>
 
-          <label className="block space-y-1.5">
-            <FieldLabel>Structure</FieldLabel>
+          <SelectBlock
+            label="Structure"
+            info={{
+              items: STRUCTURE_OPTIONS.map((option) => ({
+                label: option.label,
+                description: option.description,
+              })),
+            }}
+          >
             <SelectField
               aria-label="Match structure"
               value={picks.structure}
               options={STRUCTURE_OPTIONS.map((option) => ({
                 value: option.id,
-                label: optionLabel(option.label, option.description),
+                label: option.label,
               }))}
               onChange={(value) =>
                 patch({ structure: value as MatchStructure })
               }
             />
-          </label>
+          </SelectBlock>
 
           {picks.structure === "round-robin" ? (
-            <label className="block space-y-1.5">
-              <FieldLabel>Rounds</FieldLabel>
+            <SelectBlock
+              label="Rounds"
+              info={{
+                summary:
+                  "How many rounds in the matrix. Often matches players per side.",
+              }}
+            >
               <SelectField
                 aria-label="Rounds"
                 value={String(picks.rounds ?? picks.playersPerTeam)}
@@ -202,26 +360,46 @@ export function LmsScoresheetStudio() {
                   patch({ rounds: Number(value) || picks.playersPerTeam })
                 }
               />
-            </label>
+            </SelectBlock>
           ) : null}
 
-          <label className="block space-y-1.5">
-            <FieldLabel>Game kind</FieldLabel>
+          <SelectBlock
+            label="Game kind"
+            info={{
+              items: GAME_KIND_OPTIONS.map((option) => ({
+                label: option.label,
+                description: option.description,
+              })),
+            }}
+          >
             <SelectField
               aria-label="Game kind"
               value={picks.gameKind}
               options={GAME_KIND_OPTIONS.map((option) => ({
                 value: option.id,
-                label: optionLabel(option.label, option.description),
+                label: option.label,
               }))}
               onChange={(value) =>
                 patch({ gameKind: value as FormatGameKind })
               }
             />
-          </label>
+          </SelectBlock>
 
-          <label className="block space-y-1.5">
-            <FieldLabel>Ball</FieldLabel>
+          <SelectBlock
+            label="Ball"
+            info={{
+              summary: "Which game is written into the LMS format template.",
+              items: [
+                { label: "8-Ball", description: "GAME type 8" },
+                { label: "9-Ball", description: "GAME type 9" },
+                { label: "10-Ball", description: "GAME type 10" },
+                {
+                  label: "Any",
+                  description: "Unspecified / any ball in the template",
+                },
+              ],
+            }}
+          >
             <SelectField
               aria-label="Game ball"
               value={picks.gameBall}
@@ -229,7 +407,7 @@ export function LmsScoresheetStudio() {
                 { value: "8", label: "8-Ball" },
                 { value: "9", label: "9-Ball" },
                 { value: "10", label: "10-Ball" },
-                { value: "any", label: "Any / unspecified" },
+                { value: "any", label: "Any" },
               ]}
               onChange={(value) =>
                 patch({
@@ -240,26 +418,38 @@ export function LmsScoresheetStudio() {
                 })
               }
             />
-          </label>
+          </SelectBlock>
 
-          <label className="block space-y-1.5">
-            <FieldLabel>Race</FieldLabel>
+          <SelectBlock
+            label="Race"
+            info={{
+              items: RACE_MODEL_OPTIONS.map((option) => ({
+                label: option.label,
+                description: option.description,
+              })),
+            }}
+          >
             <SelectField
               aria-label="Race model"
               value={picks.raceModel}
               options={RACE_MODEL_OPTIONS.map((option) => ({
                 value: option.id,
-                label: optionLabel(option.label, option.description),
+                label: option.label,
               }))}
               onChange={(value) => patch({ raceModel: value as RaceModel })}
             />
-          </label>
+          </SelectBlock>
 
           {showFixedRace ? (
-            <label className="block space-y-1.5">
-              <FieldLabel>
-                {picks.gameKind === "S" ? "Score pad / race length" : "Race to"}
-              </FieldLabel>
+            <SelectBlock
+              label={picks.gameKind === "S" ? "Score pad" : "Race to"}
+              info={{
+                summary:
+                  picks.gameKind === "S"
+                    ? "Points pad length / max race value for fixed-race games."
+                    : "Same race length for every matchup.",
+              }}
+            >
               <SelectField
                 aria-label="Fixed race to"
                 value={String(picks.fixedRaceTo)}
@@ -271,13 +461,18 @@ export function LmsScoresheetStudio() {
                   patch({ fixedRaceTo: Number(value) || 7 })
                 }
               />
-            </label>
+            </SelectBlock>
           ) : null}
 
           {showFargoChart ? (
             <>
-              <label className="block space-y-1.5">
-                <FieldLabel>Chart (even race)</FieldLabel>
+              <SelectBlock
+                label="Chart"
+                info={{
+                  summary:
+                    "Even-race baseline for the Fargo chart (R6 = even races near 6–6).",
+                }}
+              >
                 <SelectField
                   aria-label="Fargo race chart base"
                   value={String(chartMeta.base)}
@@ -300,9 +495,16 @@ export function LmsScoresheetStudio() {
                     });
                   }}
                 />
-              </label>
-              <label className="block space-y-1.5">
-                <FieldLabel>Chart intensity</FieldLabel>
+              </SelectBlock>
+              <SelectBlock
+                label="Intensity"
+                info={{
+                  items: CHART_INTENSITY_OPTIONS.map((option) => ({
+                    label: option.label,
+                    description: option.description,
+                  })),
+                }}
+              >
                 <SelectField
                   aria-label="Fargo race chart intensity"
                   value={chartMeta.intensity}
@@ -319,27 +521,47 @@ export function LmsScoresheetStudio() {
                     })
                   }
                 />
-              </label>
+              </SelectBlock>
             </>
           ) : null}
 
-          <label className="block space-y-1.5">
-            <FieldLabel>Fargo handicap</FieldLabel>
+          <SelectBlock
+            label="Fargo handicap"
+            info={{
+              items: FARGO_HC_OPTIONS.map((option) => ({
+                label: option.label,
+                description: option.description,
+              })),
+            }}
+          >
             <SelectField
               aria-label="Fargo handicap"
               value={picks.fargoHc}
               options={FARGO_HC_OPTIONS.map((option) => ({
                 value: option.id,
-                label: optionLabel(option.label, option.description),
+                label: option.label,
               }))}
               onChange={(value) => patch({ fargoHc: value as FargoHcMode })}
             />
-          </label>
+          </SelectBlock>
 
           {showHcDetails ? (
             <>
-              <label className="block space-y-1.5">
-                <FieldLabel>Rating basis</FieldLabel>
+              <SelectBlock
+                label="Rating basis"
+                info={{
+                  items: [
+                    {
+                      label: "Fargo Rating",
+                      description: "Use published Fargo rating",
+                    },
+                    {
+                      label: "Effective Rating",
+                      description: "Use LMS effective rating when available",
+                    },
+                  ],
+                }}
+              >
                 <SelectField
                   aria-label="Fargo rating basis"
                   value={picks.fargoRatingBasis}
@@ -351,9 +573,14 @@ export function LmsScoresheetStudio() {
                     patch({ fargoRatingBasis: value === "1" ? "1" : "0" })
                   }
                 />
-              </label>
-              <label className="block space-y-1.5">
-                <FieldLabel>Handicap %</FieldLabel>
+              </SelectBlock>
+              <SelectBlock
+                label="Handicap %"
+                info={{
+                  summary:
+                    "Percent of calculated expected-points handicap awarded (LMS HandicapPercentage).",
+                }}
+              >
                 <SelectField
                   aria-label="Handicap percent"
                   value={String(picks.handicapPercent)}
@@ -365,9 +592,14 @@ export function LmsScoresheetStudio() {
                     patch({ handicapPercent: Number(value) || 100 })
                   }
                 />
-              </label>
-              <label className="block space-y-1.5">
-                <FieldLabel>HC cap</FieldLabel>
+              </SelectBlock>
+              <SelectBlock
+                label="HC cap"
+                info={{
+                  summary:
+                    "Maximum handicap games allowed (LMS MaximumAllowedHandicap).",
+                }}
+              >
                 <SelectField
                   aria-label="Handicap cap"
                   value={String(picks.handicapCap)}
@@ -379,29 +611,41 @@ export function LmsScoresheetStudio() {
                     patch({ handicapCap: Number(value) || 50 })
                   }
                 />
-              </label>
+              </SelectBlock>
             </>
           ) : null}
 
-          <label className="block space-y-1.5">
-            <FieldLabel>Team scoring</FieldLabel>
+          <SelectBlock
+            label="Team scoring"
+            info={{
+              items: TEAM_SCORING_OPTIONS.map((option) => ({
+                label: option.label,
+                description: option.description,
+              })),
+            }}
+          >
             <SelectField
               aria-label="Team scoring"
               value={picks.teamScoring}
               options={TEAM_SCORING_OPTIONS.map((option) => ({
                 value: option.id,
-                label: optionLabel(option.label, option.description),
+                label: option.label,
               }))}
               onChange={(value) =>
                 patch({ teamScoring: value as TeamScoringMode })
               }
             />
-          </label>
+          </SelectBlock>
 
           {showRoundPointsExtras ? (
             <>
-              <label className="block space-y-1.5">
-                <FieldLabel>Point system</FieldLabel>
+              <SelectBlock
+                label="Point system"
+                info={{
+                  summary:
+                    "Expected-points scale used with Fargo HC (1, 10, 17, or TRIOS).",
+                }}
+              >
                 <SelectField
                   aria-label="Point system"
                   value={picks.pointSystem}
@@ -415,7 +659,7 @@ export function LmsScoresheetStudio() {
                     patch({ pointSystem: value as PointSystem })
                   }
                 />
-              </label>
+              </SelectBlock>
               <label className="flex items-center gap-2 text-sm text-[var(--ink)]">
                 <input
                   type="checkbox"
