@@ -41,6 +41,12 @@ export type LeagueScoringFormat = {
   /** Used when raceMode === "fargo-race-chart". */
   raceChartId?: RaceChartId;
   /**
+   * Optional first-to team match-point target (e.g. team race to 13).
+   * Only meaningful with teamPointMode === "match-win". Individual
+   * matchups still use fixedRaceWin / the race chart.
+   */
+  teamRaceTo?: number;
+  /**
    * When true (round-points mode), award a synthetic “match points” round
    * from total game points — current R6 behavior.
    */

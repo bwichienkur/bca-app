@@ -134,15 +134,15 @@ export const SCORESHEET_PRESETS: ScoresheetPreset[] = [
   {
     id: "team-race-5",
     label: "5-Player Team Race",
-    description: "25 races · max race to 13 · round-robin list",
+    description: "25 single games · team race to 13 · round-robin list",
     build: () =>
       buildRoundRobinTemplate({
         players: 5,
         rounds: 5,
-        kind: "R",
-        raceSheetBreaks: true,
+        kind: "S",
+        raceSheetBreaks: false,
         gameType: "0",
-        raceLength: "13",
+        raceLength: "1",
       }),
   },
   {

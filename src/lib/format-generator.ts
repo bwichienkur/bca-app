@@ -45,7 +45,7 @@ export type FormatGeneratorPicks = {
   gameKind: FormatGameKind;
   gameBall: "8" | "9" | "10" | "any";
   raceModel: RaceModel;
-  /** Used when raceModel === "fixed". */
+  /** Used when raceModel === "fixed" — per-matchup race / pad length. */
   fixedRaceTo: number;
   /** Used when raceModel === "fargo-chart" (e.g. r6-hot, r5-medium). */
   raceChartId: RaceChartId;
@@ -55,6 +55,11 @@ export type FormatGeneratorPicks = {
   handicapPercent: number;
   handicapCap: number;
   teamScoring: TeamScoringMode;
+  /**
+   * First-to team match points when teamScoring === "match-win"
+   * (e.g. 13 on a 5×5 RR sheet). Null = no team race target.
+   */
+  teamRaceTo: number | null;
   pointSystem: PointSystem;
   matchPointsRound: boolean;
 };
@@ -233,6 +238,7 @@ export const FORMAT_PRESETS: Array<{
       raceChartId: "r6-hot",
       fargoHc: "none",
       teamScoring: "match-win",
+      teamRaceTo: null,
       pointSystem: "1",
       matchPointsRound: false,
     },
@@ -250,6 +256,7 @@ export const FORMAT_PRESETS: Array<{
       fixedRaceTo: 10,
       fargoHc: "RoundBased",
       teamScoring: "round-points",
+      teamRaceTo: null,
       pointSystem: "10",
       matchPointsRound: true,
     },
@@ -257,14 +264,17 @@ export const FORMAT_PRESETS: Array<{
   {
     id: "team-race-fixed",
     label: "Team race",
-    description: "Full RR races · fixed race-to · match wins",
+    description: "Full RR · single-game matchups · first team to 13",
     picks: {
       playersPerTeam: 5,
       structure: "round-robin",
-      gameKind: "R",
+      gameKind: "S",
       gameBall: "any",
       raceModel: "fixed",
-      fixedRaceTo: 13,
+      /** One game per matchup — W/L only. */
+      fixedRaceTo: 1,
+      /** Team night race: first to this many match wins. */
+      teamRaceTo: 13,
       fargoHc: "none",
       teamScoring: "match-win",
       pointSystem: "1",
@@ -284,6 +294,7 @@ export const FORMAT_PRESETS: Array<{
       fixedRaceTo: 17,
       fargoHc: "none",
       teamScoring: "match-win",
+      teamRaceTo: null,
       pointSystem: "1",
       matchPointsRound: false,
     },
@@ -304,6 +315,7 @@ export function defaultFormatPicks(): FormatGeneratorPicks {
     handicapPercent: 100,
     handicapCap: 50,
     teamScoring: "match-win",
+    teamRaceTo: null,
     pointSystem: "1",
     matchPointsRound: false,
   };
@@ -332,6 +344,15 @@ function normalizePicks(picks: FormatGeneratorPicks): FormatGeneratorPicks {
     Math.max(1, Math.round(picks.rounds ?? players) || players),
   );
 
+  const rawTeamRace = picks.teamRaceTo;
+  const teamRaceTo =
+    picks.teamScoring === "match-win" &&
+    rawTeamRace != null &&
+    Number.isFinite(rawTeamRace) &&
+    rawTeamRace > 0
+      ? Math.min(25, Math.max(1, Math.round(rawTeamRace)))
+      : null;
+
   return {
     ...picks,
     playersPerTeam: players,
@@ -340,6 +361,7 @@ function normalizePicks(picks: FormatGeneratorPicks): FormatGeneratorPicks {
     raceModel,
     raceChartId: parseRaceChartId(picks.raceChartId),
     fixedRaceTo: Math.min(21, Math.max(1, Math.round(picks.fixedRaceTo) || 7)),
+    teamRaceTo,
     handicapPercent: Math.min(
       100,
       Math.max(50, Math.round(picks.handicapPercent) || 100),
@@ -444,6 +466,8 @@ function buildScoringFormat(picks: FormatGeneratorPicks): LeagueScoringFormat {
         : n * (picks.rounds ?? n);
 
   const chartRace = picks.raceModel === "fargo-chart";
+  const fixedWin = chartRace ? undefined : picks.fixedRaceTo;
+  const singleGame = !chartRace && (fixedWin ?? 0) <= 1;
 
   return {
     id: `gen-${picks.structure}-${picks.gameKind}-${picks.raceModel}-${picks.raceChartId}-${picks.fargoHc}-${n}`,
@@ -455,10 +479,17 @@ function buildScoringFormat(picks: FormatGeneratorPicks): LeagueScoringFormat {
     pointsPerMatchWin: 1,
     raceMode: chartRace ? "fargo-race-chart" : "fixed-race",
     raceChartId: chartRace ? picks.raceChartId : undefined,
-    fixedRaceWin: chartRace ? undefined : picks.fixedRaceTo,
-    fixedRaceMaxLoss:
-      !chartRace && picks.gameKind === "S"
-        ? Math.max(1, picks.fixedRaceTo - 3)
+    fixedRaceWin: fixedWin,
+    fixedRaceMaxLoss: chartRace
+      ? undefined
+      : singleGame
+        ? 0
+        : picks.gameKind === "S"
+          ? Math.max(1, picks.fixedRaceTo - 3)
+          : undefined,
+    teamRaceTo:
+      picks.teamScoring === "match-win" && picks.teamRaceTo
+        ? picks.teamRaceTo
         : undefined,
     matchPointsRound:
       picks.teamScoring === "round-points" ? picks.matchPointsRound : false,
@@ -497,6 +528,11 @@ function buildDivisionHints(
   if (picks.raceModel === "fixed" && picks.gameKind === "R") {
     notes.push(`Fixed race-to ${picks.fixedRaceTo} written into GAME RL tokens.`);
   }
+  if (scoring.teamRaceTo) {
+    notes.push(
+      `Team race to ${scoring.teamRaceTo}: each matchup is one game; winner earns 1 match point. First team to ${scoring.teamRaceTo} wins.`,
+    );
+  }
   if (picks.fargoHc === "FullMatchBased") {
     notes.push(
       "LMS HandicapMode has no dedicated Full-match value — hints use “by match”; app scoring uses FullMatchBased.",
@@ -534,7 +570,20 @@ function matchupLabel(
 }
 
 function raceTitle(picks: FormatGeneratorPicks): string {
-  if (picks.raceModel === "fixed") return `Race to ${picks.fixedRaceTo}`;
+  if (picks.teamScoring === "match-win" && picks.teamRaceTo) {
+    const perGame =
+      picks.raceModel === "fargo-chart"
+        ? raceChartMeta(picks.raceChartId).label
+        : picks.fixedRaceTo <= 1
+          ? "single games"
+          : `games to ${picks.fixedRaceTo}`;
+    return `Team race to ${picks.teamRaceTo} · ${perGame}`;
+  }
+  if (picks.raceModel === "fixed") {
+    return picks.fixedRaceTo <= 1
+      ? "Single-game matchups"
+      : `Race to ${picks.fixedRaceTo}`;
+  }
   if (picks.raceModel === "fargo-chart") {
     return raceChartMeta(picks.raceChartId).label;
   }

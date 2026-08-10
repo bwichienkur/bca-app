@@ -528,11 +528,13 @@ export function FormatScoreSandbox({
         roundWins={{ teamOne: nightHomeWins, teamTwo: nightAwayWins }}
         roundsAvailable={
           matchWinMode
-            ? Math.max(winTally.total, rounds.length)
+            ? scoringFormat.teamRaceTo ??
+              Math.max(winTally.total, rounds.length)
             : roundsAvailable
         }
         includeMatchPointsRound={includeMatchPointsRound}
         matchWinTeamPoints={matchWinMode}
+        teamRaceTo={scoringFormat.teamRaceTo}
         formatHint={formatScoringSummary(scoringFormat)}
         pointTotals={pointTotals}
         gameWins={{
@@ -782,16 +784,18 @@ export function FormatScoreSandbox({
             ) : null}
 
             {matchWinMode && !isMatchPointsRound ? (
-              <p className="text-xs text-[var(--muted)]">
-                Each individual match win = {scoringFormat.pointsPerMatchWin}{" "}
-                team point
-                {scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}
-                {scoringFormat.raceMode === "fargo-race-chart"
-                  ? ` · ${raceChartMeta(scoringFormat.raceChartId ?? "r6-hot").label}`
-                  : ""}
-                .
-              </p>
-            ) : null}
+            <p className="text-xs text-[var(--muted)]">
+              {scoringFormat.teamRaceTo
+                ? `Each matchup is one game · winner earns ${scoringFormat.pointsPerMatchWin} match point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"} · first team to ${scoringFormat.teamRaceTo} wins.`
+                : `Each individual match win = ${scoringFormat.pointsPerMatchWin} team point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}${
+                    scoringFormat.raceMode === "fargo-race-chart"
+                      ? ` · ${raceChartMeta(scoringFormat.raceChartId ?? "r6-hot").label}`
+                      : (scoringFormat.fixedRaceWin ?? 0) <= 1
+                        ? " · single-game matchups"
+                        : ""
+                  }.`}
+            </p>
+          ) : null}
 
             {isMatchPointsRound ? (
               <p className="text-xs text-[var(--muted)]">
@@ -937,11 +941,13 @@ export function FormatScoreSandbox({
                           <p className="text-sm font-semibold tabular-nums">
                             {homeScore}–{awayScore}
                           </p>
-                          <p className="text-[9px] uppercase tracking-[0.1em] text-[var(--muted)]">
-                            {limits.chartMode
-                              ? `${homeRace}–${awayRace}`
+                        <p className="text-[9px] uppercase tracking-[0.1em] text-[var(--muted)]">
+                          {limits.chartMode
+                            ? `${homeRace}–${awayRace}`
+                            : limits.maxWin <= 1
+                              ? "W/L"
                               : `to ${limits.maxWin}`}
-                          </p>
+                        </p>
                         </div>
                         <div className="min-w-0 text-right">
                           <p
