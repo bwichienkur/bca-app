@@ -36,60 +36,45 @@ import {
   type PlayerNightStat,
   type PreviewLineupSlot,
 } from "@/lib/format-score-preview";
+import {
+  AccentRecordCard,
+  accentRecordListClass,
+} from "./AccentRecordCard";
+import {
+  IconSubTabs,
+  LineupsSubIcon,
+  MatchesSubIcon,
+  StatsSubIcon,
+} from "./IconSubTabs";
 import { MatchScoreboard } from "./MatchScoreboard";
 import { PartnerSearchField } from "./PartnerSearchField";
+import { SubTabCard } from "./SubTabCard";
 
 const btnGhost =
   "inline-flex items-center justify-center rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--ink)] disabled:opacity-50";
 const inputClass =
   "w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-sm tabular-nums text-[var(--ink)] outline-none ring-[var(--felt)] focus:ring-2";
 
-function slotDisplayName(side: "H" | "A", index: number, slot: PreviewLineupSlot) {
-  return slot.pick.displayName.trim() || `${side === "H" ? "Home" : "Away"} ${index}`;
-}
-
-function PlayerStatChip({ stat }: { stat: PlayerNightStat | null }) {
-  if (!stat || stat.games === 0) {
-    return (
-      <span className="shrink-0 text-[10px] tabular-nums text-[var(--muted)]">
-        — · 0-0
-      </span>
-    );
-  }
-  return (
-    <span className="shrink-0 text-[10px] tabular-nums text-[var(--muted)]">
-      <span className="font-semibold text-[var(--ink)]">{stat.points}</span>
-      <span className="text-[9px]">p</span>
-      {" · "}
-      <span className="font-semibold text-[var(--felt-deep)]">
-        {stat.wins}-{stat.losses}
-      </span>
-    </span>
-  );
-}
+type PreviewPane = "lineup" | "scoring" | "performance";
 
 function LineupSlotRow({
   label,
   slot,
-  stat,
   onChange,
 }: {
   label: string;
   slot: PreviewLineupSlot;
-  stat: PlayerNightStat | null;
   onChange: (next: PreviewLineupSlot) => void;
 }) {
   return (
-    <div className="grid grid-cols-[2rem_minmax(0,1fr)_3.5rem_auto] items-center gap-1">
-      <span className="text-[11px] font-semibold text-[var(--muted)]">
-        {label}
-      </span>
+    <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_4.25rem] items-center gap-1.5">
+      <span className="text-xs font-semibold text-[var(--muted)]">{label}</span>
       <PartnerSearchField
         compact
         hideLabel
         label={label}
         value={slot.pick}
-        placeholder="Name or Fargo ID…"
+        placeholder="Search name or Fargo ID…"
         onChange={(pick) => {
           const rating =
             pick.ratingAtSignup != null && Number.isFinite(pick.ratingAtSignup)
@@ -114,32 +99,73 @@ function LineupSlotRow({
           })
         }
       />
-      <PlayerStatChip stat={stat} />
     </div>
   );
 }
 
-function CompactPlayerRow({
-  label,
-  name,
-  fargo,
-  stat,
-}: {
-  label: string;
-  name: string;
-  fargo: number;
-  stat: PlayerNightStat | null;
-}) {
+function PerformancePlayerCard({ stat }: { stat: PlayerNightStat }) {
+  const sideLabel = `${stat.side === 1 ? "H" : "A"}${stat.slotIndex}`;
   return (
-    <div className="grid grid-cols-[1.75rem_minmax(0,1fr)_auto] items-baseline gap-1.5 text-xs">
-      <span className="font-semibold text-[var(--muted)]">{label}</span>
-      <span className="min-w-0 truncate text-[var(--ink)]">
-        {name}
-        <span className="ml-1 text-[10px] tabular-nums text-[var(--muted)]">
-          {fargo}
-        </span>
-      </span>
-      <PlayerStatChip stat={stat} />
+    <AccentRecordCard>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-[var(--ink)]">
+            <span className="mr-1.5 text-[var(--muted)]">{sideLabel}</span>
+            {stat.name}
+          </p>
+          <p className="mt-0.5 text-xs tabular-nums text-[var(--muted)]">
+            {stat.fargo != null ? `Fargo ${stat.fargo}` : "No Fargo"}
+            {stat.games > 0 ? ` · ${stat.games} game${stat.games === 1 ? "" : "s"}` : ""}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="font-[family-name:var(--font-display)] text-lg leading-none tabular-nums text-[var(--felt-deep)]">
+            {stat.wins}-{stat.losses}
+          </p>
+          <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            {stat.points} pts
+          </p>
+        </div>
+      </div>
+    </AccentRecordCard>
+  );
+}
+
+function PerformanceBoard({
+  homeName,
+  awayName,
+  home,
+  away,
+}: {
+  homeName: string;
+  awayName: string;
+  home: PlayerNightStat[];
+  away: PlayerNightStat[];
+}) {
+  const column = (title: string, stats: PlayerNightStat[]) => (
+    <div className="min-w-0 space-y-2">
+      <div className="flex items-baseline justify-between gap-2 px-0.5">
+        <p className="font-[family-name:var(--font-display)] text-base text-[var(--ink)]">
+          {title}
+        </p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+          W-L · pts
+        </p>
+      </div>
+      <ul className={accentRecordListClass}>
+        {stats.map((stat) => (
+          <li key={stat.playerId}>
+            <PerformancePlayerCard stat={stat} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      {column(homeName, home)}
+      {column(awayName, away)}
     </div>
   );
 }
@@ -248,7 +274,7 @@ export function FormatScoreSandbox({
   const [awaySlots, setAwaySlots] = useState(defaults.away);
   const [activeRound, setActiveRound] = useState(1);
   const [expandedGame, setExpandedGame] = useState<number | null>(null);
-  const [lineupOpen, setLineupOpen] = useState(false);
+  const [previewTab, setPreviewTab] = useState<PreviewPane>("scoring");
 
   const signature = previewFormatSignature(picks, result);
 
@@ -472,10 +498,6 @@ export function FormatScoreSandbox({
   const fullMatchHc =
     picks.fargoHc === "FullMatchBased" ? typedHc[0] ?? null : null;
 
-  const namedCount =
-    homeSlots.filter((slot) => slot.pick.displayName.trim()).length +
-    awaySlots.filter((slot) => slot.pick.displayName.trim()).length;
-
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -534,449 +556,444 @@ export function FormatScoreSandbox({
         </p>
       ) : null}
 
-      <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
-        <div className="border-b border-[var(--line)]">
-          <button
-            type="button"
-            className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
-            aria-expanded={lineupOpen}
-            onClick={() => setLineupOpen((open) => !open)}
-          >
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                Lineups
-              </p>
-              <p className="mt-0.5 text-xs text-[var(--ink)]">
-                {n}/{n} filled
-                {namedCount > 0 ? ` · ${namedCount} searched` : " · sample ratings"}
-                <span className="text-[var(--muted)]"> · pts · W-L</span>
-              </p>
-            </div>
-            <span className="shrink-0 text-[11px] font-semibold text-[var(--felt-deep)]">
-              {lineupOpen ? "Hide" : "Edit"}
-            </span>
-          </button>
-
-          {!lineupOpen ? (
-            <div className="grid gap-x-4 gap-y-2 border-t border-[var(--line)] px-3 py-2 sm:grid-cols-2">
-              <div className="space-y-1">
+      <SubTabCard
+        tabs={
+          <IconSubTabs
+            aria-label="Score preview sections"
+            value={previewTab}
+            onChange={setPreviewTab}
+            columns={3}
+            className="border-0 bg-transparent p-0"
+            items={[
+              {
+                id: "lineup" as const,
+                label: "Lineup",
+                icon: LineupsSubIcon,
+              },
+              {
+                id: "scoring" as const,
+                label: "Scoring",
+                icon: MatchesSubIcon,
+              },
+              {
+                id: "performance" as const,
+                label: "Performance",
+                icon: StatsSubIcon,
+              },
+            ]}
+          />
+        }
+        contentClassName="p-3 sm:p-3.5"
+      >
+        {previewTab === "lineup" ? (
+          <div className="space-y-2">
+            <p className="text-xs text-[var(--muted)]">
+              Set Home and Away slots — search FairMatch or edit Fargo ratings.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                  Home
+                </p>
                 {homeSlots.map((slot, index) => (
-                  <CompactPlayerRow
-                    key={`h-sum-${index}`}
+                  <LineupSlotRow
+                    key={`h-${index}`}
                     label={`H${index + 1}`}
-                    name={slotDisplayName("H", index + 1, slot)}
-                    fargo={slot.fargo}
-                    stat={playerNight.home[index] ?? null}
+                    slot={slot}
+                    onChange={(next) => setHomeSlot(index, next)}
                   />
                 ))}
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                  Away
+                </p>
                 {awaySlots.map((slot, index) => (
-                  <CompactPlayerRow
-                    key={`a-sum-${index}`}
+                  <LineupSlotRow
+                    key={`a-${index}`}
                     label={`A${index + 1}`}
-                    name={slotDisplayName("A", index + 1, slot)}
-                    fargo={slot.fargo}
-                    stat={playerNight.away[index] ?? null}
+                    slot={slot}
+                    onChange={(next) => setAwaySlot(index, next)}
                   />
                 ))}
               </div>
             </div>
-          ) : (
-            <div className="space-y-2 border-t border-[var(--line)] px-3 py-2.5">
-              <p className="text-[10px] text-[var(--muted)]">
-                Search player · Fargo · night pts / W-L
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  {homeSlots.map((slot, index) => (
-                    <LineupSlotRow
-                      key={`h-${index}`}
-                      label={`H${index + 1}`}
-                      slot={slot}
-                      stat={playerNight.home[index] ?? null}
-                      onChange={(next) => setHomeSlot(index, next)}
-                    />
-                  ))}
-                </div>
-                <div className="space-y-1.5">
-                  {awaySlots.map((slot, index) => (
-                    <LineupSlotRow
-                      key={`a-${index}`}
-                      label={`A${index + 1}`}
-                      slot={slot}
-                      stat={playerNight.away[index] ?? null}
-                      onChange={(next) => setAwaySlot(index, next)}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
+        ) : null}
 
-        <div className="space-y-2.5 px-3 py-3">
-          <div
-            role="tablist"
-            aria-label="Rounds"
-            className="grid gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
-            style={{
-              gridTemplateColumns: `repeat(${
-                rounds.length + (includeMatchPointsRound ? 1 : 0)
-              }, minmax(0, 1fr))`,
-            }}
-          >
-            {rounds.map((round) => {
-              const tally =
-                roundTallies.find(
-                  (item) => item.roundNumber === round.roundNumber,
-                ) ?? null;
-              const active = round.roundNumber === activeRound;
-              const decided = tally?.roundWinner != null;
-              return (
+        {previewTab === "performance" ? (
+          <PerformanceBoard
+            homeName="Home"
+            awayName="Away"
+            home={playerNight.home}
+            away={playerNight.away}
+          />
+        ) : null}
+
+        {previewTab === "scoring" ? (
+          <div className="space-y-2.5">
+            <div
+              role="tablist"
+              aria-label="Rounds"
+              className="grid gap-0.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-0.5"
+              style={{
+                gridTemplateColumns: `repeat(${
+                  rounds.length + (includeMatchPointsRound ? 1 : 0)
+                }, minmax(0, 1fr))`,
+              }}
+            >
+              {rounds.map((round) => {
+                const tally =
+                  roundTallies.find(
+                    (item) => item.roundNumber === round.roundNumber,
+                  ) ?? null;
+                const active = round.roundNumber === activeRound;
+                const decided = tally?.roundWinner != null;
+                return (
+                  <button
+                    key={round.roundNumber}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => {
+                      setActiveRound(round.roundNumber);
+                      setExpandedGame(null);
+                    }}
+                    className={[
+                      "min-w-0 rounded-md px-1 py-1.5 text-center transition",
+                      active
+                        ? "bg-[var(--felt)] text-white shadow-sm"
+                        : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
+                    ].join(" ")}
+                  >
+                    <p className="text-[11px] font-semibold leading-none">
+                      R{round.roundNumber}
+                    </p>
+                    <p
+                      className={[
+                        "mt-0.5 text-[10px] font-semibold tabular-nums leading-none",
+                        active ? "text-white/85" : "",
+                      ].join(" ")}
+                    >
+                      {decided
+                        ? tally!.roundWinner === 1
+                          ? "H"
+                          : "A"
+                        : `${tally?.gamesComplete ?? 0}/${round.games.length}`}
+                    </p>
+                  </button>
+                );
+              })}
+              {includeMatchPointsRound && matchPointsTally ? (
                 <button
-                  key={round.roundNumber}
                   type="button"
                   role="tab"
-                  aria-selected={active}
+                  aria-selected={isMatchPointsRound}
                   onClick={() => {
-                    setActiveRound(round.roundNumber);
+                    setActiveRound(MATCH_POINTS_ROUND);
                     setExpandedGame(null);
                   }}
                   className={[
                     "min-w-0 rounded-md px-1 py-1.5 text-center transition",
-                    active
+                    isMatchPointsRound
                       ? "bg-[var(--felt)] text-white shadow-sm"
                       : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
                   ].join(" ")}
                 >
                   <p className="text-[11px] font-semibold leading-none">
-                    R{round.roundNumber}
+                    {MATCH_POINTS_TAB_LABEL}
                   </p>
                   <p
                     className={[
                       "mt-0.5 text-[10px] font-semibold tabular-nums leading-none",
-                      active ? "text-white/85" : "",
+                      isMatchPointsRound ? "text-white/85" : "",
                     ].join(" ")}
                   >
-                    {decided
-                      ? tally!.roundWinner === 1
+                    {matchPointsTally.roundWinner
+                      ? matchPointsTally.roundWinner === 1
                         ? "H"
                         : "A"
-                      : `${tally?.gamesComplete ?? 0}/${round.games.length}`}
+                      : `${matchPointsTally.gamesComplete}/${matchPointsTally.gamesTotal}`}
                   </p>
                 </button>
-              );
-            })}
-            {includeMatchPointsRound && matchPointsTally ? (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={isMatchPointsRound}
-                onClick={() => {
-                  setActiveRound(MATCH_POINTS_ROUND);
-                  setExpandedGame(null);
-                }}
-                className={[
-                  "min-w-0 rounded-md px-1 py-1.5 text-center transition",
-                  isMatchPointsRound
-                    ? "bg-[var(--felt)] text-white shadow-sm"
-                    : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
-                ].join(" ")}
-              >
-                <p className="text-[11px] font-semibold leading-none">
-                  {MATCH_POINTS_TAB_LABEL}
-                </p>
-                <p
-                  className={[
-                    "mt-0.5 text-[10px] font-semibold tabular-nums leading-none",
-                    isMatchPointsRound ? "text-white/85" : "",
-                  ].join(" ")}
-                >
-                  {matchPointsTally.roundWinner
-                    ? matchPointsTally.roundWinner === 1
-                      ? "H"
-                      : "A"
-                    : `${matchPointsTally.gamesComplete}/${matchPointsTally.gamesTotal}`}
-                </p>
-              </button>
-            ) : null}
-          </div>
-
-          {activeRoundTally && !matchWinMode ? (
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/50 px-2.5 py-2">
-              <div className="min-w-0 text-left">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                  Home
-                </p>
-                <p
-                  className={[
-                    "font-[family-name:var(--font-display)] text-xl tabular-nums leading-none",
-                    activeRoundTally.roundWinner === 1
-                      ? "text-[var(--felt-deep)]"
-                      : "text-[var(--ink)]",
-                  ].join(" ")}
-                >
-                  {activeRoundTally.teamOneTotal}
-                </p>
-                <p className="mt-0.5 text-[10px] tabular-nums text-[var(--muted)]">
-                  {activeRoundTally.teamOneGamePoints}p
-                  {match.isHandicapped && picks.fargoHc === "RoundBased"
-                    ? ` · +${activeRoundTally.teamOneHandicap}`
-                    : ""}
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                  {isMatchPointsRound ? "Match pts" : "Round"}
-                </p>
-              </div>
-              <div className="min-w-0 text-right">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                  Away
-                </p>
-                <p
-                  className={[
-                    "font-[family-name:var(--font-display)] text-xl tabular-nums leading-none",
-                    activeRoundTally.roundWinner === 2
-                      ? "text-[var(--felt-deep)]"
-                      : "text-[var(--ink)]",
-                  ].join(" ")}
-                >
-                  {activeRoundTally.teamTwoTotal}
-                </p>
-                <p className="mt-0.5 text-[10px] tabular-nums text-[var(--muted)]">
-                  {activeRoundTally.teamTwoGamePoints}p
-                  {match.isHandicapped && picks.fargoHc === "RoundBased"
-                    ? ` · +${activeRoundTally.teamTwoHandicap}`
-                    : ""}
-                </p>
-              </div>
+              ) : null}
             </div>
-          ) : null}
 
-          {matchWinMode && !isMatchPointsRound ? (
-            <p className="text-xs text-[var(--muted)]">
-              Each individual match win = {scoringFormat.pointsPerMatchWin}{" "}
-              team point
-              {scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}
-              {scoringFormat.raceMode === "fargo-race-chart"
-                ? ` · ${raceChartMeta(scoringFormat.raceChartId ?? "r6-hot").label}`
-                : ""}
-              .
-            </p>
-          ) : null}
-
-          {isMatchPointsRound ? (
-            <p className="text-xs text-[var(--muted)]">
-              Totals is overall match points across all played rounds
-              {fullMatchHc
-                ? ` plus night HC (Home +${fullMatchHc.teamOne} / Away +${fullMatchHc.teamTwo})`
-                : ""}
-              — not an extra played round. Awarded when the other side can no
-              longer catch up.
-            </p>
-          ) : (
-            <div className="space-y-1">
-              {currentRound?.games.map((game) => {
-                const key = gameKey(currentRound.roundNumber, game.index);
-                const state = draft.games[key];
-                const p1 = findPlayer(
-                  match.teamOnePlayers,
-                  state?.teamOnePlayerId,
-                );
-                const p2 = findPlayer(
-                  match.teamTwoPlayers,
-                  state?.teamTwoPlayerId,
-                );
-                const limits = padRaceLimits(
-                  scoringFormat,
-                  match,
-                  state?.raceTargetOne,
-                  state?.raceTargetTwo,
-                );
-                const winnerOpts = {
-                  maxScore: limits.maxWin,
-                  maxLosingScore: limits.maxLoss,
-                  raceTargetOne: limits.raceTargetOne,
-                  raceTargetTwo: limits.raceTargetTwo,
-                };
-                const winner = gameWinner(state, winnerOpts);
-                const homeScore = state?.teamOneScore ?? 0;
-                const awayScore = state?.teamTwoScore ?? 0;
-                const status = winner
-                  ? "complete"
-                  : homeScore > 0 || awayScore > 0
-                    ? "in-progress"
-                    : "not-started";
-                const open = expandedGame === game.index;
-                const homeRace = limits.raceTargetOne ?? limits.maxWin;
-                const awayRace = limits.raceTargetTwo ?? limits.maxWin;
-                const homeOptions = raceScoreOptions(homeRace);
-                const awayOptions = raceScoreOptions(awayRace);
-
-                const matchHcRow =
-                  picks.fargoHc === "MatchBased"
-                    ? typedHc.find((row) =>
-                        row.matchups.some(
-                          (m) =>
-                            m.homeIndexes[0] === game.playerOne.index &&
-                            m.awayIndexes[0] === game.playerTwo.index,
-                        ),
-                      )
-                    : null;
-
-                const applyScore = (side: 1 | 2, value: number) => {
-                  updateGame(currentRound.roundNumber, game.index, (current) =>
-                    applyRaceScore(current, side, value, {
-                      maxScore: limits.maxWin,
-                      maxLosingScore: limits.maxLoss,
-                      raceTargetOne: limits.raceTargetOne,
-                      raceTargetTwo: limits.raceTargetTwo,
-                      allowedScores:
-                        side === 1 ? homeOptions : awayOptions,
-                    }),
-                  );
-                };
-
-                const bump = (side: 1 | 2, delta: number) => {
-                  const current = side === 1 ? homeScore : awayScore;
-                  const options = side === 1 ? homeOptions : awayOptions;
-                  const idx = options.indexOf(current);
-                  const next =
-                    options[
-                      Math.max(
-                        0,
-                        Math.min(
-                          options.length - 1,
-                          (idx >= 0 ? idx : 0) + delta,
-                        ),
-                      )
-                    ] ?? current;
-                  applyScore(side, next);
-                };
-
-                const markWin = (side: 1 | 2) => {
-                  updateGame(currentRound.roundNumber, game.index, (current) =>
-                    applyQuickWin(current, side, {
-                      maxScore: limits.maxWin,
-                      maxLosingScore: limits.maxLoss,
-                      raceTargetOne: limits.raceTargetOne,
-                      raceTargetTwo: limits.raceTargetTwo,
-                    }),
-                  );
-                };
-
-                return (
-                  <div
-                    key={key}
+            {activeRoundTally && !matchWinMode ? (
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/50 px-2.5 py-2">
+                <div className="min-w-0 text-left">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                    Home
+                  </p>
+                  <p
                     className={[
-                      "overflow-hidden rounded-[var(--radius)] border",
-                      status === "complete"
-                        ? "border-[var(--felt)]/55 bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]"
-                        : status === "in-progress"
-                          ? "border-[var(--amber)]/65 bg-[color-mix(in_srgb,var(--amber)_12%,var(--surface))]"
-                          : "border-[var(--line)] bg-[var(--surface)]",
+                      "font-[family-name:var(--font-display)] text-xl tabular-nums leading-none",
+                      activeRoundTally.roundWinner === 1
+                        ? "text-[var(--felt-deep)]"
+                        : "text-[var(--ink)]",
                     ].join(" ")}
                   >
-                    <button
-                      type="button"
-                      className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2.5 py-1.5 text-left"
-                      onClick={() =>
-                        setExpandedGame((prev) =>
-                          prev === game.index ? null : game.index,
-                        )
-                      }
-                    >
-                      <div className="min-w-0">
-                        <p
-                          className={[
-                            "truncate text-sm font-semibold",
-                            winner === 1
-                              ? "text-[var(--felt-deep)]"
-                              : "text-[var(--ink)]",
-                          ].join(" ")}
-                        >
-                          {p1 ? playerDisplayName(p1) : `H${game.playerOne.index}`}
-                        </p>
-                        <p className="truncate text-[10px] text-[var(--muted)]">
-                          {p1?.fargoRating ?? "—"}
-                          {state?.breakingTeam === 1 ? " · Breaks" : ""}
-                          {matchHcRow
-                            ? ` · HC +${matchHcRow.teamOne}`
-                            : ""}
-                        </p>
-                      </div>
-                      <div className="rounded-md bg-[var(--surface-2)] px-2 py-0.5 text-center">
-                        <p className="text-sm font-semibold tabular-nums">
-                          {homeScore}–{awayScore}
-                        </p>
-                        <p className="text-[9px] uppercase tracking-[0.1em] text-[var(--muted)]">
-                          {limits.chartMode
-                            ? `${homeRace}–${awayRace}`
-                            : `to ${limits.maxWin}`}
-                        </p>
-                      </div>
-                      <div className="min-w-0 text-right">
-                        <p
-                          className={[
-                            "truncate text-sm font-semibold",
-                            winner === 2
-                              ? "text-[var(--felt-deep)]"
-                              : "text-[var(--ink)]",
-                          ].join(" ")}
-                        >
-                          {p2 ? playerDisplayName(p2) : `A${game.playerTwo.index}`}
-                        </p>
-                        <p className="truncate text-[10px] text-[var(--muted)]">
-                          {p2?.fargoRating ?? "—"}
-                          {state?.breakingTeam === 2 ? " · Breaks" : ""}
-                          {matchHcRow
-                            ? ` · HC +${matchHcRow.teamTwo}`
-                            : ""}
-                        </p>
-                      </div>
-                    </button>
+                    {activeRoundTally.teamOneTotal}
+                  </p>
+                  <p className="mt-0.5 text-[10px] tabular-nums text-[var(--muted)]">
+                    {activeRoundTally.teamOneGamePoints}p
+                    {match.isHandicapped && picks.fargoHc === "RoundBased"
+                      ? ` · +${activeRoundTally.teamOneHandicap}`
+                      : ""}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                    {isMatchPointsRound ? "Match pts" : "Round"}
+                  </p>
+                </div>
+                <div className="min-w-0 text-right">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                    Away
+                  </p>
+                  <p
+                    className={[
+                      "font-[family-name:var(--font-display)] text-xl tabular-nums leading-none",
+                      activeRoundTally.roundWinner === 2
+                        ? "text-[var(--felt-deep)]"
+                        : "text-[var(--ink)]",
+                    ].join(" ")}
+                  >
+                    {activeRoundTally.teamTwoTotal}
+                  </p>
+                  <p className="mt-0.5 text-[10px] tabular-nums text-[var(--muted)]">
+                    {activeRoundTally.teamTwoGamePoints}p
+                    {match.isHandicapped && picks.fargoHc === "RoundBased"
+                      ? ` · +${activeRoundTally.teamTwoHandicap}`
+                      : ""}
+                  </p>
+                </div>
+              </div>
+            ) : null}
 
-                    {open ? (
-                      <div className="grid gap-2 border-t border-[var(--line)] px-2.5 py-2 sm:grid-cols-2">
-                        <SideScoreControls
-                          label={
-                            p1
-                              ? playerDisplayName(p1)
-                              : `H${game.playerOne.index}`
-                          }
-                          score={homeScore}
-                          raceTo={homeRace}
-                          options={homeOptions}
-                          isWinner={winner === 1}
-                          onBump={(delta) => bump(1, delta)}
-                          onSet={(value) => applyScore(1, value)}
-                          onWin={() => markWin(1)}
-                        />
-                        <SideScoreControls
-                          label={
-                            p2
-                              ? playerDisplayName(p2)
-                              : `A${game.playerTwo.index}`
-                          }
-                          score={awayScore}
-                          raceTo={awayRace}
-                          options={awayOptions}
-                          isWinner={winner === 2}
-                          onBump={(delta) => bump(2, delta)}
-                          onSet={(value) => applyScore(2, value)}
-                          onWin={() => markWin(2)}
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
+            {matchWinMode && !isMatchPointsRound ? (
+              <p className="text-xs text-[var(--muted)]">
+                Each individual match win = {scoringFormat.pointsPerMatchWin}{" "}
+                team point
+                {scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}
+                {scoringFormat.raceMode === "fargo-race-chart"
+                  ? ` · ${raceChartMeta(scoringFormat.raceChartId ?? "r6-hot").label}`
+                  : ""}
+                .
+              </p>
+            ) : null}
+
+            {isMatchPointsRound ? (
+              <p className="text-xs text-[var(--muted)]">
+                Totals is overall match points across all played rounds
+                {fullMatchHc
+                  ? ` plus night HC (Home +${fullMatchHc.teamOne} / Away +${fullMatchHc.teamTwo})`
+                  : ""}
+                — not an extra played round. Awarded when the other side can no
+                longer catch up.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {currentRound?.games.map((game) => {
+                  const key = gameKey(currentRound.roundNumber, game.index);
+                  const state = draft.games[key];
+                  const p1 = findPlayer(
+                    match.teamOnePlayers,
+                    state?.teamOnePlayerId,
+                  );
+                  const p2 = findPlayer(
+                    match.teamTwoPlayers,
+                    state?.teamTwoPlayerId,
+                  );
+                  const limits = padRaceLimits(
+                    scoringFormat,
+                    match,
+                    state?.raceTargetOne,
+                    state?.raceTargetTwo,
+                  );
+                  const winnerOpts = {
+                    maxScore: limits.maxWin,
+                    maxLosingScore: limits.maxLoss,
+                    raceTargetOne: limits.raceTargetOne,
+                    raceTargetTwo: limits.raceTargetTwo,
+                  };
+                  const winner = gameWinner(state, winnerOpts);
+                  const homeScore = state?.teamOneScore ?? 0;
+                  const awayScore = state?.teamTwoScore ?? 0;
+                  const status = winner
+                    ? "complete"
+                    : homeScore > 0 || awayScore > 0
+                      ? "in-progress"
+                      : "not-started";
+                  const open = expandedGame === game.index;
+                  const homeRace = limits.raceTargetOne ?? limits.maxWin;
+                  const awayRace = limits.raceTargetTwo ?? limits.maxWin;
+                  const homeOptions = raceScoreOptions(homeRace);
+                  const awayOptions = raceScoreOptions(awayRace);
+
+                  const matchHcRow =
+                    picks.fargoHc === "MatchBased"
+                      ? typedHc.find((row) =>
+                          row.matchups.some(
+                            (m) =>
+                              m.homeIndexes[0] === game.playerOne.index &&
+                              m.awayIndexes[0] === game.playerTwo.index,
+                          ),
+                        )
+                      : null;
+
+                  const applyScore = (side: 1 | 2, value: number) => {
+                    updateGame(currentRound.roundNumber, game.index, (current) =>
+                      applyRaceScore(current, side, value, {
+                        maxScore: limits.maxWin,
+                        maxLosingScore: limits.maxLoss,
+                        raceTargetOne: limits.raceTargetOne,
+                        raceTargetTwo: limits.raceTargetTwo,
+                        allowedScores:
+                          side === 1 ? homeOptions : awayOptions,
+                      }),
+                    );
+                  };
+
+                  const bump = (side: 1 | 2, delta: number) => {
+                    const current = side === 1 ? homeScore : awayScore;
+                    const options = side === 1 ? homeOptions : awayOptions;
+                    const idx = options.indexOf(current);
+                    const next =
+                      options[
+                        Math.max(
+                          0,
+                          Math.min(
+                            options.length - 1,
+                            (idx >= 0 ? idx : 0) + delta,
+                          ),
+                        )
+                      ] ?? current;
+                    applyScore(side, next);
+                  };
+
+                  const markWin = (side: 1 | 2) => {
+                    updateGame(currentRound.roundNumber, game.index, (current) =>
+                      applyQuickWin(current, side, {
+                        maxScore: limits.maxWin,
+                        maxLosingScore: limits.maxLoss,
+                        raceTargetOne: limits.raceTargetOne,
+                        raceTargetTwo: limits.raceTargetTwo,
+                      }),
+                    );
+                  };
+
+                  return (
+                    <div
+                      key={key}
+                      className={[
+                        "overflow-hidden rounded-[var(--radius)] border",
+                        status === "complete"
+                          ? "border-[var(--felt)]/55 bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]"
+                          : status === "in-progress"
+                            ? "border-[var(--amber)]/65 bg-[color-mix(in_srgb,var(--amber)_12%,var(--surface))]"
+                            : "border-[var(--line)] bg-[var(--surface)]",
+                      ].join(" ")}
+                    >
+                      <button
+                        type="button"
+                        className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2.5 py-1.5 text-left"
+                        onClick={() =>
+                          setExpandedGame((prev) =>
+                            prev === game.index ? null : game.index,
+                          )
+                        }
+                      >
+                        <div className="min-w-0">
+                          <p
+                            className={[
+                              "truncate text-sm font-semibold",
+                              winner === 1
+                                ? "text-[var(--felt-deep)]"
+                                : "text-[var(--ink)]",
+                            ].join(" ")}
+                          >
+                            {p1 ? playerDisplayName(p1) : `H${game.playerOne.index}`}
+                          </p>
+                          <p className="truncate text-[10px] text-[var(--muted)]">
+                            {p1?.fargoRating ?? "—"}
+                            {state?.breakingTeam === 1 ? " · Breaks" : ""}
+                            {matchHcRow
+                              ? ` · HC +${matchHcRow.teamOne}`
+                              : ""}
+                          </p>
+                        </div>
+                        <div className="rounded-md bg-[var(--surface-2)] px-2 py-0.5 text-center">
+                          <p className="text-sm font-semibold tabular-nums">
+                            {homeScore}–{awayScore}
+                          </p>
+                          <p className="text-[9px] uppercase tracking-[0.1em] text-[var(--muted)]">
+                            {limits.chartMode
+                              ? `${homeRace}–${awayRace}`
+                              : `to ${limits.maxWin}`}
+                          </p>
+                        </div>
+                        <div className="min-w-0 text-right">
+                          <p
+                            className={[
+                              "truncate text-sm font-semibold",
+                              winner === 2
+                                ? "text-[var(--felt-deep)]"
+                                : "text-[var(--ink)]",
+                            ].join(" ")}
+                          >
+                            {p2 ? playerDisplayName(p2) : `A${game.playerTwo.index}`}
+                          </p>
+                          <p className="truncate text-[10px] text-[var(--muted)]">
+                            {p2?.fargoRating ?? "—"}
+                            {state?.breakingTeam === 2 ? " · Breaks" : ""}
+                            {matchHcRow
+                              ? ` · HC +${matchHcRow.teamTwo}`
+                              : ""}
+                          </p>
+                        </div>
+                      </button>
+
+                      {open ? (
+                        <div className="grid gap-2 border-t border-[var(--line)] px-2.5 py-2 sm:grid-cols-2">
+                          <SideScoreControls
+                            label={
+                              p1
+                                ? playerDisplayName(p1)
+                                : `H${game.playerOne.index}`
+                            }
+                            score={homeScore}
+                            raceTo={homeRace}
+                            options={homeOptions}
+                            isWinner={winner === 1}
+                            onBump={(delta) => bump(1, delta)}
+                            onSet={(value) => applyScore(1, value)}
+                            onWin={() => markWin(1)}
+                          />
+                          <SideScoreControls
+                            label={
+                              p2
+                                ? playerDisplayName(p2)
+                                : `A${game.playerTwo.index}`
+                            }
+                            score={awayScore}
+                            raceTo={awayRace}
+                            options={awayOptions}
+                            isWinner={winner === 2}
+                            onBump={(delta) => bump(2, delta)}
+                            onSet={(value) => applyScore(2, value)}
+                            onWin={() => markWin(2)}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : null}
+      </SubTabCard>
     </div>
   );
 }
