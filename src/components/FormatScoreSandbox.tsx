@@ -14,6 +14,7 @@ import {
   computeMatchHandicaps,
   gameWinner,
   MATCH_POINTS_ROUND,
+  MATCH_POINTS_TAB_LABEL,
   playerDisplayName,
   tallyAllRoundPoints,
   tallyDraft,
@@ -506,7 +507,9 @@ export function FormatScoreSandbox({
                     : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
                 ].join(" ")}
               >
-                <p className="text-[11px] font-semibold leading-none">R6</p>
+                <p className="text-[11px] font-semibold leading-none">
+                  {MATCH_POINTS_TAB_LABEL}
+                </p>
                 <p
                   className={[
                     "mt-0.5 text-[10px] font-semibold tabular-nums leading-none",
@@ -582,11 +585,12 @@ export function FormatScoreSandbox({
 
           {isMatchPointsRound ? (
             <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/40 px-3 py-2 text-xs text-[var(--muted)]">
-              Match-points round totals game points across all rounds
+              Totals is overall match points across all played rounds
               {fullMatchHc
                 ? ` plus night HC (Home +${fullMatchHc.teamOne} / Away +${fullMatchHc.teamTwo})`
                 : ""}
-              . Awarded when the other side can no longer catch up.
+              — not an extra played round. Awarded when the other side can no
+              longer catch up.
             </p>
           ) : (
             <div className="space-y-1.5">

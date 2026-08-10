@@ -39,6 +39,7 @@ import {
   gameWinner,
   loadDraft,
   MATCH_POINTS_ROUND,
+  MATCH_POINTS_TAB_LABEL,
   normalizeDraftScores,
   playerDisplayName,
   RACE_SCORE_OPTIONS,
@@ -820,7 +821,7 @@ export function MatchScoring({
     return { teamOne, teamTwo };
   }, [matchPointsTally, matchWinTeamPoints, roundPointTallies, totals]);
 
-  // Live point totals from R1–R5 only (R6 is awarded later, not a separate sum).
+  // Live point totals from played rounds only (totals tab is awarded later).
   const matchPointTotals = useMemo(
     () =>
       roundPointTallies.reduce(
@@ -1400,7 +1401,7 @@ export function MatchScoring({
                     ].join(" ")}
                   >
                     <p className="text-[11px] font-semibold leading-none sm:text-xs">
-                      R6
+                      {MATCH_POINTS_TAB_LABEL}
                     </p>
                     <p
                       className={[
@@ -1448,11 +1449,12 @@ export function MatchScoring({
 
               {isMatchPointsRound ? (
                 <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--muted)]">
-                  Round 6 is total points across all games (plus handicap). It
-                  is only awarded when the other team can no longer catch up —
-                  win ≤{match.maxScore || 10} pts / loss ≤
-                  {match.maxLosingScore >= 0 ? match.maxLosingScore : 7} pts
-                  per game. Points ties break on game wins.
+                  Totals is overall match points across all played rounds (plus
+                  handicap) — not an extra played round. It is only awarded when
+                  the other team can no longer catch up — win ≤
+                  {match.maxScore || 10} pts / loss ≤
+                  {match.maxLosingScore >= 0 ? match.maxLosingScore : 7} pts per
+                  game. Points ties break on game wins.
                 </p>
               ) : (
                 <div className="min-w-0 space-y-1.5">
@@ -2213,7 +2215,7 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
             {matchPointsRound
-              ? "Match points (R6)"
+              ? "Match points (totals)"
               : `Round ${tally.roundNumber} points`}
           </p>
           <p className={["mt-0.5 text-sm font-semibold", resultTone].join(" ")}>
