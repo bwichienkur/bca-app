@@ -697,16 +697,22 @@ export function LmsScoresheetStudio() {
                   }
                 />
               </SelectBlock>
-              <label className="flex items-center gap-2 text-sm text-[var(--ink)]">
+              <label className="flex items-start gap-2 text-sm text-[var(--ink)]">
                 <input
                   type="checkbox"
                   checked={picks.matchPointsRound}
                   onChange={(event) =>
                     patch({ matchPointsRound: event.target.checked })
                   }
-                  className="size-4 accent-[var(--felt)]"
+                  className="mt-0.5 size-4 accent-[var(--felt)]"
                 />
-                Include match-points round
+                <span>
+                  Include overall match-points (totals)
+                  <span className="mt-0.5 block text-xs text-[var(--muted)]">
+                    Extra team point for night totals — shown as Tot, not a
+                    played round.
+                  </span>
+                </span>
               </label>
             </>
           ) : null}

@@ -113,6 +113,16 @@ export function gameKey(roundNumber: number, gameIndex: number): string {
   return `${roundNumber}-${gameIndex}`;
 }
 
+/**
+ * Sentinel round id for the overall match-points / totals bucket.
+ * Not a played round — must not collide with real round numbers (1…N).
+ * Historically labeled “R6” on 5-round Palm Beach sheets.
+ */
+export const MATCH_POINTS_ROUND = 100;
+
+/** Short tab label for the overall match-points bucket. */
+export const MATCH_POINTS_TAB_LABEL = "Tot";
+
 export function emptyDraft(
   match: ScoringMatchDetail,
   preferMyTeamFirst = true,
@@ -305,7 +315,7 @@ type BoardRoundGame = {
 };
 
 export type BoardRoundTallyOptions = {
-  /** Include overall match-points round (R6). Default true. */
+  /** Include overall match-points / totals round. Default true. */
   includeMatchPointsRound?: boolean;
   maxScore?: number;
   maxLosingScore?: number;
@@ -326,7 +336,7 @@ function plausibleRoundHandicap(value: number | null | undefined): number {
 /**
  * Board-level round tally from scored games.
  * Uses points + round HC with the same clinch rules as the scoresheet, and
- * optionally awards the final match-points round (R6).
+ * optionally awards the final overall match-points / totals round.
  */
 export function tallyBoardRoundWins(
   games: BoardRoundGame[],
@@ -360,8 +370,8 @@ export function tallyBoardRoundWins(
   const byRound = new Map<number, RoundAcc>();
 
   for (const game of games) {
-    // Skip synthetic match-points round key if present (see MATCH_POINTS_ROUND).
-    if (!Number.isFinite(game.round) || game.round === 6) {
+    // Skip synthetic match-points key if present (see MATCH_POINTS_ROUND).
+    if (!Number.isFinite(game.round) || game.round === MATCH_POINTS_ROUND) {
       continue;
     }
     const row = byRound.get(game.round) ?? {
@@ -853,9 +863,6 @@ export function tallyAllRoundPoints(
     }),
   );
 }
-
-/** Synthetic round number for overall match-points (R6). */
-export const MATCH_POINTS_ROUND = 6;
 
 /**
  * Overall points round: live sum of every round's totals (game points + HC).

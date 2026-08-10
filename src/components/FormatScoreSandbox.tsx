@@ -14,6 +14,7 @@ import {
   computeMatchHandicaps,
   gameWinner,
   MATCH_POINTS_ROUND,
+  MATCH_POINTS_TAB_LABEL,
   playerDisplayName,
   tallyAllRoundPoints,
   tallyDraft,
@@ -25,17 +26,113 @@ import {
 import {
   buildPreviewDraft,
   buildPreviewMatch,
-  defaultPreviewRatings,
+  defaultPreviewSlots,
   gameKey,
   previewFormatSignature,
   previewHandicapLabel,
   previewHandicaps,
+  resizePreviewSlots,
+  tallyPlayerNight,
+  type PlayerNightStat,
+  type PreviewLineupSlot,
 } from "@/lib/format-score-preview";
+import { PartnerSearchField } from "./PartnerSearchField";
 
 const btnGhost =
   "inline-flex items-center justify-center rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--ink)] disabled:opacity-50";
 const inputClass =
   "w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-sm tabular-nums text-[var(--ink)] outline-none ring-[var(--felt)] focus:ring-2";
+
+function LineupSlotRow({
+  label,
+  slot,
+  onChange,
+}: {
+  label: string;
+  slot: PreviewLineupSlot;
+  onChange: (next: PreviewLineupSlot) => void;
+}) {
+  return (
+    <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_4.25rem] items-center gap-1.5">
+      <span className="text-xs font-semibold text-[var(--muted)]">{label}</span>
+      <PartnerSearchField
+        compact
+        hideLabel
+        label={label}
+        value={slot.pick}
+        placeholder="Search name or Fargo ID…"
+        onChange={(pick) => {
+          const rating =
+            pick.ratingAtSignup != null && Number.isFinite(pick.ratingAtSignup)
+              ? Math.round(pick.ratingAtSignup)
+              : slot.fargo;
+          onChange({ pick, fargo: rating });
+        }}
+      />
+      <input
+        type="number"
+        inputMode="numeric"
+        aria-label={`${label} Fargo`}
+        className={inputClass}
+        value={slot.fargo}
+        onChange={(event) =>
+          onChange({
+            ...slot,
+            fargo: Math.max(
+              0,
+              Math.min(900, Math.round(Number(event.target.value) || 0)),
+            ),
+          })
+        }
+      />
+    </div>
+  );
+}
+
+function PlayerNightBoard({
+  home,
+  away,
+}: {
+  home: PlayerNightStat[];
+  away: PlayerNightStat[];
+}) {
+  const row = (stat: PlayerNightStat) => (
+    <li
+      key={stat.playerId}
+      className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-2 text-xs"
+    >
+      <span className="min-w-0 truncate font-medium text-[var(--ink)]">
+        <span className="text-[var(--muted)]">
+          {stat.side === 1 ? "H" : "A"}
+          {stat.slotIndex}{" "}
+        </span>
+        {stat.name}
+      </span>
+      <span className="tabular-nums text-[var(--muted)]">
+        {stat.points}
+        <span className="text-[10px]"> pts</span>
+      </span>
+      <span className="min-w-[2.75rem] text-right font-semibold tabular-nums text-[var(--felt-deep)]">
+        {stat.wins}-{stat.losses}
+      </span>
+    </li>
+  );
+
+  return (
+    <div className="space-y-2 border-b border-[var(--line)] px-3 py-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+          Night by player
+        </p>
+        <p className="text-[10px] text-[var(--muted)]">pts · W-L</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <ul className="space-y-1.5">{home.map(row)}</ul>
+        <ul className="space-y-1.5">{away.map(row)}</ul>
+      </div>
+    </div>
+  );
+}
 
 function findPlayer(
   players: ScoringPlayer[],
@@ -136,9 +233,9 @@ export function FormatScoreSandbox({
   result: FormatGeneratorResult;
 }) {
   const n = result.model.playerCount;
-  const defaults = useMemo(() => defaultPreviewRatings(n), [n]);
-  const [homeRatings, setHomeRatings] = useState(defaults.home);
-  const [awayRatings, setAwayRatings] = useState(defaults.away);
+  const defaults = useMemo(() => defaultPreviewSlots(n), [n]);
+  const [homeSlots, setHomeSlots] = useState(defaults.home);
+  const [awaySlots, setAwaySlots] = useState(defaults.away);
   const [activeRound, setActiveRound] = useState(1);
   const [expandedGame, setExpandedGame] = useState<number | null>(null);
 
@@ -149,23 +246,23 @@ export function FormatScoreSandbox({
       buildPreviewMatch({
         picks,
         result,
-        homeRatings,
-        awayRatings,
+        homeSlots,
+        awaySlots,
       }),
-    [picks, result, homeRatings, awayRatings],
+    [picks, result, homeSlots, awaySlots],
   );
 
   const [draft, setDraft] = useState<ScoringDraft>(() =>
     buildPreviewDraft(match, result.scoringFormat),
   );
 
-  // Reset scores when night shape changes; keep ratings.
+  // Reset scores when night shape changes; keep lineup picks.
   useEffect(() => {
     const nextMatch = buildPreviewMatch({
       picks,
       result,
-      homeRatings,
-      awayRatings,
+      homeSlots,
+      awaySlots,
     });
     setDraft(buildPreviewDraft(nextMatch, result.scoringFormat));
     setActiveRound(1);
@@ -173,18 +270,14 @@ export function FormatScoreSandbox({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only reshape on format signature
   }, [signature]);
 
-  // Keep lineup length / default ratings aligned with player count.
+  // Keep lineup length aligned with player count.
   useEffect(() => {
-    setHomeRatings((prev) => {
-      if (prev.length === n) return prev;
-      const next = defaultPreviewRatings(n).home;
-      return next.map((value, i) => prev[i] ?? value);
-    });
-    setAwayRatings((prev) => {
-      if (prev.length === n) return prev;
-      const next = defaultPreviewRatings(n).away;
-      return next.map((value, i) => prev[i] ?? value);
-    });
+    setHomeSlots((prev) =>
+      prev.length === n ? prev : resizePreviewSlots(prev, n, "H"),
+    );
+    setAwaySlots((prev) =>
+      prev.length === n ? prev : resizePreviewSlots(prev, n, "A"),
+    );
   }, [n]);
 
   // Re-stamp race targets when ratings change without wiping scores.
@@ -270,6 +363,10 @@ export function FormatScoreSandbox({
   );
 
   const winTally = useMemo(() => tallyDraft(draft), [draft]);
+  const playerNight = useMemo(
+    () => tallyPlayerNight(match, draft),
+    [match, draft],
+  );
   const rounds = match.matchFormat?.rounds ?? [];
   const isMatchPointsRound = activeRound === MATCH_POINTS_ROUND;
   const currentRound = rounds.find((round) => round.roundNumber === activeRound);
@@ -312,13 +409,11 @@ export function FormatScoreSandbox({
     setExpandedGame(null);
   };
 
-  const setRating = (side: 1 | 2, index: number, value: number) => {
-    const rating = Math.max(0, Math.min(900, Math.round(value) || 0));
-    if (side === 1) {
-      setHomeRatings((prev) => prev.map((item, i) => (i === index ? rating : item)));
-    } else {
-      setAwayRatings((prev) => prev.map((item, i) => (i === index ? rating : item)));
-    }
+  const setHomeSlot = (index: number, next: PreviewLineupSlot) => {
+    setHomeSlots((prev) => prev.map((slot, i) => (i === index ? next : slot)));
+  };
+  const setAwaySlot = (index: number, next: PreviewLineupSlot) => {
+    setAwaySlots((prev) => prev.map((slot, i) => (i === index ? next : slot)));
   };
 
   const fullMatchHc =
@@ -388,54 +483,39 @@ export function FormatScoreSandbox({
         ) : null}
 
         <div className="space-y-2 border-b border-[var(--line)] px-3 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-            Lineup Fargo (edit to change race / HC)
-          </p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="space-y-1">
-              {homeRatings.map((rating, index) => (
-                <label
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+              Lineup
+            </p>
+            <p className="text-[10px] text-[var(--muted)]">
+              Search player · Fargo
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              {homeSlots.map((slot, index) => (
+                <LineupSlotRow
                   key={`h-${index}`}
-                  className="grid grid-cols-[2.5rem_1fr] items-center gap-2 text-xs"
-                >
-                  <span className="font-semibold text-[var(--muted)]">
-                    H{index + 1}
-                  </span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    className={inputClass}
-                    value={rating}
-                    onChange={(event) =>
-                      setRating(1, index, Number(event.target.value))
-                    }
-                  />
-                </label>
+                  label={`H${index + 1}`}
+                  slot={slot}
+                  onChange={(next) => setHomeSlot(index, next)}
+                />
               ))}
             </div>
-            <div className="space-y-1">
-              {awayRatings.map((rating, index) => (
-                <label
+            <div className="space-y-1.5">
+              {awaySlots.map((slot, index) => (
+                <LineupSlotRow
                   key={`a-${index}`}
-                  className="grid grid-cols-[2.5rem_1fr] items-center gap-2 text-xs"
-                >
-                  <span className="font-semibold text-[var(--muted)]">
-                    A{index + 1}
-                  </span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    className={inputClass}
-                    value={rating}
-                    onChange={(event) =>
-                      setRating(2, index, Number(event.target.value))
-                    }
-                  />
-                </label>
+                  label={`A${index + 1}`}
+                  slot={slot}
+                  onChange={(next) => setAwaySlot(index, next)}
+                />
               ))}
             </div>
           </div>
         </div>
+
+        <PlayerNightBoard home={playerNight.home} away={playerNight.away} />
 
         <div className="space-y-3 px-3 py-3">
           <div
@@ -506,7 +586,9 @@ export function FormatScoreSandbox({
                     : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
                 ].join(" ")}
               >
-                <p className="text-[11px] font-semibold leading-none">R6</p>
+                <p className="text-[11px] font-semibold leading-none">
+                  {MATCH_POINTS_TAB_LABEL}
+                </p>
                 <p
                   className={[
                     "mt-0.5 text-[10px] font-semibold tabular-nums leading-none",
@@ -582,11 +664,12 @@ export function FormatScoreSandbox({
 
           {isMatchPointsRound ? (
             <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/40 px-3 py-2 text-xs text-[var(--muted)]">
-              Match-points round totals game points across all rounds
+              Totals is overall match points across all played rounds
               {fullMatchHc
                 ? ` plus night HC (Home +${fullMatchHc.teamOne} / Away +${fullMatchHc.teamTwo})`
                 : ""}
-              . Awarded when the other side can no longer catch up.
+              — not an extra played round. Awarded when the other side can no
+              longer catch up.
             </p>
           ) : (
             <div className="space-y-1.5">
