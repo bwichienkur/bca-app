@@ -62,8 +62,28 @@ export const MatchScoreboard = memo(function MatchScoreboard({
     ? Math.max(0, roundsAvailable - 1)
     : roundsAvailable;
 
+  const raceWinner: 1 | 2 | null = (() => {
+    if (teamRaceTarget == null) return null;
+    const oneHit = roundWins.teamOne >= teamRaceTarget;
+    const twoHit = roundWins.teamTwo >= teamRaceTarget;
+    if (oneHit && !twoHit) return 1;
+    if (twoHit && !oneHit) return 2;
+    if (oneHit && twoHit) {
+      if (roundWins.teamOne === roundWins.teamTwo) return null;
+      return roundWins.teamOne > roundWins.teamTwo ? 1 : 2;
+    }
+    return null;
+  })();
+  const winnerName =
+    raceWinner === 1
+      ? teamOneName.trim() || "Home"
+      : raceWinner === 2
+        ? teamTwoName.trim() || "Away"
+        : null;
+
   const teamHeader = (side: 1 | 2, name: string, align: "left" | "right") => {
     const mine = mySide === side;
+    const won = raceWinner === side;
     return (
       <div
         className={[
@@ -77,10 +97,14 @@ export const MatchScoreboard = memo(function MatchScoreboard({
         <p
           className={[
             "mt-0.5 text-[10px] font-semibold uppercase tracking-[0.14em]",
-            mine ? "text-[var(--amber)]" : "text-white/50",
+            won
+              ? "text-[var(--amber)]"
+              : mine
+                ? "text-[var(--amber)]"
+                : "text-white/50",
           ].join(" ")}
         >
-          {mine ? "Your team" : side === 1 ? "Home" : "Away"}
+          {won ? "Winner" : mine ? "Your team" : side === 1 ? "Home" : "Away"}
         </p>
       </div>
     );
@@ -194,7 +218,9 @@ export const MatchScoreboard = memo(function MatchScoreboard({
           hint:
             heroAvailable > 0
               ? teamRaceTarget
-                ? `first to ${teamRaceTarget}`
+                ? raceWinner
+                  ? "race complete"
+                  : `first to ${teamRaceTarget}`
                 : `${roundsDecided}/${heroAvailable}`
               : undefined,
         })}
@@ -230,6 +256,17 @@ export const MatchScoreboard = memo(function MatchScoreboard({
         ) : null}
       </div>
 
+      {winnerName && teamRaceTarget ? (
+        <div className="mt-2.5 rounded-[var(--radius)] bg-[color-mix(in_srgb,var(--amber)_22%,transparent)] px-3 py-2 text-center ring-1 ring-[color-mix(in_srgb,var(--amber)_45%,transparent)]">
+          <p className="font-[family-name:var(--font-display)] text-base leading-tight text-white">
+            {winnerName} wins
+          </p>
+          <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
+            First to {teamRaceTarget} · remaining games don’t count
+          </p>
+        </div>
+      ) : null}
+
       <div className="mt-2.5 space-y-1.5">
         <div className="h-1 overflow-hidden rounded-full bg-black/35">
           <div
@@ -240,6 +277,7 @@ export const MatchScoreboard = memo(function MatchScoreboard({
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-[10px] tabular-nums text-white/55">
           <p>
             {gamesPlayed}/{gamesTotal} games scored
+            {raceWinner ? " · clinched" : ""}
           </p>
           {isHandicapped &&
           (handicapTotals.teamOne > 0 || handicapTotals.teamTwo > 0) ? (

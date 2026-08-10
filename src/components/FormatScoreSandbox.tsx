@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   formatScoringSummary,
   padRaceLimits,
@@ -185,6 +186,7 @@ function SideScoreControls({
   raceTo,
   options,
   isWinner,
+  disabled,
   onBump,
   onSet,
   onWin,
@@ -194,12 +196,13 @@ function SideScoreControls({
   raceTo: number;
   options: number[];
   isWinner: boolean;
+  disabled?: boolean;
   onBump: (delta: number) => void;
   onSet: (value: number) => void;
   onWin: () => void;
 }) {
   return (
-    <div className="min-w-0 space-y-1">
+    <div className="min-w-0 space-y-1.5">
       <div className="flex items-baseline justify-between gap-1">
         <p className="truncate text-xs font-semibold text-[var(--ink)]">
           {label}
@@ -220,7 +223,8 @@ function SideScoreControls({
         <button
           type="button"
           aria-label={`Decrease ${label}`}
-          className="rounded-md border border-[var(--line)] bg-[var(--surface)] py-1 text-sm font-semibold text-[var(--muted)] active:scale-[0.98]"
+          disabled={disabled}
+          className="rounded-md border border-[var(--line)] bg-[var(--surface)] py-2 text-sm font-semibold text-[var(--muted)] active:scale-[0.98] disabled:opacity-45"
           onClick={() => onBump(-1)}
         >
           −
@@ -228,6 +232,7 @@ function SideScoreControls({
         <select
           aria-label={`Score for ${label}`}
           className={inputClass}
+          disabled={disabled}
           value={String(score)}
           onChange={(event) => onSet(Number(event.target.value) || 0)}
         >
@@ -240,7 +245,8 @@ function SideScoreControls({
         <button
           type="button"
           aria-label={`Increase ${label}`}
-          className="rounded-md border border-[var(--felt)]/40 bg-[color-mix(in_srgb,var(--felt)_18%,var(--surface))] py-1 text-sm font-semibold text-[var(--felt-deep)] active:scale-[0.98]"
+          disabled={disabled}
+          className="rounded-md border border-[var(--felt)]/40 bg-[color-mix(in_srgb,var(--felt)_18%,var(--surface))] py-2 text-sm font-semibold text-[var(--felt-deep)] active:scale-[0.98] disabled:opacity-45"
           onClick={() => onBump(1)}
         >
           +
@@ -248,9 +254,10 @@ function SideScoreControls({
       </div>
       <button
         type="button"
+        disabled={disabled}
         onClick={onWin}
         className={[
-          "w-full rounded-md py-1 text-[11px] font-semibold transition active:scale-[0.98]",
+          "w-full rounded-md py-2 text-[11px] font-semibold transition active:scale-[0.98] disabled:opacity-45",
           isWinner
             ? "bg-[var(--felt)] text-white"
             : "border border-[var(--felt)]/45 bg-[color-mix(in_srgb,var(--felt)_12%,transparent)] text-[var(--felt-deep)]",
@@ -260,6 +267,306 @@ function SideScoreControls({
       </button>
     </div>
   );
+}
+
+function scoresEqual(a: GameScoreState, b: GameScoreState): boolean {
+  return (
+    (a.teamOneScore ?? 0) === (b.teamOneScore ?? 0) &&
+    (a.teamTwoScore ?? 0) === (b.teamTwoScore ?? 0) &&
+    (a.winAdornment ?? "") === (b.winAdornment ?? "") &&
+    Boolean(a.isWinZip) === Boolean(b.isWinZip)
+  );
+}
+
+function PreviewGamePad({
+  open,
+  roundNumber,
+  gameIndex,
+  homeName,
+  awayName,
+  homeRating,
+  awayRating,
+  initial,
+  maxWin,
+  maxLoss,
+  raceTargetOne,
+  raceTargetTwo,
+  chartMode,
+  readOnly,
+  onClose,
+  onSave,
+}: {
+  open: boolean;
+  roundNumber: number;
+  gameIndex: number;
+  homeName: string;
+  awayName: string;
+  homeRating: number | null | undefined;
+  awayRating: number | null | undefined;
+  initial: GameScoreState;
+  maxWin: number;
+  maxLoss: number;
+  raceTargetOne: number | null;
+  raceTargetTwo: number | null;
+  chartMode: boolean;
+  readOnly?: boolean;
+  onClose: () => void;
+  onSave: (next: GameScoreState) => void;
+}) {
+  const [local, setLocal] = useState(initial);
+  const [baseline, setBaseline] = useState(initial);
+  const [mounted, setMounted] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    setLocal(initial);
+    setBaseline(initial);
+    setDiscardOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resync on open/game only
+  }, [open, roundNumber, gameIndex]);
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") requestClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, local, baseline]);
+
+  if (!open || !mounted) return null;
+
+  const dirty = !scoresEqual(local, baseline);
+  const homeRace = raceTargetOne ?? maxWin;
+  const awayRace = raceTargetTwo ?? maxWin;
+  const homeOptions = raceScoreOptions(homeRace);
+  const awayOptions = raceScoreOptions(awayRace);
+  const winner = gameWinner(local, {
+    maxScore: maxWin,
+    maxLosingScore: maxLoss,
+    raceTargetOne,
+    raceTargetTwo,
+  });
+  const homeScore = local.teamOneScore ?? 0;
+  const awayScore = local.teamTwoScore ?? 0;
+
+  const applyScore = (side: 1 | 2, value: number) => {
+    if (readOnly) return;
+    setLocal((prev) =>
+      applyRaceScore(prev, side, value, {
+        maxScore: maxWin,
+        maxLosingScore: maxLoss,
+        raceTargetOne,
+        raceTargetTwo,
+        allowedScores: side === 1 ? homeOptions : awayOptions,
+      }),
+    );
+  };
+
+  const bump = (side: 1 | 2, delta: number) => {
+    const current = side === 1 ? homeScore : awayScore;
+    const options = side === 1 ? homeOptions : awayOptions;
+    const idx = options.indexOf(current);
+    const next =
+      options[
+        Math.max(
+          0,
+          Math.min(options.length - 1, (idx >= 0 ? idx : 0) + delta),
+        )
+      ] ?? current;
+    applyScore(side, next);
+  };
+
+  const markWin = (side: 1 | 2) => {
+    if (readOnly) return;
+    setLocal((prev) =>
+      applyQuickWin(prev, side, {
+        maxScore: maxWin,
+        maxLosingScore: maxLoss,
+        raceTargetOne,
+        raceTargetTwo,
+      }),
+    );
+  };
+
+  const requestClose = () => {
+    if (dirty && !readOnly) {
+      setDiscardOpen(true);
+      return;
+    }
+    onClose();
+  };
+
+  const sheet = (
+    <div
+      className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Round ${roundNumber} game ${gameIndex} score pad`}
+    >
+      <button
+        type="button"
+        aria-label="Dismiss score pad"
+        className="absolute inset-0 bg-black/55"
+        onClick={requestClose}
+      />
+      <div className="relative z-[1] flex max-h-[min(92vh,40rem)] w-full max-w-lg flex-col overflow-hidden rounded-t-[1.25rem] border border-[var(--line)] bg-[var(--paper-2)] shadow-[var(--shadow)] sm:rounded-[var(--radius)]">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--line)] px-4 py-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--amber)]">
+                Round {roundNumber} · Game {gameIndex}
+              </p>
+              {dirty && !readOnly ? (
+                <span className="rounded-md bg-[color-mix(in_srgb,var(--amber)_18%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--amber)]">
+                  Unsaved
+                </span>
+              ) : null}
+              {readOnly ? (
+                <span className="rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                  Locked
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-1.5 font-[family-name:var(--font-display)] text-lg leading-tight text-[var(--felt-deep)]">
+              {homeName}
+              <span className="mx-1.5 text-[var(--muted)]">vs</span>
+              {awayName}
+            </p>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              {chartMode && raceTargetOne != null && raceTargetTwo != null
+                ? `Race ${raceTargetOne}–${raceTargetTwo}`
+                : maxWin <= 1
+                  ? "Single game · W/L"
+                  : `Race to ${maxWin}`}
+              {homeRating != null || awayRating != null
+                ? ` · ${homeRating ?? "—"} / ${awayRating ?? "—"}`
+                : ""}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={requestClose}
+            aria-label="Close score pad"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-lg leading-none text-[var(--muted)]"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <SideScoreControls
+              label={homeName}
+              score={homeScore}
+              raceTo={homeRace}
+              options={homeOptions}
+              isWinner={winner === 1}
+              disabled={readOnly}
+              onBump={(delta) => bump(1, delta)}
+              onSet={(value) => applyScore(1, value)}
+              onWin={() => markWin(1)}
+            />
+            <SideScoreControls
+              label={awayName}
+              score={awayScore}
+              raceTo={awayRace}
+              options={awayOptions}
+              isWinner={winner === 2}
+              disabled={readOnly}
+              onBump={(delta) => bump(2, delta)}
+              onSet={(value) => applyScore(2, value)}
+              onWin={() => markWin(2)}
+            />
+          </div>
+        </div>
+
+        <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-[var(--line)] bg-[var(--paper-2)] px-4 py-3 pb-[calc(0.75rem+var(--safe-bottom))]">
+          <button
+            type="button"
+            onClick={requestClose}
+            className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-3 text-sm font-semibold text-[var(--ink)]"
+          >
+            {readOnly ? "Close" : "Exit"}
+          </button>
+          <button
+            type="button"
+            disabled={readOnly || !dirty}
+            onClick={() => onSave(local)}
+            className={[
+              "rounded-[var(--radius)] px-3 py-3 text-sm font-semibold transition",
+              !readOnly && dirty
+                ? "bg-[var(--felt)] text-white"
+                : "cursor-default border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]",
+            ].join(" ")}
+          >
+            {readOnly ? "Locked" : dirty ? "Save" : "Saved ✓"}
+          </button>
+        </div>
+
+        {discardOpen ? (
+          <div className="absolute inset-0 z-[2] flex items-center justify-center bg-black/45 p-4">
+            <div className="w-full max-w-sm rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[var(--shadow)]">
+              <p className="text-sm font-semibold text-[var(--ink)]">
+                Discard unsaved changes?
+              </p>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                Score edits for this game haven’t been saved.
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className={btnGhost}
+                  onClick={() => setDiscardOpen(false)}
+                >
+                  Keep editing
+                </button>
+                <button
+                  type="button"
+                  className="rounded-[var(--radius)] border border-[var(--danger)]/45 bg-[color-mix(in_srgb,var(--danger)_12%,var(--surface))] px-2.5 py-1.5 text-xs font-semibold text-[var(--danger)]"
+                  onClick={() => {
+                    setDiscardOpen(false);
+                    onClose();
+                  }}
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  return createPortal(sheet, document.body);
+}
+
+function teamRaceWinnerSide(
+  homeWins: number,
+  awayWins: number,
+  teamRaceTo: number | null | undefined,
+): 1 | 2 | null {
+  if (teamRaceTo == null || teamRaceTo <= 0) return null;
+  const oneHit = homeWins >= teamRaceTo;
+  const twoHit = awayWins >= teamRaceTo;
+  if (oneHit && !twoHit) return 1;
+  if (twoHit && !oneHit) return 2;
+  if (oneHit && twoHit && homeWins !== awayWins) {
+    return homeWins > awayWins ? 1 : 2;
+  }
+  return null;
 }
 
 export function FormatScoreSandbox({
@@ -274,7 +581,10 @@ export function FormatScoreSandbox({
   const [homeSlots, setHomeSlots] = useState(defaults.home);
   const [awaySlots, setAwaySlots] = useState(defaults.away);
   const [activeRound, setActiveRound] = useState(1);
-  const [expandedGame, setExpandedGame] = useState<number | null>(null);
+  const [activeGame, setActiveGame] = useState<{
+    roundNumber: number;
+    gameIndex: number;
+  } | null>(null);
   const [previewTab, setPreviewTab] = useState<PreviewPane>("scoring");
 
   const signature = previewFormatSignature(picks, result);
@@ -304,7 +614,7 @@ export function FormatScoreSandbox({
     });
     setDraft(buildPreviewDraft(nextMatch, result.scoringFormat));
     setActiveRound(1);
-    setExpandedGame(null);
+    setActiveGame(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only reshape on format signature
   }, [signature]);
 
@@ -426,6 +736,12 @@ export function FormatScoreSandbox({
     : roundTallies.filter((item) => item.roundWinner === 2).length +
       (matchPointsTally?.roundWinner === 2 ? 1 : 0);
 
+  const raceClinched = teamRaceWinnerSide(
+    nightHomeWins,
+    nightAwayWins,
+    scoringFormat.teamRaceTo,
+  );
+
   const pointTotals = useMemo(
     () =>
       matchWinMode
@@ -490,7 +806,7 @@ export function FormatScoreSandbox({
 
   const resetScores = () => {
     setDraft(buildPreviewDraft(match, scoringFormat));
-    setExpandedGame(null);
+    setActiveGame(null);
   };
 
   const setHomeSlot = (index: number, next: PreviewLineupSlot) => {
@@ -669,7 +985,7 @@ export function FormatScoreSandbox({
                     aria-selected={active}
                     onClick={() => {
                       setActiveRound(round.roundNumber);
-                      setExpandedGame(null);
+                      setActiveGame(null);
                     }}
                     className={[
                       "min-w-0 rounded-md px-1 py-1.5 text-center transition",
@@ -703,7 +1019,7 @@ export function FormatScoreSandbox({
                   aria-selected={isMatchPointsRound}
                   onClick={() => {
                     setActiveRound(MATCH_POINTS_ROUND);
-                    setExpandedGame(null);
+                    setActiveGame(null);
                   }}
                   className={[
                     "min-w-0 rounded-md px-1 py-1.5 text-center transition",
@@ -784,18 +1100,20 @@ export function FormatScoreSandbox({
             ) : null}
 
             {matchWinMode && !isMatchPointsRound ? (
-            <p className="text-xs text-[var(--muted)]">
-              {scoringFormat.teamRaceTo
-                ? `Each matchup is one game · winner earns ${scoringFormat.pointsPerMatchWin} match point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"} · first team to ${scoringFormat.teamRaceTo} wins.`
-                : `Each individual match win = ${scoringFormat.pointsPerMatchWin} team point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}${
-                    scoringFormat.raceMode === "fargo-race-chart"
-                      ? ` · ${raceChartMeta(scoringFormat.raceChartId ?? "r6-hot").label}`
-                      : (scoringFormat.fixedRaceWin ?? 0) <= 1
-                        ? " · single-game matchups"
-                        : ""
-                  }.`}
-            </p>
-          ) : null}
+              <p className="text-xs text-[var(--muted)]">
+                {raceClinched
+                  ? `${raceClinched === 1 ? "Home" : "Away"} clinched the race — remaining unscored matchups are locked.`
+                  : scoringFormat.teamRaceTo
+                    ? `Each matchup is one game · winner earns ${scoringFormat.pointsPerMatchWin} match point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"} · first team to ${scoringFormat.teamRaceTo} wins. Tap a matchup to score.`
+                    : `Each individual match win = ${scoringFormat.pointsPerMatchWin} team point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}${
+                        scoringFormat.raceMode === "fargo-race-chart"
+                          ? ` · ${raceChartMeta(scoringFormat.raceChartId ?? "r6-hot").label}`
+                          : (scoringFormat.fixedRaceWin ?? 0) <= 1
+                            ? " · single-game matchups"
+                            : ""
+                      }. Tap a matchup to score.`}
+              </p>
+            ) : null}
 
             {isMatchPointsRound ? (
               <p className="text-xs text-[var(--muted)]">
@@ -839,11 +1157,9 @@ export function FormatScoreSandbox({
                     : homeScore > 0 || awayScore > 0
                       ? "in-progress"
                       : "not-started";
-                  const open = expandedGame === game.index;
+                  const locked = Boolean(raceClinched && !winner);
                   const homeRace = limits.raceTargetOne ?? limits.maxWin;
                   const awayRace = limits.raceTargetTwo ?? limits.maxWin;
-                  const homeOptions = raceScoreOptions(homeRace);
-                  const awayOptions = raceScoreOptions(awayRace);
 
                   const matchHcRow =
                     picks.fargoHc === "MatchBased"
@@ -856,67 +1172,31 @@ export function FormatScoreSandbox({
                         )
                       : null;
 
-                  const applyScore = (side: 1 | 2, value: number) => {
-                    updateGame(currentRound.roundNumber, game.index, (current) =>
-                      applyRaceScore(current, side, value, {
-                        maxScore: limits.maxWin,
-                        maxLosingScore: limits.maxLoss,
-                        raceTargetOne: limits.raceTargetOne,
-                        raceTargetTwo: limits.raceTargetTwo,
-                        allowedScores:
-                          side === 1 ? homeOptions : awayOptions,
-                      }),
-                    );
-                  };
-
-                  const bump = (side: 1 | 2, delta: number) => {
-                    const current = side === 1 ? homeScore : awayScore;
-                    const options = side === 1 ? homeOptions : awayOptions;
-                    const idx = options.indexOf(current);
-                    const next =
-                      options[
-                        Math.max(
-                          0,
-                          Math.min(
-                            options.length - 1,
-                            (idx >= 0 ? idx : 0) + delta,
-                          ),
-                        )
-                      ] ?? current;
-                    applyScore(side, next);
-                  };
-
-                  const markWin = (side: 1 | 2) => {
-                    updateGame(currentRound.roundNumber, game.index, (current) =>
-                      applyQuickWin(current, side, {
-                        maxScore: limits.maxWin,
-                        maxLosingScore: limits.maxLoss,
-                        raceTargetOne: limits.raceTargetOne,
-                        raceTargetTwo: limits.raceTargetTwo,
-                      }),
-                    );
-                  };
-
                   return (
                     <div
                       key={key}
                       className={[
                         "overflow-hidden rounded-[var(--radius)] border",
-                        status === "complete"
-                          ? "border-[var(--felt)]/55 bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]"
-                          : status === "in-progress"
-                            ? "border-[var(--amber)]/65 bg-[color-mix(in_srgb,var(--amber)_12%,var(--surface))]"
-                            : "border-[var(--line)] bg-[var(--surface)]",
+                        locked
+                          ? "border-[var(--line)] bg-[var(--surface-2)]/40 opacity-70"
+                          : status === "complete"
+                            ? "border-[var(--felt)]/55 bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]"
+                            : status === "in-progress"
+                              ? "border-[var(--amber)]/65 bg-[color-mix(in_srgb,var(--amber)_12%,var(--surface))]"
+                              : "border-[var(--line)] bg-[var(--surface)]",
                       ].join(" ")}
                     >
                       <button
                         type="button"
-                        className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2.5 py-1.5 text-left"
-                        onClick={() =>
-                          setExpandedGame((prev) =>
-                            prev === game.index ? null : game.index,
-                          )
-                        }
+                        disabled={locked}
+                        className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2.5 py-1.5 text-left disabled:cursor-not-allowed"
+                        onClick={() => {
+                          if (locked || !state) return;
+                          setActiveGame({
+                            roundNumber: currentRound.roundNumber,
+                            gameIndex: game.index,
+                          });
+                        }}
                       >
                         <div className="min-w-0">
                           <p
@@ -927,7 +1207,9 @@ export function FormatScoreSandbox({
                                 : "text-[var(--ink)]",
                             ].join(" ")}
                           >
-                            {p1 ? playerDisplayName(p1) : `H${game.playerOne.index}`}
+                            {p1
+                              ? playerDisplayName(p1)
+                              : `H${game.playerOne.index}`}
                           </p>
                           <p className="truncate text-[10px] text-[var(--muted)]">
                             {p1?.fargoRating ?? "—"}
@@ -938,16 +1220,29 @@ export function FormatScoreSandbox({
                           </p>
                         </div>
                         <div className="rounded-md bg-[var(--surface-2)] px-2 py-0.5 text-center">
-                          <p className="text-sm font-semibold tabular-nums">
-                            {homeScore}–{awayScore}
-                          </p>
-                        <p className="text-[9px] uppercase tracking-[0.1em] text-[var(--muted)]">
-                          {limits.chartMode
-                            ? `${homeRace}–${awayRace}`
-                            : limits.maxWin <= 1
-                              ? "W/L"
-                              : `to ${limits.maxWin}`}
-                        </p>
+                          {locked ? (
+                            <>
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                                Locked
+                              </p>
+                              <p className="text-[9px] uppercase tracking-[0.1em] text-[var(--muted)]">
+                                Not needed
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-sm font-semibold tabular-nums">
+                                {homeScore}–{awayScore}
+                              </p>
+                              <p className="text-[9px] uppercase tracking-[0.1em] text-[var(--muted)]">
+                                {limits.chartMode
+                                  ? `${homeRace}–${awayRace}`
+                                  : limits.maxWin <= 1
+                                    ? "W/L"
+                                    : `to ${limits.maxWin}`}
+                              </p>
+                            </>
+                          )}
                         </div>
                         <div className="min-w-0 text-right">
                           <p
@@ -958,7 +1253,9 @@ export function FormatScoreSandbox({
                                 : "text-[var(--ink)]",
                             ].join(" ")}
                           >
-                            {p2 ? playerDisplayName(p2) : `A${game.playerTwo.index}`}
+                            {p2
+                              ? playerDisplayName(p2)
+                              : `A${game.playerTwo.index}`}
                           </p>
                           <p className="truncate text-[10px] text-[var(--muted)]">
                             {p2?.fargoRating ?? "—"}
@@ -969,39 +1266,6 @@ export function FormatScoreSandbox({
                           </p>
                         </div>
                       </button>
-
-                      {open ? (
-                        <div className="grid gap-2 border-t border-[var(--line)] px-2.5 py-2 sm:grid-cols-2">
-                          <SideScoreControls
-                            label={
-                              p1
-                                ? playerDisplayName(p1)
-                                : `H${game.playerOne.index}`
-                            }
-                            score={homeScore}
-                            raceTo={homeRace}
-                            options={homeOptions}
-                            isWinner={winner === 1}
-                            onBump={(delta) => bump(1, delta)}
-                            onSet={(value) => applyScore(1, value)}
-                            onWin={() => markWin(1)}
-                          />
-                          <SideScoreControls
-                            label={
-                              p2
-                                ? playerDisplayName(p2)
-                                : `A${game.playerTwo.index}`
-                            }
-                            score={awayScore}
-                            raceTo={awayRace}
-                            options={awayOptions}
-                            isWinner={winner === 2}
-                            onBump={(delta) => bump(2, delta)}
-                            onSet={(value) => applyScore(2, value)}
-                            onWin={() => markWin(2)}
-                          />
-                        </div>
-                      ) : null}
                     </div>
                   );
                 })}
@@ -1010,6 +1274,72 @@ export function FormatScoreSandbox({
           </div>
         ) : null}
       </SubTabCard>
+
+      {activeGame && draft.games[gameKey(activeGame.roundNumber, activeGame.gameIndex)]
+        ? (() => {
+            const padState =
+              draft.games[
+                gameKey(activeGame.roundNumber, activeGame.gameIndex)
+              ]!;
+            const padLimits = padRaceLimits(
+              scoringFormat,
+              match,
+              padState.raceTargetOne,
+              padState.raceTargetTwo,
+            );
+            const padWinner = gameWinner(padState, {
+              maxScore: padLimits.maxWin,
+              maxLosingScore: padLimits.maxLoss,
+              raceTargetOne: padLimits.raceTargetOne,
+              raceTargetTwo: padLimits.raceTargetTwo,
+            });
+            const padLocked = Boolean(raceClinched && !padWinner);
+            const p1 = findPlayer(
+              match.teamOnePlayers,
+              padState.teamOnePlayerId,
+            );
+            const p2 = findPlayer(
+              match.teamTwoPlayers,
+              padState.teamTwoPlayerId,
+            );
+            return (
+              <PreviewGamePad
+                open
+                roundNumber={activeGame.roundNumber}
+                gameIndex={activeGame.gameIndex}
+                homeName={
+                  p1
+                    ? playerDisplayName(p1)
+                    : `Home ${padState.teamOnePlayerId ?? ""}`
+                }
+                awayName={
+                  p2
+                    ? playerDisplayName(p2)
+                    : `Away ${padState.teamTwoPlayerId ?? ""}`
+                }
+                homeRating={p1?.fargoRating}
+                awayRating={p2?.fargoRating}
+                initial={padState}
+                maxWin={padLimits.maxWin}
+                maxLoss={padLimits.maxLoss}
+                raceTargetOne={padLimits.raceTargetOne}
+                raceTargetTwo={padLimits.raceTargetTwo}
+                chartMode={padLimits.chartMode}
+                readOnly={padLocked}
+                onClose={() => setActiveGame(null)}
+                onSave={(next) => {
+                  if (padLocked) return;
+                  updateGame(
+                    activeGame.roundNumber,
+                    activeGame.gameIndex,
+                    () => next,
+                  );
+                  setActiveGame(null);
+                }}
+              />
+            );
+          })()
+        : null}
     </div>
   );
 }
