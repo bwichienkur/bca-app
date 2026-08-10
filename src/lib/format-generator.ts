@@ -126,7 +126,7 @@ export const GAME_KIND_OPTIONS: Array<{
 }> = [
   {
     id: "S",
-    label: "Singles (points)",
+    label: "Singles",
     description: "Score pad / points per game",
   },
   {
@@ -136,7 +136,7 @@ export const GAME_KIND_OPTIONS: Array<{
   },
   {
     id: "D",
-    label: "Scotch / doubles game",
+    label: "Scotch",
     description: "Two players per side on a game",
   },
 ];
@@ -148,17 +148,17 @@ export const RACE_MODEL_OPTIONS: Array<{
 }> = [
   {
     id: "none",
-    label: "No race chart",
+    label: "None",
     description: "Points games, or race length unused",
   },
   {
     id: "fixed",
-    label: "Fixed race-to",
+    label: "Fixed",
     description: "Same race length for everyone (set below)",
   },
   {
     id: "fargo-chart",
-    label: "Fargo race chart",
+    label: "Fargo chart",
     description: "Asymmetric race-to from rating difference (pick chart below)",
   },
 ];
@@ -170,7 +170,7 @@ export const FARGO_HC_OPTIONS: Array<{
 }> = [
   {
     id: "none",
-    label: "No Fargo HC games",
+    label: "None",
     description: "No expected-points games awarded",
   },
   {
@@ -197,7 +197,7 @@ export const TEAM_SCORING_OPTIONS: Array<{
 }> = [
   {
     id: "match-win",
-    label: "1 pt per match win",
+    label: "Match wins",
     description: "Individual match winner earns a team point",
   },
   {
