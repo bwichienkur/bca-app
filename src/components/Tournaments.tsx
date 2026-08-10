@@ -181,20 +181,21 @@ const fieldClass =
 const labelClass =
   "mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]";
 
-/** Premium solid text actions for signup request rows. */
+/** Match LMS Add / Edit / Delete action buttons (solid fill, shared radius). */
 const signupActionBtn =
-  "inline-flex h-8 shrink-0 items-center justify-center rounded-[var(--radius)] px-3 text-[11px] font-semibold tracking-[0.04em] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(0,0,0,0.35)] transition-[filter,transform] hover:brightness-110 active:translate-y-px disabled:opacity-50";
-const signupApproveBtn = `${signupActionBtn} bg-[linear-gradient(180deg,#2f8fc2_0%,var(--felt)_45%,var(--felt-soft)_100%)] text-white`;
-const signupWaitlistBtn = `${signupActionBtn} bg-[linear-gradient(180deg,#edc48a_0%,var(--amber)_48%,#c4893f_100%)] text-[#1a140c]`;
-const signupRejectBtn = `${signupActionBtn} bg-[linear-gradient(180deg,#e0726a_0%,#c44a42_48%,#9e342e_100%)] text-white`;
-const signupRevertBtn = `${signupActionBtn} bg-[linear-gradient(180deg,#3d4b58_0%,#2a3540_48%,#222b35_100%)] text-[var(--ink)]`;
+  "inline-flex shrink-0 items-center justify-center rounded-[var(--radius)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
+const signupApproveBtn = `${signupActionBtn} bg-[var(--felt)]`;
+const signupWaitlistBtn = `${signupActionBtn} bg-[#a16207]`;
+const signupRejectBtn = `${signupActionBtn} bg-[#b42318]`;
+const signupRevertBtn =
+  "inline-flex shrink-0 items-center justify-center rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold text-[var(--ink)] disabled:opacity-50";
 const signupInlineIconBtn =
   "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt-deep)] transition hover:bg-[color-mix(in_srgb,var(--chalk)_18%,transparent)] hover:text-[var(--chalk)]";
 const signupBulkBtn =
-  "inline-flex h-9 flex-1 items-center justify-center rounded-[var(--radius)] px-3.5 text-[11px] font-semibold tracking-[0.04em] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(0,0,0,0.35)] transition-[filter,transform] hover:brightness-110 active:translate-y-px disabled:opacity-50 sm:flex-none";
-const signupBulkApproveBtn = `${signupBulkBtn} bg-[linear-gradient(180deg,#2f8fc2_0%,var(--felt)_45%,var(--felt-soft)_100%)] text-white`;
-const signupBulkWaitlistBtn = `${signupBulkBtn} bg-[linear-gradient(180deg,#edc48a_0%,var(--amber)_48%,#c4893f_100%)] text-[#1a140c]`;
-const signupBulkRejectBtn = `${signupBulkBtn} bg-[linear-gradient(180deg,#e0726a_0%,#c44a42_48%,#9e342e_100%)] text-white`;
+  "inline-flex flex-1 items-center justify-center rounded-[var(--radius)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:flex-none";
+const signupBulkApproveBtn = `${signupBulkBtn} bg-[var(--felt)]`;
+const signupBulkWaitlistBtn = `${signupBulkBtn} bg-[#a16207]`;
+const signupBulkRejectBtn = `${signupBulkBtn} bg-[#b42318]`;
 const fieldToggleBtn =
   "inline-flex h-7 w-[2.65rem] shrink-0 items-center justify-center rounded-[var(--radius)] px-1.5 text-[11px] font-semibold transition disabled:opacity-50";
 const fieldToggleIdle = `${fieldToggleBtn} border border-[var(--line)] bg-[var(--surface-2)] text-[var(--muted)] hover:text-[var(--ink)]`;
