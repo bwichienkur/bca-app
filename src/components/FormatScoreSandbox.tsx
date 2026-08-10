@@ -36,6 +36,7 @@ import {
   type PlayerNightStat,
   type PreviewLineupSlot,
 } from "@/lib/format-score-preview";
+import { MatchScoreboard } from "./MatchScoreboard";
 import { PartnerSearchField } from "./PartnerSearchField";
 
 const btnGhost =
@@ -43,24 +44,52 @@ const btnGhost =
 const inputClass =
   "w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-sm tabular-nums text-[var(--ink)] outline-none ring-[var(--felt)] focus:ring-2";
 
+function slotDisplayName(side: "H" | "A", index: number, slot: PreviewLineupSlot) {
+  return slot.pick.displayName.trim() || `${side === "H" ? "Home" : "Away"} ${index}`;
+}
+
+function PlayerStatChip({ stat }: { stat: PlayerNightStat | null }) {
+  if (!stat || stat.games === 0) {
+    return (
+      <span className="shrink-0 text-[10px] tabular-nums text-[var(--muted)]">
+        — · 0-0
+      </span>
+    );
+  }
+  return (
+    <span className="shrink-0 text-[10px] tabular-nums text-[var(--muted)]">
+      <span className="font-semibold text-[var(--ink)]">{stat.points}</span>
+      <span className="text-[9px]">p</span>
+      {" · "}
+      <span className="font-semibold text-[var(--felt-deep)]">
+        {stat.wins}-{stat.losses}
+      </span>
+    </span>
+  );
+}
+
 function LineupSlotRow({
   label,
   slot,
+  stat,
   onChange,
 }: {
   label: string;
   slot: PreviewLineupSlot;
+  stat: PlayerNightStat | null;
   onChange: (next: PreviewLineupSlot) => void;
 }) {
   return (
-    <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_4.25rem] items-center gap-1.5">
-      <span className="text-xs font-semibold text-[var(--muted)]">{label}</span>
+    <div className="grid grid-cols-[2rem_minmax(0,1fr)_3.5rem_auto] items-center gap-1">
+      <span className="text-[11px] font-semibold text-[var(--muted)]">
+        {label}
+      </span>
       <PartnerSearchField
         compact
         hideLabel
         label={label}
         value={slot.pick}
-        placeholder="Search name or Fargo ID…"
+        placeholder="Name or Fargo ID…"
         onChange={(pick) => {
           const rating =
             pick.ratingAtSignup != null && Number.isFinite(pick.ratingAtSignup)
@@ -85,51 +114,32 @@ function LineupSlotRow({
           })
         }
       />
+      <PlayerStatChip stat={stat} />
     </div>
   );
 }
 
-function PlayerNightBoard({
-  home,
-  away,
+function CompactPlayerRow({
+  label,
+  name,
+  fargo,
+  stat,
 }: {
-  home: PlayerNightStat[];
-  away: PlayerNightStat[];
+  label: string;
+  name: string;
+  fargo: number;
+  stat: PlayerNightStat | null;
 }) {
-  const row = (stat: PlayerNightStat) => (
-    <li
-      key={stat.playerId}
-      className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-2 text-xs"
-    >
-      <span className="min-w-0 truncate font-medium text-[var(--ink)]">
-        <span className="text-[var(--muted)]">
-          {stat.side === 1 ? "H" : "A"}
-          {stat.slotIndex}{" "}
-        </span>
-        {stat.name}
-      </span>
-      <span className="tabular-nums text-[var(--muted)]">
-        {stat.points}
-        <span className="text-[10px]"> pts</span>
-      </span>
-      <span className="min-w-[2.75rem] text-right font-semibold tabular-nums text-[var(--felt-deep)]">
-        {stat.wins}-{stat.losses}
-      </span>
-    </li>
-  );
-
   return (
-    <div className="space-y-2 border-b border-[var(--line)] px-3 py-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-          Night by player
-        </p>
-        <p className="text-[10px] text-[var(--muted)]">pts · W-L</p>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <ul className="space-y-1.5">{home.map(row)}</ul>
-        <ul className="space-y-1.5">{away.map(row)}</ul>
-      </div>
+    <div className="grid grid-cols-[1.75rem_minmax(0,1fr)_auto] items-baseline gap-1.5 text-xs">
+      <span className="font-semibold text-[var(--muted)]">{label}</span>
+      <span className="min-w-0 truncate text-[var(--ink)]">
+        {name}
+        <span className="ml-1 text-[10px] tabular-nums text-[var(--muted)]">
+          {fargo}
+        </span>
+      </span>
+      <PlayerStatChip stat={stat} />
     </div>
   );
 }
@@ -162,14 +172,14 @@ function SideScoreControls({
   onWin: () => void;
 }) {
   return (
-    <div className="min-w-0 space-y-1.5">
+    <div className="min-w-0 space-y-1">
       <div className="flex items-baseline justify-between gap-1">
         <p className="truncate text-xs font-semibold text-[var(--ink)]">
           {label}
         </p>
         <p
           className={[
-            "text-lg font-semibold tabular-nums leading-none",
+            "text-base font-semibold tabular-nums leading-none",
             isWinner ? "text-[var(--felt-deep)]" : "text-[var(--ink)]",
           ].join(" ")}
         >
@@ -183,7 +193,7 @@ function SideScoreControls({
         <button
           type="button"
           aria-label={`Decrease ${label}`}
-          className="rounded-md border border-[var(--line)] bg-[var(--surface)] py-1.5 text-sm font-semibold text-[var(--muted)] active:scale-[0.98]"
+          className="rounded-md border border-[var(--line)] bg-[var(--surface)] py-1 text-sm font-semibold text-[var(--muted)] active:scale-[0.98]"
           onClick={() => onBump(-1)}
         >
           −
@@ -203,7 +213,7 @@ function SideScoreControls({
         <button
           type="button"
           aria-label={`Increase ${label}`}
-          className="rounded-md border border-[var(--felt)]/40 bg-[color-mix(in_srgb,var(--felt)_18%,var(--surface))] py-1.5 text-sm font-semibold text-[var(--felt-deep)] active:scale-[0.98]"
+          className="rounded-md border border-[var(--felt)]/40 bg-[color-mix(in_srgb,var(--felt)_18%,var(--surface))] py-1 text-sm font-semibold text-[var(--felt-deep)] active:scale-[0.98]"
           onClick={() => onBump(1)}
         >
           +
@@ -213,7 +223,7 @@ function SideScoreControls({
         type="button"
         onClick={onWin}
         className={[
-          "w-full rounded-md py-1.5 text-[11px] font-semibold transition active:scale-[0.98]",
+          "w-full rounded-md py-1 text-[11px] font-semibold transition active:scale-[0.98]",
           isWinner
             ? "bg-[var(--felt)] text-white"
             : "border border-[var(--felt)]/45 bg-[color-mix(in_srgb,var(--felt)_12%,transparent)] text-[var(--felt-deep)]",
@@ -238,6 +248,7 @@ export function FormatScoreSandbox({
   const [awaySlots, setAwaySlots] = useState(defaults.away);
   const [activeRound, setActiveRound] = useState(1);
   const [expandedGame, setExpandedGame] = useState<number | null>(null);
+  const [lineupOpen, setLineupOpen] = useState(false);
 
   const signature = previewFormatSignature(picks, result);
 
@@ -384,6 +395,48 @@ export function FormatScoreSandbox({
     : roundTallies.filter((item) => item.roundWinner === 2).length +
       (matchPointsTally?.roundWinner === 2 ? 1 : 0);
 
+  const pointTotals = useMemo(
+    () =>
+      matchWinMode
+        ? {
+            teamOne: winTally.teamOneWins,
+            teamTwo: winTally.teamTwoWins,
+          }
+        : roundTallies.reduce(
+            (acc, round) => ({
+              teamOne: acc.teamOne + round.teamOneTotal,
+              teamTwo: acc.teamTwo + round.teamTwoTotal,
+            }),
+            { teamOne: 0, teamTwo: 0 },
+          ),
+    [matchWinMode, roundTallies, winTally.teamOneWins, winTally.teamTwoWins],
+  );
+
+  const handicapTotals = useMemo(() => {
+    if (picks.fargoHc === "none") return { teamOne: 0, teamTwo: 0 };
+    if (picks.fargoHc === "FullMatchBased") {
+      const row = typedHc[0];
+      return {
+        teamOne: row?.teamOne ?? 0,
+        teamTwo: row?.teamTwo ?? 0,
+      };
+    }
+    const rows =
+      picks.fargoHc === "RoundBased" || picks.fargoHc === "MatchBased"
+        ? typedHc
+        : roundBasedHc;
+    return rows.reduce(
+      (acc, row) => ({
+        teamOne: acc.teamOne + row.teamOne,
+        teamTwo: acc.teamTwo + row.teamTwo,
+      }),
+      { teamOne: 0, teamTwo: 0 },
+    );
+  }, [picks.fargoHc, typedHc, roundBasedHc]);
+
+  const roundsAvailable =
+    rounds.length + (includeMatchPointsRound ? 1 : 0);
+
   const updateGame = (
     roundNumber: number,
     gameIndex: number,
@@ -419,105 +472,150 @@ export function FormatScoreSandbox({
   const fullMatchHc =
     picks.fargoHc === "FullMatchBased" ? typedHc[0] ?? null : null;
 
+  const namedCount =
+    homeSlots.filter((slot) => slot.pick.displayName.trim()).length +
+    awaySlots.filter((slot) => slot.pick.displayName.trim()).length;
+
   return (
     <div className="space-y-3">
-      <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/50 px-3 py-2.5">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-[var(--ink)]">
-              Score preview
-            </p>
-            <p className="mt-0.5 text-xs text-[var(--muted)]">
-              Local sandbox — {formatScoringSummary(scoringFormat)}. Try
-              scoring like the Score tab; nothing is saved to LMS.
-            </p>
-          </div>
-          <button type="button" className={btnGhost} onClick={resetScores}>
-            Reset scores
-          </button>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[var(--ink)]">
+            Score preview
+          </p>
+          <p className="mt-0.5 text-xs text-[var(--muted)]">
+            Local sandbox — try scoring like the Score tab; nothing is saved.
+          </p>
         </div>
+        <button type="button" className={btnGhost} onClick={resetScores}>
+          Reset scores
+        </button>
       </div>
 
-      <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-2)] px-3 py-3">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-              Home
-            </p>
-            <p className="font-[family-name:var(--font-display)] text-2xl font-semibold tabular-nums text-[var(--felt-deep)]">
-              {nightHomeWins}
-            </p>
-          </div>
-          <div className="text-center text-xs text-[var(--muted)]">
-            <p className="font-semibold text-[var(--ink)]">
-              {matchWinMode ? "Match wins" : "Round wins"}
-            </p>
-            <p className="mt-0.5">
-              {winTally.scored}/{winTally.total} games
-            </p>
-          </div>
-          <div className="min-w-0 text-right">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-              Away
-            </p>
-            <p className="font-[family-name:var(--font-display)] text-2xl font-semibold tabular-nums text-[var(--felt-deep)]">
-              {nightAwayWins}
-            </p>
-          </div>
-        </div>
+      <MatchScoreboard
+        dateLabel="Preview"
+        location={result.title}
+        teamOneName="Home"
+        teamTwoName="Away"
+        mySide={null}
+        roundWins={{ teamOne: nightHomeWins, teamTwo: nightAwayWins }}
+        roundsAvailable={
+          matchWinMode
+            ? Math.max(winTally.total, rounds.length)
+            : roundsAvailable
+        }
+        includeMatchPointsRound={includeMatchPointsRound}
+        matchWinTeamPoints={matchWinMode}
+        formatHint={formatScoringSummary(scoringFormat)}
+        pointTotals={pointTotals}
+        gameWins={{
+          teamOne: winTally.teamOneWins,
+          teamTwo: winTally.teamTwoWins,
+        }}
+        gamesPlayed={winTally.scored}
+        gamesTotal={winTally.total}
+        isHandicapped={match.isHandicapped}
+        handicapTotals={handicapTotals}
+      />
 
-        {picks.fargoHc !== "none" ? (
-          <div className="border-b border-[var(--line)] px-3 py-2 text-xs text-[var(--muted)]">
-            <span className="font-semibold text-[var(--ink)]">
-              {previewHandicapLabel(picks.fargoHc)}
+      {picks.fargoHc !== "none" ? (
+        <p className="text-[11px] text-[var(--muted)]">
+          <span className="font-semibold text-[var(--ink)]">
+            {previewHandicapLabel(picks.fargoHc)}
+          </span>
+          {" · "}
+          {picks.handicapPercent}% · cap {picks.handicapCap}
+          {fullMatchHc ? (
+            <span className="ml-1 text-[var(--ink)]">
+              · Night HC Home +{fullMatchHc.teamOne} / Away +
+              {fullMatchHc.teamTwo}
             </span>
-            {" · "}
-            {picks.handicapPercent}% · cap {picks.handicapCap}
-            {fullMatchHc ? (
-              <span className="ml-1 text-[var(--ink)]">
-                · Night HC Home +{fullMatchHc.teamOne} / Away +
-                {fullMatchHc.teamTwo}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
+          ) : null}
+        </p>
+      ) : null}
 
-        <div className="space-y-2 border-b border-[var(--line)] px-3 py-3">
-          <div className="flex items-baseline justify-between gap-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-              Lineup
-            </p>
-            <p className="text-[10px] text-[var(--muted)]">
-              Search player · Fargo
-            </p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              {homeSlots.map((slot, index) => (
-                <LineupSlotRow
-                  key={`h-${index}`}
-                  label={`H${index + 1}`}
-                  slot={slot}
-                  onChange={(next) => setHomeSlot(index, next)}
-                />
-              ))}
+      <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        <div className="border-b border-[var(--line)]">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
+            aria-expanded={lineupOpen}
+            onClick={() => setLineupOpen((open) => !open)}
+          >
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                Lineups
+              </p>
+              <p className="mt-0.5 text-xs text-[var(--ink)]">
+                {n}/{n} filled
+                {namedCount > 0 ? ` · ${namedCount} searched` : " · sample ratings"}
+                <span className="text-[var(--muted)]"> · pts · W-L</span>
+              </p>
             </div>
-            <div className="space-y-1.5">
-              {awaySlots.map((slot, index) => (
-                <LineupSlotRow
-                  key={`a-${index}`}
-                  label={`A${index + 1}`}
-                  slot={slot}
-                  onChange={(next) => setAwaySlot(index, next)}
-                />
-              ))}
+            <span className="shrink-0 text-[11px] font-semibold text-[var(--felt-deep)]">
+              {lineupOpen ? "Hide" : "Edit"}
+            </span>
+          </button>
+
+          {!lineupOpen ? (
+            <div className="grid gap-x-4 gap-y-2 border-t border-[var(--line)] px-3 py-2 sm:grid-cols-2">
+              <div className="space-y-1">
+                {homeSlots.map((slot, index) => (
+                  <CompactPlayerRow
+                    key={`h-sum-${index}`}
+                    label={`H${index + 1}`}
+                    name={slotDisplayName("H", index + 1, slot)}
+                    fargo={slot.fargo}
+                    stat={playerNight.home[index] ?? null}
+                  />
+                ))}
+              </div>
+              <div className="space-y-1">
+                {awaySlots.map((slot, index) => (
+                  <CompactPlayerRow
+                    key={`a-sum-${index}`}
+                    label={`A${index + 1}`}
+                    name={slotDisplayName("A", index + 1, slot)}
+                    fargo={slot.fargo}
+                    stat={playerNight.away[index] ?? null}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-2 border-t border-[var(--line)] px-3 py-2.5">
+              <p className="text-[10px] text-[var(--muted)]">
+                Search player · Fargo · night pts / W-L
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  {homeSlots.map((slot, index) => (
+                    <LineupSlotRow
+                      key={`h-${index}`}
+                      label={`H${index + 1}`}
+                      slot={slot}
+                      stat={playerNight.home[index] ?? null}
+                      onChange={(next) => setHomeSlot(index, next)}
+                    />
+                  ))}
+                </div>
+                <div className="space-y-1.5">
+                  {awaySlots.map((slot, index) => (
+                    <LineupSlotRow
+                      key={`a-${index}`}
+                      label={`A${index + 1}`}
+                      slot={slot}
+                      stat={playerNight.away[index] ?? null}
+                      onChange={(next) => setAwaySlot(index, next)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        <PlayerNightBoard home={playerNight.home} away={playerNight.away} />
-
-        <div className="space-y-3 px-3 py-3">
+        <div className="space-y-2.5 px-3 py-3">
           <div
             role="tablist"
             aria-label="Rounds"
@@ -606,52 +704,59 @@ export function FormatScoreSandbox({
           </div>
 
           {activeRoundTally && !matchWinMode ? (
-            <div className="grid grid-cols-2 gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/50 p-2.5">
-              {([1, 2] as const).map((side) => {
-                const total =
-                  side === 1
-                    ? activeRoundTally.teamOneTotal
-                    : activeRoundTally.teamTwoTotal;
-                const gamePoints =
-                  side === 1
-                    ? activeRoundTally.teamOneGamePoints
-                    : activeRoundTally.teamTwoGamePoints;
-                const hc =
-                  side === 1
-                    ? activeRoundTally.teamOneHandicap
-                    : activeRoundTally.teamTwoHandicap;
-                const won = activeRoundTally.roundWinner === side;
-                return (
-                  <div
-                    key={side}
-                    className={[
-                      "rounded-md px-2 py-1.5",
-                      won
-                        ? "bg-[color-mix(in_srgb,var(--felt)_18%,transparent)]"
-                        : "bg-[var(--surface)]",
-                    ].join(" ")}
-                  >
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                      {side === 1 ? "Home" : "Away"}
-                      {isMatchPointsRound ? " · match pts" : ""}
-                    </p>
-                    <p className="font-[family-name:var(--font-display)] text-xl tabular-nums text-[var(--felt-deep)]">
-                      {total}
-                    </p>
-                    <p className="text-[11px] tabular-nums text-[var(--muted)]">
-                      {gamePoints} pts
-                      {match.isHandicapped && picks.fargoHc === "RoundBased"
-                        ? ` · +${hc} HC`
-                        : ""}
-                    </p>
-                  </div>
-                );
-              })}
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/50 px-2.5 py-2">
+              <div className="min-w-0 text-left">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                  Home
+                </p>
+                <p
+                  className={[
+                    "font-[family-name:var(--font-display)] text-xl tabular-nums leading-none",
+                    activeRoundTally.roundWinner === 1
+                      ? "text-[var(--felt-deep)]"
+                      : "text-[var(--ink)]",
+                  ].join(" ")}
+                >
+                  {activeRoundTally.teamOneTotal}
+                </p>
+                <p className="mt-0.5 text-[10px] tabular-nums text-[var(--muted)]">
+                  {activeRoundTally.teamOneGamePoints}p
+                  {match.isHandicapped && picks.fargoHc === "RoundBased"
+                    ? ` · +${activeRoundTally.teamOneHandicap}`
+                    : ""}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                  {isMatchPointsRound ? "Match pts" : "Round"}
+                </p>
+              </div>
+              <div className="min-w-0 text-right">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                  Away
+                </p>
+                <p
+                  className={[
+                    "font-[family-name:var(--font-display)] text-xl tabular-nums leading-none",
+                    activeRoundTally.roundWinner === 2
+                      ? "text-[var(--felt-deep)]"
+                      : "text-[var(--ink)]",
+                  ].join(" ")}
+                >
+                  {activeRoundTally.teamTwoTotal}
+                </p>
+                <p className="mt-0.5 text-[10px] tabular-nums text-[var(--muted)]">
+                  {activeRoundTally.teamTwoGamePoints}p
+                  {match.isHandicapped && picks.fargoHc === "RoundBased"
+                    ? ` · +${activeRoundTally.teamTwoHandicap}`
+                    : ""}
+                </p>
+              </div>
             </div>
           ) : null}
 
           {matchWinMode && !isMatchPointsRound ? (
-            <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/40 px-3 py-2 text-xs text-[var(--muted)]">
+            <p className="text-xs text-[var(--muted)]">
               Each individual match win = {scoringFormat.pointsPerMatchWin}{" "}
               team point
               {scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}
@@ -663,7 +768,7 @@ export function FormatScoreSandbox({
           ) : null}
 
           {isMatchPointsRound ? (
-            <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/40 px-3 py-2 text-xs text-[var(--muted)]">
+            <p className="text-xs text-[var(--muted)]">
               Totals is overall match points across all played rounds
               {fullMatchHc
                 ? ` plus night HC (Home +${fullMatchHc.teamOne} / Away +${fullMatchHc.teamTwo})`
@@ -672,7 +777,7 @@ export function FormatScoreSandbox({
               longer catch up.
             </p>
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               {currentRound?.games.map((game) => {
                 const key = gameKey(currentRound.roundNumber, game.index);
                 const state = draft.games[key];
@@ -776,7 +881,7 @@ export function FormatScoreSandbox({
                   >
                     <button
                       type="button"
-                      className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2.5 py-2 text-left"
+                      className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2.5 py-1.5 text-left"
                       onClick={() =>
                         setExpandedGame((prev) =>
                           prev === game.index ? null : game.index,
@@ -802,7 +907,7 @@ export function FormatScoreSandbox({
                             : ""}
                         </p>
                       </div>
-                      <div className="rounded-md bg-[var(--surface-2)] px-2 py-1 text-center">
+                      <div className="rounded-md bg-[var(--surface-2)] px-2 py-0.5 text-center">
                         <p className="text-sm font-semibold tabular-nums">
                           {homeScore}–{awayScore}
                         </p>
@@ -834,7 +939,7 @@ export function FormatScoreSandbox({
                     </button>
 
                     {open ? (
-                      <div className="grid gap-3 border-t border-[var(--line)] px-2.5 py-2.5 sm:grid-cols-2">
+                      <div className="grid gap-2 border-t border-[var(--line)] px-2.5 py-2 sm:grid-cols-2">
                         <SideScoreControls
                           label={
                             p1
