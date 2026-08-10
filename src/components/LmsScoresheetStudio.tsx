@@ -33,26 +33,14 @@ import { SelectField } from "./SelectField";
 const CHART_BASE_OPTIONS: RaceChartBase[] = [
   2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
 ];
+
 const CHART_INTENSITY_OPTIONS: Array<{
   id: RaceChartIntensity;
   label: string;
-  description: string;
 }> = [
-  {
-    id: "hot",
-    label: "Hot",
-    description: "Most handicap — closest to even odds",
-  },
-  {
-    id: "medium",
-    label: "Medium",
-    description: "Moderate spot for the underdog",
-  },
-  {
-    id: "mild",
-    label: "Mild",
-    description: "Lightest handicap",
-  },
+  { id: "hot", label: "Hot — most handicap" },
+  { id: "medium", label: "Medium" },
+  { id: "mild", label: "Mild — lightest handicap" },
 ];
 
 function chartIdFromParts(
@@ -62,6 +50,10 @@ function chartIdFromParts(
   return parseRaceChartId(`r${base}-${intensity}`);
 }
 
+function optionLabel(label: string, description?: string): string {
+  return description ? `${label} — ${description}` : label;
+}
+
 const btnPrimary =
   "inline-flex items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
 const btnGhost =
@@ -69,39 +61,11 @@ const btnGhost =
 const inputClass =
   "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none ring-[var(--felt)] focus:ring-2";
 
-function ChoiceCard({
-  selected,
-  title,
-  description,
-  onClick,
-}: {
-  selected: boolean;
-  title: string;
-  description: string;
-  onClick: () => void;
-}) {
+function FieldLabel({ children }: { children: ReactNode }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        "rounded-[var(--radius)] border px-3 py-2.5 text-left transition",
-        selected
-          ? "border-[var(--felt)] bg-[color-mix(in_srgb,var(--felt)_12%,var(--surface))] shadow-sm"
-          : "border-[var(--line)] bg-[var(--surface)] hover:border-[var(--felt)]/50",
-      ].join(" ")}
-    >
-      <p className="text-sm font-semibold text-[var(--ink)]">{title}</p>
-      <p className="mt-0.5 text-xs text-[var(--muted)]">{description}</p>
-    </button>
-  );
-}
-
-function SectionLabel({ children }: { children: ReactNode }) {
-  return (
-    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+    <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
       {children}
-    </p>
+    </span>
   );
 }
 
@@ -174,30 +138,30 @@ export function LmsScoresheetStudio() {
         </p>
         <p className="mt-0.5 text-xs text-[var(--muted)]">
           Structure, race, and Fargo HC are independent. Presets are shortcuts —
-          mix any combination below. We generate an LMS template plus app scoring
-          rules so Score and Handicap stay aligned.
+          mix any combination below.
         </p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,20rem)_1fr]">
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <SectionLabel>Presets (optional)</SectionLabel>
-            <div className="grid gap-1.5">
-              {FORMAT_PRESETS.map((preset) => (
-                <ChoiceCard
-                  key={preset.id}
-                  selected={false}
-                  title={preset.label}
-                  description={preset.description}
-                  onClick={() => applyPreset(preset.id)}
-                />
-              ))}
-            </div>
-          </div>
+        <div className="space-y-3">
+          <label className="block space-y-1.5">
+            <FieldLabel>Preset</FieldLabel>
+            <SelectField
+              aria-label="Format preset"
+              value=""
+              placeholder="Apply a common setup…"
+              options={FORMAT_PRESETS.map((preset) => ({
+                value: preset.id,
+                label: optionLabel(preset.label, preset.description),
+              }))}
+              onChange={(value) => {
+                if (value) applyPreset(value as FormatPresetId);
+              }}
+            />
+          </label>
 
           <label className="block space-y-1.5">
-            <SectionLabel>Players per side</SectionLabel>
+            <FieldLabel>Players per side</FieldLabel>
             <SelectField
               aria-label="Players per side"
               value={String(picks.playersPerTeam)}
@@ -209,9 +173,24 @@ export function LmsScoresheetStudio() {
             />
           </label>
 
+          <label className="block space-y-1.5">
+            <FieldLabel>Structure</FieldLabel>
+            <SelectField
+              aria-label="Match structure"
+              value={picks.structure}
+              options={STRUCTURE_OPTIONS.map((option) => ({
+                value: option.id,
+                label: optionLabel(option.label, option.description),
+              }))}
+              onChange={(value) =>
+                patch({ structure: value as MatchStructure })
+              }
+            />
+          </label>
+
           {picks.structure === "round-robin" ? (
             <label className="block space-y-1.5">
-              <SectionLabel>Rounds</SectionLabel>
+              <FieldLabel>Rounds</FieldLabel>
               <SelectField
                 aria-label="Rounds"
                 value={String(picks.rounds ?? picks.playersPerTeam)}
@@ -226,42 +205,23 @@ export function LmsScoresheetStudio() {
             </label>
           ) : null}
 
-          <div className="space-y-2">
-            <SectionLabel>Structure</SectionLabel>
-            <div className="grid gap-1.5">
-              {STRUCTURE_OPTIONS.map((option) => (
-                <ChoiceCard
-                  key={option.id}
-                  selected={picks.structure === option.id}
-                  title={option.label}
-                  description={option.description}
-                  onClick={() =>
-                    patch({ structure: option.id as MatchStructure })
-                  }
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <SectionLabel>Game kind</SectionLabel>
-            <div className="grid gap-1.5">
-              {GAME_KIND_OPTIONS.map((option) => (
-                <ChoiceCard
-                  key={option.id}
-                  selected={picks.gameKind === option.id}
-                  title={option.label}
-                  description={option.description}
-                  onClick={() =>
-                    patch({ gameKind: option.id as FormatGameKind })
-                  }
-                />
-              ))}
-            </div>
-          </div>
+          <label className="block space-y-1.5">
+            <FieldLabel>Game kind</FieldLabel>
+            <SelectField
+              aria-label="Game kind"
+              value={picks.gameKind}
+              options={GAME_KIND_OPTIONS.map((option) => ({
+                value: option.id,
+                label: optionLabel(option.label, option.description),
+              }))}
+              onChange={(value) =>
+                patch({ gameKind: value as FormatGameKind })
+              }
+            />
+          </label>
 
           <label className="block space-y-1.5">
-            <SectionLabel>Ball</SectionLabel>
+            <FieldLabel>Ball</FieldLabel>
             <SelectField
               aria-label="Game ball"
               value={picks.gameBall}
@@ -282,26 +242,24 @@ export function LmsScoresheetStudio() {
             />
           </label>
 
-          <div className="space-y-2">
-            <SectionLabel>Race</SectionLabel>
-            <div className="grid gap-1.5">
-              {RACE_MODEL_OPTIONS.map((option) => (
-                <ChoiceCard
-                  key={option.id}
-                  selected={picks.raceModel === option.id}
-                  title={option.label}
-                  description={option.description}
-                  onClick={() => patch({ raceModel: option.id as RaceModel })}
-                />
-              ))}
-            </div>
-          </div>
+          <label className="block space-y-1.5">
+            <FieldLabel>Race</FieldLabel>
+            <SelectField
+              aria-label="Race model"
+              value={picks.raceModel}
+              options={RACE_MODEL_OPTIONS.map((option) => ({
+                value: option.id,
+                label: optionLabel(option.label, option.description),
+              }))}
+              onChange={(value) => patch({ raceModel: value as RaceModel })}
+            />
+          </label>
 
           {showFixedRace ? (
             <label className="block space-y-1.5">
-              <SectionLabel>
+              <FieldLabel>
                 {picks.gameKind === "S" ? "Score pad / race length" : "Race to"}
-              </SectionLabel>
+              </FieldLabel>
               <SelectField
                 aria-label="Fixed race to"
                 value={String(picks.fixedRaceTo)}
@@ -317,9 +275,9 @@ export function LmsScoresheetStudio() {
           ) : null}
 
           {showFargoChart ? (
-            <div className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-3">
+            <>
               <label className="block space-y-1.5">
-                <SectionLabel>Chart (even race)</SectionLabel>
+                <FieldLabel>Chart (even race)</FieldLabel>
                 <SelectField
                   aria-label="Fargo race chart base"
                   value={String(chartMeta.base)}
@@ -328,60 +286,60 @@ export function LmsScoresheetStudio() {
                     label: `R${n}`,
                   }))}
                   onChange={(value) => {
-                    const base = (Number(value) || 6) as RaceChartBase;
+                    const base = Number(value);
+                    const nextBase = (
+                      CHART_BASE_OPTIONS.includes(base as RaceChartBase)
+                        ? base
+                        : 6
+                    ) as RaceChartBase;
                     patch({
-                      raceChartId: chartIdFromParts(base, chartMeta.intensity),
+                      raceChartId: chartIdFromParts(
+                        nextBase,
+                        chartMeta.intensity,
+                      ),
                     });
                   }}
                 />
               </label>
-              <div className="space-y-2">
-                <SectionLabel>Intensity</SectionLabel>
-                <div className="grid gap-1.5">
-                  {CHART_INTENSITY_OPTIONS.map((option) => (
-                    <ChoiceCard
-                      key={option.id}
-                      selected={chartMeta.intensity === option.id}
-                      title={option.label}
-                      description={option.description}
-                      onClick={() =>
-                        patch({
-                          raceChartId: chartIdFromParts(
-                            chartMeta.base,
-                            option.id,
-                          ),
-                        })
-                      }
-                    />
-                  ))}
-                </div>
-              </div>
-              <p className="text-xs text-[var(--muted)]">
-                Using {chartMeta.label}. Score and paper preview look up
-                race-to from this chart.
-              </p>
-            </div>
+              <label className="block space-y-1.5">
+                <FieldLabel>Chart intensity</FieldLabel>
+                <SelectField
+                  aria-label="Fargo race chart intensity"
+                  value={chartMeta.intensity}
+                  options={CHART_INTENSITY_OPTIONS.map((option) => ({
+                    value: option.id,
+                    label: option.label,
+                  }))}
+                  onChange={(value) =>
+                    patch({
+                      raceChartId: chartIdFromParts(
+                        chartMeta.base,
+                        value as RaceChartIntensity,
+                      ),
+                    })
+                  }
+                />
+              </label>
+            </>
           ) : null}
 
-          <div className="space-y-2">
-            <SectionLabel>Fargo handicap</SectionLabel>
-            <div className="grid gap-1.5">
-              {FARGO_HC_OPTIONS.map((option) => (
-                <ChoiceCard
-                  key={option.id}
-                  selected={picks.fargoHc === option.id}
-                  title={option.label}
-                  description={option.description}
-                  onClick={() => patch({ fargoHc: option.id as FargoHcMode })}
-                />
-              ))}
-            </div>
-          </div>
+          <label className="block space-y-1.5">
+            <FieldLabel>Fargo handicap</FieldLabel>
+            <SelectField
+              aria-label="Fargo handicap"
+              value={picks.fargoHc}
+              options={FARGO_HC_OPTIONS.map((option) => ({
+                value: option.id,
+                label: optionLabel(option.label, option.description),
+              }))}
+              onChange={(value) => patch({ fargoHc: value as FargoHcMode })}
+            />
+          </label>
 
           {showHcDetails ? (
-            <div className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-3">
+            <>
               <label className="block space-y-1.5">
-                <SectionLabel>Rating basis</SectionLabel>
+                <FieldLabel>Rating basis</FieldLabel>
                 <SelectField
                   aria-label="Fargo rating basis"
                   value={picks.fargoRatingBasis}
@@ -395,7 +353,7 @@ export function LmsScoresheetStudio() {
                 />
               </label>
               <label className="block space-y-1.5">
-                <SectionLabel>Handicap %</SectionLabel>
+                <FieldLabel>Handicap %</FieldLabel>
                 <SelectField
                   aria-label="Handicap percent"
                   value={String(picks.handicapPercent)}
@@ -409,7 +367,7 @@ export function LmsScoresheetStudio() {
                 />
               </label>
               <label className="block space-y-1.5">
-                <SectionLabel>HC cap</SectionLabel>
+                <FieldLabel>HC cap</FieldLabel>
                 <SelectField
                   aria-label="Handicap cap"
                   value={String(picks.handicapCap)}
@@ -422,30 +380,28 @@ export function LmsScoresheetStudio() {
                   }
                 />
               </label>
-            </div>
+            </>
           ) : null}
 
-          <div className="space-y-2">
-            <SectionLabel>Team scoring</SectionLabel>
-            <div className="grid gap-1.5">
-              {TEAM_SCORING_OPTIONS.map((option) => (
-                <ChoiceCard
-                  key={option.id}
-                  selected={picks.teamScoring === option.id}
-                  title={option.label}
-                  description={option.description}
-                  onClick={() =>
-                    patch({ teamScoring: option.id as TeamScoringMode })
-                  }
-                />
-              ))}
-            </div>
-          </div>
+          <label className="block space-y-1.5">
+            <FieldLabel>Team scoring</FieldLabel>
+            <SelectField
+              aria-label="Team scoring"
+              value={picks.teamScoring}
+              options={TEAM_SCORING_OPTIONS.map((option) => ({
+                value: option.id,
+                label: optionLabel(option.label, option.description),
+              }))}
+              onChange={(value) =>
+                patch({ teamScoring: value as TeamScoringMode })
+              }
+            />
+          </label>
 
           {showRoundPointsExtras ? (
-            <div className="space-y-3">
+            <>
               <label className="block space-y-1.5">
-                <SectionLabel>Point system</SectionLabel>
+                <FieldLabel>Point system</FieldLabel>
                 <SelectField
                   aria-label="Point system"
                   value={picks.pointSystem}
@@ -471,7 +427,7 @@ export function LmsScoresheetStudio() {
                 />
                 Include match-points round
               </label>
-            </div>
+            </>
           ) : null}
         </div>
 
@@ -506,7 +462,7 @@ export function LmsScoresheetStudio() {
             </ul>
 
             <div className="space-y-3 px-3 py-3 sm:px-4">
-              <SectionLabel>Night matchups</SectionLabel>
+              <FieldLabel>Night matchups</FieldLabel>
               <div className="space-y-2">
                 {result.matchups.map((block) => (
                   <div
