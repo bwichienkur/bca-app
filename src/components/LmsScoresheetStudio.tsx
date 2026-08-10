@@ -34,8 +34,17 @@ import {
   type RaceChartId,
   type RaceChartIntensity,
 } from "@/lib/race-charts";
+import { FormatScoreSandbox } from "./FormatScoreSandbox";
 import { FormatScoresheetPreview } from "./FormatScoresheetPreview";
+import {
+  IconSubTabs,
+  LineupsSubIcon,
+  MatchesSubIcon,
+} from "./IconSubTabs";
 import { SelectField } from "./SelectField";
+import { SubTabCard } from "./SubTabCard";
+
+type StudioTab = "generator" | "score-preview";
 
 const CHART_BASE_OPTIONS: RaceChartBase[] = [
   2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
@@ -203,6 +212,7 @@ function SelectBlock({
 }
 
 export function LmsScoresheetStudio() {
+  const [studioTab, setStudioTab] = useState<StudioTab>("generator");
   const [picks, setPicks] = useState<FormatGeneratorPicks>(() =>
     defaultFormatPicks(),
   );
@@ -265,17 +275,44 @@ export function LmsScoresheetStudio() {
 
   return (
     <section className="space-y-4">
+      <SubTabCard
+        tabs={
+          <IconSubTabs
+            aria-label="Format sections"
+            value={studioTab}
+            onChange={setStudioTab}
+            columns={2}
+            className="border-0 bg-transparent p-0"
+            items={[
+              {
+                id: "generator" as const,
+                label: "Generator",
+                icon: LineupsSubIcon,
+              },
+              {
+                id: "score-preview" as const,
+                label: "Score preview",
+                icon: MatchesSubIcon,
+              },
+            ]}
+          />
+        }
+      >
+        {studioTab === "score-preview" ? (
+          <FormatScoreSandbox picks={picks} result={result} />
+        ) : (
+          <>
       <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/50 px-3 py-2.5">
         <p className="text-sm font-semibold text-[var(--ink)]">
           Scoring & handicap format
         </p>
         <p className="mt-0.5 text-xs text-[var(--muted)]">
           Structure, race, and Fargo HC are independent. Presets are shortcuts —
-          mix any combination below.
+          mix any combination below. Use Score preview to try the UI.
         </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,20rem)_1fr]">
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,20rem)_1fr]">
         <div className="space-y-3">
           <SelectBlock
             label="Preset"
@@ -816,6 +853,9 @@ export function LmsScoresheetStudio() {
           picks.raceModel === "fargo-chart" ? picks.raceChartId : undefined
         }
       />
+          </>
+        )}
+      </SubTabCard>
     </section>
   );
 }

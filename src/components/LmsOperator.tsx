@@ -2951,8 +2951,8 @@ export function LmsOperator({
       {subTab === "scoresheet" ? (
         <section className="space-y-3">
           <SectionHeader
-            title="Format generator"
-            description="Build a scoring and handicap night that stays consistent between LMS and the app. Copy the template into division settings when ready."
+            title="Format"
+            description="Configure scoring and handicap, then try the Score preview sandbox before copying the LMS template."
           />
           <LmsScoresheetStudio />
         </section>
