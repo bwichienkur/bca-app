@@ -3,11 +3,14 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   applyFormatPreset,
   defaultFormatPicks,
@@ -80,9 +83,9 @@ function chartIdFromParts(
 }
 
 const btnPrimary =
-  "inline-flex items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
+  "inline-flex w-full items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-50";
 const btnGhost =
-  "inline-flex items-center justify-center rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold text-[var(--ink)] disabled:opacity-50";
+  "inline-flex w-full items-center justify-center rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm font-semibold text-[var(--ink)] disabled:opacity-50";
 const inputClass =
   "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none ring-[var(--felt)] focus:ring-2";
 
@@ -99,15 +102,72 @@ function FieldInfo({
   items?: InfoItem[];
 }) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [tipStyle, setTipStyle] = useState<CSSProperties>({});
   const rootRef = useRef<HTMLSpanElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const tipRef = useRef<HTMLSpanElement | null>(null);
+  const closeTimer = useRef<number | null>(null);
   const tipId = useId();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const cancelClose = () => {
+    if (closeTimer.current != null) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  };
+
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimer.current = window.setTimeout(() => setOpen(false), 140);
+  };
+
+  useLayoutEffect(() => {
+    if (!open || !buttonRef.current) return;
+
+    const updatePosition = () => {
+      const rect = buttonRef.current!.getBoundingClientRect();
+      const tipWidth = Math.min(288, window.innerWidth - 16);
+      const tipMaxHeight = Math.min(280, window.innerHeight * 0.45);
+      let left = rect.left + rect.width / 2 - tipWidth / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - tipWidth - 8));
+
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUpward = spaceBelow < 140 && rect.top > spaceBelow;
+
+      setTipStyle({
+        position: "fixed",
+        left,
+        width: tipWidth,
+        maxHeight: tipMaxHeight,
+        top: openUpward ? undefined : rect.bottom + 8,
+        bottom: openUpward
+          ? Math.max(8, window.innerHeight - rect.top + 8)
+          : undefined,
+        zIndex: 10060,
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open, summary, items?.length]);
 
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (tipRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
@@ -120,16 +180,65 @@ function FieldInfo({
     };
   }, [open]);
 
+  const tip =
+    open && mounted
+      ? createPortal(
+          <span
+            ref={tipRef}
+            id={tipId}
+            role="tooltip"
+            style={tipStyle}
+            className="overflow-y-auto rounded-[var(--radius)] border border-[var(--line-strong)] bg-[var(--surface)] p-3 text-left shadow-[var(--shadow)]"
+            onMouseEnter={cancelClose}
+            onMouseLeave={scheduleClose}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--felt-deep)]">
+              {label}
+            </p>
+            {summary ? (
+              <p className="mt-1.5 text-xs leading-relaxed text-[var(--ink)]">
+                {summary}
+              </p>
+            ) : null}
+            {items?.length ? (
+              <ul className={summary ? "mt-2.5 space-y-2" : "mt-1.5 space-y-2"}>
+                {items.map((item) => (
+                  <li key={item.label} className="text-xs leading-snug">
+                    <span className="font-semibold text-[var(--ink)]">
+                      {item.label}
+                    </span>
+                    <span className="text-[var(--muted)]">
+                      {" "}
+                      — {item.description}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </span>,
+          document.body,
+        )
+      : null;
+
   return (
     <span
       ref={rootRef}
       className="relative inline-flex"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      onMouseEnter={() => {
+        cancelClose();
+        setOpen(true);
+      }}
+      onMouseLeave={scheduleClose}
     >
       <button
+        ref={buttonRef}
         type="button"
-        className="inline-flex size-4 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[10px] font-bold leading-none text-[var(--muted)] hover:border-[var(--felt)] hover:text-[var(--felt-deep)]"
+        className={[
+          "inline-flex size-5 items-center justify-center rounded-full transition",
+          open
+            ? "bg-[var(--felt)] text-white shadow-sm"
+            : "bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))] text-[var(--felt-deep)] ring-1 ring-[color-mix(in_srgb,var(--felt)_35%,var(--line))] hover:bg-[color-mix(in_srgb,var(--felt)_22%,var(--surface))]",
+        ].join(" ")}
         aria-label={`About ${label}`}
         aria-expanded={open}
         aria-controls={tipId}
@@ -139,34 +248,23 @@ function FieldInfo({
           setOpen((value) => !value);
         }}
       >
-        i
-      </button>
-      {open ? (
-        <span
-          id={tipId}
-          role="tooltip"
-          className="absolute left-0 top-[calc(100%+0.35rem)] z-30 w-[min(18rem,calc(100vw-2.5rem))] rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-2.5 text-left shadow-[var(--shadow)]"
+        <svg
+          viewBox="0 0 16 16"
+          className="size-3"
+          fill="none"
+          aria-hidden
         >
-          {summary ? (
-            <p className="text-xs leading-snug text-[var(--muted)]">{summary}</p>
-          ) : null}
-          {items?.length ? (
-            <ul className={summary ? "mt-2 space-y-1.5" : "space-y-1.5"}>
-              {items.map((item) => (
-                <li key={item.label} className="text-xs leading-snug">
-                  <span className="font-semibold text-[var(--ink)]">
-                    {item.label}
-                  </span>
-                  <span className="text-[var(--muted)]">
-                    {" "}
-                    — {item.description}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </span>
-      ) : null}
+          <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.5" />
+          <path
+            d="M8 7.25v4"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+          <circle cx="8" cy="5" r="0.85" fill="currentColor" />
+        </svg>
+      </button>
+      {tip}
     </span>
   );
 }
@@ -833,35 +931,37 @@ export function LmsScoresheetStudio() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 border-t border-[var(--line)] px-3 py-3 sm:px-4">
-              <button
-                type="button"
-                className={btnPrimary}
-                onClick={() => void copyText(result.dsl, "dsl")}
-              >
-                {copied === "dsl" ? "DSL copied" : "Copy LMS template"}
-              </button>
-              <button
-                type="button"
-                className={btnGhost}
-                onClick={() => void copyText(hintsText, "hints")}
-              >
-                {copied === "hints" ? "Hints copied" : "Copy LMS field hints"}
-              </button>
-              <button
-                type="button"
-                className={btnGhost}
-                onClick={() => setShowDsl((v) => !v)}
-              >
-                {showDsl ? "Hide DSL" : "Show DSL"}
-              </button>
-              <button
-                type="button"
-                className={btnGhost}
-                onClick={() => setPaperOpen(true)}
-              >
-                Paper-style preview
-              </button>
+            <div className="border-t border-[var(--line)] px-3 py-3 sm:px-4">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  className={`${btnPrimary} sm:col-span-2`}
+                  onClick={() => void copyText(result.dsl, "dsl")}
+                >
+                  {copied === "dsl" ? "DSL copied" : "Copy LMS template"}
+                </button>
+                <button
+                  type="button"
+                  className={btnGhost}
+                  onClick={() => void copyText(hintsText, "hints")}
+                >
+                  {copied === "hints" ? "Hints copied" : "Copy LMS field hints"}
+                </button>
+                <button
+                  type="button"
+                  className={btnGhost}
+                  onClick={() => setShowDsl((v) => !v)}
+                >
+                  {showDsl ? "Hide DSL" : "Show DSL"}
+                </button>
+                <button
+                  type="button"
+                  className={`${btnGhost} sm:col-span-2`}
+                  onClick={() => setPaperOpen(true)}
+                >
+                  Paper-style preview
+                </button>
+              </div>
             </div>
 
             {showDsl ? (
