@@ -47,6 +47,7 @@ import {
   summarizeDraftForBoard,
   syncLineupToGames,
   tallyAllRoundPoints,
+  tallyAllRoundsByGameWins,
   tallyDraft,
   tallyMatchPointsRound,
   type DraftBoardSummary,
@@ -770,6 +771,14 @@ export function MatchScoring({
     scoringFormat.matchPointsRound && match?.matchWinCountsAsRound !== false;
   const matchWinTeamPoints = scoringFormat.teamPointMode === "match-win";
 
+  const matchWinRoundTallies = useMemo(
+    () =>
+      match && draft && matchWinTeamPoints
+        ? tallyAllRoundsByGameWins(match, draft)
+        : [],
+    [match, draft, matchWinTeamPoints],
+  );
+
   const matchPointsTally = useMemo(() => {
     if (!match || !draft || !includeMatchPointsRound) return null;
     return tallyMatchPointsRound({
@@ -1317,10 +1326,17 @@ export function MatchScoring({
               >
                 {rounds.map((round) => {
                   const active = round.roundNumber === activeRound;
-                  const tally =
+                  const pointsTally =
                     roundPointTallies.find(
                       (item) => item.roundNumber === round.roundNumber,
                     ) ?? null;
+                  const matchWinsTally =
+                    matchWinRoundTallies.find(
+                      (item) => item.roundNumber === round.roundNumber,
+                    ) ?? null;
+                  const tally = matchWinTeamPoints
+                    ? matchWinsTally
+                    : pointsTally;
                   const done = tally?.gamesComplete ?? 0;
                   const decided = tally?.roundWinner != null;
                   const myWin =

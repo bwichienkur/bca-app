@@ -270,7 +270,12 @@ export function gameWinner(
 }
 
 export function isGameScored(game: GameScoreState | undefined): boolean {
-  return gameWinner(game) != null;
+  return (
+    gameWinner(game, {
+      raceTargetOne: game?.raceTargetOne,
+      raceTargetTwo: game?.raceTargetTwo,
+    }) != null
+  );
 }
 
 export function normalizeDraftScores(draft: ScoringDraft): ScoringDraft {
@@ -296,13 +301,90 @@ export function tallyDraft(draft: ScoringDraft): {
   let scored = 0;
   const games = Object.values(draft.games);
   for (const game of games) {
-    const winner = gameWinner(game);
+    const winner = gameWinner(game, {
+      raceTargetOne: game.raceTargetOne,
+      raceTargetTwo: game.raceTargetTwo,
+    });
     if (!winner) continue;
     scored += 1;
     if (winner === 1) teamOneWins += 1;
     if (winner === 2) teamTwoWins += 1;
   }
   return { teamOneWins, teamTwoWins, scored, total: games.length };
+}
+
+export type RoundGameWinsTally = {
+  roundNumber: number;
+  teamOneGameWins: number;
+  teamTwoGameWins: number;
+  gamesComplete: number;
+  gamesTotal: number;
+  gamesRemaining: number;
+  roundComplete: boolean;
+  /**
+   * Winner by individual race/match wins (not raw race-score points).
+   * Clinches when one side leads by more than games still unscored.
+   */
+  roundWinner: 1 | 2 | null;
+};
+
+/**
+ * Per-round tally for match-win team scoring: each completed race is one
+ * win, so asymmetric chart races (e.g. 7–4) are honored instead of summing
+ * balls/games as round points.
+ */
+export function tallyRoundByGameWins(
+  match: ScoringMatchDetail,
+  draft: ScoringDraft,
+  roundNumber: number,
+): RoundGameWinsTally {
+  const round = match.matchFormat?.rounds.find(
+    (item) => item.roundNumber === roundNumber,
+  );
+  const games = round?.games ?? [];
+  const { maxWin, maxLoss } = scoreLimits(match);
+  let teamOneGameWins = 0;
+  let teamTwoGameWins = 0;
+  let gamesComplete = 0;
+
+  for (const game of games) {
+    const state = draft.games[gameKey(roundNumber, game.index)];
+    const winner = gameWinner(state, {
+      maxScore: maxWin,
+      maxLosingScore: maxLoss,
+      raceTargetOne: state?.raceTargetOne,
+      raceTargetTwo: state?.raceTargetTwo,
+    });
+    if (!winner) continue;
+    gamesComplete += 1;
+    if (winner === 1) teamOneGameWins += 1;
+    if (winner === 2) teamTwoGameWins += 1;
+  }
+
+  const gamesRemaining = Math.max(0, games.length - gamesComplete);
+  let roundWinner: 1 | 2 | null = null;
+  if (teamOneGameWins > teamTwoGameWins + gamesRemaining) roundWinner = 1;
+  else if (teamTwoGameWins > teamOneGameWins + gamesRemaining) roundWinner = 2;
+
+  return {
+    roundNumber,
+    teamOneGameWins,
+    teamTwoGameWins,
+    gamesComplete,
+    gamesTotal: games.length,
+    gamesRemaining,
+    roundComplete: games.length > 0 && gamesRemaining === 0,
+    roundWinner,
+  };
+}
+
+export function tallyAllRoundsByGameWins(
+  match: ScoringMatchDetail,
+  draft: ScoringDraft,
+): RoundGameWinsTally[] {
+  return (match.matchFormat?.rounds ?? []).map((round) =>
+    tallyRoundByGameWins(match, draft, round.roundNumber),
+  );
 }
 
 type BoardRoundGame = {
@@ -741,7 +823,14 @@ export function pointsNeededFromRemaining(
 export function gamePlayStatus(
   game: GameScoreState | undefined,
 ): "complete" | "in-progress" | "not-started" {
-  if (gameWinner(game)) return "complete";
+  if (
+    gameWinner(game, {
+      raceTargetOne: game?.raceTargetOne,
+      raceTargetTwo: game?.raceTargetTwo,
+    })
+  ) {
+    return "complete";
+  }
   const one = game?.teamOneScore ?? 0;
   const two = game?.teamTwoScore ?? 0;
   if (one > 0 || two > 0) return "in-progress";
@@ -797,7 +886,12 @@ export function tallyRoundPoints(args: {
     const state = draft.games[gameKey(roundNumber, game.index)];
     teamOneGamePoints += state?.teamOneScore ?? 0;
     teamTwoGamePoints += state?.teamTwoScore ?? 0;
-    const winner = gameWinner(state);
+    const winner = gameWinner(state, {
+      maxScore: maxWin,
+      maxLosingScore: maxLoss,
+      raceTargetOne: state?.raceTargetOne,
+      raceTargetTwo: state?.raceTargetTwo,
+    });
     if (winner) {
       gamesComplete += 1;
       if (winner === 1) teamOneGameWins += 1;
