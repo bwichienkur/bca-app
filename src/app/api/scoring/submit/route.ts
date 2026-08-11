@@ -72,6 +72,8 @@ export async function POST(request: NextRequest) {
       payload?: Record<string, unknown>;
       /** When true, skip player verticalmatch and go straight to LO entry. */
       preferOperator?: boolean;
+      /** When true, overwrite scores already recorded in LMS (operator path). */
+      resubmit?: boolean;
     };
 
     if (!body.payload || typeof body.payload !== "object") {
@@ -96,8 +98,9 @@ export async function POST(request: NextRequest) {
 
     const matchId = String(payload.matchId ?? payload.MatchId ?? "");
     const operatorConfigured = isOperatorConfigured();
+    const forceOperator = Boolean(body.preferOperator) || Boolean(body.resubmit);
 
-    if (body.preferOperator) {
+    if (forceOperator) {
       if (!matchId) {
         return NextResponse.json(
           { error: "matchId is required." },
@@ -116,6 +119,7 @@ export async function POST(request: NextRequest) {
           verifiedPlayed: true,
           via: "operator",
           operatorConfigured,
+          resubmit: Boolean(body.resubmit),
         });
       }
       return NextResponse.json(
