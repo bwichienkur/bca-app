@@ -4,6 +4,7 @@ export type RemoteDraftResponse = {
   shared: boolean;
   draft: ScoringDraft | null;
   updatedBy?: string | null;
+  updatedByName?: string | null;
   submittedAt?: string | null;
   conflict?: boolean;
   error?: string;

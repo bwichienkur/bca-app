@@ -36,6 +36,7 @@ export async function GET(
         shared: false,
         draft: null,
         updatedBy: null,
+        updatedByName: null,
         submittedAt: null,
       });
     }
@@ -45,6 +46,7 @@ export async function GET(
       shared: true,
       draft: record?.draft ?? null,
       updatedBy: record?.updatedBy ?? null,
+      updatedByName: record?.updatedByName ?? null,
       submittedAt: record?.submittedAt ?? null,
     });
   } catch (error) {
@@ -85,6 +87,7 @@ export async function PUT(
       matchId,
       draft: body.draft,
       updatedBy: session.lmsId,
+      updatedByName: session.name,
       baseUpdatedAt: body.baseUpdatedAt,
     });
 
@@ -106,6 +109,7 @@ export async function PUT(
           conflict: true,
           draft: result.record.draft,
           updatedBy: result.record.updatedBy,
+          updatedByName: result.record.updatedByName,
           submittedAt: result.record.submittedAt,
         },
         { status: 409 },
@@ -117,6 +121,7 @@ export async function PUT(
       conflict: false,
       draft: result.record.draft,
       updatedBy: result.record.updatedBy,
+      updatedByName: result.record.updatedByName,
       submittedAt: result.record.submittedAt,
     });
   } catch (error) {
