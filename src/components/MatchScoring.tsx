@@ -2527,10 +2527,16 @@ function gameScoreEqual(a: GameScoreState, b: GameScoreState): boolean {
   );
 }
 
-/** True when either side has a recorded score (including 0). */
+/**
+ * True when the shared draft has a real result for this game.
+ * Explicit 0–0 (or empty) is treated as unscored — not a conflict.
+ */
 function gameHasEnteredScore(game: GameScoreState | null | undefined): boolean {
   if (!game) return false;
-  return game.teamOneScore != null || game.teamTwoScore != null;
+  if (game.teamOneScore == null && game.teamTwoScore == null) return false;
+  const one = game.teamOneScore ?? 0;
+  const two = game.teamTwoScore ?? 0;
+  return one !== 0 || two !== 0;
 }
 
 /** Compare the result fields that define a scored game for conflict checks. */
