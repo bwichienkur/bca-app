@@ -1064,10 +1064,19 @@ function lineupRatings(
   lineup: (string | null)[],
   players: ScoringPlayer[],
 ): number[] {
-  return lineup.map((id) => {
-    if (!id) return 0;
-    return players.find((player) => player.id === id)?.fargoRating ?? 0;
-  });
+  return lineup.map((id) => ratingForPlayer(players, id));
+}
+
+/** LMS HDCP column / `teamOneHandicaps` expects the player's Fargo rating. */
+export function ratingForPlayer(
+  players: ScoringPlayer[],
+  id: string | null | undefined,
+): number {
+  if (!id) return 0;
+  const player = players.find((entry) => entry.id === id);
+  if (!player) return 0;
+  const rating = player.fargoRating ?? player.handicap;
+  return rating != null && Number.isFinite(rating) ? Number(rating) : 0;
 }
 
 export function computeMatchHandicaps(
@@ -1085,27 +1094,34 @@ export function computeMatchHandicaps(
   });
 }
 
+/**
+ * Mirror LMS scoresheet HDCP cells: each game stores the assigned player's
+ * Fargo. Round-points handicap is computed separately via
+ * `computeMatchHandicaps` and must not be written here.
+ */
 export function applyHandicapsToDraft(
   match: ScoringMatchDetail,
   draft: ScoringDraft,
 ): ScoringDraft {
-  const results = computeMatchHandicaps(match, draft);
-  if (!results.length) return draft;
-
-  const byRound = new Map(results.map((result) => [result.round, result]));
   const games: ScoringDraft["games"] = { ...draft.games };
 
   for (const round of match.matchFormat?.rounds ?? []) {
-    const result = byRound.get(round.roundNumber);
-    if (!result) continue;
     for (const game of round.games) {
       const key = gameKey(round.roundNumber, game.index);
       const existing = games[key];
       if (!existing) continue;
+      const teamOnePlayerId =
+        existing.teamOnePlayerId ??
+        draft.teamOneLineup[(game.playerOne.index || 1) - 1] ??
+        null;
+      const teamTwoPlayerId =
+        existing.teamTwoPlayerId ??
+        draft.teamTwoLineup[(game.playerTwo.index || 1) - 1] ??
+        null;
       games[key] = {
         ...existing,
-        teamOneHandicap: result.teamOne,
-        teamTwoHandicap: result.teamTwo,
+        teamOneHandicap: ratingForPlayer(match.teamOnePlayers, teamOnePlayerId),
+        teamTwoHandicap: ratingForPlayer(match.teamTwoPlayers, teamTwoPlayerId),
       };
     }
   }
@@ -1143,6 +1159,11 @@ export function clearDraft(matchId: string): void {
 /**
  * Build the LMS verticalmatch payload.
  * Field names follow the official BCAPL app / web scoresheet models.
+ *
+ * `teamOneHandicaps` / `teamTwoHandicaps` are the players' Fargo ratings (LMS
+ * HDCP column). Do not send calculated round-points HC there, and keep
+ * `*RoundsBonus` at 0 — those are Operator Bonus fields; LMS awards round HC
+ * from the Fargos (e.g. the +4 under the round total).
  */
 export function buildVerticalMatchPayload(args: {
   match: ScoringMatchDetail;
@@ -1151,6 +1172,7 @@ export function buildVerticalMatchPayload(args: {
   dateScored?: string;
 }): Record<string, unknown> {
   const { match, draft, scoreKeeper } = args;
+
   const rounds = (match.matchFormat?.rounds ?? []).map((round) => {
     const games = round.games.map((game) => {
       const state = draft.games[gameKey(round.roundNumber, game.index)];
@@ -1187,8 +1209,8 @@ export function buildVerticalMatchPayload(args: {
         teamTwoScore,
         winAdornment,
         isWinZip,
-        teamOneHandicaps: [state?.teamOneHandicap ?? 0],
-        teamTwoHandicaps: [state?.teamTwoHandicap ?? 0],
+        teamOneHandicaps: [ratingForPlayer(match.teamOnePlayers, teamOnePlayerId)],
+        teamTwoHandicaps: [ratingForPlayer(match.teamTwoPlayers, teamTwoPlayerId)],
       };
     });
 
@@ -1199,7 +1221,6 @@ export function buildVerticalMatchPayload(args: {
     };
   });
 
-  const roundHandicaps = computeMatchHandicaps(match, draft);
   return {
     matchId: match.id,
     MatchId: match.id,
@@ -1209,14 +1230,8 @@ export function buildVerticalMatchPayload(args: {
     ScoreKeeper: scoreKeeper,
     rounds,
     Rounds: rounds,
-    teamOneRoundsBonus: roundHandicaps.reduce(
-      (sum, round) => sum + round.teamOne,
-      0,
-    ),
-    teamTwoRoundsBonus: roundHandicaps.reduce(
-      (sum, round) => sum + round.teamTwo,
-      0,
-    ),
+    teamOneRoundsBonus: 0,
+    teamTwoRoundsBonus: 0,
     teamOneGamesBonus: 0,
     teamTwoGamesBonus: 0,
     createHandoff: false,
