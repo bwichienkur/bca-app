@@ -542,6 +542,7 @@ export function MatchScoring({
 
       let chosen = newerDraft(remoteDraft, local, "a");
       const chosenScored = chosen ? tallyDraft(chosen).scored : 0;
+      let choseLmsResult = false;
 
       // Completed matches with no Tableside draft: hydrate players + scores from LMS.
       if (chosenScored === 0) {
@@ -552,6 +553,7 @@ export function MatchScoring({
           }>(`/api/scoring/matches/${matchId}/result`);
           if (lms.draft && tallyDraft(lms.draft).scored > 0) {
             chosen = lms.draft;
+            choseLmsResult = true;
             if (!submittedAt && data.match.hasBeenPlayed) {
               submittedAt = lms.summary?.submittedAt ?? new Date().toISOString();
               setSyncNote("Scores loaded from LMS.");
@@ -600,14 +602,24 @@ export function MatchScoring({
         pointsForWin: data.match.pointsForWin ?? null,
         matchWinCountsAsRound: data.match.matchWinCountsAsRound ?? null,
       });
+      // True when the shared draft won the merge — do not re-push on open or we
+      // steal updatedBy from whoever last scored (breaks discrepancy checks).
+      const adoptedRemote =
+        Boolean(remoteDraft) &&
+        Boolean(chosen) &&
+        !choseLmsResult &&
+        chosen!.updatedAt === remoteDraft!.updatedAt;
       const synced = chosen
         ? syncLineupToGames(normalizeDraftScores(chosen), data.match)
         : emptyDraft(data.match);
-      const nextDraft = applyFormatRaceTargets(
+      let nextDraft = applyFormatRaceTargets(
         data.match,
         synced,
         formatForMatch,
       );
+      if (adoptedRemote && remoteDraft) {
+        nextDraft = { ...nextDraft, updatedAt: remoteDraft.updatedAt };
+      }
 
       baseUpdatedAtRef.current = remoteDraft?.updatedAt ?? null;
       dirtyRef.current = false;
@@ -619,16 +631,24 @@ export function MatchScoring({
       setView({ mode: "sheet", matchId });
       if (!locked) {
         saveDraft(nextDraft);
-        // Seed shared store when we opened from local-only or empty.
-        void pushRemoteDraft(nextDraft, baseUpdatedAtRef.current)
-          .then((remote) => {
-            if (remote.shared) setSharedDrafts(true);
-            if (remote.draft) baseUpdatedAtRef.current = remote.draft.updatedAt;
-            if (remote.submittedAt && data.match.hasBeenPlayed) {
-              sheetLockedRef.current = true;
-            }
-          })
-          .catch(() => undefined);
+        // Seed / upload only when there is no remote yet, or local was newer.
+        // Re-pushing an adopted remote draft would rewrite updatedBy to the
+        // opener and skip the score-mismatch popup for everyone else.
+        if (!adoptedRemote) {
+          void pushRemoteDraft(nextDraft, baseUpdatedAtRef.current)
+            .then((remote) => {
+              if (remote.shared) setSharedDrafts(true);
+              if (remote.draft) {
+                baseUpdatedAtRef.current = remote.draft.updatedAt;
+              }
+              if (remote.submittedAt && data.match.hasBeenPlayed) {
+                sheetLockedRef.current = true;
+              }
+            })
+            .catch(() => undefined);
+        } else {
+          setSharedDrafts(true);
+        }
         setDraftSummaries((prev) => ({
           ...prev,
           [matchId]: summarizeDraftForBoard(
