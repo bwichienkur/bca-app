@@ -19,8 +19,6 @@ import {
 import { DateField } from "./DateField";
 import {
   IconSubTabs,
-  LeaguesSubIcon,
-  LineupsSubIcon,
   MatchupSubIcon,
   OverviewSubIcon,
   RoundsSubIcon,
@@ -36,7 +34,7 @@ import {
 } from "./PanelHeader";
 import { SearchField } from "./SearchField";
 import { BackButton } from "./BackButton";
-import { DivisionLinkPanel } from "./DivisionLinkPanel";
+import { DivisionLinkForm } from "./DivisionLinkForm";
 import {
   LmsDivisionSettingsForm,
   type DivisionSettingsSection,
@@ -44,6 +42,7 @@ import {
 import { LmsScoresheetStudio } from "./LmsScoresheetStudio";
 import { SectionCard } from "./SectionCard";
 import { SelectField } from "./SelectField";
+import type { DivisionLink } from "@/lib/division-links";
 
 type LmsSubTab =
   | "home"
@@ -53,9 +52,8 @@ type LmsSubTab =
   | "schedule"
   | "scoresheet"
   | "playoff"
-  | "division";
-
-type SettingsPageTab = DivisionSettingsSection | "link";
+  | "division"
+  | "links";
 
 type Screen =
   | { type: "list" }
@@ -64,6 +62,7 @@ type Screen =
   | { type: "edit-player"; id: string | null }
   | { type: "edit-match"; matchId: string | null }
   | { type: "edit-settings"; divisionId: string }
+  | { type: "edit-link"; id: string | null }
   | { type: "create-division" }
   | { type: "create-playoff" };
 
@@ -274,6 +273,14 @@ function DivisionIcon({ className }: { className?: string }) {
       <path d="M5 8h14" />
       <path d="M7 12h10" />
       <path d="M9 16h6" />
+    </IconShell>
+  );
+}
+function LinksIcon({ className }: { className?: string }) {
+  return (
+    <IconShell className={className}>
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
     </IconShell>
   );
 }
@@ -550,12 +557,14 @@ export function LmsOperator({
 }: LmsOperatorProps) {
   const [subTab, setSubTab] = useState<LmsSubTab>("home");
   const [screen, setScreen] = useState<Screen>({ type: "list" });
-  const [settingsTab, setSettingsTab] = useState<SettingsPageTab>("general");
+  const [settingsTab, setSettingsTab] =
+    useState<DivisionSettingsSection>("general");
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
 
   const [leagues, setLeagues] = useState<OperatorLeague[]>([]);
   const [divisions, setDivisions] = useState<OperatorDivision[]>([]);
+  const [divisionLinks, setDivisionLinks] = useState<DivisionLink[]>([]);
   const [opLeagueId, setOpLeagueId] = useState(seedLeagueId ?? "");
   const [opLeagueName, setOpLeagueName] = useState(seedLeagueName ?? "");
   const [opDivisionId, setOpDivisionId] = useState(seedDivisionId ?? "");
@@ -653,6 +662,7 @@ export function LmsOperator({
       { id: "scoresheet", label: "Format", icon: ScoresheetIcon },
       { id: "playoff", label: "Playoff", icon: PlayoffIcon },
       { id: "division", label: "Division", icon: DivisionIcon },
+      { id: "links", label: "Links", icon: LinksIcon },
     ],
     [],
   );
@@ -949,6 +959,44 @@ export function LmsOperator({
     if (subTab === "home" && screen.type === "list") void refreshHome();
   }, [user, configured, opDivisionId, subTab, screen.type, refreshHome]);
 
+  const refreshDivisionLinks = useCallback(async () => {
+    if (!opLeagueId) {
+      setDivisionLinks([]);
+      return;
+    }
+    const data = await fetchJson<{ links: DivisionLink[] }>(
+      `/api/division-links?leagueId=${encodeURIComponent(opLeagueId)}`,
+    );
+    setDivisionLinks(data.links ?? []);
+  }, [opLeagueId]);
+
+  useEffect(() => {
+    if (!user || !configured || !opLeagueId) return;
+    if (screen.type !== "list") return;
+    if (subTab !== "links") return;
+    let cancelled = false;
+    setSectionLoading(true);
+    setSectionError(null);
+    void (async () => {
+      try {
+        await refreshDivisionLinks();
+      } catch (error) {
+        if (!cancelled) {
+          setSectionError(
+            error instanceof Error
+              ? error.message
+              : "Failed to load division links.",
+          );
+        }
+      } finally {
+        if (!cancelled) setSectionLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, configured, opLeagueId, subTab, screen.type, refreshDivisionLinks]);
+
   useEffect(() => {
     if (!user || !configured || !opDivisionId) return;
     if (screen.type !== "list") return;
@@ -1109,6 +1157,17 @@ export function LmsOperator({
         .filter((d) => isPlayoffName(d.name))
         .filter((d) => !q || d.name.toLowerCase().includes(q)),
     [divisions, q],
+  );
+  const filteredDivisionLinks = useMemo(
+    () =>
+      divisionLinks.filter(
+        (link) =>
+          !q ||
+          link.name.toLowerCase().includes(q) ||
+          link.primaryDivisionName.toLowerCase().includes(q) ||
+          link.linkedDivisionName.toLowerCase().includes(q),
+      ),
+    [divisionLinks, q],
   );
 
   const scheduleByDate = useMemo(() => {
@@ -1355,6 +1414,7 @@ export function LmsOperator({
     "playoff",
     "division",
     "scoresheet",
+    "links",
   ].includes(subTab);
 
   /* ---------- Edit / create popup (not used for division settings page) ---------- */
@@ -1375,11 +1435,15 @@ export function LmsOperator({
             ? screen.matchId
               ? "Edit match"
               : "Add match"
-            : screen.type === "create-division"
-              ? "Add division"
-              : screen.type === "create-playoff"
-                ? "Add playoff"
-                : "";
+            : screen.type === "edit-link"
+              ? screen.id
+                ? "Edit division link"
+                : "Add division link"
+              : screen.type === "create-division"
+                ? "Add division"
+                : screen.type === "create-playoff"
+                  ? "Add playoff"
+                  : "";
 
   const editPopup =
     screen.type === "list" || screen.type === "edit-settings" ? null : (
@@ -2123,6 +2187,38 @@ export function LmsOperator({
           </section>
         ) : null}
 
+        {screen.type === "edit-link" && opLeagueId ? (
+          <DivisionLinkForm
+            leagueId={opLeagueId}
+            divisions={divisions}
+            initialLink={
+              screen.id
+                ? (divisionLinks.find((link) => link.id === screen.id) ?? null)
+                : null
+            }
+            busy={busy}
+            onBusy={setBusy}
+            onNotice={setNotice}
+            onError={setSectionError}
+            onSaved={(link) => {
+              setDivisionLinks((prev) => {
+                const without = prev.filter(
+                  (row) =>
+                    row.id !== link.id &&
+                    row.primaryDivisionId !== link.primaryDivisionId &&
+                    row.linkedDivisionId !== link.primaryDivisionId &&
+                    row.primaryDivisionId !== link.linkedDivisionId &&
+                    row.linkedDivisionId !== link.linkedDivisionId,
+                );
+                return [...without, link].sort((a, b) =>
+                  a.name.localeCompare(b.name),
+                );
+              });
+              goList();
+            }}
+          />
+        ) : null}
+
           </div>
         </div>
         </div>
@@ -2187,17 +2283,28 @@ export function LmsOperator({
               },
             }
           : null;
+      case "links":
+        return opLeagueId
+          ? {
+              label: "Add link",
+              onClick: (event: ReactMouseEvent<HTMLButtonElement>) => {
+                capturePopupAnchor(event);
+                setNotice(null);
+                setSectionError(null);
+                setScreen({ type: "edit-link", id: null });
+              },
+            }
+          : null;
       default:
         return null;
     }
   })();
 
-  const settingsPageTabs: IconSubTabItem<SettingsPageTab>[] = [
+  const settingsPageTabs: IconSubTabItem<DivisionSettingsSection>[] = [
     { id: "general", label: "General", icon: OverviewSubIcon },
     { id: "scoring", label: "Scoring", icon: StatsSubIcon },
     { id: "handicap", label: "Handicap", icon: RoundsSubIcon },
     { id: "format", label: "Format", icon: MatchupSubIcon },
-    { id: "link", label: "Link", icon: LeaguesSubIcon },
   ];
 
   /* ---------- Edit division full page (not a modal) ---------- */
@@ -2207,7 +2314,7 @@ export function LmsOperator({
         <BackButton onClick={goList} label="Back to divisions" />
         <PanelHeader
           title={opDivisionName || "Edit division"}
-          description="LMS settings save to Fargo. The Link tab is Tableside-only and never writes to LMS."
+          description="LMS settings save to Fargo. Use the Links section to pair divisions in Tableside."
         />
         {notice ? (
           <p className="text-sm font-medium text-[var(--felt)]">{notice}</p>
@@ -2224,29 +2331,12 @@ export function LmsOperator({
               items={settingsPageTabs}
               value={settingsTab}
               onChange={setSettingsTab}
-              columns={5}
+              columns={4}
               className="rounded-none border-0 bg-transparent p-0"
             />
           </div>
           <div className="space-y-3 p-3 sm:p-4">
-            {settingsTab === "link" ? (
-              opLeagueId ? (
-                <DivisionLinkPanel
-                  leagueId={opLeagueId}
-                  divisionId={screen.divisionId}
-                  divisionName={opDivisionName || "Division"}
-                  divisions={divisions}
-                  busy={busy}
-                  onBusy={setBusy}
-                  onNotice={setNotice}
-                  onError={setSectionError}
-                />
-              ) : (
-                <p className="text-sm text-[var(--muted)]">
-                  Choose a league before linking divisions.
-                </p>
-              )
-            ) : sectionLoading || !settings ? (
+            {sectionLoading || !settings ? (
               <LoadingState label="Loading settings…" />
             ) : (
               <LmsDivisionSettingsForm
@@ -2395,9 +2485,9 @@ export function LmsOperator({
 
       {needsDivision && !opDivisionId ? (
         <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-4 text-sm text-[var(--muted)]">
-          Choose a division above to manage this section. Division and Playoff
-          lists work from the league alone. Edit a division to open all of its
-          settings in one place.
+          Choose a division above to manage this section. Division, Playoff, and
+          Links work from the league alone. Edit a division to open LMS
+          settings; use Links to pair divisions in Tableside.
         </div>
       ) : null}
 
@@ -3004,7 +3094,7 @@ export function LmsOperator({
         <section className="space-y-3">
           <SectionHeader
             title="Divisions"
-            description="Edit opens a full settings page — general, scoring, handicap, format, and Tableside division linking."
+            description="Edit opens a full settings page — general, scoring, handicap, and format. Pair divisions under Links."
             onAdd={(event) => {
               capturePopupAnchor(event);
               setCreateSourceId(opDivisionId || divisions[0]?.id || "");
@@ -3045,6 +3135,95 @@ export function LmsOperator({
                   >
                     Edit
                   </button>
+                </div>
+              </AccentRecordCard>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {subTab === "links" && opLeagueId ? (
+        <section className="space-y-3">
+          <SectionHeader
+            title="Division links"
+            description="Tableside-only. Name a combined night and pair divisions with matching team names (or individuals)."
+            onAdd={(event) => {
+              capturePopupAnchor(event);
+              setNotice(null);
+              setSectionError(null);
+              setScreen({ type: "edit-link", id: null });
+            }}
+          />
+          <SearchField
+            label="Search links"
+            placeholder="Search links…"
+            value={listQuery}
+            onChange={setListQuery}
+            embedded
+          />
+          {sectionLoading ? <LoadingState label="Loading links…" /> : null}
+          {!sectionLoading && filteredDivisionLinks.length === 0 ? (
+            <p className="text-sm text-[var(--muted)]">
+              No division links yet. Use + Add to search divisions and create
+              one.
+            </p>
+          ) : null}
+          <ul className={accentRecordListClass}>
+            {filteredDivisionLinks.map((link) => (
+              <AccentRecordCard key={link.id}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-[var(--ink)]">
+                      {link.name}
+                    </p>
+                    <p className="text-xs text-[var(--muted)]">
+                      {link.primaryDivisionName} · {link.linkedDivisionName}
+                      <span className="ml-1.5 text-[var(--muted)]">
+                        ({link.mode})
+                      </span>
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      className={btnEdit}
+                      onClick={(event) => {
+                        capturePopupAnchor(event);
+                        setNotice(null);
+                        setSectionError(null);
+                        setScreen({ type: "edit-link", id: link.id });
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className={btnDelete}
+                      disabled={busy}
+                      onClick={(event) => {
+                        askConfirm(
+                          {
+                            title: "Unlink divisions",
+                            body: `Remove Tableside link “${link.name}”? LMS divisions are not changed.`,
+                            confirmLabel: "Unlink",
+                            onConfirm: async () => {
+                              setPendingConfirm(null);
+                              await runAction(async () => {
+                                await fetchJson(
+                                  `/api/division-links?leagueId=${encodeURIComponent(opLeagueId)}&linkId=${encodeURIComponent(link.id)}`,
+                                  { method: "DELETE" },
+                                );
+                                await refreshDivisionLinks();
+                              }, "Division link removed from Tableside.");
+                            },
+                          },
+                          event,
+                        );
+                      }}
+                    >
+                      Unlink
+                    </button>
+                  </div>
                 </div>
               </AccentRecordCard>
             ))}

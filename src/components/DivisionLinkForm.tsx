@@ -11,8 +11,6 @@ const btnPrimary =
   "inline-flex items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
 const btnGhost =
   "inline-flex items-center justify-center rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold text-[var(--ink)] disabled:opacity-50";
-const btnDelete =
-  "inline-flex items-center justify-center rounded-[var(--radius)] bg-[#b42318] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
 
 type DivisionOption = { id: string; name: string };
 
@@ -27,98 +25,88 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
-export function DivisionLinkPanel({
+function filterDivisions(
+  divisions: DivisionOption[],
+  query: string,
+  excludeId?: string,
+): DivisionOption[] {
+  const q = query.trim().toLowerCase();
+  return divisions.filter((division) => {
+    if (excludeId && division.id === excludeId) return false;
+    if (!q) return true;
+    return division.name.toLowerCase().includes(q);
+  });
+}
+
+/**
+ * Popup form to create/edit a Tableside-only division link.
+ * Never writes to LMS.
+ */
+export function DivisionLinkForm({
   leagueId,
-  divisionId,
-  divisionName,
   divisions,
+  initialLink = null,
   busy,
   onBusy,
   onNotice,
   onError,
+  onSaved,
 }: {
   leagueId: string;
-  divisionId: string;
-  divisionName: string;
   divisions: DivisionOption[];
+  initialLink?: DivisionLink | null;
   busy: boolean;
   onBusy: (busy: boolean) => void;
   onNotice: (message: string | null) => void;
   onError: (message: string | null) => void;
+  onSaved: (link: DivisionLink) => void;
 }) {
-  const [links, setLinks] = useState<DivisionLink[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [linkName, setLinkName] = useState("");
-  const [linkedDivisionId, setLinkedDivisionId] = useState("");
+  const [linkName, setLinkName] = useState(initialLink?.name ?? "");
+  const [primaryDivisionId, setPrimaryDivisionId] = useState(
+    initialLink?.primaryDivisionId ?? "",
+  );
+  const [linkedDivisionId, setLinkedDivisionId] = useState(
+    initialLink?.linkedDivisionId ?? "",
+  );
+  const [primaryQuery, setPrimaryQuery] = useState("");
+  const [linkedQuery, setLinkedQuery] = useState("");
   const [validation, setValidation] = useState<DivisionLinkValidation | null>(
     null,
   );
 
-  const existing = useMemo(
-    () =>
-      links.find(
-        (link) =>
-          link.primaryDivisionId === divisionId ||
-          link.linkedDivisionId === divisionId,
-      ) ?? null,
-    [links, divisionId],
-  );
+  useEffect(() => {
+    setLinkName(initialLink?.name ?? "");
+    setPrimaryDivisionId(initialLink?.primaryDivisionId ?? "");
+    setLinkedDivisionId(initialLink?.linkedDivisionId ?? "");
+    setPrimaryQuery("");
+    setLinkedQuery("");
+    setValidation(null);
+  }, [initialLink]);
+
+  const primaryDivision =
+    divisions.find((d) => d.id === primaryDivisionId) ?? null;
+  const linkedDivision =
+    divisions.find((d) => d.id === linkedDivisionId) ?? null;
 
   const sisterSuggestion = useMemo(() => {
-    const hit = findSisterDivision(
-      { id: divisionId, name: divisionName },
-      divisions,
+    if (!primaryDivision) return null;
+    return (
+      findSisterDivision(primaryDivision, divisions)?.sister ?? null
     );
-    return hit?.sister ?? null;
-  }, [divisionId, divisionName, divisions]);
+  }, [primaryDivision, divisions]);
 
-  const otherDivisions = useMemo(
-    () => divisions.filter((d) => d.id !== divisionId),
-    [divisions, divisionId],
+  const primaryOptions = useMemo(
+    () => filterDivisions(divisions, primaryQuery, linkedDivisionId),
+    [divisions, primaryQuery, linkedDivisionId],
+  );
+  const linkedOptions = useMemo(
+    () => filterDivisions(divisions, linkedQuery, primaryDivisionId),
+    [divisions, linkedQuery, primaryDivisionId],
   );
 
-  const refresh = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchJson<{ links: DivisionLink[] }>(
-        `/api/division-links?leagueId=${encodeURIComponent(leagueId)}`,
-      );
-      setLinks(data.links ?? []);
-    } catch (error) {
-      onError(
-        error instanceof Error ? error.message : "Failed to load links.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leagueId, divisionId]);
-
-  useEffect(() => {
-    if (existing) {
-      setLinkName(existing.name);
-      setLinkedDivisionId(
-        existing.primaryDivisionId === divisionId
-          ? existing.linkedDivisionId
-          : existing.primaryDivisionId,
-      );
-      return;
-    }
-    setLinkName("");
-    setLinkedDivisionId(sisterSuggestion?.id ?? "");
-    setValidation(null);
-  }, [existing, divisionId, sisterSuggestion?.id]);
-
-  const linkedName =
-    otherDivisions.find((d) => d.id === linkedDivisionId)?.name ?? "";
-
   const runValidate = async () => {
-    if (!linkedDivisionId) {
-      onError("Pick a division to link.");
+    if (!primaryDivisionId || !linkedDivisionId) {
+      onError("Pick two divisions to link.");
       return null;
     }
     onBusy(true);
@@ -131,10 +119,10 @@ export function DivisionLinkPanel({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "validate",
-            primaryDivisionId: divisionId,
-            primaryDivisionName: divisionName,
+            primaryDivisionId,
+            primaryDivisionName: primaryDivision?.name ?? primaryDivisionId,
             linkedDivisionId,
-            linkedDivisionName: linkedName,
+            linkedDivisionName: linkedDivision?.name ?? linkedDivisionId,
           }),
         },
       );
@@ -156,8 +144,8 @@ export function DivisionLinkPanel({
       onError("Name the link (players will see this in League).");
       return;
     }
-    if (!linkedDivisionId) {
-      onError("Pick a division to link.");
+    if (!primaryDivisionId || !linkedDivisionId) {
+      onError("Pick two divisions to link.");
       return;
     }
     onBusy(true);
@@ -171,66 +159,26 @@ export function DivisionLinkPanel({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: existing?.id,
+          id: initialLink?.id,
           leagueId,
           name,
-          primaryDivisionId: divisionId,
-          primaryDivisionName: divisionName,
+          primaryDivisionId,
+          primaryDivisionName: primaryDivision?.name ?? primaryDivisionId,
           linkedDivisionId,
-          linkedDivisionName: linkedName,
+          linkedDivisionName: linkedDivision?.name ?? linkedDivisionId,
         }),
       });
       setValidation(data.validation);
-      setLinks((prev) => {
-        const without = prev.filter(
-          (link) =>
-            link.id !== data.link.id &&
-            link.primaryDivisionId !== data.link.primaryDivisionId &&
-            link.linkedDivisionId !== data.link.primaryDivisionId &&
-            link.primaryDivisionId !== data.link.linkedDivisionId &&
-            link.linkedDivisionId !== data.link.linkedDivisionId,
-        );
-        return [...without, data.link];
-      });
       onNotice(
         "Division link saved in Tableside only — LMS was not updated.",
       );
+      onSaved(data.link);
     } catch (error) {
       onError(error instanceof Error ? error.message : "Failed to save link.");
     } finally {
       onBusy(false);
     }
   };
-
-  const unlink = async () => {
-    if (!existing) return;
-    onBusy(true);
-    onError(null);
-    onNotice(null);
-    try {
-      await fetchJson(
-        `/api/division-links?leagueId=${encodeURIComponent(leagueId)}&linkId=${encodeURIComponent(existing.id)}`,
-        { method: "DELETE" },
-      );
-      setLinks((prev) => prev.filter((link) => link.id !== existing.id));
-      setLinkName("");
-      setLinkedDivisionId(sisterSuggestion?.id ?? "");
-      setValidation(null);
-      onNotice("Division link removed from Tableside.");
-    } catch (error) {
-      onError(
-        error instanceof Error ? error.message : "Failed to remove link.",
-      );
-    } finally {
-      onBusy(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <p className="text-sm text-[var(--muted)]">Loading division links…</p>
-    );
-  }
 
   return (
     <div className="space-y-4">
@@ -241,19 +189,8 @@ export function DivisionLinkPanel({
         individuals).
       </div>
 
-      {existing ? (
-        <p className="text-sm text-[var(--felt-deep)]">
-          Linked as <span className="font-semibold">{existing.name}</span> (
-          {existing.mode}) with{" "}
-          {existing.primaryDivisionId === divisionId
-            ? existing.linkedDivisionName
-            : existing.primaryDivisionName}
-          .
-        </p>
-      ) : null}
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block space-y-1.5 text-sm sm:col-span-2">
+      <div className="grid gap-3">
+        <label className="block space-y-1.5 text-sm">
           <span className="font-medium text-[var(--ink)]">Link name</span>
           <input
             className={inputClass}
@@ -262,16 +199,59 @@ export function DivisionLinkPanel({
             onChange={(e) => setLinkName(e.target.value)}
           />
         </label>
-        <label className="block space-y-1.5 text-sm sm:col-span-2">
-          <span className="font-medium text-[var(--ink)]">
-            Link with division
+
+        <div className="space-y-1.5">
+          <span className="text-sm font-medium text-[var(--ink)]">
+            First division
           </span>
+          <input
+            className={inputClass}
+            value={primaryQuery}
+            placeholder="Search divisions…"
+            onChange={(e) => setPrimaryQuery(e.target.value)}
+          />
           <SelectField
-            aria-label="Division to link"
+            aria-label="First division"
+            value={primaryDivisionId}
+            options={[
+              { value: "", label: "Choose division…" },
+              ...primaryOptions.map((d) => ({
+                value: d.id,
+                label: d.name,
+              })),
+            ]}
+            onChange={(value) => {
+              setPrimaryDivisionId(value);
+              setValidation(null);
+              const picked = divisions.find((d) => d.id === value);
+              if (picked && !linkName.trim()) {
+                const season =
+                  picked.name.match(/\(?\s*(20\d{2}\.\d)\s*\)?/i)?.[1] ?? "";
+                if (season) setLinkName(`Beyond Monday ${season}`);
+              }
+              if (value && linkedDivisionId === value) {
+                setLinkedDivisionId("");
+              }
+            }}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <span className="text-sm font-medium text-[var(--ink)]">
+            Second division
+          </span>
+          <input
+            className={inputClass}
+            value={linkedQuery}
+            placeholder="Search divisions…"
+            onChange={(e) => setLinkedQuery(e.target.value)}
+          />
+          <SelectField
+            aria-label="Second division"
             value={linkedDivisionId}
             options={[
               { value: "", label: "Choose division…" },
-              ...otherDivisions.map((d) => ({
+              ...linkedOptions.map((d) => ({
                 value: d.id,
                 label: d.name,
               })),
@@ -284,16 +264,18 @@ export function DivisionLinkPanel({
           {sisterSuggestion && linkedDivisionId !== sisterSuggestion.id ? (
             <button
               type="button"
-              className="mt-1 text-xs font-semibold text-[var(--felt-deep)] underline-offset-2 hover:underline"
+              className="text-xs font-semibold text-[var(--felt-deep)] underline-offset-2 hover:underline"
               onClick={() => {
                 setLinkedDivisionId(sisterSuggestion.id);
-                if (!linkName.trim()) {
+                setLinkedQuery("");
+                setValidation(null);
+                if (!linkName.trim() && primaryDivision) {
                   const season =
-                    divisionName.match(/\(?\s*(20\d{2}\.\d)\s*\)?/i)?.[1] ?? "";
+                    primaryDivision.name.match(
+                      /\(?\s*(20\d{2}\.\d)\s*\)?/i,
+                    )?.[1] ?? "";
                   setLinkName(
-                    season
-                      ? `Beyond Monday ${season}`
-                      : "Beyond Monday",
+                    season ? `Beyond Monday ${season}` : "Beyond Monday",
                   );
                 }
               }}
@@ -301,7 +283,7 @@ export function DivisionLinkPanel({
               Suggest {sisterSuggestion.name}
             </button>
           ) : null}
-        </label>
+        </div>
       </div>
 
       {validation ? (
@@ -319,10 +301,10 @@ export function DivisionLinkPanel({
             validation.missingInLinked.length) ? (
             <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs">
               {validation.missingInPrimary.map((item) => (
-                <li key={`p-${item}`}>Missing here: {item}</li>
+                <li key={`p-${item}`}>Missing in first: {item}</li>
               ))}
               {validation.missingInLinked.map((item) => (
-                <li key={`l-${item}`}>Missing in linked: {item}</li>
+                <li key={`l-${item}`}>Missing in second: {item}</li>
               ))}
             </ul>
           ) : null}
@@ -333,7 +315,7 @@ export function DivisionLinkPanel({
         <button
           type="button"
           className={btnGhost}
-          disabled={busy || !linkedDivisionId}
+          disabled={busy || !primaryDivisionId || !linkedDivisionId}
           onClick={() => void runValidate()}
         >
           Check match
@@ -341,21 +323,16 @@ export function DivisionLinkPanel({
         <button
           type="button"
           className={btnPrimary}
-          disabled={busy || !linkedDivisionId || !linkName.trim()}
+          disabled={
+            busy ||
+            !primaryDivisionId ||
+            !linkedDivisionId ||
+            !linkName.trim()
+          }
           onClick={() => void saveLink()}
         >
-          {existing ? "Update link" : "Save link"}
+          {initialLink ? "Update link" : "Save link"}
         </button>
-        {existing ? (
-          <button
-            type="button"
-            className={btnDelete}
-            disabled={busy}
-            onClick={() => void unlink()}
-          >
-            Unlink
-          </button>
-        ) : null}
       </div>
     </div>
   );
