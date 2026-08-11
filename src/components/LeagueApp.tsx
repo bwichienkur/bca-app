@@ -1499,68 +1499,21 @@ export function LeagueApp() {
               <LoadingState label="Pulling report from LMS…" />
             ) : tab === "my-team" ? (
               prefs.teamName ? (
-                <SubTabCard
-                  className="rounded-none border-0 shadow-none"
-                  tabs={
-                    <IconSubTabs
-                      aria-label="My team sections"
-                      value={myTeamSubTab}
-                      onChange={(id) =>
-                        startTransition(() => setMyTeamSubTab(id))
-                      }
-                      className="rounded-none border-0 bg-transparent p-0"
-                      items={[
-                        {
-                          id: "standing",
-                          label: "Standing",
-                          icon: StandingSubIcon,
-                        },
-                        { id: "roster", label: "Roster", icon: RosterSubIcon },
-                        {
-                          id: "lineups",
-                          label: "Lineups",
-                          icon: LineupsSubIcon,
-                        },
-                      ]}
-                    />
-                  }
-                >
-                  <div
-                    className={
-                      myTeamSubTab === "standing" ? "min-w-0" : "hidden"
-                    }
-                    aria-hidden={myTeamSubTab !== "standing"}
-                  >
-                    {myStandingCells ? (
-                      <TeamStandingSummary
-                        cells={myStandingCells}
-                        teamName={prefs.teamName}
-                      />
-                    ) : (
-                      <EmptyState
-                        title="Standing unavailable"
-                        body="Team standings will show here once the division report loads."
-                      />
-                    )}
-                  </div>
-
-                  <div
-                    className={
-                      myTeamSubTab === "roster" ? "min-w-0 space-y-3" : "hidden"
-                    }
-                    aria-hidden={myTeamSubTab !== "roster"}
-                  >
+                <section className="space-y-3">
+                  <div className="px-3 pt-3 sm:px-4 sm:pt-4">
                     <PanelHeader
-                      title="Roster"
+                      title="Your team"
                       description={
-                        myTeam?.players.length
-                          ? `${myTeam.players.length} rostered · avg Fargo ${Math.round(
-                              myTeam.players.reduce(
-                                (sum, player) => sum + player.fargoRating,
-                                0,
-                              ) / myTeam.players.length,
-                            )}`
-                          : "Player statistics and Fargo ratings"
+                        <>
+                          Standing, roster, and lineup templates for{" "}
+                          <span className="font-medium text-[var(--ink)]">
+                            {prefs.teamName}
+                          </span>
+                          {selectedDivision?.name || prefs.divisionName
+                            ? <> · {selectedDivision?.name || prefs.divisionName}</>
+                            : null}
+                          .
+                        </>
                       }
                       action={
                         myTeam?.players.length ? (
@@ -1571,40 +1524,122 @@ export function LeagueApp() {
                         ) : undefined
                       }
                     />
-                    <TeamDetail
-                      teamName={prefs.teamName}
-                      team={myTeam}
-                      playersByTeam={playersByTeam}
-                      isMyTeam
-                      embedded
-                    />
                   </div>
-
-                  <div
-                    className={myTeamSubTab === "lineups" ? "min-w-0" : "hidden"}
-                    aria-hidden={myTeamSubTab !== "lineups"}
+                  <SubTabCard
+                    className="rounded-none border-0 shadow-none"
+                    tabs={
+                      <IconSubTabs
+                        aria-label="My team sections"
+                        value={myTeamSubTab}
+                        onChange={(id) =>
+                          startTransition(() => setMyTeamSubTab(id))
+                        }
+                        className="rounded-none border-0 bg-transparent p-0"
+                        items={[
+                          {
+                            id: "standing",
+                            label: "Standing",
+                            icon: StandingSubIcon,
+                          },
+                          {
+                            id: "roster",
+                            label: "Roster",
+                            icon: RosterSubIcon,
+                          },
+                          {
+                            id: "lineups",
+                            label: "Lineups",
+                            icon: LineupsSubIcon,
+                          },
+                        ]}
+                      />
+                    }
                   >
-                    {myTeam && selectedDivision ? (
-                      <TeamLineupTemplates
-                        divisionId={selectedDivision.id}
+                    <div
+                      className={
+                        myTeamSubTab === "standing" ? "min-w-0" : "hidden"
+                      }
+                      aria-hidden={myTeamSubTab !== "standing"}
+                    >
+                      {myStandingCells ? (
+                        <TeamStandingSummary
+                          cells={myStandingCells}
+                          teamName={prefs.teamName}
+                        />
+                      ) : (
+                        <EmptyState
+                          title="Standing unavailable"
+                          body="Team standings will show here once the division report loads."
+                        />
+                      )}
+                    </div>
+
+                    <div
+                      className={
+                        myTeamSubTab === "roster"
+                          ? "min-w-0 space-y-3"
+                          : "hidden"
+                      }
+                      aria-hidden={myTeamSubTab !== "roster"}
+                    >
+                      <PanelHeader
+                        title="Roster"
+                        description={
+                          myTeam?.players.length
+                            ? `${myTeam.players.length} rostered · avg Fargo ${Math.round(
+                                myTeam.players.reduce(
+                                  (sum, player) => sum + player.fargoRating,
+                                  0,
+                                ) / myTeam.players.length,
+                              )}`
+                            : "Player statistics and Fargo ratings"
+                        }
+                        action={
+                          myTeam?.players.length ? (
+                            <PanelHeaderCount
+                              label="Players"
+                              value={String(myTeam.players.length)}
+                            />
+                          ) : undefined
+                        }
+                      />
+                      <TeamDetail
+                        teamName={prefs.teamName}
                         team={myTeam}
-                        slots={scoringFormat.playersPerTeam}
+                        playersByTeam={playersByTeam}
+                        isMyTeam
                         embedded
                       />
-                    ) : (
-                      <div className="space-y-3">
-                        <PanelHeader
-                          title="Lineups"
-                          description={`Save ${scoringFormat.playersPerTeam}-player orders for league night. Load them from Handicap or Score.`}
+                    </div>
+
+                    <div
+                      className={
+                        myTeamSubTab === "lineups" ? "min-w-0" : "hidden"
+                      }
+                      aria-hidden={myTeamSubTab !== "lineups"}
+                    >
+                      {myTeam && selectedDivision ? (
+                        <TeamLineupTemplates
+                          divisionId={selectedDivision.id}
+                          team={myTeam}
+                          slots={scoringFormat.playersPerTeam}
+                          embedded
                         />
-                        <EmptyState
-                          title="Team roster needed"
-                          body="Lineup templates need your team’s roster from this division."
-                        />
-                      </div>
-                    )}
-                  </div>
-                </SubTabCard>
+                      ) : (
+                        <div className="space-y-3">
+                          <PanelHeader
+                            title="Lineups"
+                            description={`Save ${scoringFormat.playersPerTeam}-player orders for league night. Load them from Handicap or Score.`}
+                          />
+                          <EmptyState
+                            title="Team roster needed"
+                            body="Lineup templates need your team’s roster from this division."
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </SubTabCard>
+                </section>
               ) : (
                 <EmptyState
                   title="Set your team"
