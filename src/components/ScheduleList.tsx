@@ -111,32 +111,8 @@ export function ScheduleList({
   }
 
   return (
-    <section className="animate-rise">
-      <SubTabCard
-        className="rounded-none border-0 shadow-none"
-        tabs={
-          <IconSubTabs
-            aria-label="Schedule time range"
-            value={view}
-            onChange={setView}
-            className="rounded-none border-0 bg-transparent p-0"
-            items={[
-              {
-                id: "upcoming",
-                label: "Upcoming",
-                icon: UpcomingSubIcon,
-                count: upcomingMatches.length,
-              },
-              {
-                id: "past",
-                label: "Past",
-                icon: PastSubIcon,
-                count: pastMatches.length,
-              },
-            ]}
-          />
-        }
-      >
+    <section className="animate-rise space-y-3">
+      <div className="px-3 pt-3 sm:px-4 sm:pt-4">
         <PanelHeader
           title="Your schedule"
           description={
@@ -162,6 +138,32 @@ export function ScheduleList({
             />
           }
         />
+      </div>
+      <SubTabCard
+        className="rounded-none border-0 shadow-none"
+        tabs={
+          <IconSubTabs
+            aria-label="Schedule time range"
+            value={view}
+            onChange={setView}
+            className="rounded-none border-0 bg-transparent p-0"
+            items={[
+              {
+                id: "upcoming",
+                label: "Upcoming",
+                icon: UpcomingSubIcon,
+                count: upcomingMatches.length,
+              },
+              {
+                id: "past",
+                label: "Past",
+                icon: PastSubIcon,
+                count: pastMatches.length,
+              },
+            ]}
+          />
+        }
+      >
         {!visibleMatches.length ? (
           <EmptyState
             title={
