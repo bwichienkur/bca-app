@@ -241,6 +241,28 @@ function scoringSessionLmsId(user: AuthUser | null): string {
   return (user.lmsId || "").trim();
 }
 
+function scoringSessionName(user: AuthUser | null): string {
+  if (!user) return "";
+  if (user.impersonating && user.actor) {
+    return (user.actor.name || "").trim();
+  }
+  return (user.name || "").trim();
+}
+
+function stampGameScorer(
+  game: GameScoreState,
+  lmsId: string,
+  name: string,
+): GameScoreState {
+  const scoredBy = lmsId.trim();
+  if (!scoredBy) return game;
+  return {
+    ...game,
+    scoredBy,
+    scoredByName: name.trim() || null,
+  };
+}
+
 function resolveScorerName(
   match: ScoringMatchDetail,
   updatedBy: string | null | undefined,
@@ -1792,6 +1814,7 @@ export function MatchScoring({
               game={padGame}
               scoringFormat={scoringFormat}
               scoringLmsId={scoringSessionLmsId(user)}
+              scoringName={scoringSessionName(user)}
               roundNumber={activeGame?.roundNumber ?? activeRound}
               gameIndex={activeGame?.gameIndex ?? 1}
               onClose={() => setActiveGame(null)}
@@ -2793,6 +2816,7 @@ function ScorePad({
   game,
   scoringFormat,
   scoringLmsId,
+  scoringName,
   roundNumber,
   gameIndex,
   onClose,
@@ -2805,6 +2829,7 @@ function ScorePad({
   scoringFormat: LeagueScoringFormat;
   /** Real scoring-session LMS id used for shared-draft authorship. */
   scoringLmsId: string;
+  scoringName: string;
   roundNumber: number;
   gameIndex: number;
   onClose: () => void;
@@ -2924,7 +2949,9 @@ function ScorePad({
     next: GameScoreState,
     remoteUpdatedAt?: string | null,
   ) => {
-    onSave(next, { remoteUpdatedAt });
+    onSave(stampGameScorer(next, scoringLmsId, scoringName), {
+      remoteUpdatedAt,
+    });
   };
 
   const saveGame = () => {
@@ -2937,7 +2964,9 @@ function ScorePad({
         if (remote.shared) {
           const remoteGame =
             remote.draft?.games[gameKey(roundNumber, gameIndex)];
-          const remoteAuthor = (remote.updatedBy || "").trim();
+          // Per-game author only — draft updatedBy flips after one overwrite
+          // and must not suppress discrepancy checks on other games.
+          const remoteAuthor = (remoteGame?.scoredBy || "").trim();
           const sameAuthor =
             Boolean(scoringLmsId) &&
             Boolean(remoteAuthor) &&
@@ -2951,8 +2980,10 @@ function ScorePad({
             setScoreConflict({
               remoteGame,
               remoteUpdatedAt: remote.draft?.updatedAt ?? null,
-              remoteUpdatedBy: remote.updatedBy ?? null,
-              remoteUpdatedByName: remote.updatedByName ?? null,
+              remoteUpdatedBy:
+                remoteGame.scoredBy ?? remote.updatedBy ?? null,
+              remoteUpdatedByName:
+                remoteGame.scoredByName ?? remote.updatedByName ?? null,
             });
             return;
           }

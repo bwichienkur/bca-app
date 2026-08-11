@@ -90,6 +90,10 @@ export type GameScoreState = {
    */
   raceTargetOne?: number | null;
   raceTargetTwo?: number | null;
+  /** LMS id of whoever last saved this game's result (discrepancy checks). */
+  scoredBy?: string | null;
+  /** Display name for scoredBy (best-effort). */
+  scoredByName?: string | null;
 };
 
 export type ScoringDraft = {
