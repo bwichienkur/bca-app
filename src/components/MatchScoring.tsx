@@ -66,6 +66,11 @@ import {
 } from "@/lib/format-score-preview";
 import { loadTeamLineupPresets } from "@/lib/lineup-sync";
 import { canAccessLmsClient } from "@/lib/lms-access";
+import {
+  comboNightHint,
+  comboPartLabel,
+  findKnownComboForDivisionName,
+} from "@/lib/division-combos";
 import { rankForTeam, teamRanksFromReport } from "@/lib/standings";
 import type { LineupPreset, TableReport } from "@/lib/types";
 import {
@@ -93,6 +98,9 @@ import { SubTabCard } from "./SubTabCard";
 type MatchScoringProps = {
   divisionId: string | null;
   divisionName: string | null;
+  /** Sister LMS division for a combined night (e.g. Beyond Teams). */
+  linkedDivisionId?: string | null;
+  linkedDivisionName?: string | null;
   teamId: string | null;
   teamName: string | null;
   /** Explicit prefs format id, or null for auto. */
@@ -283,6 +291,8 @@ function resolveScorerName(
 export function MatchScoring({
   divisionId,
   divisionName,
+  linkedDivisionId = null,
+  linkedDivisionName = null,
   teamId,
   teamName,
   scoringFormatId = null,
@@ -332,12 +342,17 @@ export function MatchScoring({
   const pushSeqRef = useRef(0);
   const sheetLockedRef = useRef(false);
 
-  const matchesUrl = (divId: string, selectedTeamId: string | null) => {
+  const matchesUrl = (
+    divId: string,
+    selectedTeamId: string | null,
+    selectedTeamName: string | null,
+  ) => {
     const params = new URLSearchParams({
       divisionId: divId,
       mine: "0",
     });
     if (selectedTeamId) params.set("teamId", selectedTeamId);
+    if (selectedTeamName) params.set("teamName", selectedTeamName);
     return `/api/scoring/matches?${params.toString()}`;
   };
 
@@ -433,14 +448,25 @@ export function MatchScoring({
       setLoadingMatches(true);
       setListError(null);
       try {
-        const data = await fetchJson<{ matches: ScoringMatchSummary[] }>(
-          matchesUrl(divisionId!, teamId),
+        const urls = [matchesUrl(divisionId!, teamId, teamName)];
+        if (linkedDivisionId) {
+          urls.push(matchesUrl(linkedDivisionId, null, teamName));
+        }
+        const results = await Promise.all(
+          urls.map((url) =>
+            fetchJson<{ matches: ScoringMatchSummary[] }>(url),
+          ),
         );
         if (cancelled) return;
-        setMatches(data.matches);
+        const byId = new Map<string, ScoringMatchSummary>();
+        for (const data of results) {
+          for (const match of data.matches) byId.set(match.id, match);
+        }
+        const merged = Array.from(byId.values());
+        setMatches(merged);
         try {
           const remote = await fetchRemoteDraftSummaries(
-            data.matches.map((item) => item.id),
+            merged.map((item) => item.id),
           );
           if (!cancelled) {
             setSharedDrafts(remote.shared);
@@ -463,7 +489,7 @@ export function MatchScoring({
     return () => {
       cancelled = true;
     };
-  }, [user, divisionId, teamId]);
+  }, [user, divisionId, linkedDivisionId, teamId, teamName]);
 
   useEffect(() => {
     if (!divisionId) {
@@ -512,7 +538,15 @@ export function MatchScoring({
     const rows = matches.filter(
       (match) => matchNightKey(match.datePlayed) === selectedNightKey,
     );
+    const partOrder = (name: string) => {
+      const label = (comboPartLabel(name) ?? "").toLowerCase();
+      if (label === "singles") return 0;
+      if (label === "teams") return 1;
+      return 2;
+    };
     rows.sort((a, b) => {
+      const part = partOrder(a.divisionName) - partOrder(b.divisionName);
+      if (part !== 0) return part;
       const aMine = a.mySide != null ? 0 : 1;
       const bMine = b.mySide != null ? 0 : 1;
       if (aMine !== bMine) return aMine - bMine;
@@ -544,12 +578,23 @@ export function MatchScoring({
     };
     const refreshMatches = async () => {
       try {
-        const data = await fetchJson<{ matches: ScoringMatchSummary[] }>(
-          matchesUrl(divisionId, teamId),
+        const urls = [matchesUrl(divisionId, teamId, teamName)];
+        if (linkedDivisionId) {
+          urls.push(matchesUrl(linkedDivisionId, null, teamName));
+        }
+        const results = await Promise.all(
+          urls.map((url) =>
+            fetchJson<{ matches: ScoringMatchSummary[] }>(url),
+          ),
         );
         if (cancelled) return;
-        setMatches(data.matches);
-        await refreshScores(data.matches.map((item) => item.id));
+        const byId = new Map<string, ScoringMatchSummary>();
+        for (const data of results) {
+          for (const match of data.matches) byId.set(match.id, match);
+        }
+        const merged = Array.from(byId.values());
+        setMatches(merged);
+        await refreshScores(merged.map((item) => item.id));
       } catch {
         // keep last known board
       }
@@ -565,7 +610,15 @@ export function MatchScoring({
       window.clearInterval(scoreTimer);
       window.clearInterval(matchTimer);
     };
-  }, [user, divisionId, teamId, view.mode, nightMatches]);
+  }, [
+    user,
+    divisionId,
+    linkedDivisionId,
+    teamId,
+    teamName,
+    view.mode,
+    nightMatches,
+  ]);
 
   const openMatch = async (matchId: string) => {
     setLoadingMatch(true);
@@ -1049,13 +1102,24 @@ export function MatchScoring({
     setMatch(null);
     setDraft(null);
     if (divisionId) {
-      const data = await fetchJson<{ matches: ScoringMatchSummary[] }>(
-        matchesUrl(divisionId, teamId),
+      const urls = [matchesUrl(divisionId, teamId, teamName)];
+      if (linkedDivisionId) {
+        urls.push(matchesUrl(linkedDivisionId, null, teamName));
+      }
+      const results = await Promise.all(
+        urls.map((url) =>
+          fetchJson<{ matches: ScoringMatchSummary[] }>(url),
+        ),
       );
-      setMatches(data.matches);
+      const byId = new Map<string, ScoringMatchSummary>();
+      for (const data of results) {
+        for (const item of data.matches) byId.set(item.id, item);
+      }
+      const merged = Array.from(byId.values());
+      setMatches(merged);
       try {
         const remote = await fetchRemoteDraftSummaries(
-          data.matches.map((item) => item.id),
+          merged.map((item) => item.id),
         );
         setSharedDrafts(remote.shared);
         setDraftSummaries(remote.summaries);
@@ -1979,6 +2043,12 @@ export function MatchScoring({
       : nightVenues.length > 1
         ? `${nightVenues.length} venues`
         : null;
+  const linkedCombo =
+    linkedDivisionId
+      ? findKnownComboForDivisionName(divisionName) ??
+        findKnownComboForDivisionName(linkedDivisionName)
+      : null;
+  const nightHint = comboNightHint(linkedCombo);
   return (
     <section className="animate-rise space-y-3 p-3 sm:p-4">
       <PanelHeader
@@ -1991,6 +2061,15 @@ export function MatchScoring({
             ) : (
               "your division"
             )}
+            {linkedDivisionName ? (
+              <>
+                {" "}
+                +{" "}
+                <span className="font-medium text-[var(--ink)]">
+                  {linkedDivisionName}
+                </span>
+              </>
+            ) : null}
             {teamName ? (
               <>
                 {" "}
@@ -2001,6 +2080,12 @@ export function MatchScoring({
             {" · "}
             {formatScoringSummary(scoringFormat)}
             {sharedDrafts ? " · live sync on" : null}
+            {nightHint ? (
+              <>
+                <br />
+                <span className="text-[var(--muted)]">{nightHint}</span>
+              </>
+            ) : null}
           </>
         }
         action={
@@ -2115,6 +2200,11 @@ export function MatchScoring({
                     }}
                     homeName={item.teamOneName}
                     awayName={item.teamTwoName}
+                    badge={
+                      linkedDivisionId
+                        ? comboPartLabel(item.divisionName)
+                        : null
+                    }
                     boardStatus={boardStatus}
                     isMyMatch={isMyMatch}
                     homeRounds={summary?.teamOneRoundWins ?? 0}

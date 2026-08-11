@@ -1,3 +1,4 @@
+import { canonicalizeTeamKey } from "./division-combos";
 import { normalizeTeamName } from "./matchups";
 import type { TableReport } from "./types";
 
@@ -23,11 +24,16 @@ export function teamRanksFromReport(
   if (nameIndex < 0) return ranks;
 
   report.rows.forEach((row, rowIndex) => {
-    const name = normalizeTeamName(row[nameIndex] ?? "");
-    if (!name) return;
-    const raw =
+    const raw = (row[nameIndex] ?? "").trim();
+    if (!raw) return;
+    const name = normalizeTeamName(raw);
+    const key = canonicalizeTeamKey(raw);
+    const rankRaw =
       rankIndex >= 0 ? (row[rankIndex] ?? "").trim() : String(rowIndex + 1);
-    if (raw) ranks.set(name, raw.replace(/^#/, ""));
+    if (!rankRaw) return;
+    const rank = rankRaw.replace(/^#/, "");
+    if (name) ranks.set(name, rank);
+    if (key) ranks.set(key, rank);
   });
   return ranks;
 }
@@ -37,5 +43,9 @@ export function rankForTeam(
   teamName: string | null | undefined,
 ): string | null {
   if (!teamName) return null;
-  return ranks.get(normalizeTeamName(teamName)) ?? null;
+  return (
+    ranks.get(normalizeTeamName(teamName)) ??
+    ranks.get(canonicalizeTeamKey(teamName)) ??
+    null
+  );
 }

@@ -21,6 +21,8 @@ type MatchListCardProps = {
   /** Division standing rank labels, e.g. "3". */
   homeRank?: string | null;
   awayRank?: string | null;
+  /** Optional part badge (Singles / Teams) for combined nights. */
+  badge?: string | null;
   onClick?: () => void;
   className?: string;
   style?: CSSProperties;
@@ -259,6 +261,7 @@ export function MatchListCard({
   emphasizeAway,
   homeRank = null,
   awayRank = null,
+  badge = null,
   onClick,
   className,
   style,
@@ -315,6 +318,11 @@ export function MatchListCard({
         />
         <div className="relative flex items-center gap-2 px-3 py-1.5">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+            {badge ? (
+              <span className="rounded-[var(--radius)] bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white ring-1 ring-white/20">
+                {badge}
+              </span>
+            ) : null}
             {isMyMatch ? (
               <span className="rounded-[var(--radius)] bg-white px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--felt-soft)]">
                 My match
