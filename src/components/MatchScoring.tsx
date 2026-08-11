@@ -65,6 +65,7 @@ import {
   type PlayerNightStat,
 } from "@/lib/format-score-preview";
 import { loadTeamLineupPresets } from "@/lib/lineup-sync";
+import { canAccessLmsClient } from "@/lib/lms-access";
 import { rankForTeam, teamRanksFromReport } from "@/lib/standings";
 import type { LineupPreset, TableReport } from "@/lib/types";
 import {
@@ -318,8 +319,11 @@ export function MatchScoring({
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [syncNote, setSyncNote] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<
-    null | "reset" | "submit"
+    null | "reset" | "submit" | "unlock-resubmit"
   >(null);
+  /** After confirm, allow editing a match LMS already has as played. */
+  const [resubmitUnlocked, setResubmitUnlocked] = useState(false);
+  const resubmitUnlockedRef = useRef(false);
   const [, startTransition] = useTransition();
   const saveTimerRef = useRef<number | null>(null);
   const dirtyRef = useRef(false);
@@ -340,6 +344,10 @@ export function MatchScoring({
   useEffect(() => {
     draftRef.current = draft;
   }, [draft]);
+
+  useEffect(() => {
+    resubmitUnlockedRef.current = resubmitUnlocked;
+  }, [resubmitUnlocked]);
 
   useEffect(() => {
     if (!user) {
@@ -610,11 +618,16 @@ export function MatchScoring({
         }
       }
 
-      const canScore = data.match.mySide != null;
+      const canManageAnySheet =
+        Boolean(user) &&
+        canAccessLmsClient(user) &&
+        !user?.impersonating;
+      const canEditSheet = data.match.mySide != null || canManageAnySheet;
       // Only LMS hasBeenPlayed is a hard lock. Tableside submittedAt without
       // LMS confirmation must stay editable so the sheet can be re-sent.
       const lmsSubmitted = Boolean(data.match.hasBeenPlayed);
       const falseTablesideLock = Boolean(submittedAt && !lmsSubmitted);
+      setResubmitUnlocked(false);
       if (falseTablesideLock) {
         submittedAt = null;
         setSyncNote(
@@ -629,7 +642,7 @@ export function MatchScoring({
         setSyncNote("This match was already submitted from Tableside.");
       }
       const submittedLocked = lmsSubmitted;
-      const locked = submittedLocked || !canScore;
+      const locked = submittedLocked || !canEditSheet;
       sheetLockedRef.current = locked;
 
       const formatForMatch = resolveScoringFormat({
@@ -760,7 +773,12 @@ export function MatchScoring({
           setSharedDrafts(true);
           // Only LMS hasBeenPlayed is a hard lock. Ignore Tableside-only
           // submittedAt so a false lock cannot re-lock an open sheet.
-          if (remote.submittedAt && activeMatch.hasBeenPlayed) {
+          // Don't re-lock while the user unlocked for an intentional resubmit.
+          if (
+            remote.submittedAt &&
+            activeMatch.hasBeenPlayed &&
+            !resubmitUnlockedRef.current
+          ) {
             sheetLockedRef.current = true;
           } else if (remote.submittedAt && !activeMatch.hasBeenPlayed) {
             void fetch("/api/scoring/submit/unlock", {
@@ -1012,6 +1030,7 @@ export function MatchScoring({
     // Keep local + shared drafts so the night board still shows scores.
     saveDraft(currentDraft);
     sheetLockedRef.current = true;
+    setResubmitUnlocked(false);
     setSubmitMessage(
       via === "operator"
         ? "Match submitted via league operator score entry."
@@ -1055,12 +1074,15 @@ export function MatchScoring({
       setConfirmDialog(null);
       return;
     }
-    if (match.mySide == null) {
+    const canManageAnySheet = canAccessLmsClient(user);
+    const canEditSheet = match.mySide != null || canManageAnySheet;
+    if (!canEditSheet) {
       setSheetError("You can only submit scores for your team’s matches.");
       setConfirmDialog(null);
       return;
     }
-    if (sheetLockedRef.current || match.hasBeenPlayed) {
+    const isResubmit = Boolean(match.hasBeenPlayed);
+    if (sheetLockedRef.current || (isResubmit && !resubmitUnlocked)) {
       setSheetError("This scoresheet is already submitted and locked.");
       setConfirmDialog(null);
       return;
@@ -1073,6 +1095,13 @@ export function MatchScoring({
     setSubmitNeedsReview(false);
     const currentMatch = match;
     const currentDraft = draft;
+    // Resubmits must go through league operator entry — player verticalmatch
+    // rejects already-scored matches. LO / Bright editing another team's sheet
+    // also uses operator entry.
+    const preferOperator =
+      Boolean(options?.preferOperator) ||
+      isResubmit ||
+      match.mySide == null;
     try {
       const payload = buildVerticalMatchPayload({
         match: currentMatch,
@@ -1084,7 +1113,8 @@ export function MatchScoring({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           payload,
-          preferOperator: Boolean(options?.preferOperator),
+          preferOperator,
+          resubmit: isResubmit,
         }),
       });
       const result = (await response.json().catch(() => null)) as {
@@ -1110,7 +1140,7 @@ export function MatchScoring({
       }
 
       setSubmitNeedsReview(true);
-      if (result?.stuck || options?.preferOperator) {
+      if (result?.stuck || preferOperator) {
         setSubmitMessage(
           operatorSubmitAvailable || result?.operatorConfigured
             ? "Player submit is stuck in LMS (scores not recorded). Try league operator submit, or keep this draft."
@@ -1187,10 +1217,15 @@ export function MatchScoring({
 
   if (view.mode !== "list" && match && draft) {
     const reviewMode = view.mode === "review";
-    const canScore = match.mySide != null;
+    const canManageAnySheet =
+      Boolean(user) &&
+      canAccessLmsClient(user) &&
+      !user?.impersonating;
+    const canEditSheet = match.mySide != null || canManageAnySheet;
     // Lock only when LMS/Fargo has the match as played — not on Redis submittedAt.
-    const submittedLocked = Boolean(match.hasBeenPlayed);
-    const viewOnly = !canScore;
+    const isResubmit = Boolean(match.hasBeenPlayed);
+    const submittedLocked = isResubmit && !resubmitUnlocked;
+    const viewOnly = !canEditSheet;
     const sheetLocked = submittedLocked || viewOnly;
     sheetLockedRef.current = sheetLocked;
     return (
@@ -1363,10 +1398,23 @@ export function MatchScoring({
             context if this should be yours.
           </p>
         ) : submittedLocked ? (
+          <div className="space-y-2 rounded-[var(--radius)] border border-[var(--amber)]/35 bg-[color-mix(in_srgb,var(--amber)_12%,transparent)] px-3 py-2 text-sm text-[var(--amber)]">
+            <p>
+              This scoresheet has been submitted to LMS. Editing is locked —
+              unlock to fix a mistake, then resubmit.
+            </p>
+            <button
+              type="button"
+              onClick={() => setConfirmDialog("unlock-resubmit")}
+              className="rounded-full border border-[var(--amber)]/45 bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)]"
+            >
+              Edit &amp; resubmit
+            </button>
+          </div>
+        ) : isResubmit && resubmitUnlocked ? (
           <p className="rounded-[var(--radius)] border border-[var(--amber)]/35 bg-[color-mix(in_srgb,var(--amber)_12%,transparent)] px-3 py-2 text-sm text-[var(--amber)]">
-            This scoresheet has been submitted
-            {match.hasBeenPlayed ? " to LMS" : ""}. Editing is locked — you can
-            still review lineups and scores.
+            Editing unlocked for resubmit. Changes stay in Tableside until you
+            review and resubmit — that overwrites the scores in LMS.
           </p>
         ) : null}
 
@@ -1376,6 +1424,7 @@ export function MatchScoring({
             draft={draft}
             submitting={submitting}
             locked={sheetLocked}
+            isResubmit={isResubmit && resubmitUnlocked}
             onEdit={() => setView({ mode: "sheet", matchId: match.id })}
             onSubmit={() => setConfirmDialog("submit")}
           />
@@ -1777,11 +1826,22 @@ export function MatchScoring({
 
               <div className="flex flex-wrap gap-2 pt-1">
                 {sheetLocked ? (
-                  <p className="text-sm text-[var(--muted)]">
-                    {viewOnly
-                      ? "View only — scoring is for your team’s matches."
-                      : "Scoresheet is locked after submit."}
-                  </p>
+                  <div className="space-y-2">
+                    <p className="text-sm text-[var(--muted)]">
+                      {viewOnly
+                        ? "View only — scoring is for your team’s matches."
+                        : "Scoresheet is locked after submit."}
+                    </p>
+                    {submittedLocked && canEditSheet ? (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDialog("unlock-resubmit")}
+                        className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white"
+                      >
+                        Edit &amp; resubmit
+                      </button>
+                    ) : null}
+                  </div>
                 ) : (
                   <>
                     <button
@@ -1791,7 +1851,9 @@ export function MatchScoring({
                       }
                       className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white"
                     >
-                      Review & submit
+                      {isResubmit && resubmitUnlocked
+                        ? "Review & resubmit"
+                        : "Review & submit"}
                     </button>
                     <button
                       type="button"
@@ -1852,15 +1914,36 @@ export function MatchScoring({
             title={
               confirmDialog === "reset"
                 ? "Reset this scoresheet?"
-                : "Submit to LMS?"
+                : confirmDialog === "unlock-resubmit"
+                  ? "Edit submitted scoresheet?"
+                  : isResubmit && resubmitUnlocked
+                    ? "Resubmit to LMS?"
+                    : "Submit to LMS?"
             }
             body={
               confirmDialog === "reset"
                 ? "All lineups and scores for this match will be cleared. This cannot be undone."
-                : `Send the scoresheet for ${match.teamOneName.trim()} vs ${match.teamTwoName.trim()} to LMS? This cannot be undone from Tableside.`
+                : confirmDialog === "unlock-resubmit"
+                  ? `Unlock editing for ${match.teamOneName.trim()} vs ${match.teamTwoName.trim()}? After you fix the sheet, you’ll need to resubmit to overwrite the scores already in LMS.`
+                  : isResubmit && resubmitUnlocked
+                    ? `Overwrite the scores already recorded in LMS for ${match.teamOneName.trim()} vs ${match.teamTwoName.trim()}? This cannot be undone from Tableside.`
+                    : `Send the scoresheet for ${match.teamOneName.trim()} vs ${match.teamTwoName.trim()} to LMS? This cannot be undone from Tableside.`
             }
-            confirmLabel={confirmDialog === "reset" ? "Reset sheet" : "Submit"}
-            confirmTone={confirmDialog === "reset" ? "danger" : "primary"}
+            confirmLabel={
+              confirmDialog === "reset"
+                ? "Reset sheet"
+                : confirmDialog === "unlock-resubmit"
+                  ? "Unlock for editing"
+                  : isResubmit && resubmitUnlocked
+                    ? "Resubmit"
+                    : "Submit"
+            }
+            confirmTone={
+              confirmDialog === "reset" ||
+              (confirmDialog === "submit" && isResubmit && resubmitUnlocked)
+                ? "danger"
+                : "primary"
+            }
             busy={confirmDialog === "submit" && submitting}
             onCancel={() => {
               if (submitting) return;
@@ -1868,7 +1951,11 @@ export function MatchScoring({
             }}
             onConfirm={() => {
               if (confirmDialog === "reset") resetSheet();
-              else void submitMatch();
+              else if (confirmDialog === "unlock-resubmit") {
+                setResubmitUnlocked(true);
+                setConfirmDialog(null);
+                setSyncNote(null);
+              } else void submitMatch();
             }}
           />
         ) : null}
@@ -3625,6 +3712,7 @@ function ReviewPanel({
   draft,
   submitting,
   locked = false,
+  isResubmit = false,
   onEdit,
   onSubmit,
 }: {
@@ -3632,6 +3720,7 @@ function ReviewPanel({
   draft: ScoringDraft;
   submitting: boolean;
   locked?: boolean;
+  isResubmit?: boolean;
   onEdit: () => void;
   onSubmit: () => void;
 }) {
@@ -3655,7 +3744,11 @@ function ReviewPanel({
           Review
         </p>
         <h4 className="mt-1 font-[family-name:var(--font-display)] text-xl text-[var(--felt-deep)]">
-          {locked ? "Submitted scoresheet" : "Ready to send to LMS?"}
+          {locked
+            ? "Submitted scoresheet"
+            : isResubmit
+              ? "Ready to resubmit to LMS?"
+              : "Ready to send to LMS?"}
         </h4>
         <p className="mt-1 text-sm text-[var(--muted)]">
           Rounds {roundWins.teamOne}–{roundWins.teamTwo} · games{" "}
@@ -3751,13 +3844,19 @@ function ReviewPanel({
             onClick={onSubmit}
             className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
           >
-            {submitting ? "Submitting…" : "Submit to LMS"}
+            {submitting
+              ? isResubmit
+                ? "Resubmitting…"
+                : "Submitting…"
+              : isResubmit
+                ? "Resubmit to LMS"
+                : "Submit to LMS"}
           </button>
         ) : null}
       </div>
       {locked ? (
         <p className="text-xs text-[var(--muted)]">
-          Editing and resubmit are disabled after a scoresheet is submitted.
+          Unlock the sheet from the scoresheet view to edit and resubmit.
         </p>
       ) : incomplete ? (
         <p className="text-xs text-[var(--muted)]">
@@ -3766,8 +3865,9 @@ function ReviewPanel({
         </p>
       ) : (
         <p className="text-xs text-[var(--muted)]">
-          Next step asks you to confirm, then sends through the same LMS
-          endpoint as the official BCAPL scoring app.
+          {isResubmit
+            ? "Next step asks you to confirm, then overwrites the scores already in LMS."
+            : "Next step asks you to confirm, then sends through the same LMS endpoint as the official BCAPL scoring app."}
         </p>
       )}
     </div>

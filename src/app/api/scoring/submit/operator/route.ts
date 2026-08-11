@@ -44,6 +44,8 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as {
       payload?: Record<string, unknown>;
+      /** When true, rewrite scores even if LMS already has the match played. */
+      resubmit?: boolean;
     };
     if (!body.payload || typeof body.payload !== "object") {
       return NextResponse.json(
@@ -62,13 +64,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Skip work if LMS already has the match played.
+    // Skip work if LMS already has the match played — unless this is an
+    // intentional resubmit that should overwrite the recorded scores.
     const alreadyPlayed = await verifyMatchPlayedWithPlayerToken(
       session.accessToken,
       matchId,
       { attempts: 1 },
     );
-    if (alreadyPlayed) {
+    if (alreadyPlayed && !body.resubmit) {
       if (isDraftStoreConfigured()) {
         await markSharedDraftSubmitted(
           matchId,
