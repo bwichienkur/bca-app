@@ -16,6 +16,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   divisionName: null,
   linkedDivisionId: null,
   linkedDivisionName: null,
+  divisionLinkId: null,
   playerId: null,
   playerName: null,
   teamId: null,

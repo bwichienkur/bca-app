@@ -19,7 +19,12 @@ import {
 import { DateField } from "./DateField";
 import {
   IconSubTabs,
+  LeaguesSubIcon,
+  LineupsSubIcon,
+  MatchupSubIcon,
   OverviewSubIcon,
+  RoundsSubIcon,
+  StatsSubIcon,
   type IconSubTabItem,
 } from "./IconSubTabs";
 import { LoadingState } from "./LoadingState";
@@ -30,7 +35,12 @@ import {
   PanelHeader,
 } from "./PanelHeader";
 import { SearchField } from "./SearchField";
-import { LmsDivisionSettingsForm } from "./LmsDivisionSettingsForm";
+import { BackButton } from "./BackButton";
+import { DivisionLinkPanel } from "./DivisionLinkPanel";
+import {
+  LmsDivisionSettingsForm,
+  type DivisionSettingsSection,
+} from "./LmsDivisionSettingsForm";
 import { LmsScoresheetStudio } from "./LmsScoresheetStudio";
 import { SectionCard } from "./SectionCard";
 import { SelectField } from "./SelectField";
@@ -44,6 +54,8 @@ type LmsSubTab =
   | "scoresheet"
   | "playoff"
   | "division";
+
+type SettingsPageTab = DivisionSettingsSection | "link";
 
 type Screen =
   | { type: "list" }
@@ -538,6 +550,7 @@ export function LmsOperator({
 }: LmsOperatorProps) {
   const [subTab, setSubTab] = useState<LmsSubTab>("home");
   const [screen, setScreen] = useState<Screen>({ type: "list" });
+  const [settingsTab, setSettingsTab] = useState<SettingsPageTab>("general");
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
 
@@ -1184,6 +1197,7 @@ export function LmsOperator({
     setSectionError(null);
     setSettings(null);
     setSectionLoading(true);
+    setSettingsTab("general");
     setOpDivisionId(division.id);
     setOpDivisionName(division.name);
     // Do not change subTab here — the subTab effect resets screen to list.
@@ -1343,7 +1357,7 @@ export function LmsOperator({
     "scoresheet",
   ].includes(subTab);
 
-  /* ---------- Edit / create popup ---------- */
+  /* ---------- Edit / create popup (not used for division settings page) ---------- */
   const pageTitle =
     screen.type === "edit-location"
       ? screen.id
@@ -1361,16 +1375,14 @@ export function LmsOperator({
             ? screen.matchId
               ? "Edit match"
               : "Add match"
-            : screen.type === "edit-settings"
-              ? "Edit division"
-              : screen.type === "create-division"
-                ? "Add division"
-                : screen.type === "create-playoff"
-                  ? "Add playoff"
-                  : "";
+            : screen.type === "create-division"
+              ? "Add division"
+              : screen.type === "create-playoff"
+                ? "Add playoff"
+                : "";
 
   const editPopup =
-    screen.type === "list" ? null : (
+    screen.type === "list" || screen.type === "edit-settings" ? null : (
       <div
         className="fixed inset-0 z-[80] overflow-y-auto bg-black/55"
         role="dialog"
@@ -1390,7 +1402,7 @@ export function LmsOperator({
         <div
           className={[
             "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]",
-            screen.type === "edit-settings" ? "max-w-2xl" : "max-w-lg",
+            "max-w-lg",
           ].join(" ")}
         >
           <div className="flex items-start justify-between gap-3 border-b border-[var(--line)] px-4 py-3">
@@ -1914,61 +1926,6 @@ export function LmsOperator({
           </section>
         ) : null}
 
-        {screen.type === "edit-settings" ? (
-          <section className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3 sm:p-4">
-            <Field label="Division">
-              <SelectField
-                aria-label="Division being edited"
-                value={screen.divisionId}
-                options={divisions.map((d) => ({
-                  value: d.id,
-                  label: d.name,
-                }))}
-                onChange={(value) => {
-                  const division = divisions.find((d) => d.id === value);
-                  if (!division) return;
-                  setOpDivisionId(division.id);
-                  setOpDivisionName(division.name);
-                  setSettings(null);
-                  setSectionLoading(true);
-                  setScreen({ type: "edit-settings", divisionId: division.id });
-                }}
-              />
-            </Field>
-            {sectionLoading || !settings ? (
-              <LoadingState label="Loading settings…" />
-            ) : (
-              <LmsDivisionSettingsForm
-                settings={settings}
-                templates={templates}
-                busy={busy}
-                onChange={setSettings}
-                onSave={() =>
-                  void runAction(async () => {
-                    await fetchJson("/api/lms/operator/settings", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ settings }),
-                    });
-                    if (typeof settings.Name === "string") {
-                      setOpDivisionName(settings.Name);
-                      setDivisions((prev) =>
-                        prev.map((d) =>
-                          d.id === screen.divisionId
-                            ? { ...d, name: String(settings.Name) }
-                            : d,
-                        ),
-                      );
-                    }
-                    goList();
-                    await loadDivisions();
-                  }, "Settings saved.")
-                }
-              />
-            )}
-          </section>
-        ) : null}
-
         {screen.type === "create-division" ? (
           <section className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3 sm:p-4">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -2235,6 +2192,97 @@ export function LmsOperator({
     }
   })();
 
+  const settingsPageTabs: IconSubTabItem<SettingsPageTab>[] = [
+    { id: "general", label: "General", icon: OverviewSubIcon },
+    { id: "scoring", label: "Scoring", icon: StatsSubIcon },
+    { id: "handicap", label: "Handicap", icon: RoundsSubIcon },
+    { id: "format", label: "Format", icon: MatchupSubIcon },
+    { id: "link", label: "Link", icon: LeaguesSubIcon },
+  ];
+
+  /* ---------- Edit division full page (not a modal) ---------- */
+  if (screen.type === "edit-settings") {
+    return (
+      <div className="space-y-3">
+        <BackButton onClick={goList} label="Back to divisions" />
+        <PanelHeader
+          title={opDivisionName || "Edit division"}
+          description="LMS settings save to Fargo. The Link tab is Tableside-only and never writes to LMS."
+        />
+        {notice ? (
+          <p className="text-sm font-medium text-[var(--felt)]">{notice}</p>
+        ) : null}
+        {sectionError ? (
+          <p className="whitespace-pre-wrap text-sm text-[#b42318]">
+            {sectionError}
+          </p>
+        ) : null}
+        <section className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+          <div className="border-b border-[var(--line)] bg-[var(--surface-2)] p-0.5">
+            <IconSubTabs
+              aria-label="Division settings sections"
+              items={settingsPageTabs}
+              value={settingsTab}
+              onChange={setSettingsTab}
+              columns={5}
+              className="rounded-none border-0 bg-transparent p-0"
+            />
+          </div>
+          <div className="space-y-3 p-3 sm:p-4">
+            {settingsTab === "link" ? (
+              opLeagueId ? (
+                <DivisionLinkPanel
+                  leagueId={opLeagueId}
+                  divisionId={screen.divisionId}
+                  divisionName={opDivisionName || "Division"}
+                  divisions={divisions}
+                  busy={busy}
+                  onBusy={setBusy}
+                  onNotice={setNotice}
+                  onError={setSectionError}
+                />
+              ) : (
+                <p className="text-sm text-[var(--muted)]">
+                  Choose a league before linking divisions.
+                </p>
+              )
+            ) : sectionLoading || !settings ? (
+              <LoadingState label="Loading settings…" />
+            ) : (
+              <LmsDivisionSettingsForm
+                settings={settings}
+                templates={templates}
+                busy={busy}
+                section={settingsTab}
+                onChange={setSettings}
+                onSave={() =>
+                  void runAction(async () => {
+                    await fetchJson("/api/lms/operator/settings", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ settings }),
+                    });
+                    if (typeof settings.Name === "string") {
+                      setOpDivisionName(settings.Name);
+                      setDivisions((prev) =>
+                        prev.map((d) =>
+                          d.id === screen.divisionId
+                            ? { ...d, name: String(settings.Name) }
+                            : d,
+                        ),
+                      );
+                    }
+                    await loadDivisions();
+                  }, "Settings saved to LMS.")
+                }
+              />
+            )}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   /* ---------- Main list chrome ---------- */
   return (
     <div className="space-y-3">
@@ -2301,12 +2349,6 @@ export function LmsOperator({
                 const division = divisions.find((d) => d.id === value);
                 setOpDivisionId(value);
                 setOpDivisionName(division?.name ?? "");
-                // Switching division while editing settings reloads that form.
-                if (screen.type === "edit-settings" && value) {
-                  setSettings(null);
-                  setSectionLoading(true);
-                  setScreen({ type: "edit-settings", divisionId: value });
-                }
               }}
               placeholder={
                 !opLeagueId
@@ -2962,7 +3004,7 @@ export function LmsOperator({
         <section className="space-y-3">
           <SectionHeader
             title="Divisions"
-            description="Edit opens every setting for that division — general, scoring, handicap, and format."
+            description="Edit opens a full settings page — general, scoring, handicap, format, and Tableside division linking."
             onAdd={(event) => {
               capturePopupAnchor(event);
               setCreateSourceId(opDivisionId || divisions[0]?.id || "");

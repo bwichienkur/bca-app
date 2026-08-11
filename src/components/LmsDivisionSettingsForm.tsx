@@ -113,15 +113,30 @@ function SettingsBlock({
   title,
   description,
   children,
+  compact = false,
 }: {
   title: string;
   description?: string;
   children: ReactNode;
+  /** Hide title chrome when the parent page already tabs by section. */
+  compact?: boolean;
 }) {
   return (
-    <section className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3">
+    <section
+      className={
+        compact
+          ? "space-y-3"
+          : "space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3"
+      }
+    >
       <div>
-        <h3 className="font-[family-name:var(--font-display)] text-base font-semibold text-[var(--ink)]">
+        <h3
+          className={
+            compact
+              ? "text-sm font-semibold text-[var(--ink)]"
+              : "font-[family-name:var(--font-display)] text-base font-semibold text-[var(--ink)]"
+          }
+        >
           {title}
         </h3>
         {description ? (
@@ -259,16 +274,25 @@ function StandingsPicker({
   );
 }
 
+export type DivisionSettingsSection =
+  | "general"
+  | "scoring"
+  | "handicap"
+  | "format";
+
 export function LmsDivisionSettingsForm({
   settings,
   templates,
   busy,
+  section = null,
   onChange,
   onSave,
 }: {
   settings: Record<string, unknown>;
   templates: FormatTemplate[];
   busy: boolean;
+  /** When set, only that LMS settings section is shown (tabbed edit page). */
+  section?: DivisionSettingsSection | null;
   onChange: (next: Record<string, unknown>) => void;
   onSave: () => void;
 }) {
@@ -287,9 +311,13 @@ export function LmsDivisionSettingsForm({
   const patch = (partial: Record<string, unknown>) =>
     onChange({ ...settings, ...partial });
 
+  const show = (id: DivisionSettingsSection) => !section || section === id;
+
   return (
     <div className="space-y-3">
+      {show("general") ? (
       <SettingsBlock
+        compact={Boolean(section)}
         title="General"
         description="Name, game type, and division basics."
       >
@@ -380,8 +408,12 @@ export function LmsDivisionSettingsForm({
           </Field>
         </div>
       </SettingsBlock>
+      ) : null}
 
+      {show("scoring") ? (
+      <>
       <SettingsBlock
+        compact={Boolean(section)}
         title="Scoring"
         description="Points, rounds, and tie rules."
       >
@@ -477,6 +509,7 @@ export function LmsDivisionSettingsForm({
       </SettingsBlock>
 
       <SettingsBlock
+        compact={Boolean(section)}
         title="Reporting"
         description="Standings columns and display options."
       >
@@ -523,8 +556,12 @@ export function LmsDivisionSettingsForm({
           </div>
         </div>
       </SettingsBlock>
+      </>
+      ) : null}
 
+      {show("handicap") ? (
       <SettingsBlock
+        compact={Boolean(section)}
         title="Handicap"
         description="Fargo handicap mode and caps."
       >
@@ -602,8 +639,12 @@ export function LmsDivisionSettingsForm({
           </Field>
         </div>
       </SettingsBlock>
+      ) : null}
 
+      {show("format") ? (
+      <>
       <SettingsBlock
+        compact={Boolean(section)}
         title="Format"
         description="Match format template for this division. Use the Format tab to generate scoring + handicap recipes, then paste the template here."
       >
@@ -716,6 +757,8 @@ export function LmsDivisionSettingsForm({
           }}
         />
       ) : null}
+      </>
+      ) : null}
 
       <label className="flex items-center gap-2 text-sm">
         <input
@@ -732,7 +775,7 @@ export function LmsDivisionSettingsForm({
         disabled={busy}
         onClick={onSave}
       >
-        Save settings
+        Save settings to LMS
       </button>
     </div>
   );
