@@ -60,8 +60,25 @@ import {
   type ScoringPlayer,
   type WinAdornment,
 } from "@/lib/scoring";
+import {
+  tallyPlayerNight,
+  type PlayerNightStat,
+} from "@/lib/format-score-preview";
+import { loadTeamLineupPresets } from "@/lib/lineup-sync";
+import { rankForTeam, teamRanksFromReport } from "@/lib/standings";
+import type { LineupPreset, TableReport } from "@/lib/types";
+import {
+  AccentRecordCard,
+  accentRecordListClass,
+} from "./AccentRecordCard";
 import { BackButton } from "./BackButton";
 import { EmptyState } from "./EmptyState";
+import {
+  IconSubTabs,
+  LineupsSubIcon,
+  MatchesSubIcon,
+  StatsSubIcon,
+} from "./IconSubTabs";
 import { LoadingState } from "./LoadingState";
 import type { AuthUser } from "./LoginScreen";
 import { DraggableLineupList } from "./DraggableLineupList";
@@ -70,9 +87,7 @@ import { MatchListCard, type MatchBoardStatus } from "./MatchListCard";
 import { MatchScoreboard } from "./MatchScoreboard";
 import { PanelHeader, PanelHeaderCount } from "./PanelHeader";
 import { SelectField } from "./SelectField";
-import { loadTeamLineupPresets } from "@/lib/lineup-sync";
-import { rankForTeam, teamRanksFromReport } from "@/lib/standings";
-import type { LineupPreset, TableReport } from "@/lib/types";
+import { SubTabCard } from "./SubTabCard";
 
 type MatchScoringProps = {
   divisionId: string | null;
@@ -88,6 +103,8 @@ type MatchScoringProps = {
 };
 
 type SaveStatus = "idle" | "saving" | "saved" | "local";
+
+type SheetPane = "lineup" | "scoring" | "performance";
 
 type View =
   | { mode: "list" }
@@ -261,6 +278,7 @@ export function MatchScoring({
   const [draft, setDraft] = useState<ScoringDraft | null>(null);
   const [loadingMatch, setLoadingMatch] = useState(false);
   const [activeRound, setActiveRound] = useState(1);
+  const [sheetTab, setSheetTab] = useState<SheetPane>("scoring");
   const [activeGame, setActiveGame] = useState<{
     roundNumber: number;
     gameIndex: number;
@@ -628,6 +646,7 @@ export function MatchScoring({
       draftRef.current = nextDraft;
       setActiveRound(data.match.matchFormat?.rounds[0]?.roundNumber ?? 1);
       setActiveGame(null);
+      setSheetTab("scoring");
       setView({ mode: "sheet", matchId });
       if (!locked) {
         saveDraft(nextDraft);
@@ -902,6 +921,30 @@ export function MatchScoring({
     activeGame && draft
       ? draft.games[gameKey(activeGame.roundNumber, activeGame.gameIndex)]
       : null;
+
+  const playerNight = useMemo(() => {
+    if (!match || !draft) {
+      return { home: [] as PlayerNightStat[], away: [] as PlayerNightStat[] };
+    }
+    const tallied = tallyPlayerNight(match, draft);
+    const byId = new Map(
+      [...tallied.home, ...tallied.away].map((stat) => [stat.playerId, stat]),
+    );
+    const fromLineup = (
+      lineup: (string | null)[],
+      side: 1 | 2,
+    ): PlayerNightStat[] =>
+      lineup.flatMap((id, index) => {
+        if (!id) return [];
+        const stat = byId.get(id);
+        if (!stat) return [];
+        return [{ ...stat, side, slotIndex: index + 1 }];
+      });
+    return {
+      home: fromLineup(draft.teamOneLineup, 1),
+      away: fromLineup(draft.teamTwoLineup, 2),
+    };
+  }, [match, draft]);
 
   const setGameScore = (
     roundNumber: number,
@@ -1315,59 +1358,111 @@ export function MatchScoring({
             onSubmit={() => setConfirmDialog("submit")}
           />
         ) : (
+          <SubTabCard
+            tabs={
+              <IconSubTabs
+                aria-label="Scoresheet sections"
+                value={sheetTab}
+                onChange={(id) => {
+                  setSheetTab(id);
+                  if (id !== "scoring") setActiveGame(null);
+                }}
+                columns={3}
+                className="border-0 bg-transparent p-0"
+                items={[
+                  {
+                    id: "lineup" as const,
+                    label: "Lineup",
+                    icon: LineupsSubIcon,
+                  },
+                  {
+                    id: "scoring" as const,
+                    label: "Scoring",
+                    icon: MatchesSubIcon,
+                  },
+                  {
+                    id: "performance" as const,
+                    label: "Performance",
+                    icon: StatsSubIcon,
+                  },
+                ]}
+              />
+            }
+            contentClassName="p-3 sm:p-3.5"
+          >
+            {sheetTab === "lineup" ? (
+              <div className="space-y-3">
+                <p className="text-xs text-[var(--muted)]">
+                  {sheetLocked
+                    ? "View lineups for both teams."
+                    : "Set Home and Away lineups — drag to reorder, or load a saved team lineup."}
+                </p>
+                <LineupEditor
+                  match={match}
+                  draft={draft}
+                  divisionId={divisionId ?? ""}
+                  readOnly={sheetLocked}
+                  alwaysExpanded
+                  onChangeLineup={(side, index, playerId) => {
+                    updateDraft((prev) => {
+                      const lineupKey =
+                        side === 1 ? "teamOneLineup" : "teamTwoLineup";
+                      const nextLineup = [...prev[lineupKey]];
+                      nextLineup[index] = playerId;
+                      return syncLineupToGames(
+                        { ...prev, [lineupKey]: nextLineup },
+                        match,
+                      );
+                    });
+                  }}
+                  onMoveLineup={(side, from, to) => {
+                    updateDraft((prev) => {
+                      const lineupKey =
+                        side === 1 ? "teamOneLineup" : "teamTwoLineup";
+                      const nextLineup = [...prev[lineupKey]];
+                      if (
+                        from < 0 ||
+                        to < 0 ||
+                        from >= nextLineup.length ||
+                        to >= nextLineup.length ||
+                        from === to
+                      ) {
+                        return prev;
+                      }
+                      const [item] = nextLineup.splice(from, 1);
+                      nextLineup.splice(to, 0, item);
+                      return syncLineupToGames(
+                        { ...prev, [lineupKey]: nextLineup },
+                        match,
+                      );
+                    });
+                  }}
+                  onReplaceLineup={(side, nextLineup) => {
+                    updateDraft((prev) => {
+                      const lineupKey =
+                        side === 1 ? "teamOneLineup" : "teamTwoLineup";
+                      return syncLineupToGames(
+                        { ...prev, [lineupKey]: nextLineup },
+                        match,
+                      );
+                    });
+                  }}
+                />
+              </div>
+            ) : null}
+
+            {sheetTab === "performance" ? (
+              <ScoringPerformanceBoard
+                homeName={match.teamOneName}
+                awayName={match.teamTwoName}
+                home={playerNight.home}
+                away={playerNight.away}
+              />
+            ) : null}
+
+            {sheetTab === "scoring" ? (
           <div className="grid w-full min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
             <div className="w-full min-w-0 space-y-4 overflow-x-hidden">
-              <LineupEditor
-                match={match}
-                draft={draft}
-                divisionId={divisionId}
-                readOnly={sheetLocked}
-                onChangeLineup={(side, index, playerId) => {
-                  updateDraft((prev) => {
-                    const lineupKey =
-                      side === 1 ? "teamOneLineup" : "teamTwoLineup";
-                    const nextLineup = [...prev[lineupKey]];
-                    nextLineup[index] = playerId;
-                    return syncLineupToGames(
-                      { ...prev, [lineupKey]: nextLineup },
-                      match,
-                    );
-                  });
-                }}
-                onMoveLineup={(side, from, to) => {
-                  updateDraft((prev) => {
-                    const lineupKey =
-                      side === 1 ? "teamOneLineup" : "teamTwoLineup";
-                    const nextLineup = [...prev[lineupKey]];
-                    if (
-                      from < 0 ||
-                      to < 0 ||
-                      from >= nextLineup.length ||
-                      to >= nextLineup.length ||
-                      from === to
-                    ) {
-                      return prev;
-                    }
-                    const [item] = nextLineup.splice(from, 1);
-                    nextLineup.splice(to, 0, item);
-                    return syncLineupToGames(
-                      { ...prev, [lineupKey]: nextLineup },
-                      match,
-                    );
-                  });
-                }}
-                onReplaceLineup={(side, nextLineup) => {
-                  updateDraft((prev) => {
-                    const lineupKey =
-                      side === 1 ? "teamOneLineup" : "teamTwoLineup";
-                    return syncLineupToGames(
-                      { ...prev, [lineupKey]: nextLineup },
-                      match,
-                    );
-                  });
-                }}
-              />
-
               <div
                 role="tablist"
                 aria-label="Rounds"
@@ -1725,6 +1820,8 @@ export function MatchScoring({
               }}
             />
           </div>
+            ) : null}
+          </SubTabCard>
         )}
 
         {confirmDialog ? (
@@ -2120,11 +2217,90 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
   );
 });
 
+function ScoringPerformanceBoard({
+  homeName,
+  awayName,
+  home,
+  away,
+}: {
+  homeName: string;
+  awayName: string;
+  home: PlayerNightStat[];
+  away: PlayerNightStat[];
+}) {
+  const column = (title: string, stats: PlayerNightStat[]) => (
+    <div className="min-w-0 space-y-2">
+      <div className="flex items-baseline justify-between gap-2 px-0.5">
+        <p className="font-[family-name:var(--font-display)] text-base text-[var(--ink)]">
+          {title}
+        </p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+          W-L · pts
+        </p>
+      </div>
+      {stats.length === 0 ? (
+        <p className="rounded-[var(--radius)] border border-dashed border-[var(--line)] px-3 py-4 text-sm text-[var(--muted)]">
+          Set the lineup to see player performance.
+        </p>
+      ) : (
+        <ul className={accentRecordListClass}>
+          {stats.map((stat) => {
+            const sideLabel = `${stat.side === 1 ? "H" : "A"}${stat.slotIndex}`;
+            return (
+              <li key={`${stat.side}-${stat.slotIndex}-${stat.playerId}`}>
+                <AccentRecordCard>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[var(--ink)]">
+                        <span className="mr-1.5 text-[var(--muted)]">
+                          {sideLabel}
+                        </span>
+                        {stat.name}
+                      </p>
+                      <p className="mt-0.5 text-xs tabular-nums text-[var(--muted)]">
+                        {stat.fargo != null ? `Fargo ${stat.fargo}` : "No Fargo"}
+                        {stat.games > 0
+                          ? ` · ${stat.games} game${stat.games === 1 ? "" : "s"}`
+                          : ""}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="font-[family-name:var(--font-display)] text-lg leading-none tabular-nums text-[var(--felt-deep)]">
+                        {stat.wins}-{stat.losses}
+                      </p>
+                      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                        {stat.points} pts
+                      </p>
+                    </div>
+                  </div>
+                </AccentRecordCard>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-[var(--muted)]">
+        Player W-L and points from scored games on this sheet.
+      </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {column(homeName, home)}
+        {column(awayName, away)}
+      </div>
+    </div>
+  );
+}
+
 function LineupEditor({
   match,
   draft,
   divisionId,
   readOnly = false,
+  alwaysExpanded = false,
   onChangeLineup,
   onMoveLineup,
   onReplaceLineup,
@@ -2133,6 +2309,8 @@ function LineupEditor({
   draft: ScoringDraft;
   divisionId: string;
   readOnly?: boolean;
+  /** When true, skip the collapse chrome (used inside the Lineup sheet tab). */
+  alwaysExpanded?: boolean;
   onChangeLineup: (
     side: 1 | 2,
     index: number,
@@ -2141,7 +2319,7 @@ function LineupEditor({
   onMoveLineup: (side: 1 | 2, from: number, to: number) => void;
   onReplaceLineup: (side: 1 | 2, next: (string | null)[]) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(alwaysExpanded);
   const [presets, setPresets] = useState<LineupPreset[]>([]);
   const [mobileSide, setMobileSide] = useState<1 | 2>(
     match.mySide === 2 ? 2 : 1,
@@ -2216,31 +2394,40 @@ function LineupEditor({
       <LoadLineupMenu presets={teamPresets} onLoad={applyPreset} />
     ) : null;
 
+  const showBody = alwaysExpanded || open;
+
   return (
     <div className="min-w-0 space-y-3">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        className="flex w-full min-w-0 items-center justify-between gap-3 overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-3 text-left sm:px-4"
-      >
-        <div className="min-w-0 flex-1 overflow-hidden">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
-            Lineups
-          </p>
-          <p className="mt-0.5 text-xs text-[var(--muted)] sm:text-sm">
-            {filledOne + filledTwo}/{slots * 2} filled
-            {readOnly
-              ? " · view only"
-              : " · drag ⠿ or ▲▼ · Load from Team"}
-          </p>
-        </div>
-        <span className="shrink-0 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-          {open ? "Collapse ▴" : readOnly ? "View ▾" : "Change ▾"}
-        </span>
-      </button>
+      {alwaysExpanded ? (
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+          {filledOne + filledTwo}/{slots * 2} filled
+          {readOnly ? " · view only" : " · drag ⠿ or ▲▼ · Load from Team"}
+        </p>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          className="flex w-full min-w-0 items-center justify-between gap-3 overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-3 text-left sm:px-4"
+        >
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
+              Lineups
+            </p>
+            <p className="mt-0.5 text-xs text-[var(--muted)] sm:text-sm">
+              {filledOne + filledTwo}/{slots * 2} filled
+              {readOnly
+                ? " · view only"
+                : " · drag ⠿ or ▲▼ · Load from Team"}
+            </p>
+          </div>
+          <span className="shrink-0 rounded-full border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            {open ? "Collapse ▴" : readOnly ? "View ▾" : "Change ▾"}
+          </span>
+        </button>
+      )}
 
-      {open ? (
+      {showBody ? (
         <div className="space-y-4">
           {/* Mobile: one team at a time, same toggle pattern as schedule match detail */}
           <div className="space-y-3 md:hidden">
