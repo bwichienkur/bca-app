@@ -106,11 +106,12 @@ export type UserPreferences = {
   divisionName: string | null;
   /**
    * Optional sister LMS division that shares the same league night
-   * (e.g. Beyond Singles + Beyond Teams). Standings/schedule/score can
-   * combine both while each sheet still submits to its own division.
+   * (resolved from a Tableside division link).
    */
   linkedDivisionId?: string | null;
   linkedDivisionName?: string | null;
+  /** Tableside-only named link id when the player selected a combined night. */
+  divisionLinkId?: string | null;
   playerId: string | null;
   playerName: string | null;
   teamId: string | null;

@@ -31,6 +31,7 @@ export function loadPreferences(): UserPreferences {
       divisionName: parsed.divisionName ?? null,
       linkedDivisionId: parsed.linkedDivisionId ?? null,
       linkedDivisionName: parsed.linkedDivisionName ?? null,
+      divisionLinkId: parsed.divisionLinkId ?? null,
       playerId: parsed.playerId ?? null,
       playerName: parsed.playerName ?? null,
       teamId: parsed.teamId ?? null,

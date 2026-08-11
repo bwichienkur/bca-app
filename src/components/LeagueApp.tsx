@@ -20,10 +20,16 @@ import { DEFAULT_LEAGUE_ID } from "@/lib/constants";
 import {
   comboNightHint,
   findKnownComboForDivisionName,
-  findSisterDivision,
   mergeCombinedSchedule,
   mergeCombinedStandings,
 } from "@/lib/division-combos";
+import {
+  buildLinkedDivisionPickerOptions,
+  findLinkById,
+  findLinkForDivision,
+  type DivisionLink,
+  type PickerDivisionOption,
+} from "@/lib/division-links";
 import { canAccessLmsFromPublicUser, isSuperadminClient } from "@/lib/lms-access";
 import { scheduleHasMatchTonight } from "@/lib/match-night";
 import { normalizeTeamName } from "@/lib/matchups";
@@ -153,6 +159,8 @@ export function LeagueApp() {
   const [leagueQuery, setLeagueQuery] = useState("Palm Beach");
   const [leagues, setLeagues] = useState<LeagueSummary[]>([]);
   const [divisions, setDivisions] = useState<DivisionSummary[]>([]);
+  const [divisionLinks, setDivisionLinks] = useState<DivisionLink[]>([]);
+  const [divisionLinksReady, setDivisionLinksReady] = useState(false);
   const [selectedLeague, setSelectedLeague] = useState<LeagueSummary | null>(
     null,
   );
@@ -678,6 +686,100 @@ export function LeagueApp() {
     };
   }, [brightBrowseAll, selectedLeague?.id]);
 
+  // Tableside-only named division links for the selected league.
+  useEffect(() => {
+    const leagueId = selectedLeague?.id ?? prefs?.leagueId ?? null;
+    if (!leagueId) {
+      setDivisionLinks([]);
+      setDivisionLinksReady(true);
+      return;
+    }
+    let cancelled = false;
+    setDivisionLinksReady(false);
+    void fetchJson<{ links: DivisionLink[] }>(
+      `/api/division-links?leagueId=${encodeURIComponent(leagueId)}`,
+    )
+      .then((data) => {
+        if (!cancelled) {
+          setDivisionLinks(data.links ?? []);
+          setDivisionLinksReady(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDivisionLinks([]);
+          setDivisionLinksReady(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLeague?.id, prefs?.leagueId, refreshToken]);
+
+  // When Tableside links load, resolve the player's selection to the named link.
+  useEffect(() => {
+    if (!prefs?.divisionId || !divisionLinksReady) return;
+    const link =
+      findLinkById(divisionLinks, prefs.divisionLinkId) ??
+      findLinkForDivision(divisionLinks, prefs.divisionId);
+
+    // Named link was deleted in operator — restore LMS division naming.
+    // Only runs when we had a divisionLinkId (not legacy sister-link prefs).
+    if (!link && prefs.divisionLinkId) {
+      const restoredName =
+        divisions.find((d) => d.id === prefs.divisionId)?.name ??
+        membership?.divisions.find((d) => d.id === prefs.divisionId)?.name ??
+        prefs.divisionName;
+      persist({
+        ...prefs,
+        divisionName: restoredName,
+        linkedDivisionId: null,
+        linkedDivisionName: null,
+        divisionLinkId: null,
+      });
+      if (selectedDivision && restoredName) {
+        setSelectedDivision({ ...selectedDivision, name: restoredName });
+      }
+      return;
+    }
+
+    if (!link) return;
+    const already =
+      prefs.divisionLinkId === link.id &&
+      prefs.linkedDivisionId === link.linkedDivisionId &&
+      prefs.divisionName === link.name;
+    if (already) {
+      if (selectedDivision && selectedDivision.name !== link.name) {
+        setSelectedDivision({ ...selectedDivision, name: link.name });
+      }
+      return;
+    }
+    persist({
+      ...prefs,
+      divisionId: link.primaryDivisionId,
+      divisionName: link.name,
+      linkedDivisionId: link.linkedDivisionId,
+      linkedDivisionName: link.linkedDivisionName,
+      divisionLinkId: link.id,
+    });
+    setSelectedDivision((prev) =>
+      prev
+        ? {
+            ...prev,
+            id: link.primaryDivisionId,
+            name: link.name,
+          }
+        : prev,
+    );
+    // persist/selectedDivision intentionally not in deps — avoid loops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    divisionLinks,
+    divisionLinksReady,
+    prefs?.divisionId,
+    prefs?.divisionLinkId,
+  ]);
+
   useEffect(() => {
     if (!selectedDivision) return;
     let cancelled = false;
@@ -760,6 +862,13 @@ export function LeagueApp() {
       try {
         if (needsTeams) {
           const linkedId = prefs?.linkedDivisionId ?? null;
+          const activeLink =
+            findLinkById(divisionLinks, prefs?.divisionLinkId) ??
+            findLinkForDivision(divisionLinks, id);
+          const primaryLmsName =
+            activeLink?.primaryDivisionName ?? selectedDivision!.name;
+          const linkedLmsName =
+            activeLink?.linkedDivisionName ?? prefs?.linkedDivisionName ?? null;
           const [primary, linked] = await Promise.all([
             fetchJson<TableReport>(`/api/reports/teams?divisionId=${id}`),
             linkedId
@@ -769,20 +878,17 @@ export function LeagueApp() {
               : Promise.resolve(null),
           ]);
           if (!cancelled) {
+            // Use LMS division names (not the Tableside link display name)
+            // so Beyond Singles/Teams roles still resolve.
             const combo =
-              findKnownComboForDivisionName(selectedDivision!.name) ??
-              findKnownComboForDivisionName(prefs?.linkedDivisionName);
+              findKnownComboForDivisionName(primaryLmsName) ??
+              findKnownComboForDivisionName(linkedLmsName);
+            const primaryRole = combo?.roleFromName(primaryLmsName) ?? null;
             const data =
-              linked && combo
+              linked && combo && primaryRole
                 ? mergeCombinedStandings({
-                    singles:
-                      combo.roleFromName(selectedDivision!.name) === "singles"
-                        ? primary
-                        : linked,
-                    teams:
-                      combo.roleFromName(selectedDivision!.name) === "teams"
-                        ? primary
-                        : linked,
+                    singles: primaryRole === "singles" ? primary : linked,
+                    teams: primaryRole === "teams" ? primary : linked,
                     combo,
                   })
                 : primary;
@@ -803,6 +909,15 @@ export function LeagueApp() {
           }
         } else if (needsSchedule) {
           const linkedId = prefs?.linkedDivisionId ?? null;
+          const activeLink =
+            findLinkById(divisionLinks, prefs?.divisionLinkId) ??
+            findLinkForDivision(divisionLinks, id);
+          const primaryLmsName =
+            activeLink?.primaryDivisionName ?? selectedDivision!.name;
+          const linkedLmsName =
+            activeLink?.linkedDivisionName ??
+            prefs?.linkedDivisionName ??
+            "Linked";
           const [scheduleData, linkedSchedule, teams] = await Promise.all([
             fetchJson<{ days: ScheduleDay[] }>(
               `/api/reports/schedule?divisionId=${id}`,
@@ -822,12 +937,12 @@ export function LeagueApp() {
                 ? mergeCombinedSchedule({
                     primary: {
                       divisionId: id,
-                      divisionName: selectedDivision!.name,
+                      divisionName: primaryLmsName,
                       days: scheduleData.days,
                     },
                     linked: {
                       divisionId: linkedId,
-                      divisionName: prefs?.linkedDivisionName ?? "Linked",
+                      divisionName: linkedLmsName,
                       days: linkedSchedule.days,
                     },
                   })
@@ -855,7 +970,14 @@ export function LeagueApp() {
     };
     // teamReport/playerReport/schedule intentionally omitted — cache keys gate refetch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDivision, tab, refreshToken, prefs?.linkedDivisionId]);
+  }, [
+    selectedDivision,
+    tab,
+    refreshToken,
+    prefs?.linkedDivisionId,
+    prefs?.divisionLinkId,
+    divisionLinks,
+  ]);
 
   useEffect(() => {
     setFilterQuery("");
@@ -903,6 +1025,7 @@ export function LeagueApp() {
         divisionName: null,
         linkedDivisionId: null,
         linkedDivisionName: null,
+        divisionLinkId: null,
         teamId: null,
         teamName: null,
         playerId: user?.lmsId ?? prefs?.playerId ?? null,
@@ -915,8 +1038,27 @@ export function LeagueApp() {
     }
   };
 
-  const chooseDivision = (division: DivisionSummary) => {
-    setSelectedDivision(division);
+  const chooseDivisionOption = (option: PickerDivisionOption) => {
+    const link = option.link ?? null;
+    const primaryId = link?.primaryDivisionId ?? option.id;
+    const primary =
+      divisions.find((item) => item.id === primaryId) ??
+      membership?.divisions.find((item) => item.id === primaryId) ??
+      null;
+    const displayName = link?.name ?? option.name;
+    const selected: DivisionSummary = primary
+      ? { ...primary, name: displayName }
+      : {
+          id: primaryId,
+          name: displayName,
+          year: option.year,
+          leagueId: option.leagueId,
+          leagueName: option.leagueName,
+          state: option.state,
+          reportUrl: option.reportUrl,
+        };
+
+    setSelectedDivision(selected);
     setSelectedTeamName(null);
     setTab("standings");
     setTeamReport(null);
@@ -925,20 +1067,27 @@ export function LeagueApp() {
     setSchedule(null);
     startTransition(() => undefined);
     const base = prefs ?? {
-      leagueId: division.leagueId,
-      leagueName: division.leagueName,
+      leagueId: selected.leagueId,
+      leagueName: selected.leagueName,
       divisionId: null,
       divisionName: null,
       linkedDivisionId: null,
       linkedDivisionName: null,
+      divisionLinkId: null,
       playerId: user?.lmsId ?? null,
       playerName: user?.name ?? null,
       teamId: null,
       teamName: null,
     };
+    const linkDivisionIds = new Set(
+      link
+        ? [link.primaryDivisionId, link.linkedDivisionId]
+        : [primaryId],
+    );
     const membershipTeams =
-      membership?.teams.filter((team) => team.divisionId === division.id) ??
-      [];
+      membership?.teams.filter((team) =>
+        linkDivisionIds.has(team.divisionId),
+      ) ?? [];
     const keepTeam =
       prefs?.teamId &&
       membershipTeams.some((team) => team.teamId === prefs.teamId)
@@ -950,62 +1099,19 @@ export function LeagueApp() {
             }
           : { teamId: null, teamName: null };
 
-    // Auto-link Beyond Singles ↔ Teams (same season) when both exist.
-    const sisterCandidates = new Map<string, DivisionSummary>();
-    for (const item of divisions) sisterCandidates.set(item.id, item);
-    for (const item of membership?.divisions ?? []) {
-      sisterCandidates.set(item.id, item);
-    }
-    const sisterHit = findSisterDivision(
-      division,
-      Array.from(sisterCandidates.values()),
-    );
-    const linked =
-      sisterHit != null
-        ? {
-            linkedDivisionId: sisterHit.sister.id,
-            linkedDivisionName: sisterHit.sister.name,
-          }
-        : prefs?.linkedDivisionId && prefs.linkedDivisionId !== division.id
-          ? {
-              linkedDivisionId: prefs.linkedDivisionId,
-              linkedDivisionName: prefs.linkedDivisionName ?? null,
-            }
-          : { linkedDivisionId: null, linkedDivisionName: null };
-
     persist({
       ...base,
-      leagueId: division.leagueId,
-      leagueName: division.leagueName,
-      divisionId: division.id,
-      divisionName: division.name,
-      ...linked,
+      leagueId: selected.leagueId,
+      leagueName: selected.leagueName,
+      divisionId: primaryId,
+      divisionName: displayName,
+      linkedDivisionId: link?.linkedDivisionId ?? null,
+      linkedDivisionName: link?.linkedDivisionName ?? null,
+      divisionLinkId: link?.id ?? null,
       ...keepTeam,
       playerId: user?.lmsId ?? base.playerId,
       playerName: user?.name ?? base.playerName,
     });
-  };
-
-  const setLinkedDivision = (division: DivisionSummary | null) => {
-    if (!prefs || !selectedDivision) return;
-    if (!division) {
-      persist({
-        ...prefs,
-        linkedDivisionId: null,
-        linkedDivisionName: null,
-      });
-      setTeamReport(null);
-      setSchedule(null);
-      return;
-    }
-    if (division.id === selectedDivision.id) return;
-    persist({
-      ...prefs,
-      linkedDivisionId: division.id,
-      linkedDivisionName: division.name,
-    });
-    setTeamReport(null);
-    setSchedule(null);
   };
 
   const setMyTeam = (team: DivisionTeam) => {
@@ -1038,6 +1144,7 @@ export function LeagueApp() {
         divisionName: null,
         linkedDivisionId: null,
         linkedDivisionName: null,
+        divisionLinkId: null,
         teamId: null,
         teamName: null,
       });
@@ -1060,6 +1167,7 @@ export function LeagueApp() {
         divisionName: null,
         linkedDivisionId: null,
         linkedDivisionName: null,
+        divisionLinkId: null,
         teamId: null,
         teamName: null,
       });
@@ -1087,25 +1195,63 @@ export function LeagueApp() {
     }));
   }, [useMembershipCatalog, membership, leagues]);
 
-  const divisionOptions: TypeaheadOption<DivisionSummary>[] = useMemo(() => {
+  const divisionOptions: TypeaheadOption<PickerDivisionOption>[] = useMemo(() => {
     const source = useMembershipCatalog
       ? membership!.divisions.filter(
           (division) =>
             !selectedLeague || division.leagueId === selectedLeague.id,
         )
       : divisions;
-    return source.map((division) => ({
-      id: division.id,
-      label: division.name,
-      meta: `${division.year} · ${division.leagueName}`,
-      value: division,
-    }));
-  }, [useMembershipCatalog, membership, divisions, selectedLeague]);
+    // Bright / public catalog should include every LMS division so links can
+    // replace member pairs even when the player is only on one half.
+    const catalog =
+      brightBrowseAll || !useMembershipCatalog
+        ? divisions.length
+          ? divisions
+          : source
+        : source;
+    const options = buildLinkedDivisionPickerOptions(catalog, divisionLinks);
+    // Membership users only see a named link when they belong to at least one half.
+    const memberDivisionIds =
+      useMembershipCatalog && !brightBrowseAll
+        ? new Set(membership!.divisions.map((d) => d.id))
+        : null;
+    return options
+      .filter((option) => {
+        if (!option.link || !memberDivisionIds) return true;
+        return (
+          memberDivisionIds.has(option.link.primaryDivisionId) ||
+          memberDivisionIds.has(option.link.linkedDivisionId)
+        );
+      })
+      .map((option) => ({
+        id: option.id,
+        label: option.name,
+        meta: option.link
+          ? "Combined night · Tableside link"
+          : `${option.year} · ${option.leagueName}`,
+        value: option,
+      }));
+  }, [
+    useMembershipCatalog,
+    brightBrowseAll,
+    membership,
+    divisions,
+    selectedLeague,
+    divisionLinks,
+  ]);
 
   const teamOptions: TypeaheadOption<DivisionTeam>[] = useMemo(() => {
     if (useMembershipCatalog && selectedDivision) {
-      const mine = membership!.teams.filter(
-        (team) => team.divisionId === selectedDivision.id,
+      const linkedIds = new Set(
+        [
+          selectedDivision.id,
+          prefs?.divisionId,
+          prefs?.linkedDivisionId,
+        ].filter((id): id is string => Boolean(id)),
+      );
+      const mine = membership!.teams.filter((team) =>
+        linkedIds.has(team.divisionId),
       );
       return mine.map((team) => {
         const full =
@@ -1135,7 +1281,14 @@ export function LeagueApp() {
         meta: `${team.players.length} players`,
         value: team,
       }));
-  }, [useMembershipCatalog, membership, selectedDivision, divisionTeams]);
+  }, [
+    useMembershipCatalog,
+    membership,
+    selectedDivision,
+    divisionTeams,
+    prefs?.divisionId,
+    prefs?.linkedDivisionId,
+  ]);
 
   /** Followed team from the top League / Division / My team section */
   const myTeam =
@@ -1490,22 +1643,13 @@ export function LeagueApp() {
             <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl leading-tight md:text-3xl">
               {selectedDivision?.name ?? "Choose your division"}
             </h2>
-            {prefs.linkedDivisionName ? (
-              <p className="mt-1 text-sm text-white/80">
-                Combined with{" "}
-                <span className="font-semibold">{prefs.linkedDivisionName}</span>
-              </p>
-            ) : null}
             {contextOpen ? (
               <p className="mt-2 text-sm text-white/70">
                 {brightBrowseAll
-                  ? "Bright mode: every division and team in the league is available so you can link and test combined nights."
+                  ? "Bright mode: every division and team in the league is available. Named links are configured in LMS → Edit division → Link."
                   : user
-                    ? "Pick from your active sessions. Standings and players still include the whole division."
+                    ? "Pick from your active sessions. Linked nights appear as one named division."
                     : "Set league, division, and my team for schedule & handicap."}
-                {findKnownComboForDivisionName(selectedDivision?.name)
-                  ? " Link the sister Beyond Singles/Teams division for a combined night."
-                  : ""}
               </p>
             ) : prefs.teamName ? (
               <p className="mt-2 text-sm text-white/80">
@@ -1572,18 +1716,38 @@ export function LeagueApp() {
                 }
                 value={
                   selectedDivision
-                    ? {
-                        id: selectedDivision.id,
-                        label: selectedDivision.name,
-                        meta: `${selectedDivision.year}`,
-                        value: selectedDivision,
-                      }
+                    ? (() => {
+                        const link =
+                          findLinkById(divisionLinks, prefs?.divisionLinkId) ??
+                          findLinkForDivision(
+                            divisionLinks,
+                            selectedDivision.id,
+                          );
+                        const option =
+                          divisionOptions.find((item) =>
+                            link
+                              ? item.value.link?.id === link.id
+                              : item.value.id === selectedDivision.id,
+                          )?.value ?? null;
+                        return {
+                          id: option?.id ?? selectedDivision.id,
+                          label: option?.name ?? selectedDivision.name,
+                          meta: option?.link
+                            ? "Combined night · Tableside link"
+                            : `${selectedDivision.year}`,
+                          value:
+                            option ??
+                            ({
+                              ...selectedDivision,
+                            } satisfies PickerDivisionOption),
+                        };
+                      })()
                     : null
                 }
                 options={divisionOptions}
                 disabled={!selectedLeague || loadingDivisions}
                 onChange={(option) => {
-                  if (option) chooseDivision(option.value);
+                  if (option) chooseDivisionOption(option.value);
                   else clearDivision();
                 }}
                 emptyText="No divisions match"
@@ -1625,50 +1789,7 @@ export function LeagueApp() {
                 emptyText="No teams loaded yet"
               />
             </div>
-            {selectedDivision ? (
-              <div className="mt-4">
-                <Typeahead
-                  tone="felt"
-                  label="Linked division (combined night)"
-                  placeholder="Optional — e.g. Beyond Teams with Beyond Singles"
-                  value={
-                    prefs.linkedDivisionId
-                      ? {
-                          id: prefs.linkedDivisionId,
-                          label: prefs.linkedDivisionName ?? "Linked division",
-                          meta: "Combined standings · schedule · score",
-                          value: {
-                            id: prefs.linkedDivisionId,
-                            name: prefs.linkedDivisionName ?? "",
-                            year: "",
-                            leagueId: selectedDivision.leagueId,
-                            leagueName: selectedDivision.leagueName,
-                            state: selectedDivision.state,
-                            reportUrl: "",
-                          } satisfies DivisionSummary,
-                        }
-                      : null
-                  }
-                  options={divisionOptions.filter(
-                    (option) => option.id !== selectedDivision.id,
-                  )}
-                  disabled={loadingDivisions}
-                  onChange={(option) => {
-                    setLinkedDivision(option?.value ?? null);
-                  }}
-                  emptyText="No other divisions in this league"
-                />
-                {prefs.linkedDivisionId ? (
-                  <p className="mt-2 text-xs text-white/70">
-                    {comboNightHint(
-                      findKnownComboForDivisionName(selectedDivision.name) ??
-                        findKnownComboForDivisionName(prefs.linkedDivisionName),
-                    ) ??
-                      "Standings, schedule, and Score combine both divisions. Each scoresheet still submits to its own LMS division."}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
+
           </div>
         ) : null}
       </section>
@@ -2051,9 +2172,7 @@ export function LeagueApp() {
                   days={schedule}
                   teamName={prefs.teamName}
                   divisionName={
-                    prefs.linkedDivisionName
-                      ? `${selectedDivision?.name ?? prefs.divisionName} + ${prefs.linkedDivisionName}`
-                      : (selectedDivision?.name ?? prefs.divisionName)
+                    selectedDivision?.name ?? prefs.divisionName
                   }
                   teamReport={teamReport}
                   onMatchClick={(match, day) =>

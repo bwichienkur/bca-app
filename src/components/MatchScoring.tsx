@@ -2043,11 +2043,14 @@ export function MatchScoring({
       : nightVenues.length > 1
         ? `${nightVenues.length} venues`
         : null;
-  const linkedCombo =
-    linkedDivisionId
-      ? findKnownComboForDivisionName(divisionName) ??
-        findKnownComboForDivisionName(linkedDivisionName)
-      : null;
+  const linkedCombo = linkedDivisionId
+    ? findKnownComboForDivisionName(linkedDivisionName) ??
+      findKnownComboForDivisionName(
+        matches.find((match) => match.divisionId === divisionId)
+          ?.divisionName,
+      ) ??
+      findKnownComboForDivisionName(divisionName)
+    : null;
   const nightHint = comboNightHint(linkedCombo);
   return (
     <section className="animate-rise space-y-3 p-3 sm:p-4">
@@ -2061,15 +2064,6 @@ export function MatchScoring({
             ) : (
               "your division"
             )}
-            {linkedDivisionName ? (
-              <>
-                {" "}
-                +{" "}
-                <span className="font-medium text-[var(--ink)]">
-                  {linkedDivisionName}
-                </span>
-              </>
-            ) : null}
             {teamName ? (
               <>
                 {" "}
