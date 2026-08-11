@@ -2,6 +2,13 @@
 
 import { useState, type FormEvent } from "react";
 
+export type AuthActor = {
+  id: string;
+  email: string | null;
+  name: string | null;
+  lmsId: string;
+};
+
 export type AuthUser = {
   id: string;
   lmsId: string;
@@ -14,6 +21,12 @@ export type AuthUser = {
   stripeChargesEnabled?: boolean;
   scoringReady?: boolean;
   leagueOperator?: boolean;
+  /** Bright-only: show view-as controls. */
+  canImpersonate?: boolean;
+  /** Currently viewing the app as another player. */
+  impersonating?: boolean;
+  /** Real account while impersonating. */
+  actor?: AuthActor | null;
 };
 
 type Mode = "fargo" | "operator" | "tableside-login" | "tableside-register";

@@ -9,6 +9,12 @@ import {
   writeAppSession,
 } from "@/lib/app-auth";
 import {
+  actorFromAppUser,
+  clearImpersonation,
+  isSuperadminAppUser,
+  readImpersonation,
+} from "@/lib/impersonation";
+import {
   clearScoringSession,
   readScoringSession,
   requireScoringSession,
@@ -39,8 +45,47 @@ export async function GET() {
             user.fargo?.lmsId &&
             scoring.lmsId === user.fargo.lmsId,
         );
+        const canImpersonate = isSuperadminAppUser(user);
+        const impersonation = canImpersonate
+          ? await readImpersonation()
+          : null;
+        const validImpersonation =
+          impersonation && impersonation.actorUserId === user.id
+            ? impersonation
+            : null;
+
+        if (impersonation && !validImpersonation) {
+          await clearImpersonation();
+        }
+        if (!canImpersonate && impersonation) {
+          await clearImpersonation();
+        }
+
+        if (validImpersonation) {
+          const base = toPublicAuthUser(user, scoringReady);
+          return NextResponse.json({
+            user: {
+              ...base,
+              lmsId: validImpersonation.targetLmsId,
+              name: validImpersonation.targetName || base.name,
+              email: validImpersonation.targetEmail,
+              readableId: validImpersonation.targetReadableId,
+              fargoLinked: true,
+              scoringReady,
+              canImpersonate: false,
+              impersonating: true,
+              actor: actorFromAppUser(user),
+            },
+          });
+        }
+
         return NextResponse.json({
-          user: toPublicAuthUser(user, scoringReady),
+          user: {
+            ...toPublicAuthUser(user, scoringReady),
+            canImpersonate,
+            impersonating: false,
+            actor: null,
+          },
         });
       }
     }
@@ -52,12 +97,23 @@ export async function GET() {
           emailFallback: scoring.email ?? undefined,
         });
         await writeAppSession(user.id);
+        const canImpersonate = isSuperadminAppUser(user);
         return NextResponse.json({
-          user: toPublicAuthUser(user, true),
+          user: {
+            ...toPublicAuthUser(user, true),
+            canImpersonate,
+            impersonating: false,
+            actor: null,
+          },
         });
       } catch {
         return NextResponse.json({
-          user: publicUserFromScoring(scoring),
+          user: {
+            ...publicUserFromScoring(scoring),
+            canImpersonate: false,
+            impersonating: false,
+            actor: null,
+          },
         });
       }
     }

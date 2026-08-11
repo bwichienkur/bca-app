@@ -11,6 +11,7 @@ import type {
   LeagueSummary,
   MembershipSnapshot,
   MembershipTeam,
+  PlayerSearchResult,
   UserPreferences,
 } from "@/lib/types";
 import type { AuthUser } from "./LoginScreen";
@@ -62,6 +63,11 @@ export function SettingsScreen({
   const [linkPassword, setLinkPassword] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
+  const [viewAsQuery, setViewAsQuery] = useState("");
+  const [viewAsResults, setViewAsResults] = useState<PlayerSearchResult[]>([]);
+  const [viewAsLoading, setViewAsLoading] = useState(false);
+  const [viewAsError, setViewAsError] = useState<string | null>(null);
+  const [viewAsBusy, setViewAsBusy] = useState(false);
 
   const fargoLinked = Boolean(user.fargoLinked ?? user.lmsId);
   const digitalPoolLinked = Boolean(user.digitalPoolLinked);
@@ -69,6 +75,9 @@ export function SettingsScreen({
   const stripeChargesEnabled = Boolean(user.stripeChargesEnabled);
   const operatorLinked = Boolean(user.leagueOperator);
   const scoringReady = Boolean(user.scoringReady ?? user.lmsId);
+  const canImpersonate = Boolean(user.canImpersonate);
+  const impersonating = Boolean(user.impersonating);
+  const showViewAs = canImpersonate || impersonating;
 
   const refreshStripeStatus = async () => {
     const response = await fetch("/api/auth/link/stripe");
@@ -310,6 +319,114 @@ export function SettingsScreen({
     }
   };
 
+  useEffect(() => {
+    if (!canImpersonate) return;
+    const q = viewAsQuery.trim();
+    if (q.length < 2) {
+      setViewAsResults([]);
+      setViewAsLoading(false);
+      setViewAsError(null);
+      return;
+    }
+    let cancelled = false;
+    setViewAsLoading(true);
+    setViewAsError(null);
+    const timer = window.setTimeout(() => {
+      void fetch(`/api/players/search?q=${encodeURIComponent(q)}`)
+        .then(async (response) => {
+          const payload = (await response.json().catch(() => null)) as {
+            players?: PlayerSearchResult[];
+            error?: string;
+          } | null;
+          if (cancelled) return;
+          if (!response.ok) {
+            throw new Error(payload?.error || "Player search failed.");
+          }
+          setViewAsResults(payload?.players ?? []);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setViewAsResults([]);
+          setViewAsError(
+            err instanceof Error ? err.message : "Player search failed.",
+          );
+        })
+        .finally(() => {
+          if (!cancelled) setViewAsLoading(false);
+        });
+    }, 320);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [canImpersonate, viewAsQuery]);
+
+  const startViewAs = async (player: PlayerSearchResult) => {
+    setViewAsBusy(true);
+    setViewAsError(null);
+    setStatus(null);
+    try {
+      const name = [player.firstName, player.lastName]
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .join(" ");
+      const response = await fetch("/api/auth/impersonate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lmsId: player.id,
+          name: name || player.name || null,
+          readableId: player.readableId,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        user?: AuthUser;
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.user) {
+        throw new Error(payload?.error || "Could not start view-as.");
+      }
+      onUserUpdate?.(payload.user);
+      setViewAsQuery("");
+      setViewAsResults([]);
+      setStatus(`Viewing as ${payload.user.name ?? "player"}.`);
+      onRefreshMembership();
+    } catch (err) {
+      setViewAsError(
+        err instanceof Error ? err.message : "Could not start view-as.",
+      );
+    } finally {
+      setViewAsBusy(false);
+    }
+  };
+
+  const stopViewAs = async () => {
+    setViewAsBusy(true);
+    setViewAsError(null);
+    setStatus(null);
+    try {
+      const response = await fetch("/api/auth/impersonate", {
+        method: "DELETE",
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        user?: AuthUser;
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.user) {
+        throw new Error(payload?.error || "Could not exit view-as.");
+      }
+      onUserUpdate?.(payload.user);
+      setStatus("Back to your account.");
+      onRefreshMembership();
+    } catch (err) {
+      setViewAsError(
+        err instanceof Error ? err.message : "Could not exit view-as.",
+      );
+    } finally {
+      setViewAsBusy(false);
+    }
+  };
+
   const unlink = async (
     provider: "fargo" | "digital-pool" | "operator" | "stripe",
   ) => {
@@ -358,8 +475,19 @@ export function SettingsScreen({
           <p className="mt-2 text-sm text-[var(--muted)]">
             Signed in as{" "}
             <span className="font-medium text-[var(--ink)]">
-              {user.name ?? user.email ?? "Player"}
+              {impersonating
+                ? `${user.name ?? "Player"} (view-as)`
+                : (user.name ?? user.email ?? "Player")}
             </span>
+            {impersonating && user.actor ? (
+              <>
+                {" "}
+                · real account{" "}
+                <span className="font-medium text-[var(--ink)]">
+                  {user.actor.name ?? user.actor.email ?? "you"}
+                </span>
+              </>
+            ) : null}
             . Connect FargoRate for Score, League Operator for Manage,
             Digital Pool for brackets, and Stripe for tournament entry fees.
           </p>
@@ -372,6 +500,105 @@ export function SettingsScreen({
           Done
         </button>
       </div>
+
+      {showViewAs ? (
+        <div className="space-y-3 rounded-[var(--radius)] border border-[var(--felt)]/35 bg-[color-mix(in_srgb,var(--felt)_8%,var(--surface))] p-4 md:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--felt-deep)]">
+                Superadmin · View as player
+              </p>
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                See another player’s Score / team context. Shared draft sync
+                still works; LMS submit is blocked until you exit.
+              </p>
+            </div>
+            {impersonating ? (
+              <button
+                type="button"
+                disabled={viewAsBusy}
+                onClick={() => void stopViewAs()}
+                className="rounded-[var(--radius)] bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+              >
+                {viewAsBusy ? "Working…" : "Exit view-as"}
+              </button>
+            ) : null}
+          </div>
+
+          {impersonating ? (
+            <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--ink)]">
+              Viewing as{" "}
+              <span className="font-semibold">
+                {user.name ?? "player"}
+              </span>
+              {user.readableId ? (
+                <span className="text-[var(--muted)]">
+                  {" "}
+                  · #{user.readableId}
+                </span>
+              ) : null}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                  Find player
+                </span>
+                <input
+                  type="search"
+                  value={viewAsQuery}
+                  onChange={(event) => setViewAsQuery(event.target.value)}
+                  placeholder="Name…"
+                  className="w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:ring-2 focus:ring-[var(--felt-soft)]"
+                />
+              </label>
+              {viewAsLoading ? (
+                <p className="text-xs text-[var(--muted)]">Searching…</p>
+              ) : null}
+              {viewAsResults.length > 0 ? (
+                <ul className="max-h-56 space-y-1 overflow-y-auto">
+                  {viewAsResults.slice(0, 8).map((player) => {
+                    const name = [player.firstName, player.lastName]
+                      .map((part) => part.trim())
+                      .filter(Boolean)
+                      .join(" ");
+                    return (
+                      <li key={player.id}>
+                        <button
+                          type="button"
+                          disabled={viewAsBusy}
+                          onClick={() => void startViewAs(player)}
+                          className="flex w-full items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-left text-sm transition hover:border-[var(--felt)]/40 hover:bg-[color-mix(in_srgb,var(--felt)_6%,var(--surface))] disabled:opacity-50"
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate font-semibold text-[var(--ink)]">
+                              {name || player.name || "Unknown"}
+                            </span>
+                            <span className="block truncate text-[11px] text-[var(--muted)]">
+                              {player.rating != null
+                                ? `Fargo ${player.rating}`
+                                : "Unrated"}
+                              {player.location ? ` · ${player.location}` : ""}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-xs font-semibold text-[var(--felt-deep)]">
+                            View as
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
+            </div>
+          )}
+          {viewAsError ? (
+            <p className="text-xs font-medium text-[var(--danger)]">
+              {viewAsError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-4 md:p-5">
         <div>

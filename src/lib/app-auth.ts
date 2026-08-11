@@ -60,6 +60,14 @@ export type AppSession = {
   expiresAt: number;
 };
 
+/** Real account when Bright is viewing the app as another player. */
+export type PublicAuthActor = {
+  id: string;
+  email: string | null;
+  name: string | null;
+  lmsId: string;
+};
+
 /** Public user shape returned to the client. */
 export type PublicAuthUser = {
   id: string;
@@ -77,6 +85,12 @@ export type PublicAuthUser = {
   scoringReady: boolean;
   /** Verified LMS League Operator — unlocks the LMS tab with Bright allowlist. */
   leagueOperator: boolean;
+  /** Bright-only: can start view-as for another player. */
+  canImpersonate?: boolean;
+  /** True when the session is currently viewing as another player. */
+  impersonating?: boolean;
+  /** Real signed-in account while impersonating. */
+  actor?: PublicAuthActor | null;
 };
 
 type MemoryStore = {

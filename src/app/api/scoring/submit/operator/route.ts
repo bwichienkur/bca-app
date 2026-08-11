@@ -29,6 +29,8 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const { assertNotImpersonating } = await import("@/lib/impersonation");
+    await assertNotImpersonating();
     const session = await requireScoringSession();
     if (!isOperatorConfigured()) {
       return NextResponse.json(
