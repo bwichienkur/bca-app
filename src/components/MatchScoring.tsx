@@ -3175,8 +3175,8 @@ function ScorePad({
               </div>
             </div>
           }
-          cancelLabel="Use their score"
-          confirmLabel="Save mine anyway"
+          cancelLabel="Cancel"
+          confirmLabel="Overwrite"
           confirmTone="danger"
           onCancel={() => {
             const adopted = scoreConflict.remoteGame;
