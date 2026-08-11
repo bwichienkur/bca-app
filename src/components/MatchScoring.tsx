@@ -217,6 +217,29 @@ function findPlayer(
   return players.find((p) => p.id === id) ?? null;
 }
 
+/** Scoring-cookie LMS id (real account, not impersonation target). */
+function scoringSessionLmsId(user: AuthUser | null): string {
+  if (!user) return "";
+  if (user.impersonating && user.actor?.lmsId) return user.actor.lmsId.trim();
+  return (user.lmsId || "").trim();
+}
+
+function resolveScorerName(
+  match: ScoringMatchDetail,
+  updatedBy: string | null | undefined,
+  updatedByName: string | null | undefined,
+): string {
+  const stored = (updatedByName || "").trim();
+  if (stored) return stored;
+  const id = (updatedBy || "").trim();
+  if (!id) return "Another scorer";
+  const player =
+    findPlayer(match.teamOnePlayers, id) ||
+    findPlayer(match.teamTwoPlayers, id);
+  if (player) return playerDisplayName(player);
+  return "Another scorer";
+}
+
 export function MatchScoring({
   divisionId,
   divisionName,
@@ -1653,6 +1676,7 @@ export function MatchScoring({
               match={match}
               game={padGame}
               scoringFormat={scoringFormat}
+              scoringLmsId={scoringSessionLmsId(user)}
               roundNumber={activeGame?.roundNumber ?? activeRound}
               gameIndex={activeGame?.gameIndex ?? 1}
               onClose={() => setActiveGame(null)}
@@ -2561,6 +2585,7 @@ function ScorePad({
   match,
   game,
   scoringFormat,
+  scoringLmsId,
   roundNumber,
   gameIndex,
   onClose,
@@ -2571,6 +2596,8 @@ function ScorePad({
   match: ScoringMatchDetail;
   game: GameScoreState | null | undefined;
   scoringFormat: LeagueScoringFormat;
+  /** Real scoring-session LMS id used for shared-draft authorship. */
+  scoringLmsId: string;
   roundNumber: number;
   gameIndex: number;
   onClose: () => void;
@@ -2591,6 +2618,8 @@ function ScorePad({
   const [scoreConflict, setScoreConflict] = useState<{
     remoteGame: GameScoreState;
     remoteUpdatedAt: string | null;
+    remoteUpdatedBy: string | null;
+    remoteUpdatedByName: string | null;
   } | null>(null);
   const [spacerPx, setSpacerPx] = useState(104);
   const scoresRef = useRef<HTMLDivElement | null>(null);
@@ -2701,14 +2730,22 @@ function ScorePad({
         if (remote.shared) {
           const remoteGame =
             remote.draft?.games[gameKey(roundNumber, gameIndex)];
+          const remoteAuthor = (remote.updatedBy || "").trim();
+          const sameAuthor =
+            Boolean(scoringLmsId) &&
+            Boolean(remoteAuthor) &&
+            remoteAuthor === scoringLmsId;
           if (
             remoteGame &&
             gameHasEnteredScore(remoteGame) &&
-            gameResultsDiffer(remoteGame, pending)
+            gameResultsDiffer(remoteGame, pending) &&
+            !sameAuthor
           ) {
             setScoreConflict({
               remoteGame,
               remoteUpdatedAt: remote.draft?.updatedAt ?? null,
+              remoteUpdatedBy: remote.updatedBy ?? null,
+              remoteUpdatedByName: remote.updatedByName ?? null,
             });
             return;
           }
@@ -3156,7 +3193,14 @@ function ScorePad({
           body={
             <div className="space-y-3">
               <p>
-                Another device already saved a different score for{" "}
+                <span className="font-semibold text-[var(--ink)]">
+                  {resolveScorerName(
+                    match,
+                    scoreConflict.remoteUpdatedBy,
+                    scoreConflict.remoteUpdatedByName,
+                  )}
+                </span>{" "}
+                already saved a different score for{" "}
                 <span className="font-semibold text-[var(--ink)]">
                   R{roundNumber} · G{gameIndex}
                 </span>
@@ -3171,7 +3215,12 @@ function ScorePad({
                     {formatGameScoreLabel(scoreConflict.remoteGame)}
                   </p>
                   <p className="mt-0.5 text-[11px] text-[var(--muted)]">
-                    {match.teamOneName.trim()} – {match.teamTwoName.trim()}
+                    Saved by{" "}
+                    {resolveScorerName(
+                      match,
+                      scoreConflict.remoteUpdatedBy,
+                      scoreConflict.remoteUpdatedByName,
+                    )}
                   </p>
                 </div>
                 <div className="rounded-[var(--radius)] border border-[var(--amber)]/40 bg-[color-mix(in_srgb,var(--amber)_10%,var(--surface))] px-3 py-2.5">

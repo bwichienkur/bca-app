@@ -70,7 +70,11 @@ export async function POST(request: NextRequest) {
     );
     if (alreadyPlayed) {
       if (isDraftStoreConfigured()) {
-        await markSharedDraftSubmitted(matchId, session.lmsId);
+        await markSharedDraftSubmitted(
+          matchId,
+          session.lmsId,
+          session.name,
+        );
       }
       return NextResponse.json({
         ok: true,
@@ -101,7 +105,11 @@ export async function POST(request: NextRequest) {
 
     if (isDraftStoreConfigured()) {
       if (verifiedPlayed) {
-        await markSharedDraftSubmitted(matchId, session.lmsId);
+        await markSharedDraftSubmitted(
+          matchId,
+          session.lmsId,
+          session.name,
+        );
       } else {
         await clearSharedDraftSubmitted(matchId);
       }

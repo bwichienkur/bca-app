@@ -12,6 +12,8 @@ const DRAFT_TTL_SECONDS = 60 * 60 * 24 * 60; // 60 days
 export type SharedDraftRecord = {
   draft: ScoringDraft;
   updatedBy: string;
+  /** Display name of the scorer who last wrote the draft (best-effort). */
+  updatedByName: string;
   submittedAt: string | null;
 };
 
@@ -45,6 +47,8 @@ function normalizeRecord(value: unknown): SharedDraftRecord | null {
     return {
       draft: raw.draft,
       updatedBy: typeof raw.updatedBy === "string" ? raw.updatedBy : "",
+      updatedByName:
+        typeof raw.updatedByName === "string" ? raw.updatedByName : "",
       submittedAt:
         typeof raw.submittedAt === "string" || raw.submittedAt === null
           ? (raw.submittedAt as string | null)
@@ -55,6 +59,7 @@ function normalizeRecord(value: unknown): SharedDraftRecord | null {
     return {
       draft: raw,
       updatedBy: "",
+      updatedByName: "",
       submittedAt: null,
     };
   }
@@ -74,6 +79,7 @@ export async function putSharedDraft(args: {
   matchId: string;
   draft: ScoringDraft;
   updatedBy: string;
+  updatedByName?: string | null;
   /** Client's last-seen server updatedAt; used for optimistic concurrency. */
   baseUpdatedAt?: string | null;
 }): Promise<
@@ -121,6 +127,7 @@ export async function putSharedDraft(args: {
       matchId: args.matchId,
     },
     updatedBy: args.updatedBy,
+    updatedByName: (args.updatedByName ?? "").trim(),
     submittedAt: existing?.submittedAt ?? null,
   };
 
@@ -134,14 +141,19 @@ export async function putSharedDraft(args: {
 export async function markSharedDraftSubmitted(
   matchId: string,
   updatedBy: string,
+  updatedByName?: string | null,
 ): Promise<void> {
   const redis = getRedis();
   if (!redis) return;
   const existing = await getSharedDraft(matchId);
   if (!existing) return;
+  const nextName = (updatedByName ?? "").trim();
   const record: SharedDraftRecord = {
     ...existing,
     updatedBy,
+    updatedByName:
+      nextName ||
+      (existing.updatedBy === updatedBy ? existing.updatedByName : ""),
     submittedAt: new Date().toISOString(),
   };
   await redis.set(draftKey(matchId), record, { ex: DRAFT_TTL_SECONDS });

@@ -221,7 +221,11 @@ export async function POST(request: NextRequest) {
     // Only lock the sheet when LMS actually shows the match as played.
     if (matchId && isDraftStoreConfigured()) {
       if (verifiedPlayed) {
-        await markSharedDraftSubmitted(matchId, session.lmsId);
+        await markSharedDraftSubmitted(
+          matchId,
+          session.lmsId,
+          session.name,
+        );
       } else {
         await clearSharedDraftSubmitted(matchId);
       }
