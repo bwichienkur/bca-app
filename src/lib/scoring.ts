@@ -174,16 +174,13 @@ export function syncLineupToGames(
   draft: ScoringDraft,
   match: ScoringMatchDetail,
 ): ScoringDraft {
-  const next: ScoringDraft = {
-    ...draft,
-    updatedAt: new Date().toISOString(),
-    games: { ...draft.games },
-  };
+  const games: ScoringDraft["games"] = { ...draft.games };
+  let changed = false;
 
   for (const round of match.matchFormat?.rounds ?? []) {
     for (const game of round.games) {
       const key = gameKey(round.roundNumber, game.index);
-      const existing = next.games[key] ?? {
+      const existing = games[key] ?? {
         teamOnePlayerId: null,
         teamTwoPlayerId: null,
         teamOneScore: 0,
@@ -194,18 +191,53 @@ export function syncLineupToGames(
         teamOneHandicap: null,
         teamTwoHandicap: null,
       };
-      next.games[key] = {
-        ...existing,
-        teamOneScore: existing.teamOneScore ?? 0,
-        teamTwoScore: existing.teamTwoScore ?? 0,
-        teamOnePlayerId:
-          next.teamOneLineup[(game.playerOne.index || 1) - 1] ?? null,
-        teamTwoPlayerId:
-          next.teamTwoLineup[(game.playerTwo.index || 1) - 1] ?? null,
-      };
+      const teamOnePlayerId =
+        draft.teamOneLineup[(game.playerOne.index || 1) - 1] ?? null;
+      const teamTwoPlayerId =
+        draft.teamTwoLineup[(game.playerTwo.index || 1) - 1] ?? null;
+      const teamOneScore = existing.teamOneScore ?? 0;
+      const teamTwoScore = existing.teamTwoScore ?? 0;
+      if (
+        !games[key] ||
+        existing.teamOnePlayerId !== teamOnePlayerId ||
+        existing.teamTwoPlayerId !== teamTwoPlayerId ||
+        existing.teamOneScore !== teamOneScore ||
+        existing.teamTwoScore !== teamTwoScore
+      ) {
+        games[key] = {
+          ...existing,
+          teamOneScore,
+          teamTwoScore,
+          teamOnePlayerId,
+          teamTwoPlayerId,
+        };
+        changed = true;
+      }
     }
   }
-  return applyHandicapsToDraft(match, next);
+
+  const linedUp = changed ? { ...draft, games } : draft;
+  const withHandicaps = applyHandicapsToDraft(match, linedUp);
+  for (const key of Object.keys(withHandicaps.games)) {
+    const before = draft.games[key];
+    const after = withHandicaps.games[key];
+    if (!before || !after) {
+      changed = true;
+      break;
+    }
+    if (
+      before.teamOneHandicap !== after.teamOneHandicap ||
+      before.teamTwoHandicap !== after.teamTwoHandicap ||
+      before.teamOnePlayerId !== after.teamOnePlayerId ||
+      before.teamTwoPlayerId !== after.teamTwoPlayerId
+    ) {
+      changed = true;
+      break;
+    }
+  }
+
+  if (!changed) return draft;
+  return { ...withHandicaps, updatedAt: new Date().toISOString() };
 }
 
 /** Legal race scores for the score pad (no 8/9 — jump to race-to win). */

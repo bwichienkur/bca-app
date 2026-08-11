@@ -602,8 +602,8 @@ export function MatchScoring({
         pointsForWin: data.match.pointsForWin ?? null,
         matchWinCountsAsRound: data.match.matchWinCountsAsRound ?? null,
       });
-      // True when the shared draft won the merge — do not re-push on open or we
-      // steal updatedBy from whoever last scored (breaks discrepancy checks).
+      // When we load someone else's shared draft, keep their updatedAt so the
+      // poll loop and discrepancy checks don't think we just authored it.
       const adoptedRemote =
         Boolean(remoteDraft) &&
         Boolean(chosen) &&
@@ -631,10 +631,10 @@ export function MatchScoring({
       setView({ mode: "sheet", matchId });
       if (!locked) {
         saveDraft(nextDraft);
-        // Seed / upload only when there is no remote yet, or local was newer.
-        // Re-pushing an adopted remote draft would rewrite updatedBy to the
-        // opener and skip the score-mismatch popup for everyone else.
-        if (!adoptedRemote) {
+        // Only seed an empty shared store on open. Any re-push here rewrites
+        // updatedBy to the opener and skips the score-mismatch popup — even
+        // when a stale local draft merely has a newer timestamp.
+        if (!remoteDraft) {
           void pushRemoteDraft(nextDraft, baseUpdatedAtRef.current)
             .then((remote) => {
               if (remote.shared) setSharedDrafts(true);
