@@ -24,7 +24,7 @@ import {
   mergeCombinedSchedule,
   mergeCombinedStandings,
 } from "@/lib/division-combos";
-import { canAccessLmsFromPublicUser } from "@/lib/lms-access";
+import { canAccessLmsFromPublicUser, isSuperadminClient } from "@/lib/lms-access";
 import { scheduleHasMatchTonight } from "@/lib/match-night";
 import { normalizeTeamName } from "@/lib/matchups";
 import { enrichPlayersWithRatings } from "@/lib/players";
@@ -353,6 +353,11 @@ export function LeagueApp() {
     basePrefs: UserPreferences,
     playerName?: string | null,
   ) => {
+    const bright =
+      Boolean(user) &&
+      isSuperadminClient(user) &&
+      !user?.impersonating;
+
     const preferredTeam =
       nextMembership.teams.find((team) => team.teamId === basePrefs.teamId) ??
       nextMembership.teams.find(
@@ -374,6 +379,46 @@ export function LeagueApp() {
       ) ??
       nextMembership.leagues[0] ??
       null;
+
+    if (bright) {
+      // Keep Bright's chosen league/division/team (may not be in membership)
+      // so linked Beyond testing isn't reset by membership refresh.
+      const league =
+        nextMembership.leagues.find((item) => item.id === basePrefs.leagueId) ??
+        preferredLeague;
+      if (league) {
+        setSelectedLeague(league);
+        setLeagueQuery(league.name);
+      }
+      if (basePrefs.divisionId && basePrefs.divisionName) {
+        setSelectedDivision({
+          id: basePrefs.divisionId,
+          name: basePrefs.divisionName,
+          year: "",
+          leagueId: basePrefs.leagueId,
+          leagueName: basePrefs.leagueName,
+          state: league?.state ?? "",
+          reportUrl: "",
+        });
+      } else if (preferredDivision) {
+        setSelectedDivision(preferredDivision);
+      }
+      persist({
+        ...basePrefs,
+        playerId: nextMembership.playerId,
+        playerName: playerName ?? basePrefs.playerName,
+        leagueId: basePrefs.leagueId || preferredLeague?.id || basePrefs.leagueId,
+        leagueName:
+          basePrefs.leagueName ||
+          preferredLeague?.name ||
+          basePrefs.leagueName,
+        divisionId: basePrefs.divisionId ?? preferredDivision?.id ?? null,
+        divisionName: basePrefs.divisionName ?? preferredDivision?.name ?? null,
+        teamId: basePrefs.teamId ?? preferredTeam?.teamId ?? null,
+        teamName: basePrefs.teamName ?? preferredTeam?.teamName ?? null,
+      });
+      return;
+    }
 
     if (preferredLeague) {
       setSelectedLeague(preferredLeague);
@@ -573,8 +618,17 @@ export function LeagueApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const membershipReady = Boolean(
+    user && membership && membership.teams.length,
+  );
+  /** Bright (not view-as): browse every league division/team, not only membership. */
+  const brightBrowseAll = Boolean(
+    user && isSuperadminClient(user) && !user.impersonating,
+  );
+  const useMembershipCatalog = membershipReady && !brightBrowseAll;
+
   useEffect(() => {
-    if (booting || user) return;
+    if (booting || (user && !brightBrowseAll)) return;
     const controller = new AbortController();
     const handle = window.setTimeout(async () => {
       setLoadingLeagues(true);
@@ -595,7 +649,34 @@ export function LeagueApp() {
       controller.abort();
       window.clearTimeout(handle);
     };
-  }, [leagueQuery, booting, user]);
+  }, [leagueQuery, booting, user, brightBrowseAll]);
+
+  // Bright: always load the full public division list for the selected league
+  // so sister Beyond divisions (and every team) are available to link/test.
+  useEffect(() => {
+    if (!brightBrowseAll || !selectedLeague) return;
+    let cancelled = false;
+    setLoadingDivisions(true);
+    void fetchJson<{ divisions: DivisionSummary[] }>(
+      `/api/leagues/${selectedLeague.id}/divisions`,
+    )
+      .then((data) => {
+        if (!cancelled) setDivisions(data.divisions);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : "Failed to load divisions",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDivisions(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [brightBrowseAll, selectedLeague?.id]);
 
   useEffect(() => {
     if (!selectedDivision) return;
@@ -784,10 +865,6 @@ export function LeagueApp() {
     setSelectedScheduleMatch(null);
   }, [tab, selectedDivision?.id]);
 
-  const membershipReady = Boolean(
-    user && membership && membership.teams.length,
-  );
-
   const chooseLeague = async (league: LeagueSummary) => {
     setSelectedLeague(league);
     setSelectedDivision(null);
@@ -795,7 +872,7 @@ export function LeagueApp() {
     setLoadingDivisions(true);
     setError(null);
     try {
-      if (membershipReady) {
+      if (useMembershipCatalog) {
         setDivisions(
           membership!.divisions.filter(
             (division) => division.leagueId === league.id,
@@ -815,6 +892,8 @@ export function LeagueApp() {
           teamName: null,
           divisionId: null,
           divisionName: null,
+          linkedDivisionId: null,
+          linkedDivisionName: null,
           leagueId: league.id,
           leagueName: league.name,
         }),
@@ -822,6 +901,8 @@ export function LeagueApp() {
         leagueName: league.name,
         divisionId: null,
         divisionName: null,
+        linkedDivisionId: null,
+        linkedDivisionName: null,
         teamId: null,
         teamName: null,
         playerId: user?.lmsId ?? prefs?.playerId ?? null,
@@ -997,17 +1078,17 @@ export function LeagueApp() {
   };
 
   const leagueOptions: TypeaheadOption<LeagueSummary>[] = useMemo(() => {
-    const source = membershipReady ? membership!.leagues : leagues;
+    const source = useMembershipCatalog ? membership!.leagues : leagues;
     return source.map((league) => ({
       id: league.id,
       label: league.name,
       meta: `${league.state} · ${league.divisionCount} divisions`,
       value: league,
     }));
-  }, [membershipReady, membership, leagues]);
+  }, [useMembershipCatalog, membership, leagues]);
 
   const divisionOptions: TypeaheadOption<DivisionSummary>[] = useMemo(() => {
-    const source = membershipReady
+    const source = useMembershipCatalog
       ? membership!.divisions.filter(
           (division) =>
             !selectedLeague || division.leagueId === selectedLeague.id,
@@ -1019,10 +1100,10 @@ export function LeagueApp() {
       meta: `${division.year} · ${division.leagueName}`,
       value: division,
     }));
-  }, [membershipReady, membership, divisions, selectedLeague]);
+  }, [useMembershipCatalog, membership, divisions, selectedLeague]);
 
   const teamOptions: TypeaheadOption<DivisionTeam>[] = useMemo(() => {
-    if (membershipReady && selectedDivision) {
+    if (useMembershipCatalog && selectedDivision) {
       const mine = membership!.teams.filter(
         (team) => team.divisionId === selectedDivision.id,
       );
@@ -1046,13 +1127,15 @@ export function LeagueApp() {
         };
       });
     }
-    return divisionTeams.map((team) => ({
-      id: team.id,
-      label: team.name,
-      meta: `${team.players.length} players`,
-      value: team,
-    }));
-  }, [membershipReady, membership, selectedDivision, divisionTeams]);
+    return divisionTeams
+      .filter((team) => !team.isBye)
+      .map((team) => ({
+        id: team.id,
+        label: team.name,
+        meta: `${team.players.length} players`,
+        value: team,
+      }));
+  }, [useMembershipCatalog, membership, selectedDivision, divisionTeams]);
 
   /** Followed team from the top League / Division / My team section */
   const myTeam =
@@ -1415,9 +1498,11 @@ export function LeagueApp() {
             ) : null}
             {contextOpen ? (
               <p className="mt-2 text-sm text-white/70">
-                {user
-                  ? "Pick from your active sessions. Standings and players still include the whole division."
-                  : "Set league, division, and my team for schedule & handicap."}
+                {brightBrowseAll
+                  ? "Bright mode: every division and team in the league is available so you can link and test combined nights."
+                  : user
+                    ? "Pick from your active sessions. Standings and players still include the whole division."
+                    : "Set league, division, and my team for schedule & handicap."}
                 {findKnownComboForDivisionName(selectedDivision?.name)
                   ? " Link the sister Beyond Singles/Teams division for a combined night."
                   : ""}
@@ -1463,7 +1548,9 @@ export function LeagueApp() {
                     : null
                 }
                 options={leagueOptions}
-                onQueryChange={user ? undefined : setLeagueQuery}
+                onQueryChange={
+                  brightBrowseAll || !user ? setLeagueQuery : undefined
+                }
                 onChange={(option) => {
                   if (option) void chooseLeague(option.value);
                   else clearLeague();
@@ -1477,9 +1564,11 @@ export function LeagueApp() {
                     ? "Pick a league first"
                     : loadingDivisions
                       ? "Loading divisions…"
-                      : user
-                        ? "Your divisions"
-                        : "Type to find your division"
+                      : brightBrowseAll
+                        ? "All divisions in this league"
+                        : user
+                          ? "Your divisions"
+                          : "Type to find your division"
                 }
                 value={
                   selectedDivision
@@ -1507,9 +1596,11 @@ export function LeagueApp() {
                     ? "Pick a division first"
                     : loadingContext
                       ? "Loading teams…"
-                      : user
-                        ? "Your teams in this division"
-                        : "Set your team for schedule & handicap"
+                      : brightBrowseAll
+                        ? "Any team in this division"
+                        : user
+                          ? "Your teams in this division"
+                          : "Set your team for schedule & handicap"
                 }
                 value={
                   myTeam
@@ -2044,23 +2135,31 @@ export function LeagueApp() {
                   const league =
                     membership?.leagues.find(
                       (item) => item.id === next.leagueId,
-                    ) ?? null;
+                    ) ??
+                    leagues.find((item) => item.id === next.leagueId) ??
+                    null;
                   const division =
                     membership?.divisions.find(
                       (item) => item.id === next.divisionId,
-                    ) ?? null;
+                    ) ??
+                    divisions.find((item) => item.id === next.divisionId) ??
+                    null;
                   if (league) {
                     setSelectedLeague(league);
-                    setLeagues(membership?.leagues ?? [league]);
+                    if (!brightBrowseAll) {
+                      setLeagues(membership?.leagues ?? [league]);
+                    }
                     setLeagueQuery(league.name);
                   }
                   if (division) {
                     setSelectedDivision(division);
-                    setDivisions(
-                      (membership?.divisions ?? []).filter(
-                        (item) => item.leagueId === division.leagueId,
-                      ),
-                    );
+                    if (!brightBrowseAll) {
+                      setDivisions(
+                        (membership?.divisions ?? []).filter(
+                          (item) => item.leagueId === division.leagueId,
+                        ),
+                      );
+                    }
                   }
                   startTransition(() =>
                     setTab(
