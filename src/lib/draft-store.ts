@@ -1,9 +1,56 @@
 import {
   summarizeDraftForBoard,
   type DraftBoardSummary,
+  type GameScoreState,
   type ScoringDraft,
 } from "./scoring";
 import { getRedis, isRedisConfigured } from "./redis";
+
+function gameResultEqual(
+  a: GameScoreState | undefined,
+  b: GameScoreState | undefined,
+): boolean {
+  if (!a || !b) return false;
+  return (
+    a.teamOneScore === b.teamOneScore &&
+    a.teamTwoScore === b.teamTwoScore &&
+    a.winAdornment === b.winAdornment &&
+    a.isWinZip === b.isWinZip
+  );
+}
+
+/**
+ * Keep per-game scoredBy when a game's result did not change, so overwriting
+ * one matchup does not make every other game look authored by the opener.
+ */
+function mergeGameAuthorship(args: {
+  previous: ScoringDraft["games"] | undefined;
+  next: ScoringDraft["games"];
+  updatedBy: string;
+  updatedByName: string;
+}): ScoringDraft["games"] {
+  const prev = args.previous ?? {};
+  const out: ScoringDraft["games"] = {};
+  for (const [key, game] of Object.entries(args.next)) {
+    const prior = prev[key];
+    if (prior && gameResultEqual(prior, game)) {
+      out[key] = {
+        ...game,
+        scoredBy: (game.scoredBy || prior.scoredBy || "").trim() || null,
+        scoredByName:
+          (game.scoredByName || prior.scoredByName || "").trim() || null,
+      };
+      continue;
+    }
+    out[key] = {
+      ...game,
+      scoredBy: (game.scoredBy || args.updatedBy || "").trim() || null,
+      scoredByName:
+        (game.scoredByName || args.updatedByName || "").trim() || null,
+    };
+  }
+  return out;
+}
 
 const KEY_PREFIX = "tableside:scoring:draft:v1:";
 /** Free-tier friendly: drafts expire if abandoned. */
@@ -121,13 +168,22 @@ export async function putSharedDraft(args: {
     return { ok: false, conflict: true, record: existing, shared: true };
   }
 
+  const writerName = (args.updatedByName ?? "").trim();
+  const mergedGames = mergeGameAuthorship({
+    previous: existing?.draft.games,
+    next: args.draft.games,
+    updatedBy: args.updatedBy,
+    updatedByName: writerName,
+  });
+
   const record: SharedDraftRecord = {
     draft: {
       ...args.draft,
       matchId: args.matchId,
+      games: mergedGames,
     },
     updatedBy: args.updatedBy,
-    updatedByName: (args.updatedByName ?? "").trim(),
+    updatedByName: writerName,
     submittedAt: existing?.submittedAt ?? null,
   };
 
