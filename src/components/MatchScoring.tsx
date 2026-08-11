@@ -2964,9 +2964,16 @@ function ScorePad({
         if (remote.shared) {
           const remoteGame =
             remote.draft?.games[gameKey(roundNumber, gameIndex)];
-          // Per-game author only — draft updatedBy flips after one overwrite
-          // and must not suppress discrepancy checks on other games.
-          const remoteAuthor = (remoteGame?.scoredBy || "").trim();
+          // Prefer per-game scoredBy. Fall back to draft updatedBy only when
+          // the game has no author yet (legacy scores) so editing your own
+          // prior save does not prompt. Server merge backfills unchanged
+          // games from the previous draft writer so other players' scores
+          // keep their authorship after you overwrite a different game.
+          const remoteAuthor = (
+            remoteGame?.scoredBy ||
+            remote.updatedBy ||
+            ""
+          ).trim();
           const sameAuthor =
             Boolean(scoringLmsId) &&
             Boolean(remoteAuthor) &&

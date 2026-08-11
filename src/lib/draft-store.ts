@@ -22,23 +22,35 @@ function gameResultEqual(
 /**
  * Keep per-game scoredBy when a game's result did not change, so overwriting
  * one matchup does not make every other game look authored by the opener.
+ * Unchanged games with no stored author inherit the previous draft writer.
  */
 function mergeGameAuthorship(args: {
   previous: ScoringDraft["games"] | undefined;
+  previousUpdatedBy?: string;
+  previousUpdatedByName?: string;
   next: ScoringDraft["games"];
   updatedBy: string;
   updatedByName: string;
 }): ScoringDraft["games"] {
   const prev = args.previous ?? {};
+  const priorAuthor = (args.previousUpdatedBy || "").trim();
+  const priorAuthorName = (args.previousUpdatedByName || "").trim();
   const out: ScoringDraft["games"] = {};
   for (const [key, game] of Object.entries(args.next)) {
     const prior = prev[key];
     if (prior && gameResultEqual(prior, game)) {
       out[key] = {
         ...game,
-        scoredBy: (game.scoredBy || prior.scoredBy || "").trim() || null,
+        scoredBy:
+          (game.scoredBy || prior.scoredBy || priorAuthor || "").trim() ||
+          null,
         scoredByName:
-          (game.scoredByName || prior.scoredByName || "").trim() || null,
+          (
+            game.scoredByName ||
+            prior.scoredByName ||
+            priorAuthorName ||
+            ""
+          ).trim() || null,
       };
       continue;
     }
@@ -113,13 +125,50 @@ function normalizeRecord(value: unknown): SharedDraftRecord | null {
   return null;
 }
 
+/** Fill missing per-game authors from the draft writer (legacy drafts). */
+function backfillMissingGameAuthors(
+  record: SharedDraftRecord,
+): { record: SharedDraftRecord; changed: boolean } {
+  const author = (record.updatedBy || "").trim();
+  if (!author) return { record, changed: false };
+  const authorName = (record.updatedByName || "").trim();
+  let changed = false;
+  const games: ScoringDraft["games"] = { ...record.draft.games };
+  for (const [key, game] of Object.entries(games)) {
+    const one = game.teamOneScore ?? 0;
+    const two = game.teamTwoScore ?? 0;
+    if (one === 0 && two === 0) continue;
+    if ((game.scoredBy || "").trim()) continue;
+    games[key] = {
+      ...game,
+      scoredBy: author,
+      scoredByName: authorName || null,
+    };
+    changed = true;
+  }
+  if (!changed) return { record, changed: false };
+  return {
+    changed: true,
+    record: {
+      ...record,
+      draft: { ...record.draft, games },
+    },
+  };
+}
+
 export async function getSharedDraft(
   matchId: string,
 ): Promise<SharedDraftRecord | null> {
   const redis = getRedis();
   if (!redis) return null;
   const value = await redis.get<unknown>(draftKey(matchId));
-  return normalizeRecord(value);
+  const normalized = normalizeRecord(value);
+  if (!normalized) return null;
+  const { record, changed } = backfillMissingGameAuthors(normalized);
+  if (changed) {
+    await redis.set(draftKey(matchId), record, { ex: DRAFT_TTL_SECONDS });
+  }
+  return record;
 }
 
 export async function putSharedDraft(args: {
@@ -171,6 +220,8 @@ export async function putSharedDraft(args: {
   const writerName = (args.updatedByName ?? "").trim();
   const mergedGames = mergeGameAuthorship({
     previous: existing?.draft.games,
+    previousUpdatedBy: existing?.updatedBy,
+    previousUpdatedByName: existing?.updatedByName,
     next: args.draft.games,
     updatedBy: args.updatedBy,
     updatedByName: writerName,
