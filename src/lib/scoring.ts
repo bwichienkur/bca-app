@@ -1085,6 +1085,11 @@ export function computeMatchHandicaps(
   });
 }
 
+/**
+ * Round-based HC is a once-per-round award. LMS's scoresheet HDCP column sums
+ * every game row, so stamp the round total on the first game only and zero the
+ * rest — otherwise a +6 round becomes 6×5 = 30 in LMS.
+ */
 export function applyHandicapsToDraft(
   match: ScoringMatchDetail,
   draft: ScoringDraft,
@@ -1098,16 +1103,17 @@ export function applyHandicapsToDraft(
   for (const round of match.matchFormat?.rounds ?? []) {
     const result = byRound.get(round.roundNumber);
     if (!result) continue;
-    for (const game of round.games) {
+    round.games.forEach((game, gameOffset) => {
       const key = gameKey(round.roundNumber, game.index);
       const existing = games[key];
-      if (!existing) continue;
+      if (!existing) return;
+      const isHcCarrier = gameOffset === 0;
       games[key] = {
         ...existing,
-        teamOneHandicap: result.teamOne,
-        teamTwoHandicap: result.teamTwo,
+        teamOneHandicap: isHcCarrier ? result.teamOne : 0,
+        teamTwoHandicap: isHcCarrier ? result.teamTwo : 0,
       };
-    }
+    });
   }
 
   return { ...draft, games };
@@ -1143,6 +1149,9 @@ export function clearDraft(matchId: string): void {
 /**
  * Build the LMS verticalmatch payload.
  * Field names follow the official BCAPL app / web scoresheet models.
+ *
+ * Round-based handicap goes on the first game of each round only. Do not put
+ * calculated HC into `*RoundsBonus` — those are LMS Operator Bonus fields.
  */
 export function buildVerticalMatchPayload(args: {
   match: ScoringMatchDetail;
@@ -1151,8 +1160,14 @@ export function buildVerticalMatchPayload(args: {
   dateScored?: string;
 }): Record<string, unknown> {
   const { match, draft, scoreKeeper } = args;
+  const roundHandicaps = computeMatchHandicaps(match, draft);
+  const handicapByRound = new Map(
+    roundHandicaps.map((result) => [result.round, result]),
+  );
+
   const rounds = (match.matchFormat?.rounds ?? []).map((round) => {
-    const games = round.games.map((game) => {
+    const roundHc = handicapByRound.get(round.roundNumber);
+    const games = round.games.map((game, gameOffset) => {
       const state = draft.games[gameKey(round.roundNumber, game.index)];
       const teamOnePlayerId =
         state?.teamOnePlayerId ??
@@ -1170,6 +1185,9 @@ export function buildVerticalMatchPayload(args: {
         state?.isWinZip ||
         winAdornment.toUpperCase().startsWith("WZ") ||
         false;
+      // Place HC from computed round award (not draft) so stale drafts that
+      // stamped HC on every game cannot re-submit the inflated LMS totals.
+      const isHcCarrier = gameOffset === 0;
 
       return {
         gameType: game.gameType,
@@ -1187,8 +1205,8 @@ export function buildVerticalMatchPayload(args: {
         teamTwoScore,
         winAdornment,
         isWinZip,
-        teamOneHandicaps: [state?.teamOneHandicap ?? 0],
-        teamTwoHandicaps: [state?.teamTwoHandicap ?? 0],
+        teamOneHandicaps: [isHcCarrier ? (roundHc?.teamOne ?? 0) : 0],
+        teamTwoHandicaps: [isHcCarrier ? (roundHc?.teamTwo ?? 0) : 0],
       };
     });
 
@@ -1199,7 +1217,6 @@ export function buildVerticalMatchPayload(args: {
     };
   });
 
-  const roundHandicaps = computeMatchHandicaps(match, draft);
   return {
     matchId: match.id,
     MatchId: match.id,
@@ -1209,14 +1226,8 @@ export function buildVerticalMatchPayload(args: {
     ScoreKeeper: scoreKeeper,
     rounds,
     Rounds: rounds,
-    teamOneRoundsBonus: roundHandicaps.reduce(
-      (sum, round) => sum + round.teamOne,
-      0,
-    ),
-    teamTwoRoundsBonus: roundHandicaps.reduce(
-      (sum, round) => sum + round.teamTwo,
-      0,
-    ),
+    teamOneRoundsBonus: 0,
+    teamTwoRoundsBonus: 0,
     teamOneGamesBonus: 0,
     teamTwoGamesBonus: 0,
     createHandoff: false,
