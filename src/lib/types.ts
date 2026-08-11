@@ -45,6 +45,11 @@ export type ScheduleMatch = {
   away: string;
   location: string;
   url: string | null;
+  /** Present when schedule is merged from a linked division combo. */
+  divisionId?: string | null;
+  divisionName?: string | null;
+  /** Short part label e.g. Singles / Teams. */
+  partLabel?: string | null;
 };
 
 export type ScheduleDay = {
@@ -99,6 +104,13 @@ export type UserPreferences = {
   leagueName: string;
   divisionId: string | null;
   divisionName: string | null;
+  /**
+   * Optional sister LMS division that shares the same league night
+   * (e.g. Beyond Singles + Beyond Teams). Standings/schedule/score can
+   * combine both while each sheet still submits to its own division.
+   */
+  linkedDivisionId?: string | null;
+  linkedDivisionName?: string | null;
   playerId: string | null;
   playerName: string | null;
   teamId: string | null;

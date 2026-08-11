@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { normalizeTeamName } from "@/lib/matchups";
+import { canonicalizeTeamKey, teamsMatchByName } from "@/lib/division-combos";
 import { isUpcomingScheduleDate, parseScheduleDate } from "@/lib/schedule";
 import { rankForTeam, teamRanksFromReport } from "@/lib/standings";
 import type { ScheduleDay, ScheduleMatch, TableReport } from "@/lib/types";
@@ -58,14 +58,13 @@ export function ScheduleList({
 
   const teamDays = useMemo(() => {
     if (!teamName) return days;
-    const target = normalizeTeamName(teamName);
     return days
       .map((day) => ({
         ...day,
         matches: day.matches.filter(
           (match) =>
-            normalizeTeamName(match.home) === target ||
-            normalizeTeamName(match.away) === target,
+            teamsMatchByName(match.home, teamName) ||
+            teamsMatchByName(match.away, teamName),
         ),
       }))
       .filter((day) => day.matches.length > 0);
@@ -78,7 +77,7 @@ export function ScheduleList({
       const isUpcoming = isUpcomingScheduleDate(day.date);
       day.matches.forEach((match, index) => {
         const item: FlatMatch = {
-          key: `${day.date}-${index}-${match.matchId ?? match.home}`,
+          key: `${day.date}:${match.divisionId ?? ""}:${match.matchId ?? index}:${canonicalizeTeamKey(match.home)}-${canonicalizeTeamKey(match.away)}`,
           day,
           match,
           upcoming: isUpcoming,
@@ -95,7 +94,7 @@ export function ScheduleList({
 
   const visibleMatches =
     view === "upcoming" ? upcomingMatches : pastMatches;
-  const myTeam = teamName ? normalizeTeamName(teamName) : null;
+  const myTeam = teamName ?? null;
 
   if (!teamDays.length) {
     return (
@@ -181,8 +180,8 @@ export function ScheduleList({
               const { match, day } = item;
               const isMyMatch = Boolean(
                 myTeam &&
-                  (normalizeTeamName(match.home) === myTeam ||
-                    normalizeTeamName(match.away) === myTeam),
+                  (teamsMatchByName(match.home, myTeam) ||
+                    teamsMatchByName(match.away, myTeam)),
               );
               return (
                 <MatchListCard
@@ -191,22 +190,19 @@ export function ScheduleList({
                   style={{ animationDelay: `${Math.min(index, 6) * 0.04}s` }}
                   homeName={match.home}
                   awayName={match.away}
+                  badge={match.partLabel ?? null}
                   meta={formatScheduleDate(day.date)}
                   location={match.location || undefined}
                   ctaLabel="View"
                   isMyMatch={isMyMatch}
                   homeRank={rankForTeam(teamRanks, match.home)}
                   awayRank={rankForTeam(teamRanks, match.away)}
-                  emphasizeHome={
-                    Boolean(
-                      myTeam && normalizeTeamName(match.home) === myTeam,
-                    )
-                  }
-                  emphasizeAway={
-                    Boolean(
-                      myTeam && normalizeTeamName(match.away) === myTeam,
-                    )
-                  }
+                  emphasizeHome={Boolean(
+                    myTeam && teamsMatchByName(match.home, myTeam),
+                  )}
+                  emphasizeAway={Boolean(
+                    myTeam && teamsMatchByName(match.away, myTeam),
+                  )}
                   onClick={() => onMatchClick?.(match, day)}
                 />
               );

@@ -99,6 +99,27 @@ function sideForTeam(
   return null;
 }
 
+function canonicalizeTeamKey(name: string): string {
+  return name
+    .replace(/^\((H|A)\)\s*/i, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+/** Match mySide by team name when IDs differ across linked divisions. */
+function sideForTeamName(
+  match: Pick<RawMatch, "teamOneName" | "teamTwoName">,
+  teamName: string | null,
+): 1 | 2 | null {
+  if (!teamName) return null;
+  const key = canonicalizeTeamKey(teamName);
+  if (!key) return null;
+  if (canonicalizeTeamKey(match.teamOneName) === key) return 1;
+  if (canonicalizeTeamKey(match.teamTwoName) === key) return 2;
+  return null;
+}
+
 async function teamIncludesPlayer(
   teamId: string,
   playerId: string,
@@ -155,6 +176,7 @@ async function backfillFromSchedule(args: {
   divisionId: string;
   existing: ScoringMatchSummary[];
   teamId: string | null;
+  teamName: string | null;
 }): Promise<ScoringMatchSummary[]> {
   const schedule = await fetchSchedule(args.divisionId);
   const existingIds = new Set(args.existing.map((match) => match.id));
@@ -196,7 +218,13 @@ async function backfillFromSchedule(args: {
   for (const match of hydrated) {
     if (!match) continue;
     if (match.divisionId && match.divisionId !== args.divisionId) continue;
-    extras.push(toSummary(match, sideForTeam(match, args.teamId)));
+    extras.push(
+      toSummary(
+        match,
+        sideForTeam(match, args.teamId) ??
+          sideForTeamName(match, args.teamName),
+      ),
+    );
   }
   return extras;
 }
@@ -229,6 +257,7 @@ export async function GET(request: NextRequest) {
     const raw = (await response.json()) as RawMatch[];
     const mineOnly = request.nextUrl.searchParams.get("mine") !== "0";
     const teamId = request.nextUrl.searchParams.get("teamId");
+    const teamName = request.nextUrl.searchParams.get("teamName");
     const cache = new Map<string, boolean>();
     const matches: ScoringMatchSummary[] = [];
 
@@ -267,7 +296,8 @@ export async function GET(request: NextRequest) {
         if (!onOne && !onTwo) continue;
         mySide = onOne ? 1 : 2;
       } else {
-        mySide = sideForTeam(match, teamId);
+        mySide =
+          sideForTeam(match, teamId) ?? sideForTeamName(match, teamName);
       }
 
       matches.push(toSummary(match, mySide));
@@ -279,6 +309,7 @@ export async function GET(request: NextRequest) {
           divisionId,
           existing: matches,
           teamId,
+          teamName,
         });
         matches.push(...extras);
       } catch {

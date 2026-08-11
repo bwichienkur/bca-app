@@ -29,6 +29,8 @@ export function loadPreferences(): UserPreferences {
       leagueName: parsed.leagueName || DEFAULT_PREFERENCES.leagueName,
       divisionId: parsed.divisionId ?? null,
       divisionName: parsed.divisionName ?? null,
+      linkedDivisionId: parsed.linkedDivisionId ?? null,
+      linkedDivisionName: parsed.linkedDivisionName ?? null,
       playerId: parsed.playerId ?? null,
       playerName: parsed.playerName ?? null,
       teamId: parsed.teamId ?? null,

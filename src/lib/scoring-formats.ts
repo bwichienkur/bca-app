@@ -91,9 +91,51 @@ export const FORMAT_TUESDAY_9BALL_R6_HOT: LeagueScoringFormat = {
   pointSystem: "1",
 };
 
+/**
+ * Beyond Monday singles half: 3 players, each race win = 1 team point.
+ * Race limits come from the LMS match format (RL17); pointSystem mirrors that.
+ */
+export const FORMAT_BEYOND_SINGLES: LeagueScoringFormat = {
+  id: "beyond-singles",
+  label: "Beyond Singles (3 races)",
+  description:
+    "Three singles races. Each race win earns 1 team point toward the 5-pt Beyond night.",
+  playersPerTeam: 3,
+  matchesPerNight: 3,
+  teamPointMode: "match-win",
+  pointsPerMatchWin: 1,
+  raceMode: "fixed-race",
+  fixedRaceWin: 10,
+  fixedRaceMaxLoss: 7,
+  matchPointsRound: false,
+  pointSystem: "17",
+};
+
+/**
+ * Beyond Monday teams half: 3-man round-robin race on one scoresheet.
+ * LMS awards 1 match point; Tableside combined standings count it as 2 night pts.
+ */
+export const FORMAT_BEYOND_TEAMS: LeagueScoringFormat = {
+  id: "beyond-teams",
+  label: "Beyond Teams (RR race)",
+  description:
+    "Team round-robin race. LMS match win = 1; combined Beyond night awards 2 pts.",
+  playersPerTeam: 3,
+  matchesPerNight: 1,
+  teamPointMode: "match-win",
+  pointsPerMatchWin: 2,
+  raceMode: "fixed-race",
+  fixedRaceWin: 9,
+  fixedRaceMaxLoss: 9,
+  matchPointsRound: false,
+  pointSystem: "1",
+};
+
 export const LEAGUE_SCORING_FORMATS: LeagueScoringFormat[] = [
   FORMAT_PALM_BEACH_5,
   FORMAT_TUESDAY_9BALL_R6_HOT,
+  FORMAT_BEYOND_SINGLES,
+  FORMAT_BEYOND_TEAMS,
 ];
 
 export function getScoringFormat(id: string | null | undefined): LeagueScoringFormat {
@@ -110,6 +152,10 @@ export function inferScoringFormatFromDivisionName(
   divisionName: string | null | undefined,
 ): LeagueScoringFormat {
   const name = (divisionName ?? "").toLowerCase();
+  if (name.includes("beyond")) {
+    if (/\bsingles?\b/.test(name)) return FORMAT_BEYOND_SINGLES;
+    if (/\bteams?\b/.test(name)) return FORMAT_BEYOND_TEAMS;
+  }
   if (
     name.includes("9-ball") ||
     name.includes("9 ball") ||
