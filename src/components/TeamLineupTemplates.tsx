@@ -96,74 +96,37 @@ function PlusIcon({ className }: { className?: string }) {
   );
 }
 
-function EyeIcon({ className }: { className?: string }) {
+/** Same control chrome as LMS operator list rows. */
+const btnEdit =
+  "inline-flex items-center justify-center rounded-[var(--radius)] bg-[#a16207] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
+const btnDelete =
+  "inline-flex items-center justify-center rounded-[var(--radius)] bg-[#b42318] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
+
+function ChevronIcon({
+  className,
+  open,
+}: {
+  className?: string;
+  open: boolean;
+}) {
   return (
     <svg
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="2.2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={className}
-      aria-hidden
-    >
-      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
-      <circle cx="12" cy="12" r="2.5" />
-    </svg>
-  );
-}
-
-function TrashIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden
-    >
-      <path d="M4 7h16" />
-      <path d="M9 7V5h6v2" />
-      <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
-      <path d="M10 11v6" />
-      <path d="M14 11v6" />
-    </svg>
-  );
-}
-
-function ExpandIcon({ open }: { open: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 20 20"
-      fill="none"
-      aria-hidden
       className={[
-        "h-4 w-4 transition-transform",
-        open ? "rotate-180" : "",
+        className,
+        "transition-transform",
+        open ? "rotate-90" : "",
       ].join(" ")}
+      aria-hidden
     >
-      <path
-        d="M5 7.5 10 12.5 15 7.5"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="m9 6 6 6-6 6" />
     </svg>
   );
-}
-
-function expandBtnClass(expanded: boolean): string {
-  return [
-    "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] text-[var(--felt)] transition hover:bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]",
-    expanded
-      ? "bg-[color-mix(in_srgb,var(--felt)_14%,transparent)]"
-      : "",
-  ].join(" ");
 }
 
 function lineupMembers(
@@ -498,88 +461,86 @@ export function TeamLineupTemplates({
               <li key={preset.id}>
                 <AccentRecordCard>
                   <div className="space-y-1.5">
-                    <div className="flex min-w-0 items-start gap-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedId((prev) =>
+                            prev === preset.id ? null : preset.id,
+                          )
+                        }
+                        className="inline-flex shrink-0 items-center self-center rounded p-1 text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
+                        aria-expanded={expanded}
+                        aria-label={
+                          expanded
+                            ? `Collapse ${preset.name}`
+                            : `Expand ${preset.name}`
+                        }
+                      >
+                        <ChevronIcon open={expanded} className="h-5 w-5" />
+                      </button>
                       <div className="min-w-0 flex-1">
-                        <p className="font-[family-name:var(--font-display)] text-[16px] font-semibold leading-snug tracking-tight text-[var(--ink)] [overflow-wrap:anywhere]">
+                        <p className="text-sm font-semibold text-[var(--ink)]">
                           {preset.name}
                           {isDefault ? (
-                            <span className="ml-2 align-middle text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--felt-deep)]">
-                              Primary
+                            <span className="ml-2 text-xs text-[var(--muted)]">
+                              PRIMARY
                             </span>
                           ) : null}
                         </p>
-                        <p className="mt-0.5 text-[12px] leading-snug text-[var(--muted)]">
+                        <p className="text-xs text-[var(--muted)]">
                           {filledCount}/{slots} players
                           {isDefault ? " · used first" : ""}
                         </p>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setExpandedId((prev) =>
-                              prev === preset.id ? null : preset.id,
-                            )
-                          }
-                          className={expandBtnClass(expanded)}
-                          aria-expanded={expanded}
-                          aria-label={
-                            expanded
-                              ? `Hide players for ${preset.name}`
-                              : `Show players for ${preset.name}`
-                          }
-                          title={expanded ? "Hide players" : "Show players"}
-                        >
-                          <ExpandIcon open={expanded} />
-                        </button>
+                      <div className="flex shrink-0 items-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => viewPreset(preset)}
-                          aria-label={`View ${preset.name}`}
-                          title="View lineup"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] text-white transition hover:bg-[var(--felt-soft)]"
+                          className={btnEdit}
                         >
-                          <EyeIcon className="h-4 w-4" />
+                          View
                         </button>
                         {!isDefault ? (
                           <button
                             type="button"
                             onClick={() => deletePreset(preset)}
-                            aria-label={`Delete ${preset.name}`}
-                            title="Delete lineup"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius)] border border-[var(--danger)]/40 bg-[var(--danger-bg)] text-[var(--danger)] transition hover:brightness-110"
+                            className={btnDelete}
                           >
-                            <TrashIcon className="h-4 w-4" />
+                            Delete
                           </button>
                         ) : null}
                       </div>
                     </div>
 
                     {expanded ? (
-                      <ul className="space-y-1 border-t border-[var(--line)] pt-2">
+                      <ul
+                        className={`${accentRecordListClass} mt-3 border-t border-[var(--line)] pt-3`}
+                      >
                         {members.map((member) => (
-                          <li
-                            key={`${preset.id}-${member.slot}`}
-                            className="flex min-w-0 items-baseline gap-2 text-[12px] leading-snug"
-                          >
-                            <span className="w-5 shrink-0 text-[10px] font-semibold tabular-nums text-[var(--muted)]">
-                              #{member.slot}
-                            </span>
-                            <span className="min-w-0 flex-1 break-words text-[var(--ink)]">
-                              {member.name}
-                            </span>
-                            <span
-                              className={[
-                                "shrink-0 tabular-nums",
-                                member.rating == null
-                                  ? "font-semibold text-[var(--amber)]"
-                                  : "text-[var(--muted)]",
-                              ].join(" ")}
-                            >
-                              {member.rating != null
-                                ? member.rating
-                                : "Empty"}
-                            </span>
+                          <li key={`${preset.id}-${member.slot}`}>
+                            <AccentRecordCard showRail={false}>
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="min-w-0 flex-1 text-sm font-medium text-[var(--ink)]">
+                                  <span className="mr-2 text-[var(--muted)]">
+                                    #{member.slot}
+                                  </span>
+                                  {member.name}
+                                </span>
+                                <span
+                                  className={[
+                                    "shrink-0 text-sm tabular-nums",
+                                    member.rating == null
+                                      ? "font-semibold text-[var(--amber)]"
+                                      : "text-[var(--muted)]",
+                                  ].join(" ")}
+                                >
+                                  {member.rating != null
+                                    ? member.rating
+                                    : "Empty"}
+                                </span>
+                              </div>
+                            </AccentRecordCard>
                           </li>
                         ))}
                       </ul>
@@ -608,7 +569,7 @@ export function TeamLineupTemplates({
         <button
           type="button"
           onClick={editCurrent}
-          className="rounded-[var(--radius)] bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--felt-soft)]"
+          className={btnEdit}
         >
           Edit
         </button>
