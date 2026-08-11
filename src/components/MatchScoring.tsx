@@ -10,6 +10,7 @@ import {
   useState,
   useTransition,
   type CSSProperties,
+  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -314,7 +315,9 @@ export function MatchScoring({
           setDraft(merged);
           saveDraft(merged);
           setSaveStatus("saved");
-          setSyncNote("Another device had a newer score — loaded it.");
+          setSyncNote(
+            "Another device saved first — loaded their scores. Re-open a game to change it (you’ll be asked to confirm any mismatch).",
+          );
           return;
         }
         if (remote.draft) {
@@ -1646,13 +1649,28 @@ export function MatchScoring({
               roundNumber={activeGame?.roundNumber ?? activeRound}
               gameIndex={activeGame?.gameIndex ?? 1}
               onClose={() => setActiveGame(null)}
-              onSave={(next) => {
+              onSave={(next, options) => {
                 if (!activeGame || sheetLocked || !match) return;
+                if (options?.remoteUpdatedAt) {
+                  baseUpdatedAtRef.current = options.remoteUpdatedAt;
+                }
                 setGameScore(activeGame.roundNumber, activeGame.gameIndex, next, {
                   immediate: true,
                 });
                 // Stay on the sheet after save — don't auto-open the next game.
                 setActiveGame(null);
+              }}
+              onAdoptRemote={(remoteGame, remoteUpdatedAt) => {
+                if (!activeGame || sheetLocked || !match) return;
+                if (remoteUpdatedAt) {
+                  baseUpdatedAtRef.current = remoteUpdatedAt;
+                }
+                setGameScore(
+                  activeGame.roundNumber,
+                  activeGame.gameIndex,
+                  remoteGame,
+                  { immediate: true },
+                );
               }}
             />
           </div>
@@ -2502,6 +2520,29 @@ function gameScoreEqual(a: GameScoreState, b: GameScoreState): boolean {
   );
 }
 
+/** True when either side has a recorded score (including 0). */
+function gameHasEnteredScore(game: GameScoreState | null | undefined): boolean {
+  if (!game) return false;
+  return game.teamOneScore != null || game.teamTwoScore != null;
+}
+
+/** Compare the result fields that define a scored game for conflict checks. */
+function gameResultsDiffer(a: GameScoreState, b: GameScoreState): boolean {
+  return (
+    a.teamOneScore !== b.teamOneScore ||
+    a.teamTwoScore !== b.teamTwoScore ||
+    a.winAdornment !== b.winAdornment ||
+    a.isWinZip !== b.isWinZip
+  );
+}
+
+function formatGameScoreLabel(game: GameScoreState): string {
+  const one = game.teamOneScore == null ? "—" : String(game.teamOneScore);
+  const two = game.teamTwoScore == null ? "—" : String(game.teamTwoScore);
+  const adornment = game.winAdornment ? ` ${game.winAdornment}` : "";
+  return `${one} – ${two}${adornment}`;
+}
+
 function ScorePad({
   open,
   match,
@@ -2511,6 +2552,7 @@ function ScorePad({
   gameIndex,
   onClose,
   onSave,
+  onAdoptRemote,
 }: {
   open: boolean;
   match: ScoringMatchDetail;
@@ -2519,12 +2561,24 @@ function ScorePad({
   roundNumber: number;
   gameIndex: number;
   onClose: () => void;
-  onSave: (next: GameScoreState) => void;
+  onSave: (
+    next: GameScoreState,
+    options?: { remoteUpdatedAt?: string | null },
+  ) => void;
+  onAdoptRemote: (
+    remoteGame: GameScoreState,
+    remoteUpdatedAt?: string | null,
+  ) => void;
 }) {
   const [local, setLocal] = useState<GameScoreState | null>(game ?? null);
   const [baseline, setBaseline] = useState<GameScoreState | null>(game ?? null);
   const [mounted, setMounted] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
+  const [checkingRemote, setCheckingRemote] = useState(false);
+  const [scoreConflict, setScoreConflict] = useState<{
+    remoteGame: GameScoreState;
+    remoteUpdatedAt: string | null;
+  } | null>(null);
   const [spacerPx, setSpacerPx] = useState(104);
   const scoresRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -2537,6 +2591,8 @@ function ScorePad({
     setLocal(game ?? null);
     setBaseline(game ?? null);
     setDiscardOpen(false);
+    setScoreConflict(null);
+    setCheckingRemote(false);
     // Intentionally omit `game` so parent draft echoes don't clobber local taps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, roundNumber, gameIndex]);
@@ -2615,8 +2671,47 @@ function ScorePad({
     onClose();
   };
 
+  const commitSave = (
+    next: GameScoreState,
+    remoteUpdatedAt?: string | null,
+  ) => {
+    onSave(next, { remoteUpdatedAt });
+  };
+
   const saveGame = () => {
-    onSave(local);
+    if (checkingRemote || scoreConflict) return;
+    const pending = local;
+    setCheckingRemote(true);
+    void (async () => {
+      try {
+        const remote = await fetchRemoteDraft(match.id);
+        if (remote.shared) {
+          const remoteGame =
+            remote.draft?.games[gameKey(roundNumber, gameIndex)];
+          if (
+            remoteGame &&
+            gameHasEnteredScore(remoteGame) &&
+            gameResultsDiffer(remoteGame, pending)
+          ) {
+            setScoreConflict({
+              remoteGame,
+              remoteUpdatedAt: remote.draft?.updatedAt ?? null,
+            });
+            return;
+          }
+          if (remote.draft?.updatedAt) {
+            commitSave(pending, remote.draft.updatedAt);
+            return;
+          }
+        }
+        commitSave(pending);
+      } catch {
+        // Shared store unreachable — save locally / best-effort push.
+        commitSave(pending);
+      } finally {
+        setCheckingRemote(false);
+      }
+    })();
   };
 
   const scoreOptionsFor = (side: 1 | 2) => {
@@ -3025,7 +3120,7 @@ function ScorePad({
           <button
             type="button"
             onClick={saveGame}
-            disabled={!dirty}
+            disabled={!dirty || checkingRemote}
             className={[
               "w-full rounded-[var(--radius)] px-4 py-3.5 text-sm font-semibold transition enabled:active:scale-[0.99]",
               dirty
@@ -3033,10 +3128,71 @@ function ScorePad({
                 : "cursor-default border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]",
             ].join(" ")}
           >
-            {dirty ? "Save game" : "Saved ✓"}
+            {checkingRemote
+              ? "Checking…"
+              : dirty
+                ? "Save game"
+                : "Saved ✓"}
           </button>
         </div>
       </div>
+
+      {scoreConflict ? (
+        <ConfirmDialog
+          title="Score mismatch"
+          body={
+            <div className="space-y-3">
+              <p>
+                Another device already saved a different score for{" "}
+                <span className="font-semibold text-[var(--ink)]">
+                  R{roundNumber} · G{gameIndex}
+                </span>
+                . Confirm the discrepancy before overwriting.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                    Their score
+                  </p>
+                  <p className="mt-1 font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--felt-deep)]">
+                    {formatGameScoreLabel(scoreConflict.remoteGame)}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                    {match.teamOneName.trim()} – {match.teamTwoName.trim()}
+                  </p>
+                </div>
+                <div className="rounded-[var(--radius)] border border-[var(--amber)]/40 bg-[color-mix(in_srgb,var(--amber)_10%,var(--surface))] px-3 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--amber)]">
+                    Your score
+                  </p>
+                  <p className="mt-1 font-[family-name:var(--font-display)] text-lg font-semibold tabular-nums text-[var(--ink)]">
+                    {formatGameScoreLabel(local)}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                    {match.teamOneName.trim()} – {match.teamTwoName.trim()}
+                  </p>
+                </div>
+              </div>
+            </div>
+          }
+          cancelLabel="Cancel"
+          confirmLabel="Overwrite"
+          confirmTone="danger"
+          onCancel={() => {
+            const adopted = scoreConflict.remoteGame;
+            const remoteUpdatedAt = scoreConflict.remoteUpdatedAt;
+            setScoreConflict(null);
+            setLocal(adopted);
+            setBaseline(adopted);
+            onAdoptRemote(adopted, remoteUpdatedAt);
+          }}
+          onConfirm={() => {
+            const remoteUpdatedAt = scoreConflict.remoteUpdatedAt;
+            setScoreConflict(null);
+            commitSave(local, remoteUpdatedAt);
+          }}
+        />
+      ) : null}
 
       {discardOpen ? (
         <ConfirmDialog
@@ -3068,14 +3224,16 @@ function ConfirmDialog({
   title,
   body,
   confirmLabel,
+  cancelLabel = "Cancel",
   confirmTone = "primary",
   busy = false,
   onCancel,
   onConfirm,
 }: {
   title: string;
-  body: string;
+  body: ReactNode;
   confirmLabel: string;
+  cancelLabel?: string;
   confirmTone?: "primary" | "danger";
   busy?: boolean;
   onCancel: () => void;
@@ -3121,9 +3279,9 @@ function ConfirmDialog({
         >
           {title}
         </h4>
-        <p id="score-confirm-body" className="mt-2 text-sm text-[var(--muted)]">
-          {body}
-        </p>
+        <div id="score-confirm-body" className="mt-2 text-sm text-[var(--muted)]">
+          {typeof body === "string" ? <p>{body}</p> : body}
+        </div>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button
             type="button"
@@ -3131,7 +3289,7 @@ function ConfirmDialog({
             onClick={onCancel}
             className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)] disabled:opacity-50"
           >
-            Cancel
+            {cancelLabel}
           </button>
           <button
             type="button"
