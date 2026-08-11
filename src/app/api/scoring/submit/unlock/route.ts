@@ -16,6 +16,8 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: NextRequest) {
   try {
+    const { assertNotImpersonating } = await import("@/lib/impersonation");
+    await assertNotImpersonating();
     await requireScoringSession();
     const body = (await request.json()) as { matchId?: string };
     const matchId = typeof body.matchId === "string" ? body.matchId.trim() : "";

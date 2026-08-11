@@ -13,6 +13,17 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/** Client-safe: Bright / owner only (view-as / superadmin tools). */
+export function isSuperadminClient(
+  identity: LmsAccessIdentity | null | undefined,
+): boolean {
+  if (!identity) return false;
+  const email = identity.email ? normalizeEmail(identity.email) : "";
+  if (email === LMS_ACCESS_BRIGHT_EMAIL) return true;
+  const lmsId = identity.lmsId?.trim().toLowerCase() ?? "";
+  return lmsId === LMS_ACCESS_BRIGHT_LMS_ID.toLowerCase();
+}
+
 /**
  * Client-safe gate: Bright allowlist + `leagueOperator` flag from session.
  * Env LO email is covered when they sign in via League Operator login
@@ -23,11 +34,7 @@ export function canAccessLmsClient(
 ): boolean {
   if (!identity) return false;
   if (identity.leagueOperator) return true;
-  const email = identity.email ? normalizeEmail(identity.email) : "";
-  if (email === LMS_ACCESS_BRIGHT_EMAIL) return true;
-  const lmsId = identity.lmsId?.trim().toLowerCase() ?? "";
-  if (lmsId === LMS_ACCESS_BRIGHT_LMS_ID.toLowerCase()) return true;
-  return false;
+  return isSuperadminClient(identity);
 }
 
 /** Alias used by client UI (nav / LMS tab). */

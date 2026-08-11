@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAppUser } from "@/lib/app-auth";
 import { DEFAULT_LEAGUE_ID } from "@/lib/constants";
+import { resolveImpersonatedPlayerId } from "@/lib/impersonation";
 import { lmsCacheKey } from "@/lib/lms-cache";
 import { discoverMembership } from "@/lib/membership";
 import { getRedis } from "@/lib/redis";
@@ -16,6 +18,15 @@ const MEMBERSHIP_TTL_SECONDS = 60 * 60; // 1 hour
 export async function GET(request: NextRequest) {
   try {
     const session = await requireScoringSession();
+    let playerId = session.lmsId;
+    try {
+      const appUser = await requireAppUser();
+      const impersonated = await resolveImpersonatedPlayerId(appUser);
+      if (impersonated) playerId = impersonated;
+    } catch {
+      // No app session — use scoring cookie player id.
+    }
+
     const leagueId =
       request.nextUrl.searchParams.get("leagueId")?.trim() ||
       DEFAULT_LEAGUE_ID;
@@ -25,7 +36,7 @@ export async function GET(request: NextRequest) {
     const fresh = request.nextUrl.searchParams.get("fresh") === "1";
 
     // v6: one global BCAPL player-schedule discovery per player.
-    const cacheKey = lmsCacheKey("membership-v6", session.lmsId);
+    const cacheKey = lmsCacheKey("membership-v6", playerId);
 
     if (fresh) {
       const redis = getRedis();
@@ -43,7 +54,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!membership) {
-      membership = await discoverMembership(session.lmsId, {
+      membership = await discoverMembership(playerId, {
         leagueId,
         divisionId,
         teamId,
@@ -65,7 +76,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       membership: {
         ...membership,
-        playerId: session.lmsId,
+        playerId,
       },
     });
   } catch (error) {

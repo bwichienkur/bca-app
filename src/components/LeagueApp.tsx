@@ -169,7 +169,15 @@ export function LeagueApp() {
   const [screen, setScreen] = useState<AppScreen>("main");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const showManagePillar = canAccessLmsFromPublicUser(user);
+  const showManagePillar = canAccessLmsFromPublicUser(
+    user?.impersonating && user.actor
+      ? {
+          email: user.actor.email,
+          lmsId: user.actor.lmsId,
+          leagueOperator: user.leagueOperator,
+        }
+      : user,
+  );
   const activePillar = pillarForTab(tab);
   const [membership, setMembership] = useState<MembershipSnapshot | null>(null);
   const [loadingMembership, setLoadingMembership] = useState(false);
@@ -1194,6 +1202,69 @@ export function LeagueApp() {
         </div>
       </header>
 
+      {user?.impersonating ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--amber)]/40 bg-[color-mix(in_srgb,var(--amber)_14%,var(--surface))] px-4 py-3 text-sm text-[var(--ink)]">
+          <p>
+            Viewing as{" "}
+            <span className="font-semibold">
+              {user.name ?? "player"}
+            </span>
+            {user.actor ? (
+              <span className="text-[var(--muted)]">
+                {" "}
+                · signed in as {user.actor.name ?? user.actor.email ?? "you"}
+              </span>
+            ) : null}
+            . LMS submit is locked.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              void (async () => {
+                try {
+                  const response = await fetch("/api/auth/impersonate", {
+                    method: "DELETE",
+                  });
+                  const payload = (await response.json().catch(() => null)) as {
+                    user?: AuthUser;
+                    error?: string;
+                  } | null;
+                  if (!response.ok || !payload?.user) {
+                    throw new Error(payload?.error || "Could not exit view-as.");
+                  }
+                  setUser(payload.user);
+                  void loadMembership({
+                    fresh: true,
+                    prefsOverride: {
+                      ...(prefs ?? loadPreferences()),
+                      playerId: payload.user.lmsId,
+                      playerName: payload.user.name,
+                    },
+                  }).then((next) => {
+                    if (next?.teams.length) {
+                      applyMembershipDefaults(
+                        next,
+                        loadPreferences(),
+                        payload.user!.name,
+                      );
+                    }
+                  });
+                } catch (err) {
+                  setError(
+                    err instanceof Error
+                      ? err.message
+                      : "Could not exit view-as.",
+                  );
+                }
+              })();
+            }}
+            className="rounded-[var(--radius)] bg-[var(--felt)] px-3 py-1.5 text-xs font-semibold text-white"
+          >
+            Exit view-as
+          </button>
+        </div>
+      ) : null}
+
       {error ? (
         <div className="mb-4 rounded-[var(--radius)] border border-[var(--danger)]/30 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
           {error}
@@ -1723,15 +1794,45 @@ export function LeagueApp() {
                 }
                 onUserUpdate={(nextUser) => {
                   setUser(nextUser);
-                }}
-                onRefreshMembership={() => {
-                  if (!user.lmsId) return;
+                  if (!nextUser.lmsId) return;
+                  const nextPrefs = {
+                    ...(prefs ?? loadPreferences()),
+                    playerId: nextUser.lmsId,
+                    playerName: nextUser.name,
+                  };
+                  setPrefs(nextPrefs);
+                  savePreferences(nextPrefs);
                   void loadMembership({
                     fresh: true,
-                    prefsOverride: prefs,
+                    prefsOverride: nextPrefs,
                   }).then((next) => {
                     if (next?.teams.length) {
-                      applyMembershipDefaults(next, prefs, user.name);
+                      applyMembershipDefaults(
+                        next,
+                        nextPrefs,
+                        nextUser.name,
+                      );
+                    }
+                  });
+                }}
+                onRefreshMembership={() => {
+                  const current = user;
+                  if (!current?.lmsId) return;
+                  const nextPrefs = {
+                    ...(prefs ?? loadPreferences()),
+                    playerId: current.lmsId,
+                    playerName: current.name,
+                  };
+                  void loadMembership({
+                    fresh: true,
+                    prefsOverride: nextPrefs,
+                  }).then((next) => {
+                    if (next?.teams.length) {
+                      applyMembershipDefaults(
+                        next,
+                        nextPrefs,
+                        current.name,
+                      );
                     }
                   });
                 }}

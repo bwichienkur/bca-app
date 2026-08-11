@@ -940,6 +940,13 @@ export function MatchScoring({
 
   const submitMatch = async (options?: { preferOperator?: boolean }) => {
     if (!match || !draft || !user) return;
+    if (user.impersonating) {
+      setSheetError(
+        "Exit view-as before submitting to LMS. You can still save game scores to the shared draft.",
+      );
+      setConfirmDialog(null);
+      return;
+    }
     if (match.mySide == null) {
       setSheetError("You can only submit scores for your team’s matches.");
       setConfirmDialog(null);

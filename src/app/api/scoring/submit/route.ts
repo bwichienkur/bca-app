@@ -12,6 +12,7 @@ import {
   verifyMatchPlayedWithPlayerToken,
   verticalPayloadToOperatorScores,
 } from "@/lib/lms-operator";
+import { assertNotImpersonating } from "@/lib/impersonation";
 import {
   lmsAuthFetch,
   requireScoringSession,
@@ -65,6 +66,7 @@ async function tryOperatorFallback(args: {
 
 export async function POST(request: NextRequest) {
   try {
+    await assertNotImpersonating();
     const session = await requireScoringSession();
     const body = (await request.json()) as {
       payload?: Record<string, unknown>;
