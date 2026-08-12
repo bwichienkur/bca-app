@@ -227,7 +227,7 @@ export function ScoringFormatForm({
           />
         </label>
         <label className="block space-y-1 text-sm">
-          <span className="text-[var(--muted)]">Matches / night</span>
+          <span className="text-[var(--muted)]">Rounds</span>
           <input
             type="number"
             min={1}
@@ -244,13 +244,13 @@ export function ScoringFormatForm({
       </div>
 
       <label className="block space-y-1 text-sm">
-        <span className="text-[var(--muted)]">Team point mode</span>
+        <span className="text-[var(--muted)]">Team points</span>
         <SelectField
-          aria-label="Team point mode"
+          aria-label="Team points"
           value={draft.teamPointMode}
           options={[
-            { value: "round-points", label: "Round points" },
-            { value: "match-win", label: "Match win" },
+            { value: "round-points", label: "Round win" },
+            { value: "match-win", label: "Set win" },
           ]}
           onChange={(value) =>
             setDraft({
@@ -263,7 +263,7 @@ export function ScoringFormatForm({
 
       <div className="grid grid-cols-2 gap-2">
         <label className="block space-y-1 text-sm">
-          <span className="text-[var(--muted)]">Pts per match win</span>
+          <span className="text-[var(--muted)]">Pts / unit</span>
           <input
             type="number"
             min={1}
