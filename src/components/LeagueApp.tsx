@@ -215,6 +215,9 @@ export function LeagueApp() {
     match: ScheduleMatch;
     date: string;
   } | null>(null);
+  const [pendingScoreMatchId, setPendingScoreMatchId] = useState<string | null>(
+    null,
+  );
   const [contextOpen, setContextOpen] = useState(true);
   const [myTeamSubTab, setMyTeamSubTab] = useState<MyTeamSubTab>("standing");
   const [refreshToken, setRefreshToken] = useState(0);
@@ -799,6 +802,28 @@ export function LeagueApp() {
         if (cancelled) return;
         setPlayersByTeam(byTeam);
         setDivisionTeams(calculator.teams);
+
+        // Bright: if following a team by name, rebind to this division's team id.
+        if (
+          brightBrowseAll &&
+          prefs?.teamName &&
+          (!prefs.teamId ||
+            !calculator.teams.some((team) => team.id === prefs.teamId))
+        ) {
+          const matched = calculator.teams.find(
+            (team) =>
+              !team.isBye &&
+              normalizeTeamName(team.name) ===
+                normalizeTeamName(prefs.teamName ?? ""),
+          );
+          if (matched && prefs) {
+            persist({
+              ...prefs,
+              teamId: matched.id,
+              teamName: matched.name,
+            });
+          }
+        }
       } catch {
         // Non-fatal for reports that don't need team context.
       } finally {
@@ -810,7 +835,7 @@ export function LeagueApp() {
     return () => {
       cancelled = true;
     };
-  }, [selectedDivision, prefs?.teamId, refreshToken]);
+  }, [selectedDivision, prefs?.teamId, prefs?.teamName, refreshToken, brightBrowseAll]);
 
   useEffect(() => {
     if (!selectedDivision) return;
@@ -1203,16 +1228,27 @@ export function LeagueApp() {
       membership?.teams.filter((team) =>
         linkDivisionIds.has(team.divisionId),
       ) ?? [];
-    const keepTeam =
-      prefs?.teamId &&
-      membershipTeams.some((team) => team.teamId === prefs.teamId)
+
+    // Bright may follow any team in the division — don't force membership-only.
+    // Keep the prior pick when possible; otherwise leave unset so the full
+    // team list stays available for Score / schedule browsing.
+    let keepTeam: { teamId: string | null; teamName: string | null };
+    if (brightBrowseAll) {
+      keepTeam = prefs?.teamName
         ? { teamId: prefs.teamId, teamName: prefs.teamName }
-        : membershipTeams[0]
-          ? {
-              teamId: membershipTeams[0].teamId,
-              teamName: membershipTeams[0].teamName,
-            }
-          : { teamId: null, teamName: null };
+        : { teamId: null, teamName: null };
+    } else {
+      keepTeam =
+        prefs?.teamId &&
+        membershipTeams.some((team) => team.teamId === prefs.teamId)
+          ? { teamId: prefs.teamId, teamName: prefs.teamName }
+          : membershipTeams[0]
+            ? {
+                teamId: membershipTeams[0].teamId,
+                teamName: membershipTeams[0].teamName,
+              }
+            : { teamId: null, teamName: null };
+    }
 
     persist({
       ...base,
@@ -1552,7 +1588,8 @@ export function LeagueApp() {
     startTransition(() => setTab(next));
     if (
       (next === "schedule" || next === "my-team" || next === "score") &&
-      !prefs.teamName
+      !prefs.teamName &&
+      !brightBrowseAll
     ) {
       setContextOpen(true);
     }
@@ -1776,7 +1813,7 @@ export function LeagueApp() {
             {contextOpen ? (
               <p className="mt-2 text-sm text-white/70">
                 {brightBrowseAll
-                  ? "Bright mode: every division and team in the league is available. Named links are configured in LMS → Edit division → Link."
+                  ? "Bright mode: pick any division and any team. Schedule shows the full night — open a match to check its scoresheet."
                   : user
                     ? "Pick from your active sessions. Linked nights appear as one named division."
                     : "Set league, division, and my team for schedule & handicap."}
@@ -1976,6 +2013,8 @@ export function LeagueApp() {
                 teamId={prefs.teamId}
                 teamName={prefs.teamName}
                 scoringFormatId={prefs.scoringFormatId}
+                initialMatchId={pendingScoreMatchId}
+                onInitialMatchOpened={() => setPendingScoreMatchId(null)}
                 user={user}
                 authLoading={authLoading}
                 onRequestLogin={() => setScreen("login")}
@@ -2277,7 +2316,7 @@ export function LeagueApp() {
                 />
               </section>
             ) : tab === "schedule" && schedule ? (
-              !prefs.teamName ? (
+              !prefs.teamName && !brightBrowseAll ? (
                 <EmptyState
                   title="Set My team for schedule"
                   body="Schedule always uses your selected team from the context card."
@@ -2309,11 +2348,24 @@ export function LeagueApp() {
                   )}
                   myTeamName={prefs.teamName}
                   onClose={() => setSelectedScheduleMatch(null)}
+                  onOpenScoresheet={
+                    brightBrowseAll && selectedScheduleMatch.match.matchId
+                      ? () => {
+                          const matchId =
+                            selectedScheduleMatch.match.matchId!.trim();
+                          setSelectedScheduleMatch(null);
+                          setPendingScoreMatchId(matchId);
+                          startTransition(() => setTab("score"));
+                        }
+                      : undefined
+                  }
                 />
               ) : (
                 <ScheduleList
                   days={schedule}
-                  teamName={prefs.teamName}
+                  teamName={brightBrowseAll ? null : prefs.teamName}
+                  highlightTeamName={prefs.teamName}
+                  showAllTeams={brightBrowseAll}
                   divisionName={
                     selectedDivision?.name ?? prefs.divisionName
                   }

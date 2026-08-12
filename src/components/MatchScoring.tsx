@@ -126,6 +126,9 @@ type MatchScoringProps = {
   teamName: string | null;
   /** Explicit prefs format id, or null for auto. */
   scoringFormatId?: string | null;
+  /** Open this match once the board is ready (e.g. from Schedule). */
+  initialMatchId?: string | null;
+  onInitialMatchOpened?: () => void;
   user: AuthUser | null;
   authLoading?: boolean;
   onRequestLogin: () => void;
@@ -414,6 +417,8 @@ export function MatchScoring({
   teamId,
   teamName,
   scoringFormatId = null,
+  initialMatchId = null,
+  onInitialMatchOpened,
   user,
   authLoading = false,
   onRequestLogin,
@@ -830,7 +835,14 @@ export function MatchScoring({
     setSyncNote(null);
     try {
       const data = await fetchJson<{ match: ScoringMatchDetail }>(
-        `/api/scoring/matches/${matchId}`,
+        `/api/scoring/matches/${matchId}${
+          teamId || teamName
+            ? `?${new URLSearchParams({
+                ...(teamId ? { teamId } : {}),
+                ...(teamName ? { teamName } : {}),
+              }).toString()}`
+            : ""
+        }`,
       );
       const local = loadDraft(matchId);
       let remoteDraft: ScoringDraft | null = null;
@@ -1009,6 +1021,14 @@ export function MatchScoring({
       setLoadingMatch(false);
     }
   };
+
+  // Deep-link from Schedule (Bright): open a specific scoresheet once ready.
+  useEffect(() => {
+    const id = initialMatchId?.trim();
+    if (!id || !user || loadingMatches) return;
+    void openMatch(id).finally(() => onInitialMatchOpened?.());
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open once per initialMatchId
+  }, [initialMatchId, user, loadingMatches]);
 
   const updateDraft = (
     updater: (prev: ScoringDraft) => ScoringDraft,
