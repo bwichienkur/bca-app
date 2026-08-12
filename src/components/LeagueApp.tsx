@@ -1347,6 +1347,18 @@ export function LeagueApp() {
     () => standingCellsForTeam(teamReport, prefs?.teamName),
     [teamReport, prefs?.teamName],
   );
+  const myStandingRank = useMemo(() => {
+    const rank = myStandingCells?.find((cell) => {
+      const label = cell.label.trim().toLowerCase();
+      return (
+        label === "#" ||
+        label === "rank" ||
+        label === "rk" ||
+        label === "pos"
+      );
+    })?.value;
+    return rank ? `#${rank}` : null;
+  }, [myStandingCells]);
 
   const findDivisionTeam = (name: string) =>
     divisionTeams.find(
@@ -1887,14 +1899,6 @@ export function LeagueApp() {
                           .
                         </>
                       }
-                      action={
-                        myTeam?.players.length ? (
-                          <PanelHeaderCount
-                            label="Players"
-                            value={String(myTeam.players.length)}
-                          />
-                        ) : undefined
-                      }
                     />
                   </div>
                   <SubTabCard
@@ -1929,14 +1933,28 @@ export function LeagueApp() {
                   >
                     <div
                       className={
-                        myTeamSubTab === "standing" ? "min-w-0" : "hidden"
+                        myTeamSubTab === "standing"
+                          ? "min-w-0 space-y-3"
+                          : "hidden"
                       }
                       aria-hidden={myTeamSubTab !== "standing"}
                     >
+                      <PanelHeader
+                        title="Standing"
+                        description="Current place in the division"
+                        action={
+                          myStandingRank ? (
+                            <PanelHeaderCount
+                              label="Rank"
+                              value={myStandingRank}
+                            />
+                          ) : undefined
+                        }
+                      />
                       {myStandingCells ? (
                         <TeamStandingSummary
                           cells={myStandingCells}
-                          teamName={prefs.teamName}
+                          hideHeader
                         />
                       ) : (
                         <EmptyState
