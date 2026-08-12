@@ -312,10 +312,10 @@ function ScoringSideFields({
           <FieldLabel
             info={{
               summary:
-                "How many individual matches count toward the night. Usually matches Players. Beyond Teams uses 1 (one round-robin round).",
+                "LMS ROUND count on the scoresheet. Tuesday / Beyond Singles: one player race per round. Paradise: several games per round. Beyond Teams: usually 1 round (RR matchups inside it).",
             }}
           >
-            Matches
+            Rounds
           </FieldLabel>
           <input
             type="number"
@@ -336,17 +336,17 @@ function ScoringSideFields({
         <FieldLabel
           info={{
             summary:
-              "How individual results add to the team night score. Not the LMS total-points / R6 round — that comes from LMS matchWinCountsAsRound (division scoring).",
+              "What earns the team a point on the night. Not the LMS total-points / R6 round (that is matchWinCountsAsRound on the match).",
             items: [
               {
-                label: "Round points",
+                label: "Round win",
                 description:
-                  "Each clinched singles round scores for the team (Palm Beach). Maps to LMS “Division round or match” = Round.",
+                  "Team scores when it clinches the round (Paradise / Palm Beach; Beyond Teams after race-to-N). LMS standings: Rounds Won.",
               },
               {
-                label: "Match win",
+                label: "Set win",
                 description:
-                  "Winning the individual race (or GAME S) awards team point(s) (Tuesday / Beyond). Maps to LMS = Match.",
+                  "Team scores when a player wins their GAME R race (Tuesday, Beyond Singles). LMS standings: Sets Won. Beyond Teams uses GAME S matchup wins toward Team race-to instead.",
               },
             ],
           }}
@@ -357,8 +357,8 @@ function ScoringSideFields({
           aria-label={`${title} team points`}
           value={format.teamPointMode}
           options={[
-            { value: "round-points", label: "Round points" },
-            { value: "match-win", label: "Match win" },
+            { value: "round-points", label: "Round win" },
+            { value: "match-win", label: "Set win" },
           ]}
           onChange={(value) =>
             commitFormat({
@@ -374,10 +374,10 @@ function ScoringSideFields({
           <FieldLabel
             info={{
               summary:
-                "Team points awarded for one individual win. Almost always 1.",
+                "Points awarded per scored unit (one set win, or one Beyond Teams matchup win). Almost always 1.",
             }}
           >
-            Pts / win
+            Pts / unit
           </FieldLabel>
           <input
             type="number"
@@ -421,17 +421,18 @@ function ScoringSideFields({
       <label className="block space-y-1.5 text-sm">
         <FieldLabel
           info={{
-            summary: "How each individual race-to is determined on the pad.",
+            summary:
+              "How each player contest reaches a winner on the pad (points pad or Fargo race-to).",
             items: [
               {
                 label: "Fixed",
                 description:
-                  "Same race-to for everyone (Palm Beach race to 10), or win/lose (Beyond Teams race win = 1).",
+                  "Same target for everyone: Paradise game points to 10 / max loss 7, or Beyond Teams win/lose (1).",
               },
               {
                 label: "Fargo chart",
                 description:
-                  "Asymmetric race-tos from a Fargo chart by rating difference (Tuesday R6 Hot, Beyond Singles R5 Hot).",
+                  "GAME R player races with asymmetric race-tos from a chart (Tuesday R6 Hot, Beyond Singles R5 Hot). Winning that race is a set.",
               },
             ],
           }}
@@ -477,7 +478,7 @@ function ScoringSideFields({
             <FieldLabel
               info={{
                 summary:
-                  "Games needed to win the individual race. Palm Beach uses 10. Beyond Teams uses 1 (each GAME S is win/lose).",
+                  "Fixed target to finish a contest. Paradise: points to 10 per game. Beyond Teams: 1 (each GAME S is win/lose).",
               }}
             >
               Race win
