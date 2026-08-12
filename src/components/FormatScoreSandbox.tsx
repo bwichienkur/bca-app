@@ -21,6 +21,7 @@ import {
   tallyAllRoundsByGameWins,
   tallyDraft,
   tallyMatchPointsRound,
+  teamRaceWinnerSide,
   type GameScoreState,
   type ScoringDraft,
   type ScoringPlayer,
@@ -553,22 +554,6 @@ function PreviewGamePad({
   return createPortal(sheet, document.body);
 }
 
-function teamRaceWinnerSide(
-  homeWins: number,
-  awayWins: number,
-  teamRaceTo: number | null | undefined,
-): 1 | 2 | null {
-  if (teamRaceTo == null || teamRaceTo <= 0) return null;
-  const oneHit = homeWins >= teamRaceTo;
-  const twoHit = awayWins >= teamRaceTo;
-  if (oneHit && !twoHit) return 1;
-  if (twoHit && !oneHit) return 2;
-  if (oneHit && twoHit && homeWins !== awayWins) {
-    return homeWins > awayWins ? 1 : 2;
-  }
-  return null;
-}
-
 export function FormatScoreSandbox({
   picks,
   result,
@@ -851,6 +836,17 @@ export function FormatScoreSandbox({
         includeMatchPointsRound={includeMatchPointsRound}
         matchWinTeamPoints={matchWinMode}
         teamRaceTo={scoringFormat.teamRaceTo}
+        standingMatchPoints={
+          matchWinMode && scoringFormat.teamRaceTo
+            ? {
+                teamOne: raceClinched === 1 ? 2 : 0,
+                teamTwo: raceClinched === 2 ? 2 : 0,
+              }
+            : null
+        }
+        standingPtsHint={
+          matchWinMode && scoringFormat.teamRaceTo ? "RDS × 2" : null
+        }
         formatHint={formatScoringSummary(scoringFormat)}
         pointTotals={pointTotals}
         gameWins={{
@@ -1102,16 +1098,18 @@ export function FormatScoreSandbox({
             {matchWinMode && !isMatchPointsRound ? (
               <p className="text-xs text-[var(--muted)]">
                 {raceClinched
-                  ? `${raceClinched === 1 ? "Home" : "Away"} clinched the race — remaining unscored matchups are locked.`
-                  : scoringFormat.teamRaceTo
-                    ? `Each matchup is one game · winner earns ${scoringFormat.pointsPerMatchWin} match point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"} · first team to ${scoringFormat.teamRaceTo} wins. Tap a matchup to score.`
-                    : `Each individual match win = ${scoringFormat.pointsPerMatchWin} team point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}${
-                        scoringFormat.raceMode === "fargo-race-chart"
-                          ? ` · ${raceChartMeta(scoringFormat.raceChartId ?? "r6-hot").label}`
-                          : (scoringFormat.fixedRaceWin ?? 0) <= 1
-                            ? " · single-game matchups"
-                            : ""
-                      }. Tap a matchup to score.`}
+                  ? `${raceClinched === 1 ? "Home" : "Away"} won the round (2 standing match pts) — remaining unscored matchups are locked.`
+                  : scoringFormat.teamRaceTo && scoringFormat.fixedRaceWin === 1
+                    ? `Round-robin matchups · first to ${scoringFormat.teamRaceTo} wins the round (2 standing match pts). Tap a matchup to score.`
+                    : scoringFormat.teamRaceTo
+                      ? `Each matchup is one game · first team to ${scoringFormat.teamRaceTo} wins. Tap a matchup to score.`
+                      : `Each individual match win = ${scoringFormat.pointsPerMatchWin} team point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}${
+                          scoringFormat.raceMode === "fargo-race-chart"
+                            ? ` · ${raceChartMeta(scoringFormat.raceChartId ?? "r6-hot").label}`
+                            : (scoringFormat.fixedRaceWin ?? 0) <= 1
+                              ? " · single-game matchups"
+                              : ""
+                        }. Tap a matchup to score.`}
               </p>
             ) : null}
 

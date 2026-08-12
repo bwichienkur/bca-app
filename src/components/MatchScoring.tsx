@@ -52,6 +52,7 @@ import {
   tallyAllRoundsByGameWins,
   tallyDraft,
   tallyMatchPointsRound,
+  teamRaceWinnerSide,
   type DraftBoardSummary,
   type GameScoreState,
   type RoundPointsTally,
@@ -81,7 +82,10 @@ import {
   findKnownComboForDivisionName,
   mergeCombinedStandings,
 } from "@/lib/division-combos";
-import { scoringSideForDivision } from "@/lib/division-link-config";
+import {
+  scoringSideForDivision,
+  standingSideForDivision,
+} from "@/lib/division-link-config";
 import type { DivisionLink } from "@/lib/division-links";
 import type { NightHalfStatus } from "@/lib/night-standing";
 import { rankForTeam, teamRanksFromReport } from "@/lib/standings";
@@ -1180,6 +1184,50 @@ export function MatchScoring({
     return { teamOne, teamTwo };
   }, [matchPointsTally, matchWinTeamPoints, roundPointTallies, totals]);
 
+  const raceClinched = useMemo(
+    () =>
+      teamRaceWinnerSide(
+        roundWins.teamOne,
+        roundWins.teamTwo,
+        scoringFormat.teamRaceTo,
+      ),
+    [roundWins.teamOne, roundWins.teamTwo, scoringFormat.teamRaceTo],
+  );
+
+  /** Standing match pts for a Teams race sheet (LMS RDS × multiplier, usually 2). */
+  const teamsStandingAward = useMemo(() => {
+    if (!matchWinTeamPoints || !scoringFormat.teamRaceTo) return null;
+    if (divisionLink && match) {
+      const side = standingSideForDivision(divisionLink.config, {
+        divisionId: match.divisionId,
+        primaryDivisionId: divisionLink.primaryDivisionId,
+        linkedDivisionId: divisionLink.linkedDivisionId,
+      });
+      if (side.role === "teams" && side.metric === "rds") {
+        return side.multiplier > 0 ? side.multiplier : side.maxNightPoints;
+      }
+    }
+    return 2;
+  }, [divisionLink, match, matchWinTeamPoints, scoringFormat.teamRaceTo]);
+
+  const standingMatchPoints = useMemo(() => {
+    if (teamsStandingAward == null) return null;
+    const award = teamsStandingAward;
+    return {
+      teamOne: raceClinched === 1 ? award : 0,
+      teamTwo: raceClinched === 2 ? award : 0,
+    };
+  }, [raceClinched, teamsStandingAward]);
+
+  // Close the pad if the open matchup becomes locked after a race clinch.
+  useEffect(() => {
+    if (!activeGame || !draft || !raceClinched) return;
+    const state =
+      draft.games[gameKey(activeGame.roundNumber, activeGame.gameIndex)];
+    if (gameWinner(state, winnerOpts)) return;
+    setActiveGame(null);
+  }, [activeGame, draft, raceClinched, winnerOpts]);
+
   // Live point totals from played rounds only (totals tab is awarded later).
   const matchPointTotals = useMemo(
     () =>
@@ -1583,6 +1631,12 @@ export function MatchScoring({
           includeMatchPointsRound={includeMatchPointsRound}
           matchWinTeamPoints={matchWinTeamPoints}
           teamRaceTo={scoringFormat.teamRaceTo}
+          standingMatchPoints={standingMatchPoints}
+          standingPtsHint={
+            teamsStandingAward != null
+              ? `RDS × ${teamsStandingAward}`
+              : null
+          }
           formatHint={formatScoringSummary(scoringFormat)}
           pointTotals={matchPointTotals}
           gameWins={{
@@ -2002,18 +2056,19 @@ export function MatchScoring({
               ) : null}
               {matchWinTeamPoints && !isMatchPointsRound ? (
                 <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--muted)]">
-                  {scoringFormat.label}:{" "}
-                  {scoringFormat.teamRaceTo && scoringFormat.fixedRaceWin === 1
-                    ? `each matchup is win or lose (1 pt). First team to ${scoringFormat.teamRaceTo} wins.`
-                    : `each individual match win is ${scoringFormat.pointsPerMatchWin} team point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}${
-                        scoringFormat.teamRaceTo
-                          ? ` · first team to ${scoringFormat.teamRaceTo} wins`
-                          : ""
-                      }${
-                        scoringFormat.raceMode === "fargo-race-chart"
-                          ? ` · race from the ${raceChartMeta(scoringFormat.raceChartId ?? "r6-hot").label} chart`
-                          : ""
-                      }.`}
+                  {raceClinched
+                    ? `Round won — ${teamsStandingAward ?? 2} standing match pts (RDS × ${teamsStandingAward ?? 2}). Remaining matchups are locked.`
+                    : scoringFormat.teamRaceTo && scoringFormat.fixedRaceWin === 1
+                      ? `Round-robin matchups · first to ${scoringFormat.teamRaceTo} wins the round (${teamsStandingAward ?? 2} standing match pts).`
+                      : `Each match win is ${scoringFormat.pointsPerMatchWin} team point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}${
+                          scoringFormat.teamRaceTo
+                            ? ` · first to ${scoringFormat.teamRaceTo}`
+                            : ""
+                        }${
+                          scoringFormat.raceMode === "fargo-race-chart"
+                            ? ` · ${raceChartMeta(scoringFormat.raceChartId ?? "r6-hot").label}`
+                            : ""
+                        }.`}
                 </p>
               ) : null}
 
@@ -2028,10 +2083,10 @@ export function MatchScoring({
                 </p>
               ) : (
                 <div className="min-w-0 space-y-1.5">
-                  {currentRound?.games.map((game) => {
+                  {(currentRound?.games ?? []).map((game) => {
                     const state =
                       draft.games[
-                        gameKey(currentRound.roundNumber, game.index)
+                        gameKey(currentRound!.roundNumber, game.index)
                       ];
                     const p1 = findPlayer(
                       match.teamOnePlayers,
@@ -2042,33 +2097,40 @@ export function MatchScoring({
                       state?.teamTwoPlayerId ?? null,
                     );
                     const selected =
-                      activeGame?.roundNumber === currentRound.roundNumber &&
+                      activeGame?.roundNumber === currentRound!.roundNumber &&
                       activeGame?.gameIndex === game.index;
                     const winner = gameWinner(state, winnerOpts);
                     const status = gamePlayStatus(state, winnerOpts);
+                    const raceLocked = Boolean(raceClinched && !winner);
+                    const rowDisabled = sheetLocked || raceLocked;
                     return (
                       <button
                         key={game.index}
                         type="button"
                         onClick={() => {
-                          if (sheetLocked) return;
+                          if (rowDisabled) return;
                           setActiveGame({
-                            roundNumber: currentRound.roundNumber,
+                            roundNumber: currentRound!.roundNumber,
                             gameIndex: game.index,
                           });
                         }}
-                        disabled={sheetLocked}
+                        disabled={rowDisabled}
                         className={[
                           "w-full min-w-0 overflow-hidden rounded-[var(--radius)] border px-2.5 py-2 text-left transition sm:px-3",
-                          sheetLocked ? "cursor-default opacity-95" : "",
+                          rowDisabled ? "cursor-default opacity-95" : "",
+                          raceLocked
+                            ? "border-[var(--line)] bg-[var(--surface-2)]/50 opacity-70"
+                            : "",
                           selected
                             ? "border-[var(--felt)] ring-2 ring-[var(--felt)]/25"
                             : "",
-                          status === "complete"
+                          !raceLocked && status === "complete"
                             ? "border-[var(--felt)]/55 bg-[color-mix(in_srgb,var(--felt)_12%,var(--surface))]"
-                            : status === "in-progress"
+                            : !raceLocked && status === "in-progress"
                               ? "border-[var(--amber)]/65 bg-[color-mix(in_srgb,var(--amber)_14%,var(--surface))]"
-                              : "border-[var(--line)] bg-[var(--surface)] hover:bg-[var(--surface-2)]",
+                              : !raceLocked
+                                ? "border-[var(--line)] bg-[var(--surface)] hover:bg-[var(--surface-2)]"
+                                : "",
                         ].join(" ")}
                       >
                         <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
@@ -2099,32 +2161,47 @@ export function MatchScoring({
                           <div
                             className={[
                               "shrink-0 rounded-lg px-2.5 py-1 text-center",
-                              status === "complete"
-                                ? "bg-[color-mix(in_srgb,var(--felt)_20%,var(--surface))]"
-                                : status === "in-progress"
-                                  ? "bg-[color-mix(in_srgb,var(--amber)_22%,var(--surface))]"
-                                  : "bg-[var(--surface-2)]",
+                              raceLocked
+                                ? "bg-[var(--surface-2)]"
+                                : status === "complete"
+                                  ? "bg-[color-mix(in_srgb,var(--felt)_20%,var(--surface))]"
+                                  : status === "in-progress"
+                                    ? "bg-[color-mix(in_srgb,var(--amber)_22%,var(--surface))]"
+                                    : "bg-[var(--surface-2)]",
                             ].join(" ")}
                           >
-                            <p className="text-sm font-semibold tabular-nums leading-none">
-                              {scoreLabel(state, winnerOpts)}
-                            </p>
-                            <p
-                              className={[
-                                "mt-0.5 text-[9px] uppercase tracking-[0.12em]",
-                                status === "complete"
-                                  ? "font-semibold text-[var(--felt-deep)]"
-                                  : status === "in-progress"
-                                    ? "font-semibold text-[var(--amber)]"
-                                    : "text-[var(--muted)]",
-                              ].join(" ")}
-                            >
-                              {status === "complete"
-                                ? "Final"
-                                : status === "in-progress"
-                                  ? "Live"
-                                  : `G${game.index}`}
-                            </p>
+                            {raceLocked ? (
+                              <>
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                                  Locked
+                                </p>
+                                <p className="mt-0.5 text-[9px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                                  Not needed
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-sm font-semibold tabular-nums leading-none">
+                                  {scoreLabel(state, winnerOpts)}
+                                </p>
+                                <p
+                                  className={[
+                                    "mt-0.5 text-[9px] uppercase tracking-[0.12em]",
+                                    status === "complete"
+                                      ? "font-semibold text-[var(--felt-deep)]"
+                                      : status === "in-progress"
+                                        ? "font-semibold text-[var(--amber)]"
+                                        : "text-[var(--muted)]",
+                                  ].join(" ")}
+                                >
+                                  {status === "complete"
+                                    ? "Final"
+                                    : status === "in-progress"
+                                      ? "Live"
+                                      : `G${game.index}`}
+                                </p>
+                              </>
+                            )}
                           </div>
                           <div className="min-w-0 overflow-hidden text-right">
                             <p
@@ -2154,6 +2231,11 @@ export function MatchScoring({
                       </button>
                     );
                   })}
+                  {!currentRound?.games.length ? (
+                    <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--muted)]">
+                      No round-robin matchups on this sheet yet.
+                    </p>
+                  ) : null}
                 </div>
               )}
 
@@ -4210,7 +4292,15 @@ function ReviewPanel({
   const matchWinTeamPoints = scoringFormat.teamPointMode === "match-win";
   const hideRoundHandicap = formatUsesWinLoseMatchups(scoringFormat);
   const totals = tallyDraft(draft, winnerOpts);
-  const incomplete = totals.scored < totals.total;
+  const raceClinched = teamRaceWinnerSide(
+    totals.teamOneWins,
+    totals.teamTwoWins,
+    scoringFormat.teamRaceTo,
+  );
+  // LMS AllScoresRequired=0 for Beyond Teams — race clinch is enough to submit.
+  const incomplete = raceClinched
+    ? false
+    : totals.scored < totals.total;
   const roundTallies = matchWinTeamPoints
     ? []
     : tallyAllRoundPoints(match, draft);
@@ -4242,12 +4332,16 @@ function ReviewPanel({
         <p className="mt-1 text-sm text-[var(--muted)]">
           {matchWinTeamPoints
             ? scoringFormat.teamRaceTo
-              ? `Match pts ${roundWins.teamOne}–${roundWins.teamTwo} · race to ${scoringFormat.teamRaceTo}`
+              ? raceClinched
+                ? `Race ${totals.teamOneWins}–${totals.teamTwoWins} (to ${scoringFormat.teamRaceTo}) · round won`
+                : `Race ${totals.teamOneWins}–${totals.teamTwoWins} · first to ${scoringFormat.teamRaceTo}`
               : `Match wins ${roundWins.teamOne}–${roundWins.teamTwo}`
             : `Rounds ${roundWins.teamOne}–${roundWins.teamTwo}`}{" "}
-          · games {totals.teamOneWins}–{totals.teamTwoWins} · {totals.scored} of{" "}
-          {totals.total} complete
-          {incomplete && !locked ? " · finish every game first" : ""}
+          · {totals.scored} of {totals.total} matchups scored
+          {incomplete && !locked ? " · finish the race first" : ""}
+          {raceClinched && !locked
+            ? " · remaining matchups not required"
+            : ""}
           {match.isHandicapped && !hideRoundHandicap
             ? ` · HC ${hcOne}–${hcTwo}`
             : ""}
@@ -4355,14 +4449,17 @@ function ReviewPanel({
         </p>
       ) : incomplete ? (
         <p className="text-xs text-[var(--muted)]">
-          Score every game before submitting — LMS expects a complete
-          scoresheet.
+          {scoringFormat.teamRaceTo
+            ? `Reach ${scoringFormat.teamRaceTo} matchup wins to clinch the round before submitting.`
+            : "Score every game before submitting — LMS expects a complete scoresheet."}
         </p>
       ) : (
         <p className="text-xs text-[var(--muted)]">
           {isResubmit
             ? "Next step asks you to confirm, then overwrites the scores already in LMS."
-            : "Next step asks you to confirm, then sends through the same LMS endpoint as the official BCAPL scoring app."}
+            : raceClinched
+              ? "Race is clinched — remaining matchups are not required. Confirm to send to LMS."
+              : "Next step asks you to confirm, then sends through the same LMS endpoint as the official BCAPL scoring app."}
         </p>
       )}
     </div>
