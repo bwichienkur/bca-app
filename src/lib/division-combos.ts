@@ -16,6 +16,7 @@ import type {
 import {
   defaultDivisionLinkConfig,
   linkConfigNightHint,
+  standingRawColumnHeaders,
 } from "./division-link-config";
 import type { ScheduleDay, ScheduleMatch, TableReport } from "./types";
 
@@ -234,8 +235,14 @@ export function standingSidesFromCombo(
 }
 
 /**
- * Merge two LMS team-standings reports by team name into a combined night table.
- * Beyond uses Singles SETS×1 + Teams RDS×2 (not game PTS).
+ * Merge two LMS team-standings reports by team name into a combined table.
+ *
+ * Output columns:
+ * - STANDING — combined rank total (each half’s metric × its multiplier)
+ * - raw LMS columns — the metric each half uses (e.g. SETS, RDS)
+ * - WKS
+ *
+ * Beyond default: STANDING = SETS×1 + RDS×2.
  */
 export function mergeCombinedStandings(args: {
   singles: TableReport | null | undefined;
@@ -244,11 +251,27 @@ export function mergeCombinedStandings(args: {
   /** Preferred: link-level standing config (SETS/RDS/PTS + multipliers). */
   config?: DivisionLinkConfig | null;
 }): TableReport {
-  const sides = args.config
+  const configSides = args.config
+    ? {
+        primary: args.config.standing.primary,
+        linked: args.config.standing.linked,
+      }
+    : null;
+  const roleSides = args.config
     ? standingSidesFromConfig(args.config)
     : standingSidesFromCombo(args.combo ?? BEYOND_MONDAY_COMBO);
-  const singlesSide = sides.singles;
-  const teamsSide = sides.teams;
+  const singlesSide = roleSides.singles;
+  const teamsSide = roleSides.teams;
+
+  // Column order follows link primary → linked when config is present.
+  const columnSides: [DivisionLinkStandingSide, DivisionLinkStandingSide] =
+    configSides
+      ? [configSides.primary, configSides.linked]
+      : [singlesSide, teamsSide];
+  const [rawHeaderA, rawHeaderB] = standingRawColumnHeaders(
+    columnSides[0],
+    columnSides[1],
+  );
 
   const byKey = new Map<
     string,
@@ -294,6 +317,11 @@ export function mergeCombinedStandings(args: {
   ingest(args.singles, singlesSide);
   ingest(args.teams, teamsSide);
 
+  const rawForSide = (
+    item: { singlesRaw: number; teamsRaw: number },
+    side: DivisionLinkStandingSide,
+  ) => (side.role === "singles" ? item.singlesRaw : item.teamsRaw);
+
   const rows = Array.from(byKey.values())
     .map((item) => {
       const singlesPts = item.singlesRaw * singlesSide.multiplier;
@@ -303,6 +331,8 @@ export function mergeCombinedStandings(args: {
         singlesPts,
         teamsPts,
         combinedPts: singlesPts + teamsPts,
+        rawA: rawForSide(item, columnSides[0]),
+        rawB: rawForSide(item, columnSides[1]),
       };
     })
     .sort((a, b) => {
@@ -312,13 +342,13 @@ export function mergeCombinedStandings(args: {
     });
 
   return {
-    headers: ["#", "TEAM", "NIGHT", "SINGLES", "TEAMS", "WKS"],
+    headers: ["#", "TEAM", "STANDING", rawHeaderA, rawHeaderB, "WKS"],
     rows: rows.map((item, index) => [
       String(index + 1),
       item.displayName,
       formatPts(item.combinedPts),
-      formatPts(item.singlesPts),
-      formatPts(item.teamsPts),
+      formatPts(item.rawA),
+      formatPts(item.rawB),
       formatPts(item.weeks),
     ]),
   };

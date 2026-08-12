@@ -6,7 +6,9 @@ import { findSisterDivision } from "@/lib/division-combos";
 import {
   defaultDivisionLinkConfig,
   linkConfigNightHint,
+  linkConfigStandingFormula,
   normalizeDivisionLinkConfig,
+  standingRawColumnHeaders,
   STANDING_METRIC_OPTIONS,
   type DivisionLinkConfig,
   type DivisionLinkScoringSide,
@@ -88,7 +90,9 @@ function StandingSideFields({
         </select>
       </label>
       <label className="block space-y-1 text-sm">
-        <span className="text-[var(--muted)]">Standing metric (LMS column)</span>
+        <span className="text-[var(--muted)]">
+          Main scoring column (from LMS standings)
+        </span>
         <select
           className={selectClass}
           value={side.metric}
@@ -108,7 +112,9 @@ function StandingSideFields({
       </label>
       <div className="grid grid-cols-2 gap-2">
         <label className="block space-y-1 text-sm">
-          <span className="text-[var(--muted)]">Multiplier</span>
+          <span className="text-[var(--muted)]">
+            Multiplier into STANDING
+          </span>
           <input
             type="number"
             min={0}
@@ -124,7 +130,7 @@ function StandingSideFields({
           />
         </label>
         <label className="block space-y-1 text-sm">
-          <span className="text-[var(--muted)]">Max / night</span>
+          <span className="text-[var(--muted)]">Max / night (hint)</span>
           <input
             type="number"
             min={0}
@@ -542,12 +548,10 @@ export function DivisionLinkForm({
           {tab === "standing" ? (
             <div className="space-y-3">
               <p className="text-sm text-[var(--muted)]">
-                Beyond LMS ranks Singles by{" "}
-                <span className="font-medium text-[var(--ink)]">SETS</span>{" "}
-                (race wins) and Teams by{" "}
-                <span className="font-medium text-[var(--ink)]">RDS</span>{" "}
-                (rounds). Combined night points default to Sets×1 + Rounds×2 —
-                not game PTS.
+                Pick each half’s LMS standings column and a multiplier. League
+                standings will show those raw columns plus a{" "}
+                <span className="font-medium text-[var(--ink)]">STANDING</span>{" "}
+                total used to rank the combined league.
               </p>
               <StandingSideFields
                 title={primaryDivision?.name || "First division"}
@@ -569,9 +573,32 @@ export function DivisionLinkForm({
                   }))
                 }
               />
-              <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--muted)]">
-                {linkConfigNightHint(config)}
-              </p>
+              <div className="space-y-1.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--muted)]">
+                <p className="font-semibold text-[var(--ink)]">
+                  {linkConfigStandingFormula(config)}
+                </p>
+                <p>
+                  Output columns:{" "}
+                  <span className="font-medium text-[var(--ink)]">
+                    # · TEAM · STANDING ·{" "}
+                    {
+                      standingRawColumnHeaders(
+                        config.standing.primary,
+                        config.standing.linked,
+                      )[0]
+                    }{" "}
+                    ·{" "}
+                    {
+                      standingRawColumnHeaders(
+                        config.standing.primary,
+                        config.standing.linked,
+                      )[1]
+                    }{" "}
+                    · WKS
+                  </span>
+                </p>
+                <p>{linkConfigNightHint(config)}</p>
+              </div>
               <button
                 type="button"
                 className={btnGhost}
@@ -584,7 +611,7 @@ export function DivisionLinkForm({
                   );
                 }}
               >
-                Reset Beyond defaults
+                Reset Beyond defaults (SETS×1 + RDS×2)
               </button>
             </div>
           ) : null}

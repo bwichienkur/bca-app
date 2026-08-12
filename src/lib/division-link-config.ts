@@ -261,13 +261,40 @@ export function scoringSideForDivision(
   return config.scoring.primary;
 }
 
+export function standingMetricColumnLabel(
+  metric: StandingScoreMetric,
+): string {
+  if (metric === "sets") return "SETS";
+  if (metric === "rds") return "RDS";
+  return "PTS";
+}
+
+/** Headers for the two raw LMS metric columns (disambiguate if identical). */
+export function standingRawColumnHeaders(
+  primary: DivisionLinkStandingSide,
+  linked: DivisionLinkStandingSide,
+): [string, string] {
+  const a = standingMetricColumnLabel(primary.metric);
+  const b = standingMetricColumnLabel(linked.metric);
+  if (a !== b) return [a, b];
+  const prefix = (side: DivisionLinkStandingSide) =>
+    side.role === "singles" ? "S" : "T";
+  return [`${prefix(primary)}-${a}`, `${prefix(linked)}-${b}`];
+}
+
+/** STANDING = metricA×multA + metricB×multB */
+export function linkConfigStandingFormula(config: DivisionLinkConfig): string {
+  const a = config.standing.primary;
+  const b = config.standing.linked;
+  const [colA, colB] = standingRawColumnHeaders(a, b);
+  const term = (col: string, side: DivisionLinkStandingSide) =>
+    side.multiplier === 1 ? col : `${col}×${side.multiplier}`;
+  return `STANDING = ${term(colA, a)} + ${term(colB, b)}`;
+}
+
 export function linkConfigNightHint(config: DivisionLinkConfig): string {
   const a = config.standing.primary;
   const b = config.standing.linked;
-  const label = (side: DivisionLinkStandingSide) =>
-    side.role === "singles" ? "singles" : "teams";
-  const metric = (side: DivisionLinkStandingSide) =>
-    side.metric === "sets" ? "sets" : side.metric === "rds" ? "rounds" : "pts";
   const total = a.maxNightPoints + b.maxNightPoints;
-  return `${a.maxNightPoints} from ${label(a)} (${metric(a)}×${a.multiplier}) + ${b.maxNightPoints} from ${label(b)} (${metric(b)}×${b.multiplier}) = ${total} pts/night. Score each LMS sheet separately.`;
+  return `${linkConfigStandingFormula(config)} (${a.maxNightPoints}+${b.maxNightPoints}=${total} pts/night max). Score each LMS sheet separately.`;
 }

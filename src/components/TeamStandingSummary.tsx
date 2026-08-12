@@ -45,11 +45,15 @@ function parseRatio(value: string): { forValue: string; againstValue: string } |
 
 function friendlyLabel(label: string): string {
   const h = label.trim().toLowerCase();
-  if (h === "rds") return "Rounds";
+  if (h === "rds" || h === "t-rds" || h === "s-rds") return "Rounds";
   if (h === "wks") return "Weeks";
-  if (h === "pts" || h === "points") return "Points";
-  if (h === "sets" || h === "set") return "Sets";
-  if (h === "night") return "Night";
+  if (h === "pts" || h === "points" || h === "t-pts" || h === "s-pts") {
+    return "Points";
+  }
+  if (h === "sets" || h === "set" || h === "t-sets" || h === "s-sets") {
+    return "Sets";
+  }
+  if (h === "standing" || h === "night") return "Standing";
   if (h === "singles") return "Singles";
   if (h === "teams") return "Teams";
   if (h === "gms" || h === "games") return "Games";

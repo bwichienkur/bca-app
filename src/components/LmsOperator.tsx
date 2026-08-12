@@ -3208,7 +3208,7 @@ export function LmsOperator({
                       <p className="text-xs text-[var(--muted)]">
                         2 divisions · {link.mode}
                         {link.config
-                          ? ` · ${link.config.standing.primary.metric}×${link.config.standing.primary.multiplier} + ${link.config.standing.linked.metric}×${link.config.standing.linked.multiplier}`
+                          ? ` · STANDING=${link.config.standing.primary.metric}×${link.config.standing.primary.multiplier}+${link.config.standing.linked.metric}×${link.config.standing.linked.multiplier}`
                           : ""}
                       </p>
                     </button>

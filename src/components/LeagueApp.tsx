@@ -2076,7 +2076,7 @@ export function LeagueApp() {
                     title="Team standings"
                     description={
                       prefs.linkedDivisionId
-                        ? "Combined night standings — Singles sets + Teams rounds×2 (configurable on the LMS Links form). Tap a team for details."
+                        ? "Combined standings — STANDING ranks the league from each half’s LMS column × multiplier (set on LMS Links). Tap a team for details."
                         : "Tap a team to view player statistics. Use back to return to the league grid."
                     }
                     action={
