@@ -33,6 +33,12 @@ type FlatMatch = {
   upcoming: boolean;
 };
 
+type NightGroup = {
+  date: string;
+  dateLabel: string;
+  matches: FlatMatch[];
+};
+
 function formatScheduleDate(value: string): string {
   const date = parseScheduleDate(value);
   if (!date) return value;
@@ -41,6 +47,32 @@ function formatScheduleDate(value: string): string {
     month: "short",
     day: "numeric",
   });
+}
+
+function partOrder(label: string | null | undefined): number {
+  const l = (label ?? "").toLowerCase();
+  if (l === "singles") return 0;
+  if (l === "teams") return 1;
+  return 2;
+}
+
+function groupByNight(items: FlatMatch[]): NightGroup[] {
+  const byDate = new Map<string, FlatMatch[]>();
+  for (const item of items) {
+    const key = item.day.date.trim();
+    const list = byDate.get(key) ?? [];
+    list.push(item);
+    byDate.set(key, list);
+  }
+  return Array.from(byDate.entries()).map(([date, matches]) => ({
+    date,
+    dateLabel: formatScheduleDate(date),
+    matches: [...matches].sort(
+      (a, b) =>
+        partOrder(a.match.partLabel) - partOrder(b.match.partLabel) ||
+        a.match.home.localeCompare(b.match.home),
+    ),
+  }));
 }
 
 export function ScheduleList({
@@ -94,6 +126,11 @@ export function ScheduleList({
 
   const visibleMatches =
     view === "upcoming" ? upcomingMatches : pastMatches;
+  const nightGroups = useMemo(
+    () => groupByNight(visibleMatches),
+    [visibleMatches],
+  );
+  const hasLinkedParts = visibleMatches.some((item) => item.match.partLabel);
   const myTeam = teamName ?? null;
 
   if (!teamDays.length) {
@@ -127,7 +164,14 @@ export function ScheduleList({
                 "Division schedule"
               )}
               {divisionName ? <> · {divisionName}</> : null}
-              . Use Score to open a scoresheet.
+              {hasLinkedParts ? (
+                <>
+                  . Combined night — Singles and Teams halves share a date;
+                  each half has its own matchup and lineup.
+                </>
+              ) : (
+                <>. Use Score to open a scoresheet.</>
+              )}
             </>
           }
           action={
@@ -175,38 +219,60 @@ export function ScheduleList({
             }
           />
         ) : (
-          <div className="space-y-2.5">
-            {visibleMatches.map((item, index) => {
-              const { match, day } = item;
-              const isMyMatch = Boolean(
-                myTeam &&
-                  (teamsMatchByName(match.home, myTeam) ||
-                    teamsMatchByName(match.away, myTeam)),
-              );
-              return (
-                <MatchListCard
-                  key={item.key}
-                  className="animate-rise"
-                  style={{ animationDelay: `${Math.min(index, 6) * 0.04}s` }}
-                  homeName={match.home}
-                  awayName={match.away}
-                  badge={match.partLabel ?? null}
-                  meta={formatScheduleDate(day.date)}
-                  location={match.location || undefined}
-                  ctaLabel="View"
-                  isMyMatch={isMyMatch}
-                  homeRank={rankForTeam(teamRanks, match.home)}
-                  awayRank={rankForTeam(teamRanks, match.away)}
-                  emphasizeHome={Boolean(
-                    myTeam && teamsMatchByName(match.home, myTeam),
-                  )}
-                  emphasizeAway={Boolean(
-                    myTeam && teamsMatchByName(match.away, myTeam),
-                  )}
-                  onClick={() => onMatchClick?.(match, day)}
-                />
-              );
-            })}
+          <div className="space-y-4">
+            {nightGroups.map((night) => (
+              <div key={night.date} className="space-y-2.5">
+                {hasLinkedParts ? (
+                  <div className="px-0.5">
+                    <p className="font-[family-name:var(--font-display)] text-[15px] font-semibold tracking-wide text-[var(--amber)]">
+                      {night.dateLabel}
+                    </p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                      Combined night · {night.matches.length} sheets
+                    </p>
+                  </div>
+                ) : null}
+                {night.matches.map((item, index) => {
+                  const { match, day } = item;
+                  const isMyMatch = Boolean(
+                    myTeam &&
+                      (teamsMatchByName(match.home, myTeam) ||
+                        teamsMatchByName(match.away, myTeam)),
+                  );
+                  return (
+                    <MatchListCard
+                      key={item.key}
+                      className="animate-rise"
+                      style={{
+                        animationDelay: `${Math.min(index, 6) * 0.04}s`,
+                      }}
+                      homeName={match.home}
+                      awayName={match.away}
+                      badge={match.partLabel ?? null}
+                      meta={
+                        hasLinkedParts
+                          ? match.partLabel
+                            ? `${match.partLabel} · own lineup`
+                            : undefined
+                          : formatScheduleDate(day.date)
+                      }
+                      location={match.location || undefined}
+                      ctaLabel="View"
+                      isMyMatch={isMyMatch}
+                      homeRank={rankForTeam(teamRanks, match.home)}
+                      awayRank={rankForTeam(teamRanks, match.away)}
+                      emphasizeHome={Boolean(
+                        myTeam && teamsMatchByName(match.home, myTeam),
+                      )}
+                      emphasizeAway={Boolean(
+                        myTeam && teamsMatchByName(match.away, myTeam),
+                      )}
+                      onClick={() => onMatchClick?.(match, day)}
+                    />
+                  );
+                })}
+              </div>
+            ))}
           </div>
         )}
       </SubTabCard>

@@ -18,7 +18,6 @@ import {
 } from "@/lib/app-nav";
 import { DEFAULT_LEAGUE_ID } from "@/lib/constants";
 import {
-  comboNightHint,
   findKnownComboForDivisionName,
   mergeCombinedSchedule,
   mergeCombinedStandings,
@@ -923,19 +922,25 @@ export function LeagueApp() {
             activeLink?.linkedDivisionName ??
             prefs?.linkedDivisionName ??
             "Linked";
-          const [scheduleData, linkedSchedule, teams] = await Promise.all([
-            fetchJson<{ days: ScheduleDay[] }>(
-              `/api/reports/schedule?divisionId=${id}`,
-            ),
-            linkedId
-              ? fetchJson<{ days: ScheduleDay[] }>(
-                  `/api/reports/schedule?divisionId=${linkedId}`,
-                ).catch(() => null)
-              : Promise.resolve(null),
-            fetchJson<TableReport>(
-              `/api/reports/teams?divisionId=${id}`,
-            ).catch(() => null),
-          ]);
+          const [scheduleData, linkedSchedule, primaryTeams, linkedTeams] =
+            await Promise.all([
+              fetchJson<{ days: ScheduleDay[] }>(
+                `/api/reports/schedule?divisionId=${id}`,
+              ),
+              linkedId
+                ? fetchJson<{ days: ScheduleDay[] }>(
+                    `/api/reports/schedule?divisionId=${linkedId}`,
+                  ).catch(() => null)
+                : Promise.resolve(null),
+              fetchJson<TableReport>(
+                `/api/reports/teams?divisionId=${id}`,
+              ).catch(() => null),
+              linkedId
+                ? fetchJson<TableReport>(
+                    `/api/reports/teams?divisionId=${linkedId}`,
+                  ).catch(() => null)
+                : Promise.resolve(null),
+            ]);
           if (!cancelled) {
             const days =
               linkedId && linkedSchedule?.days
@@ -954,9 +959,27 @@ export function LeagueApp() {
                 : scheduleData.days;
             setSchedule(days);
             scheduleKeyRef.current = cacheKey;
-            if (teams) {
-              setTeamReport(teams);
-              teamReportKeyRef.current = cacheKey;
+            // Ranks for schedule cards only — do not mark standings cache fresh
+            // (that previously poisoned Standings with primary-only data).
+            if (primaryTeams) {
+              const linkConfig = activeLink?.config ?? null;
+              const primaryRole =
+                linkConfig?.standing.primary.role ??
+                findKnownComboForDivisionName(primaryLmsName)?.roleFromName(
+                  primaryLmsName,
+                ) ??
+                null;
+              const ranks =
+                linkedId && linkedTeams && primaryRole
+                  ? mergeCombinedStandings({
+                      singles:
+                        primaryRole === "singles" ? primaryTeams : linkedTeams,
+                      teams:
+                        primaryRole === "teams" ? primaryTeams : linkedTeams,
+                      config: linkConfig,
+                    })
+                  : primaryTeams;
+              setTeamReport(ranks);
             }
           }
         }
