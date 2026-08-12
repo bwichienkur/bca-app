@@ -69,10 +69,16 @@ import { canAccessLmsClient } from "@/lib/lms-access";
 import {
   comboNightHint,
   comboPartLabel,
+  comboRoleForDivisionName,
   findKnownComboForDivisionName,
+  mergeCombinedStandings,
 } from "@/lib/division-combos";
 import { scoringSideForDivision } from "@/lib/division-link-config";
 import type { DivisionLink } from "@/lib/division-links";
+import {
+  computeNightStanding,
+  type NightHalfStatus,
+} from "@/lib/night-standing";
 import { rankForTeam, teamRanksFromReport } from "@/lib/standings";
 import type { LineupPreset, TableReport } from "@/lib/types";
 import {
@@ -313,6 +319,43 @@ function linkScoringOverrides(
   };
 }
 
+function formatForMatchHalf(
+  match: Pick<
+    ScoringMatchSummary,
+    "divisionId" | "divisionName" | "numberOfSets" | "pointsForWin" | "matchWinCountsAsRound"
+  >,
+  args: {
+    scoringFormatId?: string | null;
+    divisionLink?: DivisionLink | null;
+    fallbackDivisionName?: string | null;
+  },
+): LeagueScoringFormat {
+  const linkOverrides = linkScoringOverrides(
+    args.divisionLink,
+    match.divisionId,
+  );
+  return resolveScoringFormat({
+    prefsFormatId: args.scoringFormatId,
+    divisionName: match.divisionName || args.fallbackDivisionName,
+    playersPerTeam: match.numberOfSets || null,
+    pointsForWin: match.pointsForWin ?? null,
+    matchWinCountsAsRound: match.matchWinCountsAsRound ?? null,
+    linkFormatId: linkOverrides.linkFormatId,
+    linkRaceChartId: linkOverrides.linkRaceChartId,
+  });
+}
+
+function nightStatusFromBoard(
+  match: ScoringMatchSummary,
+  summary: DraftBoardSummary | null,
+  draft: ScoringDraft | null,
+): NightHalfStatus {
+  const status = boardStatusFor(match, summary, draft);
+  if (status === "complete") return "complete";
+  if (status === "in_progress") return "in_progress";
+  return "not_started";
+}
+
 export function MatchScoring({
   divisionId,
   divisionName,
@@ -523,19 +566,43 @@ export function MatchScoring({
       return;
     }
     let cancelled = false;
-    void fetchJson<TableReport>(
-      `/api/reports/teams?divisionId=${divisionId}`,
-    )
-      .then((data) => {
-        if (!cancelled) setTeamReport(data);
-      })
-      .catch(() => {
+    void (async () => {
+      try {
+        const primary = await fetchJson<TableReport>(
+          `/api/reports/teams?divisionId=${divisionId}`,
+        );
+        if (cancelled) return;
+        if (!linkedDivisionId || !divisionLink) {
+          setTeamReport(primary);
+          return;
+        }
+        const linked = await fetchJson<TableReport>(
+          `/api/reports/teams?divisionId=${linkedDivisionId}`,
+        ).catch(() => null);
+        if (cancelled) return;
+        if (!linked) {
+          setTeamReport(primary);
+          return;
+        }
+        const primaryRole =
+          divisionLink.config.standing.primary.role ??
+          comboRoleForDivisionName(divisionLink.primaryDivisionName);
+        setTeamReport(
+          mergeCombinedStandings({
+            singles:
+              primaryRole === "singles" ? primary : linked,
+            teams: primaryRole === "teams" ? primary : linked,
+            config: divisionLink.config,
+          }),
+        );
+      } catch {
         if (!cancelled) setTeamReport(null);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, [divisionId]);
+  }, [divisionId, linkedDivisionId, divisionLink]);
 
   const teamRanks = useMemo(
     () => teamRanksFromReport(teamReport),
@@ -2094,6 +2161,85 @@ export function MatchScoring({
     linkedCombo,
     divisionLink?.config ?? null,
   );
+
+  const summaryForMatch = (item: ScoringMatchSummary) => {
+    const format = formatForMatchHalf(item, {
+      scoringFormatId,
+      divisionLink,
+      fallbackDivisionName: divisionName,
+    });
+    return mergeBoardSummary(
+      draftSummaries[item.id],
+      loadDraft(item.id),
+      format,
+    );
+  };
+
+  const myNightMatches = nightMatches.filter((item) => item.mySide != null);
+  const nightStanding =
+    divisionLink && myNightMatches.length > 0
+      ? computeNightStanding({
+          config: divisionLink.config,
+          primaryDivisionId: divisionLink.primaryDivisionId,
+          linkedDivisionId: divisionLink.linkedDivisionId,
+          myMatches: myNightMatches,
+          summaryFor: (matchId) => {
+            const item = myNightMatches.find((row) => row.id === matchId);
+            if (!item) return null;
+            return summaryForMatch(item);
+          },
+          statusFor: (item) =>
+            nightStatusFromBoard(
+              item,
+              summaryForMatch(item),
+              loadDraft(item.id),
+            ),
+        })
+      : null;
+
+  const nightSections = (() => {
+    if (!linkedDivisionId) {
+      return [{ key: "all", label: null as string | null, rows: nightMatches }];
+    }
+    const singles = nightMatches.filter(
+      (item) =>
+        (comboPartLabel(item.divisionName) ?? "").toLowerCase() === "singles" ||
+        comboRoleForDivisionName(item.divisionName) === "singles",
+    );
+    const teams = nightMatches.filter(
+      (item) =>
+        (comboPartLabel(item.divisionName) ?? "").toLowerCase() === "teams" ||
+        comboRoleForDivisionName(item.divisionName) === "teams",
+    );
+    const used = new Set([...singles, ...teams].map((item) => item.id));
+    const other = nightMatches.filter((item) => !used.has(item.id));
+    const sections: Array<{
+      key: string;
+      label: string | null;
+      rows: ScoringMatchSummary[];
+    }> = [];
+    if (singles.length) {
+      sections.push({
+        key: "singles",
+        label: "Singles — individual races (own lineup)",
+        rows: singles,
+      });
+    }
+    if (teams.length) {
+      sections.push({
+        key: "teams",
+        label: "Teams — round-robin race (own lineup)",
+        rows: teams,
+      });
+    }
+    if (other.length) {
+      sections.push({ key: "other", label: "Other matches", rows: other });
+    }
+    return sections.length
+      ? sections
+      : [{ key: "all", label: null, rows: nightMatches }];
+  })();
+
   return (
     <section className="animate-rise space-y-3 p-3 sm:p-4">
       <PanelHeader
@@ -2106,6 +2252,7 @@ export function MatchScoring({
             ) : (
               "your division"
             )}
+            {linkedDivisionId ? " · combined night" : null}
             {teamName ? (
               <>
                 {" "}
@@ -2113,8 +2260,12 @@ export function MatchScoring({
                 <span className="font-medium text-[var(--ink)]">{teamName}</span>
               </>
             ) : null}
-            {" · "}
-            {formatScoringSummary(scoringFormat)}
+            {linkedDivisionId ? null : (
+              <>
+                {" · "}
+                {formatScoringSummary(scoringFormat)}
+              </>
+            )}
             {sharedDrafts ? " · live sync on" : null}
             {nightHint ? (
               <>
@@ -2217,47 +2368,151 @@ export function MatchScoring({
               body="Pick another night above, or check back when the schedule posts."
             />
           ) : (
-            <div className="space-y-2.5">
-              {nightMatches.map((item, index) => {
-                const localDraft = loadDraft(item.id);
-                const summary = mergeBoardSummary(
-                  draftSummaries[item.id],
-                  localDraft,
-                  scoringFormat,
-                );
-                const boardStatus = boardStatusFor(item, summary, localDraft);
-                const isMyMatch = item.mySide != null;
-                return (
-                  <MatchListCard
-                    key={item.id}
-                    className="animate-rise"
-                    style={{
-                      animationDelay: `${Math.min(index, 6) * 0.04}s`,
-                    }}
-                    homeName={item.teamOneName}
-                    awayName={item.teamTwoName}
-                    badge={
-                      linkedDivisionId
-                        ? comboPartLabel(item.divisionName)
-                        : null
-                    }
-                    boardStatus={boardStatus}
-                    isMyMatch={isMyMatch}
-                    homeRounds={summary?.teamOneRoundWins ?? 0}
-                    awayRounds={summary?.teamTwoRoundWins ?? 0}
-                    homeRank={rankForTeam(teamRanks, item.teamOneName)}
-                    awayRank={rankForTeam(teamRanks, item.teamTwoName)}
-                    emphasizeHome={item.mySide === 1}
-                    emphasizeAway={item.mySide === 2}
-                    onClick={() => void openMatch(item.id)}
-                  />
-                );
-              })}
+            <div className="space-y-4">
+              {nightStanding ? (
+                <NightStandingCard
+                  standing={nightStanding}
+                  onOpenHalf={(matchId) => void openMatch(matchId)}
+                />
+              ) : null}
+
+              {nightSections.map((section) => (
+                <div key={section.key} className="space-y-2.5">
+                  {section.label ? (
+                    <div className="px-0.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                        {section.label}
+                      </p>
+                    </div>
+                  ) : null}
+                  {section.rows.map((item, index) => {
+                    const localDraft = loadDraft(item.id);
+                    const summary = summaryForMatch(item);
+                    const boardStatus = boardStatusFor(
+                      item,
+                      summary,
+                      localDraft,
+                    );
+                    const isMyMatch = item.mySide != null;
+                    const halfStanding = nightStanding?.halves.find(
+                      (half) => half.matchId === item.id,
+                    );
+                    return (
+                      <MatchListCard
+                        key={item.id}
+                        className="animate-rise"
+                        style={{
+                          animationDelay: `${Math.min(index, 6) * 0.04}s`,
+                        }}
+                        homeName={item.teamOneName}
+                        awayName={item.teamTwoName}
+                        badge={
+                          linkedDivisionId
+                            ? comboPartLabel(item.divisionName)
+                            : null
+                        }
+                        meta={
+                          halfStanding
+                            ? `${formatRawStanding(halfStanding.raw)}/${formatRawStanding(halfStanding.rawMax)} ${halfStanding.metricLabel}${halfStanding.multiplier !== 1 ? ` ×${halfStanding.multiplier}` : ""} → ${formatRawStanding(halfStanding.standingPts)} pts`
+                            : undefined
+                        }
+                        boardStatus={boardStatus}
+                        isMyMatch={isMyMatch}
+                        homeRounds={summary?.teamOneRoundWins ?? 0}
+                        awayRounds={summary?.teamTwoRoundWins ?? 0}
+                        homeRank={rankForTeam(teamRanks, item.teamOneName)}
+                        awayRank={rankForTeam(teamRanks, item.teamTwoName)}
+                        emphasizeHome={item.mySide === 1}
+                        emphasizeAway={item.mySide === 2}
+                        onClick={() => void openMatch(item.id)}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           )}
         </>
       )}
     </section>
+  );
+}
+
+function formatRawStanding(value: number | null | undefined): string {
+  if (value == null) return "–";
+  if (Number.isInteger(value)) return String(value);
+  return String(Math.round(value * 10) / 10);
+}
+
+function NightStandingCard({
+  standing,
+  onOpenHalf,
+}: {
+  standing: import("@/lib/night-standing").NightStandingSummary;
+  onOpenHalf: (matchId: string) => void;
+}) {
+  return (
+    <div className="rounded-[var(--radius)] border border-[var(--felt)]/35 bg-[color-mix(in_srgb,var(--felt)_12%,var(--surface))] px-3.5 py-3 shadow-[var(--shadow)]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            Your night standing
+          </p>
+          <p className="mt-1 font-[family-name:var(--font-display)] text-xl font-semibold tracking-wide text-[var(--ink)]">
+            {standing.headline}
+          </p>
+        </div>
+        <p className="rounded-full bg-[var(--surface)] px-2.5 py-1 text-[11px] font-semibold text-[var(--felt-deep)] ring-1 ring-[var(--felt)]/25">
+          Max {formatRawStanding(standing.standingMax)}
+        </p>
+      </div>
+      <p className="mt-1.5 text-xs text-[var(--muted)]">{standing.line}</p>
+      <ul className="mt-3 space-y-2">
+        {standing.halves.map((half) => (
+          <li key={`${half.role}-${half.matchId ?? "missing"}`}>
+            <button
+              type="button"
+              disabled={!half.matchId}
+              onClick={() => {
+                if (half.matchId) onOpenHalf(half.matchId);
+              }}
+              className="flex w-full items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-left disabled:opacity-60"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-[var(--ink)]">
+                  {half.partLabel}
+                  {half.opponentName ? (
+                    <span className="font-normal text-[var(--muted)]">
+                      {" "}
+                      vs {half.opponentName.replace(/^\((H|A)\)\s*/i, "")}
+                    </span>
+                  ) : null}
+                </p>
+                <p className="text-[11px] text-[var(--muted)]">
+                  {half.status === "missing"
+                    ? "No match found for this half"
+                    : half.status === "not_started"
+                      ? "Not started · separate lineup on this sheet"
+                      : half.status === "in_progress"
+                        ? "Live · separate lineup on this sheet"
+                        : "Complete · separate lineup on this sheet"}
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-sm font-semibold text-[var(--ink)]">
+                  {formatRawStanding(half.raw)}/{formatRawStanding(half.rawMax)}{" "}
+                  {half.metricLabel}
+                </p>
+                <p className="text-[11px] font-semibold text-[var(--felt-deep)]">
+                  {formatRawStanding(half.standingPts)} pts
+                  {half.multiplier !== 1 ? ` (×${half.multiplier})` : ""}
+                </p>
+              </div>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

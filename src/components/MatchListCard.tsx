@@ -275,9 +275,10 @@ export function MatchListCard({
   const displayScores = showScores ?? hasBoard;
   const scoresMuted = boardStatus === "not_started";
   const isLive = boardStatus === "in_progress";
-  // Board cards hoist venue to the night header; schedule keeps meta/location.
+  // Board cards hoist venue to the night header but still show optional meta
+  // (e.g. standing contribution). Schedule keeps meta + location.
   const headerMeta = hasBoard
-    ? null
+    ? meta?.trim() || null
     : [meta, location].filter(Boolean).join(" · ") || null;
   const { icon, label } = actionIcon(boardStatus, isMyMatch, ctaLabel);
   const homeDisplay = displayTeamName(homeName);
