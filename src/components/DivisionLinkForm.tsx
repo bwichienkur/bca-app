@@ -30,17 +30,43 @@ import {
   StatsSubIcon,
   type IconSubTabItem,
 } from "./IconSubTabs";
+import { SelectField } from "./SelectField";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
 const inputClass =
   "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none ring-[var(--felt)] focus:ring-2";
-const selectClass = inputClass;
 const btnPrimary =
   "inline-flex items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
 const btnGhost =
   "inline-flex items-center justify-center rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold text-[var(--ink)] disabled:opacity-50";
 const btnDelete =
   "inline-flex items-center justify-center rounded-[var(--radius)] border border-[var(--danger)]/40 bg-[var(--danger-bg)] px-3 py-2 text-sm font-semibold text-[var(--danger)] disabled:opacity-50";
+
+const ROLE_OPTIONS = [
+  { value: "singles", label: "Singles half" },
+  { value: "teams", label: "Teams half" },
+] as const;
+
+const METRIC_OPTIONS = STANDING_METRIC_OPTIONS.map((opt) => ({
+  value: opt.id,
+  label: `${opt.label} — ${opt.hint}`,
+}));
+
+const PLAY_STYLE_OPTIONS = [
+  { value: "", label: "None (prefs / Palm Beach default)" },
+  ...LEAGUE_SCORING_FORMATS.map((format) => ({
+    value: format.id,
+    label: format.label,
+  })),
+];
+
+const RACE_CHART_SELECT_OPTIONS = [
+  { value: "", label: "None / format default" },
+  ...RACE_CHART_OPTIONS.map((chart) => ({
+    value: chart.id,
+    label: chart.label,
+  })),
+];
 
 type DivisionOption = { id: string; name: string };
 type LinkFormTab = "divisions" | "standing" | "race";
@@ -79,52 +105,55 @@ function StandingSideFields({
   title,
   side,
   onChange,
+  showLegType,
 }: {
   title: string;
   side: DivisionLinkStandingSide;
   onChange: (next: DivisionLinkStandingSide) => void;
+  /** Beyond-style Singles/Teams tag — mainly useful on multi-leg nights. */
+  showLegType: boolean;
 }) {
   return (
     <fieldset className="space-y-2 rounded-[var(--radius)] border border-[var(--line)] p-3">
       <legend className="px-1 text-sm font-semibold text-[var(--ink)]">
         {title}
       </legend>
-      <label className="block space-y-1 text-sm">
-        <span className="text-[var(--muted)]">Role hint</span>
-        <select
-          className={selectClass}
-          value={side.role}
-          onChange={(e) =>
-            onChange({
-              ...side,
-              role: e.target.value === "teams" ? "teams" : "singles",
-            })
-          }
-        >
-          <option value="singles">Singles</option>
-          <option value="teams">Teams</option>
-        </select>
-      </label>
+      {showLegType ? (
+        <label className="block space-y-1 text-sm">
+          <span className="text-[var(--muted)]">Leg type</span>
+          <SelectField
+            aria-label={`${title} leg type`}
+            value={side.role}
+            options={[...ROLE_OPTIONS]}
+            onChange={(value) =>
+              onChange({
+                ...side,
+                role: value === "teams" ? "teams" : "singles",
+              })
+            }
+          />
+          <p className="text-xs text-[var(--muted)]">
+            Tags this half as Singles or Teams for combined-night standings
+            labels (e.g. S-SETS / T-RDS). Not the Score play style — set that
+            under Race HC.
+          </p>
+        </label>
+      ) : null}
       <label className="block space-y-1 text-sm">
         <span className="text-[var(--muted)]">
           Main scoring column (from LMS standings)
         </span>
-        <select
-          className={selectClass}
+        <SelectField
+          aria-label={`${title} scoring column`}
           value={side.metric}
-          onChange={(e) =>
+          options={METRIC_OPTIONS}
+          onChange={(value) =>
             onChange({
               ...side,
-              metric: e.target.value as StandingScoreMetric,
+              metric: value as StandingScoreMetric,
             })
           }
-        >
-          {STANDING_METRIC_OPTIONS.map((opt) => (
-            <option key={opt.id} value={opt.id}>
-              {opt.label} — {opt.hint}
-            </option>
-          ))}
-        </select>
+        />
       </label>
       <div className="grid grid-cols-2 gap-2">
         <label className="block space-y-1 text-sm">
@@ -175,63 +204,61 @@ function ScoringSideFields({
   side: DivisionLinkScoringSide;
   onChange: (next: DivisionLinkScoringSide) => void;
 }) {
+  const format = side.scoringFormatId
+    ? getScoringFormat(side.scoringFormatId)
+    : null;
   return (
     <fieldset className="space-y-2 rounded-[var(--radius)] border border-[var(--line)] p-3">
       <legend className="px-1 text-sm font-semibold text-[var(--ink)]">
         {title}
       </legend>
       <label className="block space-y-1 text-sm">
-        <span className="text-[var(--muted)]">Scoring format</span>
-        <select
-          className={selectClass}
+        <span className="text-[var(--muted)]">Play style</span>
+        <SelectField
+          aria-label={`${title} play style`}
           value={side.scoringFormatId ?? ""}
-          onChange={(e) => {
-            const formatId = e.target.value || null;
-            const format = formatId ? getScoringFormat(formatId) : null;
+          options={PLAY_STYLE_OPTIONS}
+          onChange={(value) => {
+            const formatId = value || null;
+            const nextFormat = formatId ? getScoringFormat(formatId) : null;
             onChange({
               ...side,
               scoringFormatId: formatId,
               raceChartId:
-                format?.raceMode === "fargo-race-chart" && format.raceChartId
-                  ? format.raceChartId
+                nextFormat?.raceMode === "fargo-race-chart" &&
+                nextFormat.raceChartId
+                  ? nextFormat.raceChartId
                   : formatId
                     ? null
                     : side.raceChartId,
             });
           }}
-        >
-          <option value="">Infer from division name / prefs</option>
-          {LEAGUE_SCORING_FORMATS.map((format) => (
-            <option key={format.id} value={format.id}>
-              {format.label}
-            </option>
-          ))}
-        </select>
+        />
+        <p className="text-xs text-[var(--muted)]">
+          How Score runs this leg (lineup size, match-win vs round points, race
+          model). Required for Tuesday R6 Hot / Beyond — Score no longer guesses
+          from the division name.
+        </p>
       </label>
       <label className="block space-y-1 text-sm">
         <span className="text-[var(--muted)]">Race chart (handicap)</span>
-        <select
-          className={selectClass}
+        <SelectField
+          aria-label={`${title} race chart`}
           value={side.raceChartId ?? ""}
-          onChange={(e) =>
+          options={RACE_CHART_SELECT_OPTIONS}
+          onChange={(value) =>
             onChange({
               ...side,
-              raceChartId: (e.target.value || null) as RaceChartId | null,
+              raceChartId: (value || null) as RaceChartId | null,
             })
           }
-        >
-          <option value="">None / format default</option>
-          {RACE_CHART_OPTIONS.map((chart) => (
-            <option key={chart.id} value={chart.id}>
-              {chart.label}
-            </option>
-          ))}
-        </select>
+        />
+        <p className="text-xs text-[var(--muted)]">
+          {format?.raceMode === "fargo-race-chart"
+            ? "Fargo race-tos stamped on the Score pad (overrides LMS RL placeholders)."
+            : "Only used when play style is a Fargo race-chart format (e.g. Tuesday / Beyond Singles)."}
+        </p>
       </label>
-      <p className="text-xs text-[var(--muted)]">
-        Pin format + chart here so Score does not rely on division-name
-        heuristics. Overrides LMS race-tos on the Tableside pad only.
-      </p>
     </fieldset>
   );
 }
@@ -614,6 +641,7 @@ export function DivisionLinkForm({
                   <StandingSideFields
                     key={leg.divisionId}
                     title={leg.label || leg.divisionName || `Leg ${index + 1}`}
+                    showLegType={filledLegs.length >= 2}
                     side={leg.standing}
                     onChange={(standing) =>
                       updateLeg(legIndex >= 0 ? legIndex : index, { standing })
