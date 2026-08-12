@@ -3,8 +3,8 @@
  *
  * LMS still owns live match payloads; these presets describe how *this app*
  * should interpret a division’s night (lineup size, race model, how team
- * points are earned). Prefer pinning a format on a Night Format leg (or
- * account prefs); division-name heuristics are a fallback only.
+ * points are earned). Pin a preset on a Night Format leg (preferred) or in
+ * account prefs. Name helpers below only seed the Night Format operator form.
  */
 
 import type { RaceChartId } from "./race-charts";
@@ -151,8 +151,8 @@ export function getScoringFormat(id: string | null | undefined): LeagueScoringFo
 }
 
 /**
- * Lightweight name heuristic until a Night Format leg or prefs store an
- * explicit format id. Prefer Night Format / prefs when wired.
+ * Name hints used when seeding a Night Format leg in the operator form.
+ * Score does not call this — pin play style on the Night Format (or prefs).
  */
 export function inferScoringFormatFromDivisionName(
   divisionName: string | null | undefined,
@@ -162,14 +162,20 @@ export function inferScoringFormatFromDivisionName(
     if (/\bsingles?\b/.test(name)) return FORMAT_BEYOND_SINGLES;
     if (/\bteams?\b/.test(name)) return FORMAT_BEYOND_TEAMS;
   }
-  if (
+  const nine =
     name.includes("9-ball") ||
     name.includes("9 ball") ||
-    name.includes("9ball")
+    name.includes("9ball");
+  // Tuesday / FairMatch / "Test Bright 9Ball" style race sheets for form defaults.
+  if (
+    nine &&
+    !/\bmatrix\b/.test(name) &&
+    (name.includes("tuesday") ||
+      name.includes("tue") ||
+      name.includes("fairmatch") ||
+      name.includes("9ball"))
   ) {
-    if (name.includes("tuesday") || name.includes("tue")) {
-      return FORMAT_TUESDAY_9BALL_R6_HOT;
-    }
+    return FORMAT_TUESDAY_9BALL_R6_HOT;
   }
   return FORMAT_PALM_BEACH_5;
 }
