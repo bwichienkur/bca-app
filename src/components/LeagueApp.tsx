@@ -1940,7 +1940,7 @@ export function LeagueApp() {
                       aria-hidden={myTeamSubTab !== "standing"}
                     >
                       <PanelHeader
-                        title="Team"
+                        title="Standing"
                         description="Current place in the division"
                         action={
                           myStandingRank ? (
