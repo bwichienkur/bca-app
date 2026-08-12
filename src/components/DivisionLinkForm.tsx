@@ -10,6 +10,7 @@ import {
   legsNightHint,
   legsStandingFormula,
   normalizeNightLegs,
+  scoringSideFromFormat,
   standingRawColumnHeadersForLegs,
   suggestNightNameFromDivision,
   STANDING_METRIC_OPTIONS,
@@ -19,11 +20,15 @@ import {
   type StandingScoreMetric,
 } from "@/lib/division-link-config";
 import {
+  FORMAT_PALM_BEACH_5,
   getScoringFormat,
   LEAGUE_SCORING_FORMATS,
   type LeagueScoringFormat,
+  type RaceMode,
+  type TeamPointMode,
 } from "@/lib/scoring-formats";
 import { RACE_CHART_OPTIONS, type RaceChartId } from "@/lib/race-charts";
+import { FieldInfo, FieldLabel } from "./FieldLabel";
 import {
   IconSubTabs,
   OverviewSubIcon,
@@ -36,7 +41,6 @@ import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
 const inputClass =
   "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none ring-[var(--felt)] focus:ring-2";
-const selectClass = inputClass;
 const btnPrimary =
   "inline-flex items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
 const btnGhost =
@@ -45,7 +49,18 @@ const btnDelete =
   "inline-flex items-center justify-center rounded-[var(--radius)] border border-[var(--danger)]/40 bg-[var(--danger-bg)] px-3 py-2 text-sm font-semibold text-[var(--danger)] disabled:opacity-50";
 
 type DivisionOption = { id: string; name: string };
-type LinkFormTab = "divisions" | "standing" | "race";
+type LinkFormTab = "divisions" | "standing" | "playstyle";
+
+function effectiveLegFormat(
+  side: DivisionLinkScoringSide,
+  catalog: readonly LeagueScoringFormat[],
+): LeagueScoringFormat {
+  if (side.format) return side.format;
+  if (side.scoringFormatId) {
+    return getScoringFormat(side.scoringFormatId, catalog);
+  }
+  return FORMAT_PALM_BEACH_5;
+}
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
@@ -81,58 +96,82 @@ function StandingSideFields({
   title,
   side,
   onChange,
+  showLegType,
 }: {
   title: string;
   side: DivisionLinkStandingSide;
   onChange: (next: DivisionLinkStandingSide) => void;
+  showLegType: boolean;
 }) {
   return (
-    <fieldset className="space-y-2 rounded-[var(--radius)] border border-[var(--line)] p-3">
+    <fieldset className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] p-3">
       <legend className="px-1 text-sm font-semibold text-[var(--ink)]">
         {title}
       </legend>
-      <label className="block space-y-1 text-sm">
-        <span className="text-[var(--muted)]">Role hint</span>
-        <select
-          className={selectClass}
-          value={side.role}
-          onChange={(e) =>
-            onChange({
-              ...side,
-              role: e.target.value === "teams" ? "teams" : "singles",
-            })
-          }
+      {showLegType ? (
+        <label className="block space-y-1.5 text-sm">
+          <FieldLabel
+            info={{
+              summary:
+                "Tags this half as Singles or Teams for combined-night standings labels (e.g. S-SETS / T-RDS). Does not change how Score plays the match.",
+            }}
+          >
+            Leg type
+          </FieldLabel>
+          <SelectField
+            aria-label={`${title} leg type`}
+            value={side.role}
+            options={[
+              { value: "singles", label: "Singles" },
+              { value: "teams", label: "Teams" },
+            ]}
+            onChange={(value) =>
+              onChange({
+                ...side,
+                role: value === "teams" ? "teams" : "singles",
+              })
+            }
+          />
+        </label>
+      ) : null}
+      <label className="block space-y-1.5 text-sm">
+        <FieldLabel
+          info={{
+            summary:
+              "Which LMS standings column feeds this leg’s contribution to the combined STANDING total.",
+            items: STANDING_METRIC_OPTIONS.map((opt) => ({
+              label: opt.label,
+              description: opt.hint,
+            })),
+          }}
         >
-          <option value="singles">Singles</option>
-          <option value="teams">Teams</option>
-        </select>
-      </label>
-      <label className="block space-y-1 text-sm">
-        <span className="text-[var(--muted)]">
-          Main scoring column (from LMS standings)
-        </span>
-        <select
-          className={selectClass}
+          LMS column
+        </FieldLabel>
+        <SelectField
+          aria-label={`${title} LMS column`}
           value={side.metric}
-          onChange={(e) =>
+          options={STANDING_METRIC_OPTIONS.map((opt) => ({
+            value: opt.id,
+            label: opt.label,
+          }))}
+          onChange={(value) =>
             onChange({
               ...side,
-              metric: e.target.value as StandingScoreMetric,
+              metric: value as StandingScoreMetric,
             })
           }
-        >
-          {STANDING_METRIC_OPTIONS.map((opt) => (
-            <option key={opt.id} value={opt.id}>
-              {opt.label} — {opt.hint}
-            </option>
-          ))}
-        </select>
+        />
       </label>
       <div className="grid grid-cols-2 gap-2">
-        <label className="block space-y-1 text-sm">
-          <span className="text-[var(--muted)]">
-            Multiplier into STANDING
-          </span>
+        <label className="block space-y-1.5 text-sm">
+          <FieldLabel
+            info={{
+              summary:
+                "Multiplies the LMS column into STANDING. Beyond Teams often uses ×2 so a round win is worth 2 standing points.",
+            }}
+          >
+            Multiplier
+          </FieldLabel>
           <input
             type="number"
             min={0}
@@ -147,8 +186,15 @@ function StandingSideFields({
             }
           />
         </label>
-        <label className="block space-y-1 text-sm">
-          <span className="text-[var(--muted)]">Max / night (hint)</span>
+        <label className="block space-y-1.5 text-sm">
+          <FieldLabel
+            info={{
+              summary:
+                "Soft cap used only in night-hint copy (e.g. “up to 3 sets”). Does not clamp Score.",
+            }}
+          >
+            Max / night
+          </FieldLabel>
           <input
             type="number"
             min={0}
@@ -180,90 +226,407 @@ function ScoringSideFields({
   formats: readonly LeagueScoringFormat[];
 }) {
   const catalog = formats.length ? formats : LEAGUE_SCORING_FORMATS;
-  const playStyleOptions = [
-    { value: "", label: "None (prefs / Palm Beach default)" },
-    ...catalog.map((format) => ({
-      value: format.id,
-      label: format.label,
-    })),
-  ];
+  const format = effectiveLegFormat(side, catalog);
+  const templateValue = side.scoringFormatId ?? format.id;
+
+  const commitFormat = (
+    next: LeagueScoringFormat,
+    raceChartId?: RaceChartId | null,
+  ) => {
+    onChange(
+      scoringSideFromFormat(
+        next,
+        raceChartId !== undefined ? raceChartId : side.raceChartId,
+      ),
+    );
+  };
+
   const raceChartOptions = [
-    { value: "", label: "None / format default" },
+    { value: "", label: "Format default" },
     ...RACE_CHART_OPTIONS.map((chart) => ({
       value: chart.id,
-      label: chart.label,
+      label: chart.shortLabel || chart.label,
     })),
   ];
-  const format = side.scoringFormatId
-    ? getScoringFormat(side.scoringFormatId, catalog)
-    : null;
 
   return (
-    <fieldset className="space-y-2 rounded-[var(--radius)] border border-[var(--line)] p-3">
+    <fieldset className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] p-3">
       <legend className="px-1 text-sm font-semibold text-[var(--ink)]">
         {title}
       </legend>
-      <label className="block space-y-1 text-sm">
-        <span className="text-[var(--muted)]">Play style</span>
+
+      <label className="block space-y-1.5 text-sm">
+        <FieldLabel
+          info={{
+            summary:
+              "Loads a reusable template from Manage → Templates. After loading, edit the fields below — those values are saved on this night and shape the Score pad.",
+          }}
+        >
+          Template
+        </FieldLabel>
         <SelectField
-          aria-label={`${title} play style`}
-          value={side.scoringFormatId ?? ""}
-          options={playStyleOptions}
+          aria-label={`${title} template`}
+          value={templateValue}
+          options={catalog.map((row) => ({
+            value: row.id,
+            label: row.label,
+          }))}
           onChange={(value) => {
-            const formatId = value || null;
-            const nextFormat = formatId
-              ? getScoringFormat(formatId, catalog)
-              : null;
-            onChange({
-              ...side,
-              scoringFormatId: formatId,
-              raceChartId:
-                nextFormat?.raceMode === "fargo-race-chart" &&
-                nextFormat.raceChartId
-                  ? nextFormat.raceChartId
-                  : formatId
-                    ? null
-                    : side.raceChartId,
-            });
+            const next = getScoringFormat(value, catalog);
+            onChange(
+              scoringSideFromFormat(
+                next,
+                next.raceMode === "fargo-race-chart"
+                  ? (next.raceChartId ?? null)
+                  : null,
+              ),
+            );
           }}
         />
-        <p className="text-xs text-[var(--muted)]">
-          From Manage → Styles. Required for Tuesday / Beyond — Score no longer
-          guesses from the division name.
-        </p>
       </label>
-      <label className="block space-y-1 text-sm">
-        <span className="text-[var(--muted)]">Race chart (handicap)</span>
+
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block space-y-1.5 text-sm">
+          <FieldLabel
+            info={{
+              summary:
+                "Lineup size on the Score pad — how many singles slots each team fills.",
+            }}
+          >
+            Players
+          </FieldLabel>
+          <input
+            type="number"
+            min={1}
+            className={inputClass}
+            value={format.playersPerTeam}
+            onChange={(e) =>
+              commitFormat({
+                ...format,
+                playersPerTeam: Number(e.target.value) || 1,
+              })
+            }
+          />
+        </label>
+        <label className="block space-y-1.5 text-sm">
+          <FieldLabel
+            info={{
+              summary:
+                "How many individual matches count toward the night. Usually matches Players. Beyond Teams uses 1 (one round-robin round).",
+            }}
+          >
+            Matches
+          </FieldLabel>
+          <input
+            type="number"
+            min={1}
+            className={inputClass}
+            value={format.matchesPerNight}
+            onChange={(e) =>
+              commitFormat({
+                ...format,
+                matchesPerNight: Number(e.target.value) || 1,
+              })
+            }
+          />
+        </label>
+      </div>
+
+      <label className="block space-y-1.5 text-sm">
+        <FieldLabel
+          info={{
+            summary:
+              "How a finished individual race adds to the team night score on the pad.",
+            items: [
+              {
+                label: "Round points",
+                description:
+                  "Palm Beach style: each clinched singles round scores for the team; optional R6 match-points round from total game points.",
+              },
+              {
+                label: "Match win",
+                description:
+                  "Tuesday / Beyond style: winning the individual race (or GAME S matchup) awards team point(s). No synthetic points round.",
+              },
+            ],
+          }}
+        >
+          Team points
+        </FieldLabel>
         <SelectField
-          aria-label={`${title} race chart`}
-          value={side.raceChartId ?? ""}
-          options={raceChartOptions}
+          aria-label={`${title} team points`}
+          value={format.teamPointMode}
+          options={[
+            { value: "round-points", label: "Round points" },
+            { value: "match-win", label: "Match win" },
+          ]}
           onChange={(value) =>
-            onChange({
-              ...side,
-              raceChartId: (value || null) as RaceChartId | null,
+            commitFormat({
+              ...format,
+              teamPointMode: value as TeamPointMode,
             })
           }
         />
-        <p className="text-xs text-[var(--muted)]">
-          {format?.raceMode === "fargo-race-chart"
-            ? "Fargo race-tos stamped on the Score pad (overrides LMS RL placeholders)."
-            : "Only used when play style is a Fargo race-chart format."}
-        </p>
+      </label>
+
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block space-y-1.5 text-sm">
+          <FieldLabel
+            info={{
+              summary:
+                "Team points awarded for one individual win. Almost always 1.",
+            }}
+          >
+            Pts / win
+          </FieldLabel>
+          <input
+            type="number"
+            min={1}
+            className={inputClass}
+            value={format.pointsPerMatchWin}
+            onChange={(e) =>
+              commitFormat({
+                ...format,
+                pointsPerMatchWin: Number(e.target.value) || 1,
+              })
+            }
+          />
+        </label>
+        <label className="block space-y-1.5 text-sm">
+          <FieldLabel
+            info={{
+              summary:
+                "Optional first-to target for the team night (e.g. Beyond Teams first to 9 matchup wins). Leave empty for Tuesday / Beyond Singles.",
+            }}
+          >
+            Team race-to
+          </FieldLabel>
+          <input
+            type="number"
+            min={0}
+            className={inputClass}
+            value={format.teamRaceTo ?? ""}
+            placeholder="—"
+            onChange={(e) => {
+              const raw = e.target.value.trim();
+              commitFormat({
+                ...format,
+                teamRaceTo: raw ? Number(raw) || undefined : undefined,
+              });
+            }}
+          />
+        </label>
+      </div>
+
+      <label className="block space-y-1.5 text-sm">
+        <FieldLabel
+          info={{
+            summary: "How each individual race-to is determined on the pad.",
+            items: [
+              {
+                label: "Fixed",
+                description:
+                  "Same race-to for everyone (Palm Beach race to 10), or win/lose (Beyond Teams race win = 1).",
+              },
+              {
+                label: "Fargo chart",
+                description:
+                  "Asymmetric race-tos from a Fargo chart by rating difference (Tuesday R6 Hot, Beyond Singles R5 Hot).",
+              },
+            ],
+          }}
+        >
+          Race model
+        </FieldLabel>
+        <SelectField
+          aria-label={`${title} race model`}
+          value={format.raceMode}
+          options={[
+            { value: "fixed-race", label: "Fixed" },
+            { value: "fargo-race-chart", label: "Fargo chart" },
+          ]}
+          onChange={(value) => {
+            const raceMode = value as RaceMode;
+            const next: LeagueScoringFormat = {
+              ...format,
+              raceMode,
+              raceChartId:
+                raceMode === "fargo-race-chart"
+                  ? format.raceChartId ?? side.raceChartId ?? "r6-hot"
+                  : undefined,
+              fixedRaceWin:
+                raceMode === "fixed-race" ? format.fixedRaceWin ?? 10 : undefined,
+              fixedRaceMaxLoss:
+                raceMode === "fixed-race"
+                  ? format.fixedRaceMaxLoss ?? 0
+                  : undefined,
+            };
+            commitFormat(
+              next,
+              raceMode === "fargo-race-chart"
+                ? (next.raceChartId ?? "r6-hot")
+                : null,
+            );
+          }}
+        />
+      </label>
+
+      {format.raceMode === "fixed-race" ? (
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block space-y-1.5 text-sm">
+            <FieldLabel
+              info={{
+                summary:
+                  "Games needed to win the individual race. Palm Beach uses 10. Beyond Teams uses 1 (each GAME S is win/lose).",
+              }}
+            >
+              Race win
+            </FieldLabel>
+            <input
+              type="number"
+              min={1}
+              className={inputClass}
+              value={format.fixedRaceWin ?? 10}
+              onChange={(e) =>
+                commitFormat({
+                  ...format,
+                  fixedRaceWin: Number(e.target.value) || 1,
+                })
+              }
+            />
+          </label>
+          <label className="block space-y-1.5 text-sm">
+            <FieldLabel
+              info={{
+                summary:
+                  "Stop scoring after this many losses (Palm Beach max loss 7). Use 0 when every game is win/lose.",
+              }}
+            >
+              Max loss
+            </FieldLabel>
+            <input
+              type="number"
+              min={0}
+              className={inputClass}
+              value={format.fixedRaceMaxLoss ?? 0}
+              onChange={(e) =>
+                commitFormat({
+                  ...format,
+                  fixedRaceMaxLoss: Number(e.target.value) || 0,
+                })
+              }
+            />
+          </label>
+        </div>
+      ) : (
+        <label className="block space-y-1.5 text-sm">
+          <FieldLabel
+            info={{
+              summary:
+                "Fargo chart stamped onto each Score pad race (overrides LMS RL placeholders). Hot = most handicap.",
+            }}
+          >
+            Race chart
+          </FieldLabel>
+          <SelectField
+            aria-label={`${title} race chart`}
+            value={side.raceChartId ?? format.raceChartId ?? ""}
+            options={raceChartOptions}
+            onChange={(value) => {
+              const chart = (value || null) as RaceChartId | null;
+              commitFormat(
+                {
+                  ...format,
+                  raceChartId: chart ?? format.raceChartId,
+                },
+                chart,
+              );
+            }}
+          />
+        </label>
+      )}
+
+      <label className="block space-y-1.5 text-sm">
+        <FieldLabel
+          info={{
+            summary:
+              "Expected-points scale for RoundBased handicap display. Affects HC math, not race-to.",
+            items: [
+              {
+                label: "1",
+                description: "Win/lose matchups (Tuesday, Beyond Teams).",
+              },
+              {
+                label: "10",
+                description: "Palm Beach expected-points nights.",
+              },
+              {
+                label: "17",
+                description:
+                  "Beyond Singles — LMS RL17 sheet capacity, not race-to 17.",
+              },
+            ],
+          }}
+        >
+          HC system
+        </FieldLabel>
+        <SelectField
+          aria-label={`${title} HC system`}
+          value={format.pointSystem}
+          options={[
+            { value: "1", label: "1" },
+            { value: "10", label: "10" },
+            { value: "17", label: "17" },
+          ]}
+          onChange={(value) =>
+            commitFormat({
+              ...format,
+              pointSystem: value as LeagueScoringFormat["pointSystem"],
+            })
+          }
+        />
+      </label>
+
+      <label className="flex items-start gap-2 text-sm text-[var(--ink)]">
+        <input
+          type="checkbox"
+          className="mt-1"
+          checked={format.matchPointsRound}
+          onChange={(e) =>
+            commitFormat({
+              ...format,
+              matchPointsRound: e.target.checked,
+            })
+          }
+        />
+        <span className="space-y-0.5">
+          <span className="flex items-center gap-1.5 font-medium">
+            Match-points round
+            <FieldInfo
+              label="Match-points round"
+              summary="Palm Beach R6: award a synthetic team round from total game points after the singles races. Leave off for Tuesday / Beyond."
+            />
+          </span>
+          <span className="block text-xs text-[var(--muted)]">
+            Adds an R6-style points round on the Score pad
+          </span>
+        </span>
       </label>
     </fieldset>
   );
 }
 
 /**
- * Popup form to create/edit a Tableside Night Format (division link).
+ * Create/edit a Tableside Night Format (division link).
  * Never writes to LMS. Supports 1..N legs (single-leg nights for Tuesday, etc.).
+ * Use variant="page" when hosted as a full Manage page (not a popup).
  */
 export function DivisionLinkForm({
   leagueId,
   divisions,
   scoringFormats,
   initialLink = null,
+  variant = "page",
   busy,
   onBusy,
   onNotice,
@@ -272,9 +635,10 @@ export function DivisionLinkForm({
 }: {
   leagueId: string;
   divisions: DivisionOption[];
-  /** Optional seed from Manage → Styles; form also fetches the league catalog. */
+  /** Optional seed from Manage → Templates; form also fetches the league catalog. */
   scoringFormats?: readonly LeagueScoringFormat[] | null;
   initialLink?: DivisionLink | null;
+  variant?: "page" | "embedded";
   busy: boolean;
   onBusy: (busy: boolean) => void;
   onNotice: (message: string | null) => void;
@@ -347,7 +711,7 @@ export function DivisionLinkForm({
   const tabs: IconSubTabItem<LinkFormTab>[] = [
     { id: "divisions", label: "Legs", icon: OverviewSubIcon },
     { id: "standing", label: "Standing", icon: StatsSubIcon },
-    { id: "race", label: "Race HC", icon: RoundsSubIcon },
+    { id: "playstyle", label: "Play style", icon: RoundsSubIcon },
   ];
 
   const updateLeg = (index: number, patch: Partial<NightLeg>) => {
@@ -456,14 +820,16 @@ export function DivisionLinkForm({
   const rawHeaders = standingRawColumnHeadersForLegs(filledLegs);
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-[var(--radius)] border border-[var(--amber)]/35 bg-[color-mix(in_srgb,var(--amber)_12%,transparent)] px-3 py-2 text-sm text-[var(--amber)]">
-        Tableside-only Night Format. Use one leg for a single LMS division
-        (e.g. Tuesday 9-Ball / R6 Hot), or add more legs for combined nights
-        like Beyond. Linking does not change LMS.
-      </div>
+    <div className={variant === "page" ? "space-y-3" : "space-y-4"}>
+      {variant === "embedded" ? (
+        <div className="rounded-[var(--radius)] border border-[var(--amber)]/35 bg-[color-mix(in_srgb,var(--amber)_12%,transparent)] px-3 py-2 text-sm text-[var(--amber)]">
+          Tableside-only Night Format. Use one leg for a single LMS division
+          (e.g. Tuesday 9-Ball / R6 Hot), or add more legs for combined nights
+          like Beyond. Linking does not change LMS.
+        </div>
+      ) : null}
 
-      <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]">
+      <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <div className="border-b border-[var(--line)] bg-[var(--surface-2)] p-0.5">
           <IconSubTabs
             aria-label="Night format settings"
@@ -652,7 +1018,7 @@ export function DivisionLinkForm({
             <div className="space-y-3">
               <p className="text-sm text-[var(--muted)]">
                 Pick each leg’s LMS standings column and a multiplier. League
-                standings will show those raw columns plus a{" "}
+                standings show those columns plus a{" "}
                 <span className="font-medium text-[var(--ink)]">STANDING</span>{" "}
                 total used to rank the combined night.
               </p>
@@ -664,6 +1030,7 @@ export function DivisionLinkForm({
                   <StandingSideFields
                     key={leg.divisionId}
                     title={leg.label || leg.divisionName || `Leg ${index + 1}`}
+                    showLegType={filledLegs.length >= 2}
                     side={leg.standing}
                     onChange={(standing) =>
                       updateLeg(legIndex >= 0 ? legIndex : index, { standing })
@@ -698,17 +1065,18 @@ export function DivisionLinkForm({
             </div>
           ) : null}
 
-          {tab === "race" ? (
+          {tab === "playstyle" ? (
             <div className="space-y-3">
               <p className="text-sm text-[var(--muted)]">
-                Score-pad play style per leg. Tuesday 9-Ball should use{" "}
-                <span className="font-medium text-[var(--ink)]">
-                  Tuesday 9-Ball (R6 Hot)
-                </span>
-                ; Beyond Singles uses{" "}
-                <span className="font-medium text-[var(--ink)]">R5 Hot</span>;
-                Teams usually stays fixed race / no chart.
+                Configure how the Score pad looks and scores for each leg.
+                Start from a template, then tune the fields — saved on this
+                night (LMS is not changed).
               </p>
+              {filledLegs.length < 1 ? (
+                <p className="text-sm text-[var(--muted)]">
+                  Add a leg under Legs before setting play style.
+                </p>
+              ) : null}
               {filledLegs.map((leg, index) => {
                 const legIndex = legs.findIndex(
                   (row) => row.divisionId === leg.divisionId,

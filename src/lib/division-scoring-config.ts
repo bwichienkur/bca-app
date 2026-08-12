@@ -38,6 +38,11 @@ export type ResolveScoringFormatInput = {
    * Night Format leg scoring format override (wins over prefs when set).
    */
   linkFormatId?: string | null;
+  /**
+   * Authoritative play-style snapshot from the Night Format leg.
+   * When set, this beats linkFormatId / catalog lookup.
+   */
+  linkFormat?: LeagueScoringFormat | null;
   /** Night Format leg race-chart override. */
   linkRaceChartId?: RaceChartId | null;
   /**
@@ -57,6 +62,12 @@ export function resolveScoringFormat(
 ): LeagueScoringFormat {
   const catalog = input.formats?.length ? input.formats : undefined;
   // Night Format leg beats account prefs so Singles/Teams (or Tuesday) can differ.
+  if (input.linkFormat) {
+    return applyLmsStructureTweaks(
+      applyRaceChartOverride(input.linkFormat, input.linkRaceChartId),
+      input,
+    );
+  }
   if (input.linkFormatId) {
     const linked = getScoringFormat(input.linkFormatId, catalog);
     return applyLmsStructureTweaks(

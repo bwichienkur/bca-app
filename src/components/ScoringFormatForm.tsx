@@ -163,9 +163,8 @@ export function ScoringFormatForm({
   return (
     <div className="space-y-4 px-4 py-4">
       <p className="text-sm text-[var(--muted)]">
-        Play styles control how Tableside Score runs a night (lineup size, race
-        model, team points). Pin one on a Night Format leg under Links → Race
-        HC. Built-ins can be overridden for this league; custom styles are
+        Templates seed a Night Format → Play style tab. Configure the live night
+        there. Built-ins can be overridden for this league; custom templates are
         league-only.
       </p>
 
@@ -250,8 +249,8 @@ export function ScoringFormatForm({
           aria-label="Team point mode"
           value={draft.teamPointMode}
           options={[
-            { value: "round-points", label: "Round points (Palm Beach style)" },
-            { value: "match-win", label: "Match win = team point" },
+            { value: "round-points", label: "Round points" },
+            { value: "match-win", label: "Match win" },
           ]}
           onChange={(value) =>
             setDraft({
@@ -303,8 +302,8 @@ export function ScoringFormatForm({
           aria-label="Race model"
           value={draft.raceMode}
           options={[
-            { value: "fixed-race", label: "Fixed race-to" },
-            { value: "fargo-race-chart", label: "Fargo race chart" },
+            { value: "fixed-race", label: "Fixed" },
+            { value: "fargo-race-chart", label: "Fargo chart" },
           ]}
           onChange={(value) => {
             const raceMode = value as RaceMode;
@@ -384,9 +383,9 @@ export function ScoringFormatForm({
           aria-label="HC point system"
           value={draft.pointSystem}
           options={[
-            { value: "1", label: "1 (win/lose matchups)" },
-            { value: "10", label: "10 (Palm Beach)" },
-            { value: "17", label: "17 (Beyond / RL17 capacity)" },
+            { value: "1", label: "1" },
+            { value: "10", label: "10" },
+            { value: "17", label: "17" },
           ]}
           onChange={(value) =>
             setDraft({

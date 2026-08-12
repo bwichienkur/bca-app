@@ -15,6 +15,8 @@ import {
   FORMAT_PALM_BEACH_5,
   FORMAT_TUESDAY_9BALL_R6_HOT,
   inferScoringFormatFromDivisionName,
+  normalizeScoringFormat,
+  type LeagueScoringFormat,
 } from "./scoring-formats";
 
 export type DivisionComboRole = "singles" | "teams";
@@ -84,16 +86,37 @@ export type DivisionLinkStandingSide = {
 
 export type DivisionLinkScoringSide = {
   /**
-   * Tableside scoring format override for this leg.
-   * null/undefined = infer from role / division name.
+   * Template id from Manage → Templates (optional reference).
+   * Score prefers `format` when present.
    */
   scoringFormatId?: string | null;
+  /**
+   * Authoritative play-style snapshot for this leg (edited on Night Format).
+   * When set, Score uses this instead of looking up the template catalog.
+   */
+  format?: LeagueScoringFormat | null;
   /**
    * Race-chart override when the format uses fargo-race-chart.
    * null/undefined = use the format’s default chart.
    */
   raceChartId?: RaceChartId | null;
 };
+
+/** Build a scoring side from a template / edited format snapshot. */
+export function scoringSideFromFormat(
+  format: LeagueScoringFormat,
+  raceChartId?: RaceChartId | null,
+): DivisionLinkScoringSide {
+  const chart =
+    raceChartId !== undefined
+      ? raceChartId
+      : (format.raceChartId ?? null);
+  return {
+    scoringFormatId: format.id,
+    format: { ...format },
+    raceChartId: chart,
+  };
+}
 
 /**
  * One scored LMS division inside a Night Format.
@@ -203,32 +226,21 @@ export function defaultScoringSideForPlayStyle(
   style: NightLegPlayStyle,
 ): DivisionLinkScoringSide {
   if (style === "beyond-teams") {
-    return {
-      scoringFormatId: FORMAT_BEYOND_TEAMS.id,
-      raceChartId: null,
-    };
+    return scoringSideFromFormat(FORMAT_BEYOND_TEAMS, null);
   }
   if (style === "tuesday-9ball") {
-    return {
-      scoringFormatId: FORMAT_TUESDAY_9BALL_R6_HOT.id,
-      raceChartId: "r6-hot",
-    };
+    return scoringSideFromFormat(FORMAT_TUESDAY_9BALL_R6_HOT, "r6-hot");
   }
   if (style === "palm-beach") {
-    return {
-      scoringFormatId: FORMAT_PALM_BEACH_5.id,
-      raceChartId: null,
-    };
+    return scoringSideFromFormat(FORMAT_PALM_BEACH_5, null);
   }
   if (style === "beyond-singles") {
-    return {
-      scoringFormatId: FORMAT_BEYOND_SINGLES.id,
-      raceChartId: "r5-hot",
-    };
+    return scoringSideFromFormat(FORMAT_BEYOND_SINGLES, "r5-hot");
   }
-  // generic: leave unset so Score can still infer from prefs / LMS signals
+  // generic: leave unset so Score falls back to prefs / Palm Beach
   return {
     scoringFormatId: null,
+    format: null,
     raceChartId: null,
   };
 }
@@ -436,8 +448,15 @@ function normalizeScoringSide(
     typeof raw?.scoringFormatId === "string" && raw.scoringFormatId.trim()
       ? raw.scoringFormatId.trim()
       : (fallback.scoringFormatId ?? null);
+  const rawFormat =
+    raw && "format" in raw
+      ? normalizeScoringFormat(raw.format)
+      : fallback.format
+        ? normalizeScoringFormat(fallback.format)
+        : null;
   return {
     scoringFormatId: formatId,
+    format: rawFormat,
     raceChartId:
       raw && "raceChartId" in raw
         ? parseRaceChartId(raw.raceChartId)
