@@ -1694,7 +1694,9 @@ export function MatchScoring({
             submitting={submitting}
             locked={sheetLocked}
             isResubmit={isResubmit && resubmitUnlocked}
-            onEdit={() => setView({ mode: "sheet", matchId: match.id })}
+            onEdit={() =>
+              setView({ mode: "sheet", matchId: match.id, fromCombined })
+            }
             onSubmit={() => setConfirmDialog("submit")}
           />
         ) : (
