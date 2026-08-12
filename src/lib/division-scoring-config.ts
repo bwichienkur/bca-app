@@ -183,8 +183,10 @@ function playerRating(
 
 /**
  * Stamp per-game race targets from the active scoring format onto a draft.
- * Chart formats get asymmetric Fargo race-chart targets; fixed-race clears them so
- * maxWin/maxLoss rules apply.
+ * Chart formats get asymmetric Fargo race-chart targets.
+ * Win/lose matchups (fixedRaceWin === 1) stamp race-to-1 so tallies recognize
+ * 1–0 / 0–1 without the default 10/7 race rules.
+ * Other fixed-race formats clear targets so maxWin/maxLoss (e.g. 10/7) applies.
  */
 export function applyFormatRaceTargets(
   match: ScoringMatchDetail,
@@ -219,6 +221,10 @@ export function applyFormatRaceTargets(
         );
         raceTargetOne = targets.raceOne;
         raceTargetTwo = targets.raceTwo;
+      } else if (format.fixedRaceWin === 1) {
+        // Single-game matchups (Beyond Teams): stamp so 1–0 counts as complete.
+        raceTargetOne = 1;
+        raceTargetTwo = 1;
       }
 
       if (
@@ -279,11 +285,18 @@ export function padRaceLimits(
         ? match.maxLosingScore
         : 7;
 
+  // Win/lose matchups expose race-to-1 targets so saves + tallies agree.
+  const stampWinLose = fixedWin === 1;
   return {
     maxWin: fixedWin,
     maxLoss: fixedLoss,
-    raceTargetOne: null,
-    raceTargetTwo: null,
+    raceTargetOne: stampWinLose ? 1 : null,
+    raceTargetTwo: stampWinLose ? 1 : null,
     chartMode: false,
   };
+}
+
+/** True when the format uses scratch win/lose matchups (no round HC). */
+export function formatUsesWinLoseMatchups(format: LeagueScoringFormat): boolean {
+  return format.teamPointMode === "match-win" && format.fixedRaceWin === 1;
 }

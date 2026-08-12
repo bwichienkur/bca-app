@@ -22,6 +22,7 @@ import {
 import {
   applyFormatRaceTargets,
   formatScoringSummary,
+  formatUsesWinLoseMatchups,
   padRaceLimits,
   raceScoreOptions,
   resolveScoringFormat,
@@ -189,10 +190,29 @@ function pickDefaultNightKey(keys: string[]): string | null {
 }
 
 function boardSummaryOptions(format: LeagueScoringFormat) {
+  const limits = padRaceLimits(format, { maxScore: 0, maxLosingScore: -1 });
   return {
     teamPointMode: format.teamPointMode,
     includeMatchPointsRound: format.matchPointsRound,
+    maxScore: limits.maxWin,
+    maxLosingScore: limits.maxLoss,
   } as const;
+}
+
+function winnerOptionsForFormat(
+  format: LeagueScoringFormat,
+  match?: Pick<ScoringMatchDetail, "maxScore" | "maxLosingScore"> | null,
+) {
+  const limits = padRaceLimits(
+    format,
+    match ?? { maxScore: 0, maxLosingScore: -1 },
+  );
+  return {
+    maxScore: limits.maxWin,
+    maxLosingScore: limits.maxLoss,
+    raceTargetOne: limits.raceTargetOne,
+    raceTargetTwo: limits.raceTargetTwo,
+  };
 }
 
 function mergeBoardSummary(
@@ -220,12 +240,14 @@ function boardStatusFor(
   match: ScoringMatchSummary,
   summary: DraftBoardSummary | null,
   draft?: ScoringDraft | null,
+  format?: LeagueScoringFormat | null,
 ): MatchBoardStatus {
   // LMS is the source of truth for "submitted to Fargo".
   // A Tableside-only submittedAt without hasBeenPlayed is a sync issue, not Complete.
   if (match.hasBeenPlayed) return "complete";
   // Live only when a game has points or a winner — empty drafts stay Not started.
-  if (draftHasStartedPlay(draft)) return "in_progress";
+  const winnerOpts = format ? winnerOptionsForFormat(format, match) : undefined;
+  if (draftHasStartedPlay(draft, winnerOpts)) return "in_progress";
   if (
     summary &&
     ((summary.gamesStarted ?? 0) > 0 || summary.gamesScored > 0)
@@ -236,11 +258,19 @@ function boardStatusFor(
   return "not_started";
 }
 
-function scoreLabel(game: GameScoreState | undefined): string {
+function scoreLabel(
+  game: GameScoreState | undefined,
+  options?: Parameters<typeof gameWinner>[1],
+): string {
   const s1 = game?.teamOneScore ?? 0;
   const s2 = game?.teamTwoScore ?? 0;
   const adorn = game?.winAdornment ?? "";
-  const winner = gameWinner(game);
+  const winner = gameWinner(game, {
+    maxScore: options?.maxScore,
+    maxLosingScore: options?.maxLosingScore,
+    raceTargetOne: options?.raceTargetOne ?? game?.raceTargetOne,
+    raceTargetTwo: options?.raceTargetTwo ?? game?.raceTargetTwo,
+  });
   if (adorn && winner) {
     return winner === 1 ? `${adorn} – ${s2}` : `${s1} – ${adorn}`;
   }
@@ -356,8 +386,9 @@ function nightStatusFromBoard(
   match: ScoringMatchSummary,
   summary: DraftBoardSummary | null,
   draft: ScoringDraft | null,
+  format?: LeagueScoringFormat | null,
 ): NightHalfStatus {
-  const status = boardStatusFor(match, summary, draft);
+  const status = boardStatusFor(match, summary, draft, format);
   if (status === "complete") return "complete";
   if (status === "in_progress") return "in_progress";
   return "not_started";
@@ -767,8 +798,31 @@ export function MatchScoring({
       }
 
       let chosen = newerDraft(remoteDraft, local, "a");
-      const chosenScored = chosen ? tallyDraft(chosen).scored : 0;
       let choseLmsResult = false;
+
+      const matchDivisionId =
+        data.match.divisionId ?? divisionId ?? null;
+      const linkOverrides = linkScoringOverrides(
+        divisionLink,
+        matchDivisionId,
+      );
+      const formatForMatch = resolveScoringFormat({
+        prefsFormatId: scoringFormatId,
+        // Prefer LMS half name over Tableside link display name.
+        divisionName: data.match.divisionName ?? divisionName,
+        playersPerTeam:
+          data.match.matchFormat?.teamOnePlayers.length ||
+          data.match.numberOfSets ||
+          null,
+        pointsForWin: data.match.pointsForWin ?? null,
+        matchWinCountsAsRound: data.match.matchWinCountsAsRound ?? null,
+        linkFormatId: linkOverrides.linkFormatId,
+        linkRaceChartId: linkOverrides.linkRaceChartId,
+      });
+      const openWinnerOpts = winnerOptionsForFormat(formatForMatch, data.match);
+      const chosenScored = chosen
+        ? tallyDraft(chosen, openWinnerOpts).scored
+        : 0;
 
       // Completed matches with no Tableside draft: hydrate players + scores from LMS.
       if (chosenScored === 0) {
@@ -777,7 +831,7 @@ export function MatchScoring({
             draft: ScoringDraft | null;
             summary?: DraftBoardSummary | null;
           }>(`/api/scoring/matches/${matchId}/result`);
-          if (lms.draft && tallyDraft(lms.draft).scored > 0) {
+          if (lms.draft && tallyDraft(lms.draft, openWinnerOpts).scored > 0) {
             chosen = lms.draft;
             choseLmsResult = true;
             if (!submittedAt && data.match.hasBeenPlayed) {
@@ -823,25 +877,6 @@ export function MatchScoring({
       const locked = submittedLocked || !canEditSheet;
       sheetLockedRef.current = locked;
 
-      const matchDivisionId =
-        data.match.divisionId ?? divisionId ?? null;
-      const linkOverrides = linkScoringOverrides(
-        divisionLink,
-        matchDivisionId,
-      );
-      const formatForMatch = resolveScoringFormat({
-        prefsFormatId: scoringFormatId,
-        // Prefer LMS half name over Tableside link display name.
-        divisionName: data.match.divisionName ?? divisionName,
-        playersPerTeam:
-          data.match.matchFormat?.teamOnePlayers.length ||
-          data.match.numberOfSets ||
-          null,
-        pointsForWin: data.match.pointsForWin ?? null,
-        matchWinCountsAsRound: data.match.matchWinCountsAsRound ?? null,
-        linkFormatId: linkOverrides.linkFormatId,
-        linkRaceChartId: linkOverrides.linkRaceChartId,
-      });
       // When we load someone else's shared draft, keep their updatedAt so the
       // poll loop and discrepancy checks don't think we just authored it.
       const adoptedRemote =
@@ -1045,20 +1080,32 @@ export function MatchScoring({
     match?.id,
     scoringFormat.id,
     scoringFormat.raceMode,
+    scoringFormat.fixedRaceWin,
     draft?.teamOneLineup,
     draft?.teamTwoLineup,
   ]);
 
-  const totals = useMemo(
-    () => (draft ? tallyDraft(draft) : null),
-    [draft],
+  const winnerOpts = useMemo(
+    () => winnerOptionsForFormat(scoringFormat, match),
+    [scoringFormat, match],
   );
 
+  const totals = useMemo(
+    () => (draft ? tallyDraft(draft, winnerOpts) : null),
+    [draft, winnerOpts],
+  );
+
+  const hideRoundHandicap = formatUsesWinLoseMatchups(scoringFormat);
+
   // Handicaps depend only on lineups — keep stable across score taps.
+  // Win/lose race-to-N formats are scratch (no round HC).
   const roundHandicaps = useMemo(
-    () => (match && draft ? computeMatchHandicaps(match, draft) : []),
+    () =>
+      match && draft && !hideRoundHandicap
+        ? computeMatchHandicaps(match, draft)
+        : [],
     // eslint-disable-next-line react-hooks/exhaustive-deps -- lineup refs stay stable when only games change
-    [match, draft?.teamOneLineup, draft?.teamTwoLineup],
+    [match, draft?.teamOneLineup, draft?.teamTwoLineup, hideRoundHandicap],
   );
 
   const roundPointTallies = useMemo(
@@ -1076,9 +1123,9 @@ export function MatchScoring({
   const matchWinRoundTallies = useMemo(
     () =>
       match && draft && matchWinTeamPoints
-        ? tallyAllRoundsByGameWins(match, draft)
+        ? tallyAllRoundsByGameWins(match, draft, winnerOpts)
         : [],
-    [match, draft, matchWinTeamPoints],
+    [match, draft, matchWinTeamPoints, winnerOpts],
   );
 
   const matchPointsTally = useMemo(() => {
@@ -1544,7 +1591,7 @@ export function MatchScoring({
           }}
           gamesPlayed={totals?.scored ?? 0}
           gamesTotal={totals?.total ?? 0}
-          isHandicapped={match.isHandicapped}
+          isHandicapped={match.isHandicapped && !hideRoundHandicap}
           handicapTotals={handicapTotals}
         />
 
@@ -1700,6 +1747,7 @@ export function MatchScoring({
           <ReviewPanel
             match={match}
             draft={draft}
+            scoringFormat={scoringFormat}
             submitting={submitting}
             locked={sheetLocked}
             isResubmit={isResubmit && resubmitUnlocked}
@@ -1996,8 +2044,8 @@ export function MatchScoring({
                     const selected =
                       activeGame?.roundNumber === currentRound.roundNumber &&
                       activeGame?.gameIndex === game.index;
-                    const winner = gameWinner(state);
-                    const status = gamePlayStatus(state);
+                    const winner = gameWinner(state, winnerOpts);
+                    const status = gamePlayStatus(state, winnerOpts);
                     return (
                       <button
                         key={game.index}
@@ -2059,7 +2107,7 @@ export function MatchScoring({
                             ].join(" ")}
                           >
                             <p className="text-sm font-semibold tabular-nums leading-none">
-                              {scoreLabel(state)}
+                              {scoreLabel(state, winnerOpts)}
                             </p>
                             <p
                               className={[
@@ -2425,6 +2473,11 @@ export function MatchScoring({
                           item,
                           summaryForMatch(item),
                           loadDraft(item.id),
+                          formatForMatchHalf(item, {
+                            scoringFormatId,
+                            divisionLink,
+                            fallbackDivisionName: divisionName,
+                          }),
                         ),
                     })
                   : null;
@@ -2441,6 +2494,11 @@ export function MatchScoring({
                         first,
                         summaryForMatch(first),
                         loadDraft(first.id),
+                        formatForMatchHalf(first, {
+                          scoringFormatId,
+                          divisionLink,
+                          fallbackDivisionName: divisionName,
+                        }),
                       );
                     })();
                 const homeRounds = scores
@@ -4132,6 +4190,7 @@ function ConfirmDialog({
 function ReviewPanel({
   match,
   draft,
+  scoringFormat,
   submitting,
   locked = false,
   isResubmit = false,
@@ -4140,22 +4199,30 @@ function ReviewPanel({
 }: {
   match: ScoringMatchDetail;
   draft: ScoringDraft;
+  scoringFormat: LeagueScoringFormat;
   submitting: boolean;
   locked?: boolean;
   isResubmit?: boolean;
   onEdit: () => void;
   onSubmit: () => void;
 }) {
-  const totals = tallyDraft(draft);
+  const winnerOpts = winnerOptionsForFormat(scoringFormat, match);
+  const matchWinTeamPoints = scoringFormat.teamPointMode === "match-win";
+  const hideRoundHandicap = formatUsesWinLoseMatchups(scoringFormat);
+  const totals = tallyDraft(draft, winnerOpts);
   const incomplete = totals.scored < totals.total;
-  const roundTallies = tallyAllRoundPoints(match, draft);
-  const roundWins = roundTallies.reduce(
-    (acc, round) => ({
-      teamOne: acc.teamOne + (round.roundWinner === 1 ? 1 : 0),
-      teamTwo: acc.teamTwo + (round.roundWinner === 2 ? 1 : 0),
-    }),
-    { teamOne: 0, teamTwo: 0 },
-  );
+  const roundTallies = matchWinTeamPoints
+    ? []
+    : tallyAllRoundPoints(match, draft);
+  const roundWins = matchWinTeamPoints
+    ? { teamOne: totals.teamOneWins, teamTwo: totals.teamTwoWins }
+    : roundTallies.reduce(
+        (acc, round) => ({
+          teamOne: acc.teamOne + (round.roundWinner === 1 ? 1 : 0),
+          teamTwo: acc.teamTwo + (round.roundWinner === 2 ? 1 : 0),
+        }),
+        { teamOne: 0, teamTwo: 0 },
+      );
   const hcOne = roundTallies.reduce((sum, round) => sum + round.teamOneHandicap, 0);
   const hcTwo = roundTallies.reduce((sum, round) => sum + round.teamTwoHandicap, 0);
 
@@ -4173,11 +4240,17 @@ function ReviewPanel({
               : "Ready to send to LMS?"}
         </h4>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Rounds {roundWins.teamOne}–{roundWins.teamTwo} · games{" "}
-          {totals.teamOneWins}–{totals.teamTwoWins} · {totals.scored} of{" "}
+          {matchWinTeamPoints
+            ? scoringFormat.teamRaceTo
+              ? `Match pts ${roundWins.teamOne}–${roundWins.teamTwo} · race to ${scoringFormat.teamRaceTo}`
+              : `Match wins ${roundWins.teamOne}–${roundWins.teamTwo}`
+            : `Rounds ${roundWins.teamOne}–${roundWins.teamTwo}`}{" "}
+          · games {totals.teamOneWins}–{totals.teamTwoWins} · {totals.scored} of{" "}
           {totals.total} complete
           {incomplete && !locked ? " · finish every game first" : ""}
-          {match.isHandicapped ? ` · HC ${hcOne}–${hcTwo}` : ""}
+          {match.isHandicapped && !hideRoundHandicap
+            ? ` · HC ${hcOne}–${hcTwo}`
+            : ""}
         </p>
       </div>
 
@@ -4221,7 +4294,7 @@ function ReviewPanel({
                     match.teamTwoPlayers,
                     state?.teamTwoPlayerId ?? null,
                   );
-                  const complete = gameWinner(state) != null;
+                  const complete = gameWinner(state, winnerOpts) != null;
                   return (
                     <div
                       key={game.index}
@@ -4236,7 +4309,7 @@ function ReviewPanel({
                       </span>
                       <span className="shrink-0 text-right">
                         <span className="font-semibold tabular-nums">
-                          {scoreLabel(state)}
+                          {scoreLabel(state, winnerOpts)}
                         </span>
                         <span className="mt-0.5 block text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
                           {complete ? "Won" : "Open"}

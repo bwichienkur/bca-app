@@ -248,30 +248,9 @@ export function buildPreviewDraft(
   match: ScoringMatchDetail,
   scoringFormat: LeagueScoringFormat,
 ): ScoringDraft {
-  let draft = emptyDraft(match, false);
-  draft = applyFormatRaceTargets(match, draft, scoringFormat);
-
-  // Stamp even race targets for fixed-race nights so gameWinner() (and
-  // match-win tallies) honor race-to values other than the 10/7 default.
-  if (scoringFormat.raceMode !== "fargo-race-chart") {
-    const win =
-      scoringFormat.fixedRaceWin && scoringFormat.fixedRaceWin > 0
-        ? scoringFormat.fixedRaceWin
-        : match.maxScore > 0
-          ? match.maxScore
-          : 10;
-    const games: ScoringDraft["games"] = { ...draft.games };
-    for (const [key, game] of Object.entries(games)) {
-      games[key] = {
-        ...game,
-        raceTargetOne: win,
-        raceTargetTwo: win,
-      };
-    }
-    draft = { ...draft, games };
-  }
-
-  return draft;
+  // applyFormatRaceTargets stamps chart races and win/lose (race-to-1) targets.
+  // Other fixed races (e.g. 10/7) stay target-cleared so maxWin/maxLoss applies.
+  return applyFormatRaceTargets(match, emptyDraft(match, false), scoringFormat);
 }
 
 export function previewHandicaps(

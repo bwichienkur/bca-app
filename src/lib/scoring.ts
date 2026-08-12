@@ -305,11 +305,16 @@ export function gameWinner(
   return null;
 }
 
-export function isGameScored(game: GameScoreState | undefined): boolean {
+export function isGameScored(
+  game: GameScoreState | undefined,
+  options?: GameWinnerOptions,
+): boolean {
   return (
     gameWinner(game, {
-      raceTargetOne: game?.raceTargetOne,
-      raceTargetTwo: game?.raceTargetTwo,
+      maxScore: options?.maxScore,
+      maxLosingScore: options?.maxLosingScore,
+      raceTargetOne: options?.raceTargetOne ?? game?.raceTargetOne,
+      raceTargetTwo: options?.raceTargetTwo ?? game?.raceTargetTwo,
     }) != null
   );
 }
@@ -326,7 +331,10 @@ export function normalizeDraftScores(draft: ScoringDraft): ScoringDraft {
   return { ...draft, games };
 }
 
-export function tallyDraft(draft: ScoringDraft): {
+export function tallyDraft(
+  draft: ScoringDraft,
+  options?: GameWinnerOptions,
+): {
   teamOneWins: number;
   teamTwoWins: number;
   scored: number;
@@ -338,8 +346,10 @@ export function tallyDraft(draft: ScoringDraft): {
   const games = Object.values(draft.games);
   for (const game of games) {
     const winner = gameWinner(game, {
-      raceTargetOne: game.raceTargetOne,
-      raceTargetTwo: game.raceTargetTwo,
+      maxScore: options?.maxScore,
+      maxLosingScore: options?.maxLosingScore,
+      raceTargetOne: options?.raceTargetOne ?? game.raceTargetOne,
+      raceTargetTwo: options?.raceTargetTwo ?? game.raceTargetTwo,
     });
     if (!winner) continue;
     scored += 1;
@@ -373,6 +383,7 @@ export function tallyRoundByGameWins(
   match: ScoringMatchDetail,
   draft: ScoringDraft,
   roundNumber: number,
+  options?: GameWinnerOptions,
 ): RoundGameWinsTally {
   const round = match.matchFormat?.rounds.find(
     (item) => item.roundNumber === roundNumber,
@@ -386,10 +397,10 @@ export function tallyRoundByGameWins(
   for (const game of games) {
     const state = draft.games[gameKey(roundNumber, game.index)];
     const winner = gameWinner(state, {
-      maxScore: maxWin,
-      maxLosingScore: maxLoss,
-      raceTargetOne: state?.raceTargetOne,
-      raceTargetTwo: state?.raceTargetTwo,
+      maxScore: options?.maxScore ?? maxWin,
+      maxLosingScore: options?.maxLosingScore ?? maxLoss,
+      raceTargetOne: options?.raceTargetOne ?? state?.raceTargetOne,
+      raceTargetTwo: options?.raceTargetTwo ?? state?.raceTargetTwo,
     });
     if (!winner) continue;
     gamesComplete += 1;
@@ -417,9 +428,10 @@ export function tallyRoundByGameWins(
 export function tallyAllRoundsByGameWins(
   match: ScoringMatchDetail,
   draft: ScoringDraft,
+  options?: GameWinnerOptions,
 ): RoundGameWinsTally[] {
   return (match.matchFormat?.rounds ?? []).map((round) =>
-    tallyRoundByGameWins(match, draft, round.roundNumber),
+    tallyRoundByGameWins(match, draft, round.roundNumber, options),
   );
 }
 
@@ -645,10 +657,13 @@ export type DraftBoardSummary = {
 };
 
 /** True when any game has points or a winner (used for night-board Live). */
-export function draftHasStartedPlay(draft: ScoringDraft | null | undefined): boolean {
+export function draftHasStartedPlay(
+  draft: ScoringDraft | null | undefined,
+  options?: GameWinnerOptions,
+): boolean {
   if (!draft) return false;
   return Object.values(draft.games).some(
-    (game) => gamePlayStatus(game) !== "not-started",
+    (game) => gamePlayStatus(game, options) !== "not-started",
   );
 }
 
@@ -656,6 +671,9 @@ export type SummarizeDraftOptions = {
   /** When "match-win", team points = individual match wins (no R6). */
   teamPointMode?: "round-points" | "match-win";
   includeMatchPointsRound?: boolean;
+  /** Format race limits so win/lose (1–0) matchups count without stamped targets. */
+  maxScore?: number;
+  maxLosingScore?: number;
 };
 
 export function summarizeDraftForBoard(
@@ -663,9 +681,13 @@ export function summarizeDraftForBoard(
   submittedAt: string | null = null,
   options: SummarizeDraftOptions = {},
 ): DraftBoardSummary {
-  const games = tallyDraft(draft);
+  const winnerOpts: GameWinnerOptions = {
+    maxScore: options.maxScore,
+    maxLosingScore: options.maxLosingScore,
+  };
+  const games = tallyDraft(draft, winnerOpts);
   const gamesStarted = Object.values(draft.games).filter(
-    (game) => gamePlayStatus(game) !== "not-started",
+    (game) => gamePlayStatus(game, winnerOpts) !== "not-started",
   ).length;
 
   if (options.teamPointMode === "match-win") {
@@ -858,11 +880,14 @@ export function pointsNeededFromRemaining(
 /** Card status for a game in the round list. */
 export function gamePlayStatus(
   game: GameScoreState | undefined,
+  options?: GameWinnerOptions,
 ): "complete" | "in-progress" | "not-started" {
   if (
     gameWinner(game, {
-      raceTargetOne: game?.raceTargetOne,
-      raceTargetTwo: game?.raceTargetTwo,
+      maxScore: options?.maxScore,
+      maxLosingScore: options?.maxLosingScore,
+      raceTargetOne: options?.raceTargetOne ?? game?.raceTargetOne,
+      raceTargetTwo: options?.raceTargetTwo ?? game?.raceTargetTwo,
     })
   ) {
     return "complete";
