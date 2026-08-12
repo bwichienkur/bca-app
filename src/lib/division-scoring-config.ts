@@ -159,12 +159,18 @@ export function formatScoringSummary(format: LeagueScoringFormat): string {
   const team =
     format.teamPointMode === "match-win"
       ? format.teamRaceTo
-        ? `team race to ${format.teamRaceTo}`
-        : "1 pt per match win"
+        ? `1 pt per matchup · team race to ${format.teamRaceTo}`
+        : `${format.pointsPerMatchWin} pt${format.pointsPerMatchWin === 1 ? "" : "s"} per match win`
       : format.matchPointsRound
         ? "round pts + match-points round"
         : "round points";
-  return `${format.playersPerTeam}/side · ${race} · ${team}`;
+  const raceLabel =
+    format.teamPointMode === "match-win" &&
+    format.teamRaceTo &&
+    format.fixedRaceWin === 1
+      ? "win/lose matchups"
+      : race;
+  return `${format.playersPerTeam}/side · ${raceLabel} · ${team}`;
 }
 
 function playerRating(

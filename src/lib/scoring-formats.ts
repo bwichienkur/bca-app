@@ -112,21 +112,26 @@ export const FORMAT_BEYOND_SINGLES: LeagueScoringFormat = {
 };
 
 /**
- * Beyond Monday teams half: 3-man round-robin race on one scoresheet.
- * LMS awards 1 match point; Tableside combined standings count it as 2 night pts.
+ * Beyond Monday teams half: team race to 9 on one scoresheet.
+ * Each singles matchup is win/lose (1 pt toward the team total). First team
+ * to 9 wins the sheet. Combined night standings still count that match win
+ * as 2 standing points (RDS×2 on the link).
  */
 export const FORMAT_BEYOND_TEAMS: LeagueScoringFormat = {
   id: "beyond-teams",
-  label: "Beyond Teams (RR race)",
+  label: "Beyond Teams (race to 9)",
   description:
-    "Team round-robin race. LMS match win = 1; combined Beyond night awards 2 pts.",
+    "Team race to 9. Each matchup is win or lose (1 pt). First team to 9 wins the sheet.",
   playersPerTeam: 3,
   matchesPerNight: 1,
   teamPointMode: "match-win",
-  pointsPerMatchWin: 2,
+  pointsPerMatchWin: 1,
   raceMode: "fixed-race",
-  fixedRaceWin: 9,
-  fixedRaceMaxLoss: 9,
+  /** Each matchup is a single game (0/1) — not a race to 9 itself. */
+  fixedRaceWin: 1,
+  fixedRaceMaxLoss: 0,
+  /** Team total: first to this many matchup wins. */
+  teamRaceTo: 9,
   matchPointsRound: false,
   pointSystem: "1",
 };

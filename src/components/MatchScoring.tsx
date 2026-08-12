@@ -1945,13 +1945,18 @@ export function MatchScoring({
               ) : null}
               {matchWinTeamPoints && !isMatchPointsRound ? (
                 <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--muted)]">
-                  {scoringFormat.label}: each individual match win is{" "}
-                  {scoringFormat.pointsPerMatchWin} team point
-                  {scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}
-                  {scoringFormat.raceMode === "fargo-race-chart"
-                    ? ` · race from the ${raceChartMeta(scoringFormat.raceChartId ?? "r6-hot").label} chart`
-                    : ""}
-                  .
+                  {scoringFormat.label}:{" "}
+                  {scoringFormat.teamRaceTo && scoringFormat.fixedRaceWin === 1
+                    ? `each matchup is win or lose (1 pt). First team to ${scoringFormat.teamRaceTo} wins.`
+                    : `each individual match win is ${scoringFormat.pointsPerMatchWin} team point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}${
+                        scoringFormat.teamRaceTo
+                          ? ` · first team to ${scoringFormat.teamRaceTo} wins`
+                          : ""
+                      }${
+                        scoringFormat.raceMode === "fargo-race-chart"
+                          ? ` · race from the ${raceChartMeta(scoringFormat.raceChartId ?? "r6-hot").label} chart`
+                          : ""
+                      }.`}
                 </p>
               ) : null}
 
@@ -2571,7 +2576,7 @@ function CombinedNightHub({
           const hint =
             half.kind === "singles"
               ? "Individual races · own lineup"
-              : "Team round-robin · own lineup";
+              : "Team race to 9 · 1 pt per matchup · own lineup";
           return (
             <button
               key={half.match.id}
