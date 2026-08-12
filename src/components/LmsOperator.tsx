@@ -620,6 +620,8 @@ export function LmsOperator({
   >([]);
 
   const [genStart, setGenStart] = useState("");
+  /** LMS rejects sending both weeks and rounds; one dimension must be zero. */
+  const [genMode, setGenMode] = useState<"weeks" | "rounds">("weeks");
   const [genRounds, setGenRounds] = useState("5");
   const [genWeeks, setGenWeeks] = useState("11");
   const [matchDraft, setMatchDraft] = useState<{
@@ -1204,13 +1206,17 @@ export function LmsOperator({
     });
   }
 
-  async function runAction(fn: () => Promise<void>, success?: string) {
+  async function runAction(
+    fn: () => Promise<void | string>,
+    success?: string,
+  ) {
     setBusy(true);
     setNotice(null);
     setSectionError(null);
     try {
-      await fn();
-      if (success) setNotice(success);
+      const result = await fn();
+      if (typeof result === "string" && result.trim()) setNotice(result);
+      else if (success) setNotice(success);
     } catch (error) {
       setSectionError(
         error instanceof Error ? error.message : "Action failed.",
@@ -2847,6 +2853,10 @@ export function LmsOperator({
           />
           <div className="min-w-0 space-y-2 overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3">
             <p className="text-sm font-semibold">Generate schedule</p>
+            <p className="text-xs text-[var(--muted)]">
+              LMS builds by weeks or by rounds — not both. Unplayed matches are
+              cleared, then the new sheet is written.
+            </p>
             <div className="grid min-w-0 gap-3 sm:grid-cols-3">
               <Field label="Start date">
                 <DateField
@@ -2855,53 +2865,87 @@ export function LmsOperator({
                   onChange={setGenStart}
                 />
               </Field>
-              <Field label="Rounds">
-                <input
-                  type="number"
-                  min={1}
+              <Field label="Build by">
+                <select
                   className={inputClass}
-                  value={genRounds}
-                  onChange={(e) => setGenRounds(e.target.value)}
-                />
+                  value={genMode}
+                  onChange={(e) =>
+                    setGenMode(e.target.value === "rounds" ? "rounds" : "weeks")
+                  }
+                >
+                  <option value="weeks">Weeks</option>
+                  <option value="rounds">Rounds</option>
+                </select>
               </Field>
-              <Field label="Weeks">
-                <input
-                  type="number"
-                  min={1}
-                  className={inputClass}
-                  value={genWeeks}
-                  onChange={(e) => setGenWeeks(e.target.value)}
-                />
-              </Field>
+              {genMode === "weeks" ? (
+                <Field label="Weeks">
+                  <input
+                    type="number"
+                    min={1}
+                    className={inputClass}
+                    value={genWeeks}
+                    onChange={(e) => setGenWeeks(e.target.value)}
+                  />
+                </Field>
+              ) : (
+                <Field label="Rounds">
+                  <input
+                    type="number"
+                    min={1}
+                    className={inputClass}
+                    value={genRounds}
+                    onChange={(e) => setGenRounds(e.target.value)}
+                  />
+                </Field>
+              )}
             </div>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 className={btnPrimary}
-                disabled={busy || !genStart}
+                disabled={
+                  busy ||
+                  !genStart ||
+                  !(
+                    (genMode === "weeks" ? Number(genWeeks) : Number(genRounds)) >
+                    0
+                  )
+                }
                 onClick={(event) => {
+                  const count =
+                    genMode === "weeks"
+                      ? Number(genWeeks) || 0
+                      : Number(genRounds) || 0;
                   askConfirm(
                     {
                       title: "Generate schedule",
-                      body: "Regenerate the schedule? This replaces the current schedule in LMS.",
+                      body: `Regenerate the schedule for ${count} ${genMode}? This clears unplayed LMS matches and writes a new sheet.`,
                       confirmLabel: "Generate",
                       tone: "primary",
                       onConfirm: async () => {
                         setPendingConfirm(null);
                         await runAction(async () => {
-                          await fetchJson("/api/lms/operator/schedule", {
+                          const result = await fetchJson<{
+                            matchCount?: number;
+                          }>("/api/lms/operator/schedule", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
                               action: "generate",
                               divisionId: opDivisionId,
                               startDate: genStart,
-                              numberOfRounds: Number(genRounds) || 5,
-                              numberOfWeeks: Number(genWeeks) || 11,
+                              mode: genMode,
+                              numberOfWeeks:
+                                genMode === "weeks" ? count : undefined,
+                              numberOfRounds:
+                                genMode === "rounds" ? count : undefined,
                             }),
                           });
                           await refreshSchedule();
-                        }, "Schedule generated.");
+                          return result.matchCount
+                            ? `Schedule generated (${result.matchCount} matches).`
+                            : "Schedule generated.";
+                        });
                       },
                     },
                     event,
