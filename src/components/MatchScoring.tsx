@@ -70,6 +70,7 @@ import {
   combineScoreMatchupsForNight,
   computeMatchupStandingScores,
   roleLabel,
+  type CombinedHalfKind,
   type CombinedScoreMatchup,
 } from "@/lib/combined-night-matchup";
 import {
@@ -94,6 +95,8 @@ import {
   IconSubTabs,
   LineupsSubIcon,
   MatchesSubIcon,
+  MatchupSubIcon,
+  RoundsSubIcon,
   StatsSubIcon,
 } from "./IconSubTabs";
 import { LoadingState } from "./LoadingState";
@@ -1439,28 +1442,9 @@ export function MatchScoring({
         </section>
       );
     }
-    const scores = divisionLink
-      ? computeMatchupStandingScores({
-          config: divisionLink.config,
-          matchup,
-          summaryFor: (matchId) => {
-            const item = matchup.halves.find((h) => h.match.id === matchId)?.match;
-            return item ? summaryForMatch(item) : null;
-          },
-          statusFor: (item) =>
-            nightStatusFromBoard(
-              item,
-              summaryForMatch(item),
-              loadDraft(item.id),
-            ),
-        })
-      : null;
     return (
       <CombinedNightHub
         matchup={matchup}
-        scores={scores}
-        homeRank={rankForTeam(teamRanks, matchup.homeName)}
-        awayRank={rankForTeam(teamRanks, matchup.awayName)}
         onBack={() => setView({ mode: "list" })}
         onOpenHalf={(matchId) =>
           void openMatch(matchId, { fromCombined: matchup.key })
@@ -1490,6 +1474,18 @@ export function MatchScoring({
     const viewOnly = !canEditSheet;
     const sheetLocked = submittedLocked || viewOnly;
     sheetLockedRef.current = sheetLocked;
+    const combinedPair = fromCombined
+      ? (nightMatchups.find((row) => row.key === fromCombined) ?? null)
+      : null;
+    const halfTabs =
+      combinedPair && combinedPair.halves.length > 1
+        ? combinedPair.halves.map((half) => ({
+            id: half.match.id,
+            label: combinedHalfTabLabel(half.kind),
+            icon: combinedHalfTabIcon(half.kind),
+          }))
+        : null;
+
     return (
       <section className="animate-panel w-full min-w-0 space-y-2.5 overflow-x-hidden">
         <div className="flex items-center justify-between gap-3">
@@ -1501,9 +1497,6 @@ export function MatchScoring({
                   matchId: match.id,
                   fromCombined,
                 });
-              } else if (fromCombined) {
-                setView({ mode: "combined", pairKey: fromCombined });
-                setActiveGame(null);
               } else {
                 setView({ mode: "list" });
                 setActiveGame(null);
@@ -1511,6 +1504,22 @@ export function MatchScoring({
             }}
           />
         </div>
+
+        {halfTabs && !reviewMode ? (
+          <div className="px-3 sm:px-4">
+            <IconSubTabs
+              aria-label="Scoresheet half"
+              value={match.id}
+              onChange={(id) => {
+                if (id === match.id) return;
+                setActiveGame(null);
+                void openMatch(id, { fromCombined });
+              }}
+              columns={2}
+              items={halfTabs}
+            />
+          </div>
+        ) : null}
 
         <MatchScoreboard
           dateLabel={formatMatchDate(match.datePlayed)}
@@ -1945,13 +1954,18 @@ export function MatchScoring({
               ) : null}
               {matchWinTeamPoints && !isMatchPointsRound ? (
                 <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--muted)]">
-                  {scoringFormat.label}: each individual match win is{" "}
-                  {scoringFormat.pointsPerMatchWin} team point
-                  {scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}
-                  {scoringFormat.raceMode === "fargo-race-chart"
-                    ? ` · race from the ${raceChartMeta(scoringFormat.raceChartId ?? "r6-hot").label} chart`
-                    : ""}
-                  .
+                  {scoringFormat.label}:{" "}
+                  {scoringFormat.teamRaceTo && scoringFormat.fixedRaceWin === 1
+                    ? `each matchup is win or lose (1 pt). First team to ${scoringFormat.teamRaceTo} wins.`
+                    : `each individual match win is ${scoringFormat.pointsPerMatchWin} team point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}${
+                        scoringFormat.teamRaceTo
+                          ? ` · first team to ${scoringFormat.teamRaceTo} wins`
+                          : ""
+                      }${
+                        scoringFormat.raceMode === "fargo-race-chart"
+                          ? ` · race from the ${raceChartMeta(scoringFormat.raceChartId ?? "r6-hot").label} chart`
+                          : ""
+                      }.`}
                 </p>
               ) : null}
 
@@ -2468,7 +2482,14 @@ export function MatchScoring({
                     emphasizeAway={matchup.mySide === 2}
                     onClick={() => {
                       if (linkedDivisionId && matchup.halves.length > 1) {
-                        setView({ mode: "combined", pairKey: matchup.key });
+                        const prefer =
+                          matchup.halves.find((h) => h.kind === "singles") ??
+                          matchup.halves[0];
+                        if (prefer) {
+                          void openMatch(prefer.match.id, {
+                            fromCombined: matchup.key,
+                          });
+                        }
                         return;
                       }
                       const only = matchup.halves[0]?.match.id;
@@ -2491,107 +2512,47 @@ function formatRawStanding(value: number | null | undefined): string {
   return String(Math.round(value * 10) / 10);
 }
 
+function combinedHalfTabLabel(kind: CombinedHalfKind): string {
+  return kind === "singles" ? "Singles" : "Team";
+}
+
+function combinedHalfTabIcon(kind: CombinedHalfKind) {
+  return kind === "singles" ? MatchupSubIcon : RoundsSubIcon;
+}
+
 function CombinedNightHub({
   matchup,
-  scores,
-  homeRank,
-  awayRank,
   onBack,
   onOpenHalf,
 }: {
   matchup: CombinedScoreMatchup;
-  scores: import("@/lib/combined-night-matchup").MatchupStandingScores | null;
-  homeRank: string | null;
-  awayRank: string | null;
   onBack: () => void;
   onOpenHalf: (matchId: string) => void;
 }) {
-  const boardStatus = scores
-    ? scores.status === "complete"
-      ? "complete"
-      : scores.status === "in_progress"
-        ? "in_progress"
-        : "not_started"
-    : "not_started";
+  const items = matchup.halves.map((half) => ({
+    id: half.match.id,
+    label: combinedHalfTabLabel(half.kind),
+    icon: combinedHalfTabIcon(half.kind),
+  }));
+  const [selectedId, setSelectedId] = useState(
+    () => items[0]?.id ?? "",
+  );
 
   return (
     <section className="animate-panel w-full min-w-0 space-y-3 overflow-x-hidden p-3 sm:p-4">
       <BackButton onClick={onBack} />
-      <PanelHeader
-        title={`${matchup.homeName} vs ${matchup.awayName}`}
-        description={
-          scores
-            ? `${scores.line}. Open one sheet — Singles and Teams keep separate lineups.`
-            : "Combined night scoresheet. Singles and Teams keep separate lineups."
-        }
-      />
-
-      <MatchListCard
-        homeName={matchup.homeName}
-        awayName={matchup.awayName}
-        badge="Combined"
-        meta={
-          scores
-            ? `Standing pts · max ${formatRawStanding(scores.standingMax)}`
-            : "Standing pts"
-        }
-        boardStatus={boardStatus}
-        isMyMatch={matchup.isMyMatch}
-        homeRounds={scores?.homeStanding ?? 0}
-        awayRounds={scores?.awayStanding ?? 0}
-        homeRank={homeRank}
-        awayRank={awayRank}
-        emphasizeHome={matchup.mySide === 1}
-        emphasizeAway={matchup.mySide === 2}
-      />
-
-      {scores ? (
-        <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-xs text-[var(--muted)]">
-          <p>
-            <span className="font-semibold text-[var(--ink)]">
-              {matchup.homeName}:
-            </span>{" "}
-            {scores.homeBreakdown}
-          </p>
-          <p className="mt-1">
-            <span className="font-semibold text-[var(--ink)]">
-              {matchup.awayName}:
-            </span>{" "}
-            {scores.awayBreakdown}
-          </p>
-        </div>
+      {items.length > 0 ? (
+        <IconSubTabs
+          aria-label="Scoresheet half"
+          value={selectedId || items[0]!.id}
+          onChange={(id) => {
+            setSelectedId(id);
+            onOpenHalf(id);
+          }}
+          columns={Math.min(items.length, 2)}
+          items={items}
+        />
       ) : null}
-
-      <div className="space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-          Scoresheet halves
-        </p>
-        {matchup.halves.map((half) => {
-          const label = roleLabel(half.kind);
-          const hint =
-            half.kind === "singles"
-              ? "Individual races · own lineup"
-              : "Team round-robin · own lineup";
-          return (
-            <button
-              key={half.match.id}
-              type="button"
-              onClick={() => onOpenHalf(half.match.id)}
-              className="flex w-full items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3.5 py-3 text-left transition hover:border-[color-mix(in_srgb,var(--felt)_55%,var(--line))] hover:bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]"
-            >
-              <div>
-                <p className="text-sm font-semibold text-[var(--ink)]">
-                  {label}
-                </p>
-                <p className="text-[11px] text-[var(--muted)]">{hint}</p>
-              </div>
-              <span className="text-sm font-semibold text-[var(--felt-deep)]">
-                Open
-              </span>
-            </button>
-          );
-        })}
-      </div>
     </section>
   );
 }
