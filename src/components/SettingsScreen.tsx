@@ -1026,7 +1026,7 @@ export function SettingsScreen({
             />
             <p className="text-[11px] leading-snug text-[var(--muted)]">
               {scoringFormatId === "auto"
-                ? "Uses the Night Format Race HC play style when linked; otherwise Palm Beach. Manage presets under Manage → Styles, or pin one on a Night Format (Links)."
+                ? "Uses the Night Format play style when linked; otherwise Palm Beach. Edit nights under Manage → Links, or manage templates under Manage → Templates."
                 : getScoringFormat(scoringFormatId, formatCatalog).description}
             </p>
           </div>

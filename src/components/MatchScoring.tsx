@@ -349,15 +349,17 @@ function linkScoringOverrides(
   matchDivisionId: string | null | undefined,
 ): {
   linkFormatId: string | null;
+  linkFormat: LeagueScoringFormat | null;
   linkRaceChartId: import("@/lib/race-charts").RaceChartId | null;
 } {
   if (!link || !matchDivisionId) {
-    return { linkFormatId: null, linkRaceChartId: null };
+    return { linkFormatId: null, linkFormat: null, linkRaceChartId: null };
   }
   const fromLeg = link.legs?.find((leg) => leg.divisionId === matchDivisionId);
   if (fromLeg) {
     return {
       linkFormatId: fromLeg.scoring.scoringFormatId ?? null,
+      linkFormat: fromLeg.scoring.format ?? null,
       linkRaceChartId: fromLeg.scoring.raceChartId ?? null,
     };
   }
@@ -368,6 +370,7 @@ function linkScoringOverrides(
   });
   return {
     linkFormatId: side.scoringFormatId ?? null,
+    linkFormat: side.format ?? null,
     linkRaceChartId: side.raceChartId ?? null,
   };
 }
@@ -395,6 +398,7 @@ function formatForMatchHalf(
     pointsForWin: match.pointsForWin ?? null,
     matchWinCountsAsRound: match.matchWinCountsAsRound ?? null,
     linkFormatId: linkOverrides.linkFormatId,
+    linkFormat: linkOverrides.linkFormat,
     linkRaceChartId: linkOverrides.linkRaceChartId,
     formats: args.scoringFormats,
   });
@@ -882,6 +886,7 @@ export function MatchScoring({
         pointsForWin: data.match.pointsForWin ?? null,
         matchWinCountsAsRound: data.match.matchWinCountsAsRound ?? null,
         linkFormatId: linkOverrides.linkFormatId,
+        linkFormat: linkOverrides.linkFormat,
         linkRaceChartId: linkOverrides.linkRaceChartId,
         formats: scoringFormats,
       });
@@ -1126,6 +1131,7 @@ export function MatchScoring({
       pointsForWin: match?.pointsForWin ?? null,
       matchWinCountsAsRound: match?.matchWinCountsAsRound ?? null,
       linkFormatId: linkOverrides.linkFormatId,
+      linkFormat: linkOverrides.linkFormat,
       linkRaceChartId: linkOverrides.linkRaceChartId,
       formats: scoringFormats,
     });
@@ -1192,8 +1198,10 @@ export function MatchScoring({
     [match, draft, roundHandicaps],
   );
 
+  // LMS owns this (match.matchWinCountsAsRound) — e.g. Palm Beach total-points
+  // round. Do not gate on a Tableside play-style flag.
   const includeMatchPointsRound =
-    scoringFormat.matchPointsRound && match?.matchWinCountsAsRound !== false;
+    match != null && match.matchWinCountsAsRound !== false;
   const matchWinTeamPoints = scoringFormat.teamPointMode === "match-win";
 
   const matchWinRoundTallies = useMemo(

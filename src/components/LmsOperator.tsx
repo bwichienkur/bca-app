@@ -685,7 +685,7 @@ export function LmsOperator({
       { id: "playoff", label: "Playoff", icon: PlayoffIcon },
       { id: "division", label: "Division", icon: DivisionIcon },
       { id: "links", label: "Links", icon: LinksIcon },
-      { id: "styles", label: "Styles", icon: StylesIcon },
+      { id: "styles", label: "Templates", icon: StylesIcon },
     ],
     [],
   );
@@ -1054,7 +1054,7 @@ export function LmsOperator({
           setSectionError(
             error instanceof Error
               ? error.message
-              : "Failed to load play styles.",
+              : "Failed to load templates.",
           );
         }
       } finally {
@@ -1527,22 +1527,22 @@ export function LmsOperator({
             ? screen.matchId
               ? "Edit match"
               : "Add match"
-            : screen.type === "edit-link"
+            : screen.type === "edit-style"
               ? screen.id
-                ? "Edit division link"
-                : "Add division link"
-              : screen.type === "edit-style"
-                ? screen.id
-                  ? "Edit play style"
-                  : "Add play style"
-                : screen.type === "create-division"
-                  ? "Add division"
-                  : screen.type === "create-playoff"
-                    ? "Add playoff"
-                    : "";
+                ? "Edit template"
+                : "Add template"
+              : screen.type === "create-division"
+                ? "Add division"
+                : screen.type === "create-playoff"
+                  ? "Add playoff"
+                  : "";
 
   const editPopup =
-    screen.type === "list" || screen.type === "edit-settings" ? null : (
+    screen.type === "list" ||
+    screen.type === "edit-settings" ||
+    screen.type === "edit-link"
+      ? null
+      : (
       <div
         className="fixed inset-0 z-[80] overflow-y-auto bg-black/55"
         role="dialog"
@@ -2293,39 +2293,6 @@ export function LmsOperator({
           </section>
         ) : null}
 
-        {screen.type === "edit-link" && opLeagueId ? (
-          <DivisionLinkForm
-            leagueId={opLeagueId}
-            divisions={divisions}
-            scoringFormats={scoringFormats}
-            initialLink={
-              screen.id
-                ? (divisionLinks.find((link) => link.id === screen.id) ?? null)
-                : null
-            }
-            busy={busy}
-            onBusy={setBusy}
-            onNotice={setNotice}
-            onError={setSectionError}
-            onSaved={(link) => {
-              setDivisionLinks((prev) => {
-                const without = prev.filter(
-                  (row) =>
-                    row.id !== link.id &&
-                    row.primaryDivisionId !== link.primaryDivisionId &&
-                    row.linkedDivisionId !== link.primaryDivisionId &&
-                    row.primaryDivisionId !== link.linkedDivisionId &&
-                    row.linkedDivisionId !== link.linkedDivisionId,
-                );
-                return [...without, link].sort((a, b) =>
-                  a.name.localeCompare(b.name),
-                );
-              });
-              goList();
-            }}
-          />
-        ) : null}
-
         {screen.type === "edit-style" && opLeagueId ? (
           <ScoringFormatForm
             leagueId={opLeagueId}
@@ -2416,7 +2383,7 @@ export function LmsOperator({
       case "links":
         return opLeagueId
           ? {
-              label: "Add link",
+              label: "Add night format",
               onClick: (event: ReactMouseEvent<HTMLButtonElement>) => {
                 capturePopupAnchor(event);
                 setNotice(null);
@@ -2428,7 +2395,7 @@ export function LmsOperator({
       case "styles":
         return opLeagueId
           ? {
-              label: "Add play style",
+              label: "Add template",
               onClick: (event: ReactMouseEvent<HTMLButtonElement>) => {
                 capturePopupAnchor(event);
                 setNotice(null);
@@ -2448,6 +2415,60 @@ export function LmsOperator({
     { id: "handicap", label: "Handicap", icon: RoundsSubIcon },
     { id: "format", label: "Format", icon: MatchupSubIcon },
   ];
+
+  /* ---------- Edit night format full page (not a modal) ---------- */
+  if (screen.type === "edit-link" && opLeagueId) {
+    const editingLink = screen.id
+      ? (divisionLinks.find((link) => link.id === screen.id) ?? null)
+      : null;
+    return (
+      <div className="space-y-3">
+        <BackButton onClick={goList} label="Back to night formats" />
+        <PanelHeader
+          title={
+            editingLink?.name ||
+            (screen.id ? "Edit night format" : "Add night format")
+          }
+          description="Tableside-only. Configure legs, standings, and Score play style here. LMS divisions are not changed."
+        />
+        {notice ? (
+          <p className="text-sm font-medium text-[var(--felt)]">{notice}</p>
+        ) : null}
+        {sectionError ? (
+          <p className="whitespace-pre-wrap text-sm text-[#b42318]">
+            {sectionError}
+          </p>
+        ) : null}
+        <DivisionLinkForm
+          leagueId={opLeagueId}
+          divisions={divisions}
+          scoringFormats={scoringFormats}
+          initialLink={editingLink}
+          variant="page"
+          busy={busy}
+          onBusy={setBusy}
+          onNotice={setNotice}
+          onError={setSectionError}
+          onSaved={(link) => {
+            setDivisionLinks((prev) => {
+              const without = prev.filter(
+                (row) =>
+                  row.id !== link.id &&
+                  row.primaryDivisionId !== link.primaryDivisionId &&
+                  row.linkedDivisionId !== link.primaryDivisionId &&
+                  row.primaryDivisionId !== link.linkedDivisionId &&
+                  row.linkedDivisionId !== link.linkedDivisionId,
+              );
+              return [...without, link].sort((a, b) =>
+                a.name.localeCompare(b.name),
+              );
+            });
+            goList();
+          }}
+        />
+      </div>
+    );
+  }
 
   /* ---------- Edit division full page (not a modal) ---------- */
   if (screen.type === "edit-settings") {
@@ -3371,8 +3392,8 @@ export function LmsOperator({
       {subTab === "links" && opLeagueId ? (
         <section className="space-y-3">
           <SectionHeader
-            title="Division links"
-            description="Tableside-only Night Formats. One LMS division (e.g. Tuesday 9-Ball) or multiple legs (Beyond), with standing metrics and race-chart overrides for Score."
+            title="Night formats"
+            description="Tableside-only. One LMS division (e.g. Tuesday 9-Ball) or multiple legs (Beyond). Edit opens a full page for legs, standings, and Score play style."
             onAdd={(event) => {
               capturePopupAnchor(event);
               setNotice(null);
@@ -3381,8 +3402,8 @@ export function LmsOperator({
             }}
           />
           <SearchField
-            label="Search links"
-            placeholder="Search links…"
+            label="Search night formats"
+            placeholder="Search night formats…"
             value={listQuery}
             onChange={setListQuery}
             embedded
@@ -3532,8 +3553,8 @@ export function LmsOperator({
       {subTab === "styles" && opLeagueId ? (
         <section className="space-y-3">
           <SectionHeader
-            title="Play styles"
-            description="Tableside scoring presets for this league. Built-ins ship with the app; edit to override, or add custom styles. Pin one on a Night Format (Links → Race HC) or in Account settings."
+            title="Play style templates"
+            description="Reusable Score presets for this league. Use them to seed a Night Format → Play style tab; configure the live night there. Built-ins can be overridden, or add custom templates."
             onAdd={(event) => {
               capturePopupAnchor(event);
               setNotice(null);
@@ -3542,16 +3563,16 @@ export function LmsOperator({
             }}
           />
           <SearchField
-            label="Search play styles"
-            placeholder="Search play styles…"
+            label="Search templates"
+            placeholder="Search templates…"
             value={listQuery}
             onChange={setListQuery}
             embedded
           />
-          {sectionLoading ? <LoadingState label="Loading play styles…" /> : null}
+          {sectionLoading ? <LoadingState label="Loading templates…" /> : null}
           {!sectionLoading && filteredScoringFormats.length === 0 ? (
             <p className="text-sm text-[var(--muted)]">
-              No play styles found.
+              No templates found.
             </p>
           ) : null}
           <ul className={accentRecordListClass}>
