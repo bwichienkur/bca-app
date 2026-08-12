@@ -1347,6 +1347,18 @@ export function LeagueApp() {
     () => standingCellsForTeam(teamReport, prefs?.teamName),
     [teamReport, prefs?.teamName],
   );
+  const myStandingRank = useMemo(() => {
+    const rank = myStandingCells?.find((cell) => {
+      const label = cell.label.trim().toLowerCase();
+      return (
+        label === "#" ||
+        label === "rank" ||
+        label === "rk" ||
+        label === "pos"
+      );
+    })?.value;
+    return rank ? `#${rank}` : null;
+  }, [myStandingCells]);
 
   const findDivisionTeam = (name: string) =>
     divisionTeams.find(
@@ -1902,7 +1914,7 @@ export function LeagueApp() {
                         items={[
                           {
                             id: "standing",
-                            label: "Team",
+                            label: "Standing",
                             icon: StandingSubIcon,
                           },
                           {
@@ -1921,10 +1933,24 @@ export function LeagueApp() {
                   >
                     <div
                       className={
-                        myTeamSubTab === "standing" ? "min-w-0" : "hidden"
+                        myTeamSubTab === "standing"
+                          ? "min-w-0 space-y-3"
+                          : "hidden"
                       }
                       aria-hidden={myTeamSubTab !== "standing"}
                     >
+                      <PanelHeader
+                        title="Team"
+                        description="Current place in the division"
+                        action={
+                          myStandingRank ? (
+                            <PanelHeaderCount
+                              label="Rank"
+                              value={myStandingRank}
+                            />
+                          ) : undefined
+                        }
+                      />
                       {myStandingCells ? (
                         <TeamStandingSummary
                           cells={myStandingCells}
@@ -1932,7 +1958,7 @@ export function LeagueApp() {
                         />
                       ) : (
                         <EmptyState
-                          title="Team standing unavailable"
+                          title="Standing unavailable"
                           body="Team standings will show here once the division report loads."
                         />
                       )}
