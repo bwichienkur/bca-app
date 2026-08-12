@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { DivisionLink, DivisionLinkValidation } from "@/lib/division-links";
 import { findSisterDivision } from "@/lib/division-combos";
-import { SelectField } from "./SelectField";
+import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
 const inputClass =
   "w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none ring-[var(--felt)] focus:ring-2";
@@ -25,17 +25,15 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
-function filterDivisions(
-  divisions: DivisionOption[],
-  query: string,
-  excludeId?: string,
-): DivisionOption[] {
-  const q = query.trim().toLowerCase();
-  return divisions.filter((division) => {
-    if (excludeId && division.id === excludeId) return false;
-    if (!q) return true;
-    return division.name.toLowerCase().includes(q);
-  });
+function toOption(
+  division: DivisionOption | null | undefined,
+): TypeaheadOption<DivisionOption> | null {
+  if (!division) return null;
+  return {
+    id: division.id,
+    label: division.name,
+    value: division,
+  };
 }
 
 /**
@@ -68,8 +66,6 @@ export function DivisionLinkForm({
   const [linkedDivisionId, setLinkedDivisionId] = useState(
     initialLink?.linkedDivisionId ?? "",
   );
-  const [primaryQuery, setPrimaryQuery] = useState("");
-  const [linkedQuery, setLinkedQuery] = useState("");
   const [validation, setValidation] = useState<DivisionLinkValidation | null>(
     null,
   );
@@ -78,31 +74,60 @@ export function DivisionLinkForm({
     setLinkName(initialLink?.name ?? "");
     setPrimaryDivisionId(initialLink?.primaryDivisionId ?? "");
     setLinkedDivisionId(initialLink?.linkedDivisionId ?? "");
-    setPrimaryQuery("");
-    setLinkedQuery("");
     setValidation(null);
   }, [initialLink]);
 
   const primaryDivision =
-    divisions.find((d) => d.id === primaryDivisionId) ?? null;
+    divisions.find((d) => d.id === primaryDivisionId) ??
+    (initialLink && initialLink.primaryDivisionId === primaryDivisionId
+      ? {
+          id: initialLink.primaryDivisionId,
+          name: initialLink.primaryDivisionName,
+        }
+      : null);
   const linkedDivision =
-    divisions.find((d) => d.id === linkedDivisionId) ?? null;
+    divisions.find((d) => d.id === linkedDivisionId) ??
+    (initialLink && initialLink.linkedDivisionId === linkedDivisionId
+      ? {
+          id: initialLink.linkedDivisionId,
+          name: initialLink.linkedDivisionName,
+        }
+      : null);
 
   const sisterSuggestion = useMemo(() => {
     if (!primaryDivision) return null;
-    return (
-      findSisterDivision(primaryDivision, divisions)?.sister ?? null
-    );
+    return findSisterDivision(primaryDivision, divisions)?.sister ?? null;
   }, [primaryDivision, divisions]);
 
   const primaryOptions = useMemo(
-    () => filterDivisions(divisions, primaryQuery, linkedDivisionId),
-    [divisions, primaryQuery, linkedDivisionId],
+    () =>
+      divisions
+        .filter((d) => d.id !== linkedDivisionId)
+        .map((d) => ({
+          id: d.id,
+          label: d.name,
+          value: d,
+        })),
+    [divisions, linkedDivisionId],
   );
   const linkedOptions = useMemo(
-    () => filterDivisions(divisions, linkedQuery, primaryDivisionId),
-    [divisions, linkedQuery, primaryDivisionId],
+    () =>
+      divisions
+        .filter((d) => d.id !== primaryDivisionId)
+        .map((d) => ({
+          id: d.id,
+          label: d.name,
+          value: d,
+        })),
+    [divisions, primaryDivisionId],
   );
+
+  const maybePrefillLinkName = (divisionName: string) => {
+    if (linkName.trim()) return;
+    const season =
+      divisionName.match(/\(?\s*(20\d{2}\.\d)\s*\)?/i)?.[1] ?? "";
+    if (season) setLinkName(`Beyond Monday ${season}`);
+  };
 
   const runValidate = async () => {
     if (!primaryDivisionId || !linkedDivisionId) {
@@ -200,64 +225,32 @@ export function DivisionLinkForm({
           />
         </label>
 
-        <div className="space-y-1.5">
-          <span className="text-sm font-medium text-[var(--ink)]">
-            First division
-          </span>
-          <input
-            className={inputClass}
-            value={primaryQuery}
-            placeholder="Search divisions…"
-            onChange={(e) => setPrimaryQuery(e.target.value)}
-          />
-          <SelectField
-            aria-label="First division"
-            value={primaryDivisionId}
-            options={[
-              { value: "", label: "Choose division…" },
-              ...primaryOptions.map((d) => ({
-                value: d.id,
-                label: d.name,
-              })),
-            ]}
-            onChange={(value) => {
-              setPrimaryDivisionId(value);
-              setValidation(null);
-              const picked = divisions.find((d) => d.id === value);
-              if (picked && !linkName.trim()) {
-                const season =
-                  picked.name.match(/\(?\s*(20\d{2}\.\d)\s*\)?/i)?.[1] ?? "";
-                if (season) setLinkName(`Beyond Monday ${season}`);
-              }
-              if (value && linkedDivisionId === value) {
-                setLinkedDivisionId("");
-              }
-            }}
-          />
-        </div>
+        <Typeahead
+          label="First division"
+          placeholder="Search divisions…"
+          emptyText="No divisions match"
+          value={toOption(primaryDivision)}
+          options={primaryOptions}
+          onChange={(option) => {
+            const nextId = option?.value.id ?? "";
+            setPrimaryDivisionId(nextId);
+            setValidation(null);
+            if (option) maybePrefillLinkName(option.value.name);
+            if (nextId && linkedDivisionId === nextId) {
+              setLinkedDivisionId("");
+            }
+          }}
+        />
 
         <div className="space-y-1.5">
-          <span className="text-sm font-medium text-[var(--ink)]">
-            Second division
-          </span>
-          <input
-            className={inputClass}
-            value={linkedQuery}
+          <Typeahead
+            label="Second division"
             placeholder="Search divisions…"
-            onChange={(e) => setLinkedQuery(e.target.value)}
-          />
-          <SelectField
-            aria-label="Second division"
-            value={linkedDivisionId}
-            options={[
-              { value: "", label: "Choose division…" },
-              ...linkedOptions.map((d) => ({
-                value: d.id,
-                label: d.name,
-              })),
-            ]}
-            onChange={(value) => {
-              setLinkedDivisionId(value);
+            emptyText="No divisions match"
+            value={toOption(linkedDivision)}
+            options={linkedOptions}
+            onChange={(option) => {
+              setLinkedDivisionId(option?.value.id ?? "");
               setValidation(null);
             }}
           />
@@ -267,16 +260,18 @@ export function DivisionLinkForm({
               className="text-xs font-semibold text-[var(--felt-deep)] underline-offset-2 hover:underline"
               onClick={() => {
                 setLinkedDivisionId(sisterSuggestion.id);
-                setLinkedQuery("");
                 setValidation(null);
-                if (!linkName.trim() && primaryDivision) {
-                  const season =
-                    primaryDivision.name.match(
-                      /\(?\s*(20\d{2}\.\d)\s*\)?/i,
-                    )?.[1] ?? "";
-                  setLinkName(
-                    season ? `Beyond Monday ${season}` : "Beyond Monday",
-                  );
+                if (primaryDivision) {
+                  maybePrefillLinkName(primaryDivision.name);
+                  if (!linkName.trim()) {
+                    const season =
+                      primaryDivision.name.match(
+                        /\(?\s*(20\d{2}\.\d)\s*\)?/i,
+                      )?.[1] ?? "";
+                    setLinkName(
+                      season ? `Beyond Monday ${season}` : "Beyond Monday",
+                    );
+                  }
                 }
               }}
             >

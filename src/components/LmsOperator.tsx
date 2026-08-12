@@ -3169,64 +3169,106 @@ export function LmsOperator({
             </p>
           ) : null}
           <ul className={accentRecordListClass}>
-            {filteredDivisionLinks.map((link) => (
-              <AccentRecordCard key={link.id}>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-[var(--ink)]">
-                      {link.name}
-                    </p>
-                    <p className="text-xs text-[var(--muted)]">
-                      {link.primaryDivisionName} · {link.linkedDivisionName}
-                      <span className="ml-1.5 text-[var(--muted)]">
-                        ({link.mode})
-                      </span>
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
+            {filteredDivisionLinks.map((link) => {
+              const open = expandedIds.has(link.id);
+              const halves = [
+                {
+                  id: link.primaryDivisionId,
+                  name: link.primaryDivisionName,
+                },
+                {
+                  id: link.linkedDivisionId,
+                  name: link.linkedDivisionName,
+                },
+              ];
+              return (
+                <AccentRecordCard key={link.id}>
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      className={btnEdit}
-                      onClick={(event) => {
-                        capturePopupAnchor(event);
-                        setNotice(null);
-                        setSectionError(null);
-                        setScreen({ type: "edit-link", id: link.id });
-                      }}
+                      aria-expanded={open}
+                      aria-label={
+                        open ? "Collapse linked divisions" : "Expand linked divisions"
+                      }
+                      className="inline-flex shrink-0 items-center self-center rounded p-1 text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
+                      onClick={() => toggleExpanded(link.id)}
                     >
-                      Edit
+                      <ChevronIcon open={open} className="h-5 w-5" />
                     </button>
                     <button
                       type="button"
-                      className={btnDelete}
-                      disabled={busy}
-                      onClick={(event) => {
-                        askConfirm(
-                          {
-                            title: "Unlink divisions",
-                            body: `Remove Tableside link “${link.name}”? LMS divisions are not changed.`,
-                            confirmLabel: "Unlink",
-                            onConfirm: async () => {
-                              setPendingConfirm(null);
-                              await runAction(async () => {
-                                await fetchJson(
-                                  `/api/division-links?leagueId=${encodeURIComponent(opLeagueId)}&linkId=${encodeURIComponent(link.id)}`,
-                                  { method: "DELETE" },
-                                );
-                                await refreshDivisionLinks();
-                              }, "Division link removed from Tableside.");
-                            },
-                          },
-                          event,
-                        );
-                      }}
+                      className="min-w-0 flex-1 text-left"
+                      onClick={() => toggleExpanded(link.id)}
                     >
-                      Unlink
+                      <p className="text-sm font-semibold text-[var(--ink)]">
+                        {link.name}
+                      </p>
+                      <p className="text-xs text-[var(--muted)]">
+                        2 divisions · {link.mode}
+                      </p>
                     </button>
                   </div>
-                </div>
-              </AccentRecordCard>
-            ))}
+                  {open ? (
+                    <ul
+                      className={`${accentRecordListClass} mt-3 border-t border-[var(--line)] pt-3`}
+                    >
+                      {halves.map((half) => (
+                        <li key={half.id}>
+                          <AccentRecordCard showRail={false}>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="min-w-0 flex-1 text-sm font-medium text-[var(--ink)]">
+                                {half.name}
+                              </span>
+                            </div>
+                          </AccentRecordCard>
+                        </li>
+                      ))}
+                      <li className="flex flex-wrap gap-1.5 pt-1">
+                        <button
+                          type="button"
+                          className={btnEdit}
+                          onClick={(event) => {
+                            capturePopupAnchor(event);
+                            setNotice(null);
+                            setSectionError(null);
+                            setScreen({ type: "edit-link", id: link.id });
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className={btnDelete}
+                          disabled={busy}
+                          onClick={(event) => {
+                            askConfirm(
+                              {
+                                title: "Unlink divisions",
+                                body: `Remove Tableside link “${link.name}”? LMS divisions are not changed.`,
+                                confirmLabel: "Unlink",
+                                onConfirm: async () => {
+                                  setPendingConfirm(null);
+                                  await runAction(async () => {
+                                    await fetchJson(
+                                      `/api/division-links?leagueId=${encodeURIComponent(opLeagueId)}&linkId=${encodeURIComponent(link.id)}`,
+                                      { method: "DELETE" },
+                                    );
+                                    await refreshDivisionLinks();
+                                  }, "Division link removed from Tableside.");
+                                },
+                              },
+                              event,
+                            );
+                          }}
+                        >
+                          Unlink
+                        </button>
+                      </li>
+                    </ul>
+                  ) : null}
+                </AccentRecordCard>
+              );
+            })}
           </ul>
         </section>
       ) : null}
