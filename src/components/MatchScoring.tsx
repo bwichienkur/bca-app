@@ -67,6 +67,12 @@ import {
 import { loadTeamLineupPresets } from "@/lib/lineup-sync";
 import { canAccessLmsClient } from "@/lib/lms-access";
 import {
+  combineScoreMatchupsForNight,
+  computeMatchupStandingScores,
+  roleLabel,
+  type CombinedScoreMatchup,
+} from "@/lib/combined-night-matchup";
+import {
   comboNightHint,
   comboPartLabel,
   comboRoleForDivisionName,
@@ -75,10 +81,7 @@ import {
 } from "@/lib/division-combos";
 import { scoringSideForDivision } from "@/lib/division-link-config";
 import type { DivisionLink } from "@/lib/division-links";
-import {
-  computeNightStanding,
-  type NightHalfStatus,
-} from "@/lib/night-standing";
+import type { NightHalfStatus } from "@/lib/night-standing";
 import { rankForTeam, teamRanksFromReport } from "@/lib/standings";
 import type { LineupPreset, TableReport } from "@/lib/types";
 import {
@@ -127,8 +130,9 @@ type SheetPane = "lineup" | "scoring" | "performance";
 
 type View =
   | { mode: "list" }
-  | { mode: "sheet"; matchId: string }
-  | { mode: "review"; matchId: string };
+  | { mode: "combined"; pairKey: string }
+  | { mode: "sheet"; matchId: string; fromCombined?: string }
+  | { mode: "review"; matchId: string; fromCombined?: string };
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
@@ -713,7 +717,32 @@ export function MatchScoring({
     nightMatches,
   ]);
 
-  const openMatch = async (matchId: string) => {
+  const summaryForMatch = (item: ScoringMatchSummary) => {
+    const format = formatForMatchHalf(item, {
+      scoringFormatId,
+      divisionLink,
+      fallbackDivisionName: divisionName,
+    });
+    return mergeBoardSummary(
+      draftSummaries[item.id],
+      loadDraft(item.id),
+      format,
+    );
+  };
+
+  const nightMatchups = useMemo(() => {
+    if (!selectedNightKey) return [] as CombinedScoreMatchup[];
+    return combineScoreMatchupsForNight({
+      nightKey: selectedNightKey,
+      matches: nightMatches,
+      linked: Boolean(linkedDivisionId),
+    });
+  }, [selectedNightKey, nightMatches, linkedDivisionId]);
+
+  const openMatch = async (
+    matchId: string,
+    options?: { fromCombined?: string },
+  ) => {
     setLoadingMatch(true);
     setSheetError(null);
     setSubmitMessage(null);
@@ -837,7 +866,11 @@ export function MatchScoring({
       setActiveRound(data.match.matchFormat?.rounds[0]?.roundNumber ?? 1);
       setActiveGame(null);
       setSheetTab("scoring");
-      setView({ mode: "sheet", matchId });
+      setView({
+        mode: "sheet",
+        matchId,
+        fromCombined: options?.fromCombined,
+      });
       if (!locked) {
         saveDraft(nextDraft);
         // Only seed an empty shared store on open. Any re-push here rewrites
@@ -917,7 +950,8 @@ export function MatchScoring({
 
   // Poll shared draft so a second phone/tablet stays in sync.
   useEffect(() => {
-    if (view.mode === "list" || !view.matchId || !match) return;
+    if (view.mode !== "sheet" && view.mode !== "review") return;
+    if (!view.matchId || !match) return;
     const matchId = view.matchId;
     const activeMatch = match;
     const timer = window.setInterval(() => {
@@ -1382,12 +1416,69 @@ export function MatchScoring({
     );
   }
 
-  if (view.mode !== "list" && (loadingMatch || !match || !draft)) {
+  if (view.mode === "combined") {
+    const matchup =
+      nightMatchups.find((row) => row.key === view.pairKey) ?? null;
+    if (!matchup) {
+      return (
+        <section className="animate-rise space-y-3 p-3 sm:p-4">
+          <BackButton onClick={() => setView({ mode: "list" })} />
+          <EmptyState
+            title="Matchup not found"
+            body="That combined night entry is no longer on the board."
+            action={
+              <button
+                type="button"
+                className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-2.5 text-sm font-semibold text-white"
+                onClick={() => setView({ mode: "list" })}
+              >
+                Back to night board
+              </button>
+            }
+          />
+        </section>
+      );
+    }
+    const scores = divisionLink
+      ? computeMatchupStandingScores({
+          config: divisionLink.config,
+          matchup,
+          summaryFor: (matchId) => {
+            const item = matchup.halves.find((h) => h.match.id === matchId)?.match;
+            return item ? summaryForMatch(item) : null;
+          },
+          statusFor: (item) =>
+            nightStatusFromBoard(
+              item,
+              summaryForMatch(item),
+              loadDraft(item.id),
+            ),
+        })
+      : null;
+    return (
+      <CombinedNightHub
+        matchup={matchup}
+        scores={scores}
+        homeRank={rankForTeam(teamRanks, matchup.homeName)}
+        awayRank={rankForTeam(teamRanks, matchup.awayName)}
+        onBack={() => setView({ mode: "list" })}
+        onOpenHalf={(matchId) =>
+          void openMatch(matchId, { fromCombined: matchup.key })
+        }
+      />
+    );
+  }
+
+  if (
+    (view.mode === "sheet" || view.mode === "review") &&
+    (loadingMatch || !match || !draft)
+  ) {
     return <LoadingState label="Opening scoresheet…" />;
   }
 
-  if (view.mode !== "list" && match && draft) {
+  if ((view.mode === "sheet" || view.mode === "review") && match && draft) {
     const reviewMode = view.mode === "review";
+    const fromCombined = view.fromCombined;
     const canManageAnySheet =
       Boolean(user) &&
       canAccessLmsClient(user) &&
@@ -1405,7 +1496,14 @@ export function MatchScoring({
           <BackButton
             onClick={() => {
               if (reviewMode) {
-                setView({ mode: "sheet", matchId: match.id });
+                setView({
+                  mode: "sheet",
+                  matchId: match.id,
+                  fromCombined,
+                });
+              } else if (fromCombined) {
+                setView({ mode: "combined", pairKey: fromCombined });
+                setActiveGame(null);
               } else {
                 setView({ mode: "list" });
                 setActiveGame(null);
@@ -1596,7 +1694,9 @@ export function MatchScoring({
             submitting={submitting}
             locked={sheetLocked}
             isResubmit={isResubmit && resubmitUnlocked}
-            onEdit={() => setView({ mode: "sheet", matchId: match.id })}
+            onEdit={() =>
+              setView({ mode: "sheet", matchId: match.id, fromCombined })
+            }
             onSubmit={() => setConfirmDialog("submit")}
           />
         ) : (
@@ -2018,7 +2118,11 @@ export function MatchScoring({
                     <button
                       type="button"
                       onClick={() =>
-                        setView({ mode: "review", matchId: match.id })
+                        setView({
+                          mode: "review",
+                          matchId: match.id,
+                          fromCombined,
+                        })
                       }
                       className="rounded-[var(--radius)] bg-[var(--felt)] px-4 py-3 text-sm font-semibold text-white"
                     >
@@ -2162,84 +2266,6 @@ export function MatchScoring({
     divisionLink?.config ?? null,
   );
 
-  const summaryForMatch = (item: ScoringMatchSummary) => {
-    const format = formatForMatchHalf(item, {
-      scoringFormatId,
-      divisionLink,
-      fallbackDivisionName: divisionName,
-    });
-    return mergeBoardSummary(
-      draftSummaries[item.id],
-      loadDraft(item.id),
-      format,
-    );
-  };
-
-  const myNightMatches = nightMatches.filter((item) => item.mySide != null);
-  const nightStanding =
-    divisionLink && myNightMatches.length > 0
-      ? computeNightStanding({
-          config: divisionLink.config,
-          primaryDivisionId: divisionLink.primaryDivisionId,
-          linkedDivisionId: divisionLink.linkedDivisionId,
-          myMatches: myNightMatches,
-          summaryFor: (matchId) => {
-            const item = myNightMatches.find((row) => row.id === matchId);
-            if (!item) return null;
-            return summaryForMatch(item);
-          },
-          statusFor: (item) =>
-            nightStatusFromBoard(
-              item,
-              summaryForMatch(item),
-              loadDraft(item.id),
-            ),
-        })
-      : null;
-
-  const nightSections = (() => {
-    if (!linkedDivisionId) {
-      return [{ key: "all", label: null as string | null, rows: nightMatches }];
-    }
-    const singles = nightMatches.filter(
-      (item) =>
-        (comboPartLabel(item.divisionName) ?? "").toLowerCase() === "singles" ||
-        comboRoleForDivisionName(item.divisionName) === "singles",
-    );
-    const teams = nightMatches.filter(
-      (item) =>
-        (comboPartLabel(item.divisionName) ?? "").toLowerCase() === "teams" ||
-        comboRoleForDivisionName(item.divisionName) === "teams",
-    );
-    const used = new Set([...singles, ...teams].map((item) => item.id));
-    const other = nightMatches.filter((item) => !used.has(item.id));
-    const sections: Array<{
-      key: string;
-      label: string | null;
-      rows: ScoringMatchSummary[];
-    }> = [];
-    if (singles.length) {
-      sections.push({
-        key: "singles",
-        label: "Singles — individual races (own lineup)",
-        rows: singles,
-      });
-    }
-    if (teams.length) {
-      sections.push({
-        key: "teams",
-        label: "Teams — round-robin race (own lineup)",
-        rows: teams,
-      });
-    }
-    if (other.length) {
-      sections.push({ key: "other", label: "Other matches", rows: other });
-    }
-    return sections.length
-      ? sections
-      : [{ key: "all", label: null, rows: nightMatches }];
-  })();
-
   return (
     <section className="animate-rise space-y-3 p-3 sm:p-4">
       <PanelHeader
@@ -2279,7 +2305,7 @@ export function MatchScoring({
           loadingMatches ? undefined : (
             <PanelHeaderCount
               label="Matches"
-              value={String(nightMatches.length)}
+              value={String(nightMatchups.length)}
             />
           )
         }
@@ -2362,74 +2388,95 @@ export function MatchScoring({
             </div>
           ) : null}
 
-          {nightMatches.length === 0 ? (
+          {nightMatchups.length === 0 ? (
             <EmptyState
               title="No matches this night"
               body="Pick another night above, or check back when the schedule posts."
             />
           ) : (
-            <div className="space-y-4">
-              {nightStanding ? (
-                <NightStandingCard
-                  standing={nightStanding}
-                  onOpenHalf={(matchId) => void openMatch(matchId)}
-                />
-              ) : null}
-
-              {nightSections.map((section) => (
-                <div key={section.key} className="space-y-2.5">
-                  {section.label ? (
-                    <div className="px-0.5">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                        {section.label}
-                      </p>
-                    </div>
-                  ) : null}
-                  {section.rows.map((item, index) => {
-                    const localDraft = loadDraft(item.id);
-                    const summary = summaryForMatch(item);
-                    const boardStatus = boardStatusFor(
-                      item,
-                      summary,
-                      localDraft,
-                    );
-                    const isMyMatch = item.mySide != null;
-                    const halfStanding = nightStanding?.halves.find(
-                      (half) => half.matchId === item.id,
-                    );
-                    return (
-                      <MatchListCard
-                        key={item.id}
-                        className="animate-rise"
-                        style={{
-                          animationDelay: `${Math.min(index, 6) * 0.04}s`,
-                        }}
-                        homeName={item.teamOneName}
-                        awayName={item.teamTwoName}
-                        badge={
-                          linkedDivisionId
-                            ? comboPartLabel(item.divisionName)
-                            : null
-                        }
-                        meta={
-                          halfStanding
-                            ? `${formatRawStanding(halfStanding.raw)}/${formatRawStanding(halfStanding.rawMax)} ${halfStanding.metricLabel}${halfStanding.multiplier !== 1 ? ` ×${halfStanding.multiplier}` : ""} → ${formatRawStanding(halfStanding.standingPts)} pts`
-                            : undefined
-                        }
-                        boardStatus={boardStatus}
-                        isMyMatch={isMyMatch}
-                        homeRounds={summary?.teamOneRoundWins ?? 0}
-                        awayRounds={summary?.teamTwoRoundWins ?? 0}
-                        homeRank={rankForTeam(teamRanks, item.teamOneName)}
-                        awayRank={rankForTeam(teamRanks, item.teamTwoName)}
-                        emphasizeHome={item.mySide === 1}
-                        emphasizeAway={item.mySide === 2}
-                        onClick={() => void openMatch(item.id)}
-                      />
-                    );
-                  })}
-                </div>
-              ))}
+            <div className="space-y-2.5">
+              {nightMatchups.map((matchup, index) => {
+                const scores = divisionLink
+                  ? computeMatchupStandingScores({
+                      config: divisionLink.config,
+                      matchup,
+                      summaryFor: (matchId) => {
+                        const item = matchup.halves.find(
+                          (h) => h.match.id === matchId,
+                        )?.match;
+                        return item ? summaryForMatch(item) : null;
+                      },
+                      statusFor: (item) =>
+                        nightStatusFromBoard(
+                          item,
+                          summaryForMatch(item),
+                          loadDraft(item.id),
+                        ),
+                    })
+                  : null;
+                const boardStatus = scores
+                  ? scores.status === "complete"
+                    ? "complete"
+                    : scores.status === "in_progress"
+                      ? "in_progress"
+                      : "not_started"
+                  : (() => {
+                      const first = matchup.halves[0]?.match;
+                      if (!first) return "not_started" as const;
+                      return boardStatusFor(
+                        first,
+                        summaryForMatch(first),
+                        loadDraft(first.id),
+                      );
+                    })();
+                const homeRounds = scores
+                  ? scores.homeStanding
+                  : (summaryForMatch(matchup.halves[0]!.match)
+                      ?.teamOneRoundWins ?? 0);
+                const awayRounds = scores
+                  ? scores.awayStanding
+                  : (summaryForMatch(matchup.halves[0]!.match)
+                      ?.teamTwoRoundWins ?? 0);
+                return (
+                  <MatchListCard
+                    key={matchup.key}
+                    className="animate-rise"
+                    style={{
+                      animationDelay: `${Math.min(index, 6) * 0.04}s`,
+                    }}
+                    homeName={matchup.homeName}
+                    awayName={matchup.awayName}
+                    badge={
+                      linkedDivisionId
+                        ? matchup.completePair
+                          ? "Combined"
+                          : roleLabel(matchup.halves[0]?.kind ?? "singles")
+                        : null
+                    }
+                    meta={
+                      scores
+                        ? `Standing pts · max ${formatRawStanding(scores.standingMax)}`
+                        : undefined
+                    }
+                    boardStatus={boardStatus}
+                    isMyMatch={matchup.isMyMatch}
+                    homeRounds={homeRounds}
+                    awayRounds={awayRounds}
+                    homeRank={rankForTeam(teamRanks, matchup.homeName)}
+                    awayRank={rankForTeam(teamRanks, matchup.awayName)}
+                    emphasizeHome={matchup.mySide === 1}
+                    emphasizeAway={matchup.mySide === 2}
+                    onClick={() => {
+                      if (linkedDivisionId && matchup.halves.length > 1) {
+                        setView({ mode: "combined", pairKey: matchup.key });
+                        return;
+                      }
+                      const only = matchup.halves[0]?.match.id;
+                      if (only) void openMatch(only);
+                    }}
+                  />
+                );
+              })}
             </div>
           )}
         </>
@@ -2444,75 +2491,108 @@ function formatRawStanding(value: number | null | undefined): string {
   return String(Math.round(value * 10) / 10);
 }
 
-function NightStandingCard({
-  standing,
+function CombinedNightHub({
+  matchup,
+  scores,
+  homeRank,
+  awayRank,
+  onBack,
   onOpenHalf,
 }: {
-  standing: import("@/lib/night-standing").NightStandingSummary;
+  matchup: CombinedScoreMatchup;
+  scores: import("@/lib/combined-night-matchup").MatchupStandingScores | null;
+  homeRank: string | null;
+  awayRank: string | null;
+  onBack: () => void;
   onOpenHalf: (matchId: string) => void;
 }) {
+  const boardStatus = scores
+    ? scores.status === "complete"
+      ? "complete"
+      : scores.status === "in_progress"
+        ? "in_progress"
+        : "not_started"
+    : "not_started";
+
   return (
-    <div className="rounded-[var(--radius)] border border-[var(--felt)]/35 bg-[color-mix(in_srgb,var(--felt)_12%,var(--surface))] px-3.5 py-3 shadow-[var(--shadow)]">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-            Your night standing
+    <section className="animate-panel w-full min-w-0 space-y-3 overflow-x-hidden p-3 sm:p-4">
+      <BackButton onClick={onBack} />
+      <PanelHeader
+        title={`${matchup.homeName} vs ${matchup.awayName}`}
+        description={
+          scores
+            ? `${scores.line}. Open one sheet — Singles and Teams keep separate lineups.`
+            : "Combined night scoresheet. Singles and Teams keep separate lineups."
+        }
+      />
+
+      <MatchListCard
+        homeName={matchup.homeName}
+        awayName={matchup.awayName}
+        badge="Combined"
+        meta={
+          scores
+            ? `Standing pts · max ${formatRawStanding(scores.standingMax)}`
+            : "Standing pts"
+        }
+        boardStatus={boardStatus}
+        isMyMatch={matchup.isMyMatch}
+        homeRounds={scores?.homeStanding ?? 0}
+        awayRounds={scores?.awayStanding ?? 0}
+        homeRank={homeRank}
+        awayRank={awayRank}
+        emphasizeHome={matchup.mySide === 1}
+        emphasizeAway={matchup.mySide === 2}
+      />
+
+      {scores ? (
+        <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-xs text-[var(--muted)]">
+          <p>
+            <span className="font-semibold text-[var(--ink)]">
+              {matchup.homeName}:
+            </span>{" "}
+            {scores.homeBreakdown}
           </p>
-          <p className="mt-1 font-[family-name:var(--font-display)] text-xl font-semibold tracking-wide text-[var(--ink)]">
-            {standing.headline}
+          <p className="mt-1">
+            <span className="font-semibold text-[var(--ink)]">
+              {matchup.awayName}:
+            </span>{" "}
+            {scores.awayBreakdown}
           </p>
         </div>
-        <p className="rounded-full bg-[var(--surface)] px-2.5 py-1 text-[11px] font-semibold text-[var(--felt-deep)] ring-1 ring-[var(--felt)]/25">
-          Max {formatRawStanding(standing.standingMax)}
+      ) : null}
+
+      <div className="space-y-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+          Scoresheet halves
         </p>
-      </div>
-      <p className="mt-1.5 text-xs text-[var(--muted)]">{standing.line}</p>
-      <ul className="mt-3 space-y-2">
-        {standing.halves.map((half) => (
-          <li key={`${half.role}-${half.matchId ?? "missing"}`}>
+        {matchup.halves.map((half) => {
+          const label = roleLabel(half.kind);
+          const hint =
+            half.kind === "singles"
+              ? "Individual races · own lineup"
+              : "Team round-robin · own lineup";
+          return (
             <button
+              key={half.match.id}
               type="button"
-              disabled={!half.matchId}
-              onClick={() => {
-                if (half.matchId) onOpenHalf(half.matchId);
-              }}
-              className="flex w-full items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-left disabled:opacity-60"
+              onClick={() => onOpenHalf(half.match.id)}
+              className="flex w-full items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3.5 py-3 text-left transition hover:border-[color-mix(in_srgb,var(--felt)_55%,var(--line))] hover:bg-[color-mix(in_srgb,var(--felt)_10%,var(--surface))]"
             >
-              <div className="min-w-0">
+              <div>
                 <p className="text-sm font-semibold text-[var(--ink)]">
-                  {half.partLabel}
-                  {half.opponentName ? (
-                    <span className="font-normal text-[var(--muted)]">
-                      {" "}
-                      vs {half.opponentName.replace(/^\((H|A)\)\s*/i, "")}
-                    </span>
-                  ) : null}
+                  {label}
                 </p>
-                <p className="text-[11px] text-[var(--muted)]">
-                  {half.status === "missing"
-                    ? "No match found for this half"
-                    : half.status === "not_started"
-                      ? "Not started · separate lineup on this sheet"
-                      : half.status === "in_progress"
-                        ? "Live · separate lineup on this sheet"
-                        : "Complete · separate lineup on this sheet"}
-                </p>
+                <p className="text-[11px] text-[var(--muted)]">{hint}</p>
               </div>
-              <div className="shrink-0 text-right">
-                <p className="text-sm font-semibold text-[var(--ink)]">
-                  {formatRawStanding(half.raw)}/{formatRawStanding(half.rawMax)}{" "}
-                  {half.metricLabel}
-                </p>
-                <p className="text-[11px] font-semibold text-[var(--felt-deep)]">
-                  {formatRawStanding(half.standingPts)} pts
-                  {half.multiplier !== 1 ? ` (×${half.multiplier})` : ""}
-                </p>
-              </div>
+              <span className="text-sm font-semibold text-[var(--felt-deep)]">
+                Open
+              </span>
             </button>
-          </li>
-        ))}
-      </ul>
-    </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

@@ -1,9 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { canonicalizeTeamKey, teamsMatchByName } from "@/lib/division-combos";
+import {
+  combineScheduleMatchupsForDay,
+  type CombinedScheduleMatchup,
+} from "@/lib/combined-night-matchup";
 import { isUpcomingScheduleDate, parseScheduleDate } from "@/lib/schedule";
 import { rankForTeam, teamRanksFromReport } from "@/lib/standings";
+import { teamsMatchByName } from "@/lib/division-combos";
 import type { ScheduleDay, ScheduleMatch, TableReport } from "@/lib/types";
 import { EmptyState } from "./EmptyState";
 import {
@@ -26,17 +30,13 @@ type ScheduleListProps = {
 
 type ScheduleView = "upcoming" | "past";
 
-type FlatMatch = {
+type FlatMatchup = {
   key: string;
   day: ScheduleDay;
+  matchup: CombinedScheduleMatchup;
+  /** Representative match for detail navigation (prefer Singles). */
   match: ScheduleMatch;
   upcoming: boolean;
-};
-
-type NightGroup = {
-  date: string;
-  dateLabel: string;
-  matches: FlatMatch[];
 };
 
 function formatScheduleDate(value: string): string {
@@ -47,32 +47,6 @@ function formatScheduleDate(value: string): string {
     month: "short",
     day: "numeric",
   });
-}
-
-function partOrder(label: string | null | undefined): number {
-  const l = (label ?? "").toLowerCase();
-  if (l === "singles") return 0;
-  if (l === "teams") return 1;
-  return 2;
-}
-
-function groupByNight(items: FlatMatch[]): NightGroup[] {
-  const byDate = new Map<string, FlatMatch[]>();
-  for (const item of items) {
-    const key = item.day.date.trim();
-    const list = byDate.get(key) ?? [];
-    list.push(item);
-    byDate.set(key, list);
-  }
-  return Array.from(byDate.entries()).map(([date, matches]) => ({
-    date,
-    dateLabel: formatScheduleDate(date),
-    matches: [...matches].sort(
-      (a, b) =>
-        partOrder(a.match.partLabel) - partOrder(b.match.partLabel) ||
-        a.match.home.localeCompare(b.match.home),
-    ),
-  }));
 }
 
 export function ScheduleList({
@@ -86,6 +60,11 @@ export function ScheduleList({
   const teamRanks = useMemo(
     () => teamRanksFromReport(teamReport),
     [teamReport],
+  );
+
+  const linked = useMemo(
+    () => days.some((day) => day.matches.some((match) => match.partLabel)),
+    [days],
   );
 
   const teamDays = useMemo(() => {
@@ -102,35 +81,40 @@ export function ScheduleList({
       .filter((day) => day.matches.length > 0);
   }, [days, teamName]);
 
-  const { upcomingMatches, pastMatches } = useMemo(() => {
-    const upcoming: FlatMatch[] = [];
-    const past: FlatMatch[] = [];
+  const { upcomingMatchups, pastMatchups } = useMemo(() => {
+    const upcoming: FlatMatchup[] = [];
+    const past: FlatMatchup[] = [];
     for (const day of teamDays) {
       const isUpcoming = isUpcomingScheduleDate(day.date);
-      day.matches.forEach((match, index) => {
-        const item: FlatMatch = {
-          key: `${day.date}:${match.divisionId ?? ""}:${match.matchId ?? index}:${canonicalizeTeamKey(match.home)}-${canonicalizeTeamKey(match.away)}`,
+      const matchups = combineScheduleMatchupsForDay({
+        date: day.date,
+        matches: day.matches,
+        linked,
+      });
+      for (const matchup of matchups) {
+        const match =
+          matchup.halves.find((half) => half.kind === "singles")?.match ??
+          matchup.halves[0]?.match;
+        if (!match) continue;
+        const item: FlatMatchup = {
+          key: matchup.key,
           day,
+          matchup,
           match,
           upcoming: isUpcoming,
         };
         if (isUpcoming) upcoming.push(item);
         else past.push(item);
-      });
+      }
     }
     return {
-      upcomingMatches: upcoming,
-      pastMatches: [...past].reverse(),
+      upcomingMatchups: upcoming,
+      pastMatchups: [...past].reverse(),
     };
-  }, [teamDays]);
+  }, [teamDays, linked]);
 
-  const visibleMatches =
-    view === "upcoming" ? upcomingMatches : pastMatches;
-  const nightGroups = useMemo(
-    () => groupByNight(visibleMatches),
-    [visibleMatches],
-  );
-  const hasLinkedParts = visibleMatches.some((item) => item.match.partLabel);
+  const visibleMatchups =
+    view === "upcoming" ? upcomingMatchups : pastMatchups;
   const myTeam = teamName ?? null;
 
   if (!teamDays.length) {
@@ -164,10 +148,10 @@ export function ScheduleList({
                 "Division schedule"
               )}
               {divisionName ? <> · {divisionName}</> : null}
-              {hasLinkedParts ? (
+              {linked ? (
                 <>
-                  . Combined night — Singles and Teams halves share a date;
-                  each half has its own matchup and lineup.
+                  . One card per night opponent — Singles and Teams share the
+                  scoresheet entry on Score.
                 </>
               ) : (
                 <>. Use Score to open a scoresheet.</>
@@ -177,7 +161,7 @@ export function ScheduleList({
           action={
             <PanelHeaderCount
               label={view === "upcoming" ? "Upcoming" : "Past"}
-              value={String(visibleMatches.length)}
+              value={String(visibleMatchups.length)}
             />
           }
         />
@@ -195,19 +179,19 @@ export function ScheduleList({
                 id: "upcoming",
                 label: "Upcoming",
                 icon: UpcomingSubIcon,
-                count: upcomingMatches.length,
+                count: upcomingMatchups.length,
               },
               {
                 id: "past",
                 label: "Past",
                 icon: PastSubIcon,
-                count: pastMatches.length,
+                count: pastMatchups.length,
               },
             ]}
           />
         }
       >
-        {!visibleMatches.length ? (
+        {!visibleMatchups.length ? (
           <EmptyState
             title={
               view === "upcoming" ? "No upcoming matches" : "No past matches"
@@ -219,60 +203,48 @@ export function ScheduleList({
             }
           />
         ) : (
-          <div className="space-y-4">
-            {nightGroups.map((night) => (
-              <div key={night.date} className="space-y-2.5">
-                {hasLinkedParts ? (
-                  <div className="px-0.5">
-                    <p className="font-[family-name:var(--font-display)] text-[15px] font-semibold tracking-wide text-[var(--amber)]">
-                      {night.dateLabel}
-                    </p>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                      Combined night · {night.matches.length} sheets
-                    </p>
-                  </div>
-                ) : null}
-                {night.matches.map((item, index) => {
-                  const { match, day } = item;
-                  const isMyMatch = Boolean(
-                    myTeam &&
-                      (teamsMatchByName(match.home, myTeam) ||
-                        teamsMatchByName(match.away, myTeam)),
-                  );
-                  return (
-                    <MatchListCard
-                      key={item.key}
-                      className="animate-rise"
-                      style={{
-                        animationDelay: `${Math.min(index, 6) * 0.04}s`,
-                      }}
-                      homeName={match.home}
-                      awayName={match.away}
-                      badge={match.partLabel ?? null}
-                      meta={
-                        hasLinkedParts
-                          ? match.partLabel
-                            ? `${match.partLabel} · own lineup`
-                            : undefined
-                          : formatScheduleDate(day.date)
-                      }
-                      location={match.location || undefined}
-                      ctaLabel="View"
-                      isMyMatch={isMyMatch}
-                      homeRank={rankForTeam(teamRanks, match.home)}
-                      awayRank={rankForTeam(teamRanks, match.away)}
-                      emphasizeHome={Boolean(
-                        myTeam && teamsMatchByName(match.home, myTeam),
-                      )}
-                      emphasizeAway={Boolean(
-                        myTeam && teamsMatchByName(match.away, myTeam),
-                      )}
-                      onClick={() => onMatchClick?.(match, day)}
-                    />
-                  );
-                })}
-              </div>
-            ))}
+          <div className="space-y-2.5">
+            {visibleMatchups.map((item, index) => {
+              const { match, day, matchup } = item;
+              const isMyMatch = Boolean(
+                myTeam &&
+                  (teamsMatchByName(matchup.homeName, myTeam) ||
+                    teamsMatchByName(matchup.awayName, myTeam)),
+              );
+              return (
+                <MatchListCard
+                  key={item.key}
+                  className="animate-rise"
+                  style={{
+                    animationDelay: `${Math.min(index, 6) * 0.04}s`,
+                  }}
+                  homeName={matchup.homeName}
+                  awayName={matchup.awayName}
+                  badge={
+                    linked
+                      ? matchup.completePair
+                        ? "Combined"
+                        : (matchup.halves[0]?.kind === "teams"
+                            ? "Teams"
+                            : "Singles")
+                      : null
+                  }
+                  meta={formatScheduleDate(day.date)}
+                  location={matchup.location || undefined}
+                  ctaLabel="View"
+                  isMyMatch={isMyMatch}
+                  homeRank={rankForTeam(teamRanks, matchup.homeName)}
+                  awayRank={rankForTeam(teamRanks, matchup.awayName)}
+                  emphasizeHome={Boolean(
+                    myTeam && teamsMatchByName(matchup.homeName, myTeam),
+                  )}
+                  emphasizeAway={Boolean(
+                    myTeam && teamsMatchByName(matchup.awayName, myTeam),
+                  )}
+                  onClick={() => onMatchClick?.(match, day)}
+                />
+              );
+            })}
           </div>
         )}
       </SubTabCard>
