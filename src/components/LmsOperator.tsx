@@ -3188,7 +3188,9 @@ export function LmsOperator({
                       type="button"
                       aria-expanded={open}
                       aria-label={
-                        open ? "Collapse linked divisions" : "Expand linked divisions"
+                        open
+                          ? "Collapse linked divisions"
+                          : "Expand linked divisions"
                       }
                       className="inline-flex shrink-0 items-center self-center rounded p-1 text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
                       onClick={() => toggleExpanded(link.id)}
@@ -3207,6 +3209,47 @@ export function LmsOperator({
                         2 divisions · {link.mode}
                       </p>
                     </button>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <button
+                        type="button"
+                        className={btnEdit}
+                        onClick={(event) => {
+                          capturePopupAnchor(event);
+                          setNotice(null);
+                          setSectionError(null);
+                          setScreen({ type: "edit-link", id: link.id });
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className={btnDelete}
+                        disabled={busy}
+                        onClick={(event) => {
+                          askConfirm(
+                            {
+                              title: "Unlink divisions",
+                              body: `Remove Tableside link “${link.name}”? LMS divisions are not changed.`,
+                              confirmLabel: "Unlink",
+                              onConfirm: async () => {
+                                setPendingConfirm(null);
+                                await runAction(async () => {
+                                  await fetchJson(
+                                    `/api/division-links?leagueId=${encodeURIComponent(opLeagueId)}&linkId=${encodeURIComponent(link.id)}`,
+                                    { method: "DELETE" },
+                                  );
+                                  await refreshDivisionLinks();
+                                }, "Division link removed from Tableside.");
+                              },
+                            },
+                            event,
+                          );
+                        }}
+                      >
+                        Unlink
+                      </button>
+                    </div>
                   </div>
                   {open ? (
                     <ul
@@ -3219,51 +3262,22 @@ export function LmsOperator({
                               <span className="min-w-0 flex-1 text-sm font-medium text-[var(--ink)]">
                                 {half.name}
                               </span>
+                              <button
+                                type="button"
+                                className={btnEdit}
+                                onClick={(event) =>
+                                  openEditSettings(
+                                    { id: half.id, name: half.name },
+                                    event,
+                                  )
+                                }
+                              >
+                                Edit
+                              </button>
                             </div>
                           </AccentRecordCard>
                         </li>
                       ))}
-                      <li className="flex flex-wrap gap-1.5 pt-1">
-                        <button
-                          type="button"
-                          className={btnEdit}
-                          onClick={(event) => {
-                            capturePopupAnchor(event);
-                            setNotice(null);
-                            setSectionError(null);
-                            setScreen({ type: "edit-link", id: link.id });
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className={btnDelete}
-                          disabled={busy}
-                          onClick={(event) => {
-                            askConfirm(
-                              {
-                                title: "Unlink divisions",
-                                body: `Remove Tableside link “${link.name}”? LMS divisions are not changed.`,
-                                confirmLabel: "Unlink",
-                                onConfirm: async () => {
-                                  setPendingConfirm(null);
-                                  await runAction(async () => {
-                                    await fetchJson(
-                                      `/api/division-links?leagueId=${encodeURIComponent(opLeagueId)}&linkId=${encodeURIComponent(link.id)}`,
-                                      { method: "DELETE" },
-                                    );
-                                    await refreshDivisionLinks();
-                                  }, "Division link removed from Tableside.");
-                                },
-                              },
-                              event,
-                            );
-                          }}
-                        >
-                          Unlink
-                        </button>
-                      </li>
                     </ul>
                   ) : null}
                 </AccentRecordCard>
