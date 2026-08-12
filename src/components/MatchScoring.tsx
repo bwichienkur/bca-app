@@ -98,7 +98,6 @@ import {
   MatchupSubIcon,
   RoundsSubIcon,
   StatsSubIcon,
-  type IconSubTabItem,
 } from "./IconSubTabs";
 import { LoadingState } from "./LoadingState";
 import type { AuthUser } from "./LoginScreen";
