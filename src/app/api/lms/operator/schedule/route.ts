@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
       action?: string;
       divisionId?: string;
       startDate?: string;
+      mode?: "weeks" | "rounds" | string;
       numberOfRounds?: number;
       numberOfWeeks?: number;
       matchId?: string;
@@ -64,9 +65,7 @@ export async function POST(request: NextRequest) {
     const action = body.action ?? "list";
 
     if (action === "generate") {
-      const modeRaw = String(
-        (body as { mode?: string }).mode ?? "",
-      ).toLowerCase();
+      const modeRaw = String(body.mode ?? "").toLowerCase();
       // LMS accepts weeks XOR rounds (the other must be 0). Prefer explicit mode;
       // fall back to whichever positive count was provided.
       const weeks = Number(body.numberOfWeeks);
