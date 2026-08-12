@@ -652,7 +652,7 @@ export function LmsOperator({
   const [createDescription, setCreateDescription] = useState("");
   const [createSourceId, setCreateSourceId] = useState("");
   const [includeTeams, setIncludeTeams] = useState(true);
-  const [includePlayersCopy, setIncludePlayersCopy] = useState(false);
+  const [includePlayersCopy, setIncludePlayersCopy] = useState(true);
 
   const subItems: IconSubTabItem<LmsSubTab>[] = useMemo(
     () => [
@@ -2040,7 +2040,8 @@ export function LmsOperator({
                 checked={includeTeams}
                 onChange={(e) => {
                   setIncludeTeams(e.target.checked);
-                  if (!e.target.checked) setIncludePlayersCopy(false);
+                  if (e.target.checked) setIncludePlayersCopy(true);
+                  else setIncludePlayersCopy(false);
                 }}
                 className="h-4 w-4 accent-[var(--felt)]"
               />

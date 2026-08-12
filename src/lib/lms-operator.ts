@@ -519,7 +519,7 @@ type InternalTeam = {
 
 type InternalPlayer = {
   id: string;
-  readableId?: string | number;
+  readableId?: string | number | null;
   firstName?: string;
   lastName?: string;
   city?: string;
@@ -599,11 +599,15 @@ export type CreateDivisionResult = {
   success: boolean;
   messages: string[];
   redirectUrl: string | null;
+  divisionId?: string | null;
 };
 
 /**
  * Build + POST CreateDivisionFromSettings using an existing division as template.
  * Copies locations; optionally teams (+ player ids). Schedule is left empty.
+ *
+ * LMS expects each roster entry as `{ id, readableId }` — GUID alone causes
+ * "Cannot perform runtime binding on a null reference".
  */
 export async function operatorCreateDivisionFromCopy(
   session: OperatorSession,
@@ -649,12 +653,24 @@ export async function operatorCreateDivisionFromCopy(
         (team.locationId && locationIdMap.get(team.locationId)) ||
         locations[0]?.id ||
         "";
-      let players: Array<{ id: string }> = [];
+      let players: Array<{ id: string; readableId: string | number }> = [];
       if (input.includePlayers) {
         const roster = await operatorGetTeamPlayers(session, team.id);
         players = roster
-          .map((p) => ({ id: String(p.id ?? "").trim() }))
-          .filter((p) => p.id);
+          .map((p) => {
+            const id = String(p.id ?? "").trim();
+            const readable =
+              p.readableId != null && String(p.readableId).trim()
+                ? (typeof p.readableId === "number"
+                    ? p.readableId
+                    : String(p.readableId).trim())
+                : null;
+            if (!id || readable == null) return null;
+            return { id, readableId: readable };
+          })
+          .filter(
+            (p): p is { id: string; readableId: string | number } => p != null,
+          );
       }
       teams.push({
         id: localId,
@@ -747,6 +763,12 @@ export async function operatorCreateDivisionFromCopy(
     : data.message != null
       ? [String(data.message)]
       : [];
+  const divisionIdRaw = data.DivisionId ?? data.divisionId;
+  const divisionId =
+    divisionIdRaw != null &&
+    String(divisionIdRaw) !== "00000000-0000-0000-0000-000000000000"
+      ? String(divisionIdRaw)
+      : null;
   return {
     success: Boolean(data.Success ?? data.success),
     messages,
@@ -755,6 +777,9 @@ export async function operatorCreateDivisionFromCopy(
         ? String(data.RedirectUrl)
         : data.redirectUrl != null
           ? String(data.redirectUrl)
-          : null,
+          : divisionId
+            ? `/Division/DivisionDetail?divisionId=${divisionId}`
+            : null,
+    divisionId,
   };
 }

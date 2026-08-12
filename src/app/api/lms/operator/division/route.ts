@@ -109,6 +109,7 @@ export async function POST(request: NextRequest) {
       ok: true,
       messages: result.messages,
       redirectUrl: result.redirectUrl,
+      divisionId: result.divisionId ?? null,
     });
   } catch (error) {
     const message =
