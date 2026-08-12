@@ -39,6 +39,27 @@ export async function invalidateOperatorCache(options?: {
   const redis = getRedis();
   if (!redis) return 0;
 
+  let deleted = 0;
+
+  // Prefer exact key deletes for division lists — SCAN can miss under load,
+  // and stale 24h cache makes delete/remove look like a no-op in the UI.
+  if (options?.divisionId) {
+    const d = options.divisionId;
+    const exact = [
+      `${OP_PREFIX}locations:${d}`,
+      `${OP_PREFIX}teams:${d}`,
+      `${OP_PREFIX}players:${d}`,
+      `${OP_PREFIX}schedule:${d}`,
+      `${OP_PREFIX}settings:${d}`,
+    ];
+    try {
+      const n = await redis.del(...exact);
+      deleted += typeof n === "number" ? n : exact.length;
+    } catch {
+      // Fall through to SCAN patterns below.
+    }
+  }
+
   const patterns = new Set<string>([`${OP_PREFIX}leagues`]);
   if (options?.leagueId) {
     patterns.add(`${OP_PREFIX}divisions:${options.leagueId}*`);
@@ -64,7 +85,6 @@ export async function invalidateOperatorCache(options?: {
     patterns.add(`${OP_PREFIX}matches:*`);
   }
 
-  let deleted = 0;
   for (const pattern of patterns) {
     let cursor = "0";
     do {

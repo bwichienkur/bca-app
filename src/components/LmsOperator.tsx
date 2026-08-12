@@ -1590,7 +1590,7 @@ export function LmsOperator({
                     });
                   }
                   goList();
-                  await refreshLocations();
+                  await refreshLocations(true);
                 }, "Location saved.")
               }
             >
@@ -1664,7 +1664,10 @@ export function LmsOperator({
                     });
                   }
                   goList();
-                  await refreshTeams();
+                  await Promise.all([
+                    refreshTeams(true),
+                    refreshLocations(true),
+                  ]);
                 }, "Team saved.")
               }
             >
@@ -1748,14 +1751,15 @@ export function LmsOperator({
                                   },
                                   body: JSON.stringify({
                                     action: "assign",
+                                    divisionId: opDivisionId,
                                     teamId: assignTeamId,
                                     readableId: hit.readableId,
                                   }),
                                 });
                                 goList();
                                 await Promise.all([
-                                  refreshTeams(),
-                                  refreshPlayers(),
+                                  refreshTeams(true),
+                                  refreshPlayers(true),
                                 ]);
                               }, "Player assigned.")
                             }
@@ -1890,6 +1894,7 @@ export function LmsOperator({
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
                         action: "update",
+                        divisionId: opDivisionId,
                         player: playerDraft,
                       }),
                     });
@@ -1899,13 +1904,17 @@ export function LmsOperator({
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
                         action: "create",
+                        divisionId: opDivisionId,
                         player: playerDraft,
                         teamId: assignTeamId || undefined,
                       }),
                     });
                   }
                   goList();
-                  await Promise.all([refreshPlayers(), refreshTeams()]);
+                  await Promise.all([
+                    refreshPlayers(true),
+                    refreshTeams(true),
+                  ]);
                 }, "Player saved.")
               }
             >
@@ -2640,7 +2649,10 @@ export function LmsOperator({
                                     `/api/lms/operator/teams?teamId=${encodeURIComponent(team.id)}&divisionId=${encodeURIComponent(opDivisionId)}`,
                                     { method: "DELETE" },
                                   );
-                                  await refreshTeams();
+                                  await Promise.all([
+                                    refreshTeams(true),
+                                    refreshPlayers(true),
+                                  ]);
                                 }, "Team deleted.");
                               },
                             },
@@ -2689,12 +2701,16 @@ export function LmsOperator({
                                                 },
                                                 body: JSON.stringify({
                                                   action: "remove",
+                                                  divisionId: opDivisionId,
                                                   teamId: team.id,
                                                   playerId: player.id,
                                                 }),
                                               },
                                             );
-                                            await refreshTeams();
+                                            await Promise.all([
+                                              refreshTeams(true),
+                                              refreshPlayers(true),
+                                            ]);
                                           }, "Player removed.");
                                         },
                                       },
@@ -2722,7 +2738,7 @@ export function LmsOperator({
         <section className="space-y-3">
           <SectionHeader
             title="Players"
-            description="View, create, and edit player info."
+            description="View, create, edit, or remove players from this division."
             onAdd={(event) => void openEditPlayer(null, event)}
           />
           <SearchField
@@ -2746,13 +2762,52 @@ export function LmsOperator({
                       {player.location ? ` · ${player.location}` : ""}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    className={btnEdit}
-                    onClick={(event) => void openEditPlayer(player.id, event)}
-                  >
-                    Edit
-                  </button>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      className={btnEdit}
+                      onClick={(event) => void openEditPlayer(player.id, event)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className={btnDelete}
+                      disabled={busy}
+                      onClick={(event) => {
+                        askConfirm(
+                          {
+                            title: "Remove player",
+                            body: `Remove ${player.name} from all teams in this division? LMS does not hard-delete players.`,
+                            confirmLabel: "Remove",
+                            onConfirm: async () => {
+                              setPendingConfirm(null);
+                              await runAction(async () => {
+                                await fetchJson("/api/lms/operator/players", {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                  },
+                                  body: JSON.stringify({
+                                    action: "remove",
+                                    divisionId: opDivisionId,
+                                    playerId: player.id,
+                                  }),
+                                });
+                                await Promise.all([
+                                  refreshTeams(true),
+                                  refreshPlayers(true),
+                                ]);
+                              }, "Player removed.");
+                            },
+                          },
+                          event,
+                        );
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
               </AccentRecordCard>
             ))}
@@ -2819,7 +2874,7 @@ export function LmsOperator({
                                   `/api/lms/operator/locations?locationId=${encodeURIComponent(loc.id)}&divisionId=${encodeURIComponent(opDivisionId)}`,
                                   { method: "DELETE" },
                                 );
-                                await refreshLocations();
+                                await refreshLocations(true);
                               }, "Location deleted.");
                             },
                           },
