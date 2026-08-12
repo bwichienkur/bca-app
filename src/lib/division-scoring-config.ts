@@ -40,6 +40,11 @@ export type ResolveScoringFormatInput = {
   linkFormatId?: string | null;
   /** Night Format leg race-chart override. */
   linkRaceChartId?: RaceChartId | null;
+  /**
+   * Merged built-in + league catalog. When omitted, only code built-ins
+   * are used (custom Redis presets will not resolve).
+   */
+  formats?: readonly LeagueScoringFormat[] | null;
 };
 
 /**
@@ -50,9 +55,10 @@ export type ResolveScoringFormatInput = {
 export function resolveScoringFormat(
   input: ResolveScoringFormatInput,
 ): LeagueScoringFormat {
+  const catalog = input.formats?.length ? input.formats : undefined;
   // Night Format leg beats account prefs so Singles/Teams (or Tuesday) can differ.
   if (input.linkFormatId) {
-    const linked = getScoringFormat(input.linkFormatId);
+    const linked = getScoringFormat(input.linkFormatId, catalog);
     return applyLmsStructureTweaks(
       applyRaceChartOverride(linked, input.linkRaceChartId),
       input,
@@ -62,7 +68,7 @@ export function resolveScoringFormat(
   if (input.prefsFormatId) {
     return applyLmsStructureTweaks(
       applyRaceChartOverride(
-        getScoringFormat(input.prefsFormatId),
+        getScoringFormat(input.prefsFormatId, catalog),
         input.linkRaceChartId,
       ),
       input,
@@ -70,7 +76,10 @@ export function resolveScoringFormat(
   }
 
   return applyLmsStructureTweaks(
-    applyRaceChartOverride(FORMAT_PALM_BEACH_5, input.linkRaceChartId),
+    applyRaceChartOverride(
+      getScoringFormat(FORMAT_PALM_BEACH_5.id, catalog),
+      input.linkRaceChartId,
+    ),
     input,
   );
 }

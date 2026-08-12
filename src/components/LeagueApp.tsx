@@ -45,6 +45,10 @@ import {
   pushSharedPreferences,
 } from "@/lib/prefs-sync";
 import { resolveScoringFormat } from "@/lib/division-scoring-config";
+import {
+  LEAGUE_SCORING_FORMATS,
+  type LeagueScoringFormat,
+} from "@/lib/scoring-formats";
 import { useViewportAnchor } from "@/lib/use-viewport-anchor";
 import type {
   AppPillar,
@@ -160,6 +164,9 @@ export function LeagueApp() {
   const [divisions, setDivisions] = useState<DivisionSummary[]>([]);
   const [divisionLinks, setDivisionLinks] = useState<DivisionLink[]>([]);
   const [divisionLinksReady, setDivisionLinksReady] = useState(false);
+  const [scoringFormats, setScoringFormats] = useState<LeagueScoringFormat[]>(
+    () => [...LEAGUE_SCORING_FORMATS],
+  );
   const [selectedLeague, setSelectedLeague] = useState<LeagueSummary | null>(
     null,
   );
@@ -712,6 +719,30 @@ export function LeagueApp() {
           setDivisionLinks([]);
           setDivisionLinksReady(true);
         }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLeague?.id, prefs?.leagueId, refreshToken]);
+
+  // League play-style catalog (built-ins + Redis customs/overrides).
+  useEffect(() => {
+    const leagueId = selectedLeague?.id ?? prefs?.leagueId ?? null;
+    if (!leagueId) {
+      setScoringFormats([...LEAGUE_SCORING_FORMATS]);
+      return;
+    }
+    let cancelled = false;
+    void fetchJson<{ formats: LeagueScoringFormat[] }>(
+      `/api/scoring-formats?leagueId=${encodeURIComponent(leagueId)}`,
+    )
+      .then((data) => {
+        if (!cancelled && data.formats?.length) {
+          setScoringFormats(data.formats);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setScoringFormats([...LEAGUE_SCORING_FORMATS]);
       });
     return () => {
       cancelled = true;
@@ -1459,11 +1490,13 @@ export function LeagueApp() {
       resolveScoringFormat({
         prefsFormatId: prefs?.scoringFormatId,
         divisionName: selectedDivision?.name ?? prefs?.divisionName,
+        formats: scoringFormats,
       }),
     [
       prefs?.scoringFormatId,
       prefs?.divisionName,
       selectedDivision?.name,
+      scoringFormats,
     ],
   );
 
@@ -2013,6 +2046,7 @@ export function LeagueApp() {
                 teamId={prefs.teamId}
                 teamName={prefs.teamName}
                 scoringFormatId={prefs.scoringFormatId}
+                scoringFormats={scoringFormats}
                 initialMatchId={pendingScoreMatchId}
                 onInitialMatchOpened={() => setPendingScoreMatchId(null)}
                 user={user}
@@ -2039,6 +2073,7 @@ export function LeagueApp() {
                 divisionId={selectedDivision.id}
                 divisionName={selectedDivision.name}
                 prefs={prefs}
+                scoringFormats={scoringFormats}
                 refreshToken={refreshToken}
               />
             ) : loadingReport ? (
@@ -2395,6 +2430,7 @@ export function LeagueApp() {
                 membership={membership}
                 loadingMembership={loadingMembership}
                 membershipError={membershipError}
+                scoringFormats={scoringFormats}
                 onClose={() =>
                   startTransition(() =>
                     setTab(defaultTabForPillar("league", leagueDefaultOptions)),

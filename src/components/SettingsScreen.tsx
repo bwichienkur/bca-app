@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   LEAGUE_SCORING_FORMATS,
   getScoringFormat,
+  type LeagueScoringFormat,
 } from "@/lib/scoring-formats";
 import type {
   DivisionSummary,
@@ -24,6 +25,8 @@ type SettingsScreenProps = {
   membership: MembershipSnapshot | null;
   loadingMembership: boolean;
   membershipError: string | null;
+  /** Merged built-in + league play styles (Manage → Styles). */
+  scoringFormats?: LeagueScoringFormat[] | null;
   onSave: (next: UserPreferences) => void;
   onRefreshMembership: () => void;
   onSignOut: () => void;
@@ -37,6 +40,7 @@ export function SettingsScreen({
   membership,
   loadingMembership,
   membershipError,
+  scoringFormats = null,
   onSave,
   onRefreshMembership,
   onSignOut,
@@ -48,6 +52,12 @@ export function SettingsScreen({
   const [teamId, setTeamId] = useState(prefs.teamId);
   const [scoringFormatId, setScoringFormatId] = useState<string>(
     prefs.scoringFormatId ?? "auto",
+  );
+  const [formatCatalog, setFormatCatalog] = useState<LeagueScoringFormat[]>(
+    () =>
+      scoringFormats?.length
+        ? [...scoringFormats]
+        : [...LEAGUE_SCORING_FORMATS],
   );
   const [status, setStatus] = useState<string | null>(null);
   const [leagueQuery, setLeagueQuery] = useState(
@@ -116,6 +126,38 @@ export function SettingsScreen({
       setLinkBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (scoringFormats?.length) {
+      setFormatCatalog([...scoringFormats]);
+    }
+  }, [scoringFormats]);
+
+  useEffect(() => {
+    const id = leagueId.trim();
+    if (!id) {
+      setFormatCatalog(
+        scoringFormats?.length
+          ? [...scoringFormats]
+          : [...LEAGUE_SCORING_FORMATS],
+      );
+      return;
+    }
+    let cancelled = false;
+    void fetch(`/api/scoring-formats?leagueId=${encodeURIComponent(id)}`)
+      .then(async (response) => {
+        const payload = (await response.json().catch(() => null)) as {
+          formats?: LeagueScoringFormat[];
+        } | null;
+        if (!cancelled && payload?.formats?.length) {
+          setFormatCatalog(payload.formats);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [leagueId, scoringFormats]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -976,7 +1018,7 @@ export function SettingsScreen({
                   value: "auto",
                   label: "Auto (Night Format → Palm Beach)",
                 },
-                ...LEAGUE_SCORING_FORMATS.map((format) => ({
+                ...formatCatalog.map((format) => ({
                   value: format.id,
                   label: format.label,
                 })),
@@ -984,8 +1026,8 @@ export function SettingsScreen({
             />
             <p className="text-[11px] leading-snug text-[var(--muted)]">
               {scoringFormatId === "auto"
-                ? "Uses the Night Format race HC for this division when one is linked; otherwise Palm Beach 5-player. Pin Tuesday R6 Hot / Beyond on the Night Format (LMS → Division links), or pick a format here."
-                : getScoringFormat(scoringFormatId).description}
+                ? "Uses the Night Format Race HC play style when linked; otherwise Palm Beach. Manage presets under Manage → Styles, or pin one on a Night Format (Links)."
+                : getScoringFormat(scoringFormatId, formatCatalog).description}
             </p>
           </div>
 

@@ -1,13 +1,13 @@
 /**
- * Configurable league night scoring formats.
+ * League night scoring format presets.
  *
- * LMS still owns live match payloads; these presets describe how *this app*
- * should interpret a division’s night (lineup size, race model, how team
- * points are earned). Pin a preset on a Night Format leg (preferred) or in
- * account prefs. Name helpers below only seed the Night Format operator form.
+ * Built-ins live here. Per-league overrides and custom presets are stored in
+ * Redis (see scoring-formats-store) and merged at read time. Pin a preset id
+ * on a Night Format leg (preferred) or in account prefs. Name helpers only
+ * seed the Night Format operator form.
  */
 
-import type { RaceChartId } from "./race-charts";
+import { isRaceChartId, type RaceChartId } from "./race-charts";
 
 /** How a completed singles race contributes to the team night score. */
 export type TeamPointMode =
@@ -144,10 +144,190 @@ export const LEAGUE_SCORING_FORMATS: LeagueScoringFormat[] = [
   FORMAT_BEYOND_TEAMS,
 ];
 
-export function getScoringFormat(id: string | null | undefined): LeagueScoringFormat {
-  return (
-    LEAGUE_SCORING_FORMATS.find((f) => f.id === id) ?? FORMAT_PALM_BEACH_5
+export const BUILT_IN_SCORING_FORMAT_IDS = new Set(
+  LEAGUE_SCORING_FORMATS.map((format) => format.id),
+);
+
+export type ScoringFormatSource = "built-in" | "override" | "custom";
+
+export type ScoringFormatListItem = LeagueScoringFormat & {
+  source: ScoringFormatSource;
+};
+
+/**
+ * Merge built-ins with league-stored rows. Same id replaces the built-in
+ * (league override). Unknown ids append after built-ins.
+ */
+export function mergeScoringFormatCatalog(
+  custom: readonly LeagueScoringFormat[],
+): LeagueScoringFormat[] {
+  const byId = new Map(
+    LEAGUE_SCORING_FORMATS.map((format) => [format.id, format]),
   );
+  for (const format of custom) {
+    const normalized = normalizeScoringFormat(format);
+    if (normalized) byId.set(normalized.id, normalized);
+  }
+  const result = LEAGUE_SCORING_FORMATS.map(
+    (builtIn) => byId.get(builtIn.id) ?? builtIn,
+  );
+  for (const format of custom) {
+    const id = format.id?.trim();
+    if (!id || BUILT_IN_SCORING_FORMAT_IDS.has(id)) continue;
+    const normalized = normalizeScoringFormat(format);
+    if (normalized) result.push(normalized);
+  }
+  return result;
+}
+
+export function getScoringFormat(
+  id: string | null | undefined,
+  catalog: readonly LeagueScoringFormat[] = LEAGUE_SCORING_FORMATS,
+): LeagueScoringFormat {
+  const key = id?.trim();
+  if (key) {
+    const found = catalog.find((format) => format.id === key);
+    if (found) return found;
+  }
+  const palm =
+    catalog.find((format) => format.id === FORMAT_PALM_BEACH_5.id) ??
+    FORMAT_PALM_BEACH_5;
+  return palm;
+}
+
+function asPositiveInt(value: unknown, fallback: number): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.round(n);
+}
+
+function asNonNegInt(value: unknown, fallback: number): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return Math.round(n);
+}
+
+function parseTeamPointMode(
+  value: unknown,
+  fallback: TeamPointMode,
+): TeamPointMode {
+  return value === "match-win" || value === "round-points"
+    ? value
+    : fallback;
+}
+
+function parseRaceMode(value: unknown, fallback: RaceMode): RaceMode {
+  return value === "fargo-race-chart" || value === "fixed-race"
+    ? value
+    : fallback;
+}
+
+function parsePointSystem(
+  value: unknown,
+  fallback: LeagueScoringFormat["pointSystem"],
+): LeagueScoringFormat["pointSystem"] {
+  return value === "1" || value === "10" || value === "17" ? value : fallback;
+}
+
+function slugIdFromLabel(label: string): string {
+  const slug = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  return slug || `sf_${Date.now().toString(36)}`;
+}
+
+/**
+ * Coerce a partial / stored row into a valid format.
+ * Returns null when label (or fallback) cannot produce a usable preset.
+ */
+export function normalizeScoringFormat(
+  raw: Partial<LeagueScoringFormat> | null | undefined,
+  fallback: LeagueScoringFormat = FORMAT_PALM_BEACH_5,
+): LeagueScoringFormat | null {
+  if (!raw || typeof raw !== "object") return null;
+
+  const label =
+    typeof raw.label === "string" && raw.label.trim()
+      ? raw.label.trim()
+      : fallback.label.trim();
+  if (!label) return null;
+
+  const idRaw =
+    typeof raw.id === "string" && raw.id.trim()
+      ? raw.id.trim()
+      : fallback.id !== "draft"
+        ? fallback.id
+        : slugIdFromLabel(label);
+  const id = idRaw.slice(0, 64);
+  if (!id) return null;
+
+  const raceMode = parseRaceMode(raw.raceMode, fallback.raceMode);
+  const teamPointMode = parseTeamPointMode(
+    raw.teamPointMode,
+    fallback.teamPointMode,
+  );
+  const playersPerTeam = asPositiveInt(
+    raw.playersPerTeam,
+    fallback.playersPerTeam,
+  );
+  const matchesPerNight = asPositiveInt(
+    raw.matchesPerNight,
+    fallback.matchesPerNight || playersPerTeam,
+  );
+
+  const chartCandidate =
+    typeof raw.raceChartId === "string" ? raw.raceChartId : fallback.raceChartId;
+  const raceChartId =
+    raceMode === "fargo-race-chart" && isRaceChartId(chartCandidate)
+      ? chartCandidate
+      : raceMode === "fargo-race-chart"
+        ? (fallback.raceChartId ?? "r6-hot")
+        : undefined;
+
+  const fixedRaceWin =
+    raceMode === "fixed-race"
+      ? asPositiveInt(raw.fixedRaceWin, fallback.fixedRaceWin ?? 10)
+      : undefined;
+  const fixedRaceMaxLoss =
+    raceMode === "fixed-race"
+      ? asNonNegInt(raw.fixedRaceMaxLoss, fallback.fixedRaceMaxLoss ?? 0)
+      : undefined;
+
+  const teamRaceToRaw =
+    raw.teamRaceTo === null || raw.teamRaceTo === undefined
+      ? fallback.teamRaceTo
+      : raw.teamRaceTo;
+  const teamRaceTo =
+    teamRaceToRaw === null || teamRaceToRaw === undefined
+      ? undefined
+      : asPositiveInt(teamRaceToRaw, 0) || undefined;
+
+  return {
+    id,
+    label,
+    description:
+      typeof raw.description === "string"
+        ? raw.description.trim()
+        : fallback.description,
+    playersPerTeam,
+    matchesPerNight,
+    teamPointMode,
+    pointsPerMatchWin: asPositiveInt(
+      raw.pointsPerMatchWin,
+      fallback.pointsPerMatchWin,
+    ),
+    raceMode,
+    ...(fixedRaceWin != null ? { fixedRaceWin } : {}),
+    ...(fixedRaceMaxLoss != null ? { fixedRaceMaxLoss } : {}),
+    ...(raceChartId ? { raceChartId } : {}),
+    ...(teamRaceTo != null ? { teamRaceTo } : {}),
+    matchPointsRound: Boolean(
+      raw.matchPointsRound ?? fallback.matchPointsRound,
+    ),
+    pointSystem: parsePointSystem(raw.pointSystem, fallback.pointSystem),
+  };
 }
 
 /**
@@ -156,11 +336,16 @@ export function getScoringFormat(id: string | null | undefined): LeagueScoringFo
  */
 export function inferScoringFormatFromDivisionName(
   divisionName: string | null | undefined,
+  catalog: readonly LeagueScoringFormat[] = LEAGUE_SCORING_FORMATS,
 ): LeagueScoringFormat {
   const name = (divisionName ?? "").toLowerCase();
   if (name.includes("beyond")) {
-    if (/\bsingles?\b/.test(name)) return FORMAT_BEYOND_SINGLES;
-    if (/\bteams?\b/.test(name)) return FORMAT_BEYOND_TEAMS;
+    if (/\bsingles?\b/.test(name)) {
+      return getScoringFormat(FORMAT_BEYOND_SINGLES.id, catalog);
+    }
+    if (/\bteams?\b/.test(name)) {
+      return getScoringFormat(FORMAT_BEYOND_TEAMS.id, catalog);
+    }
   }
   const nine =
     name.includes("9-ball") ||
@@ -175,7 +360,7 @@ export function inferScoringFormatFromDivisionName(
       name.includes("fairmatch") ||
       name.includes("9ball"))
   ) {
-    return FORMAT_TUESDAY_9BALL_R6_HOT;
+    return getScoringFormat(FORMAT_TUESDAY_9BALL_R6_HOT.id, catalog);
   }
-  return FORMAT_PALM_BEACH_5;
+  return getScoringFormat(FORMAT_PALM_BEACH_5.id, catalog);
 }
