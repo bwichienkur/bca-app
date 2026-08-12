@@ -22,6 +22,10 @@ import { SubTabCard } from "./SubTabCard";
 type ScheduleListProps = {
   days: ScheduleDay[];
   teamName?: string | null;
+  /** Highlight this team without filtering the list (Bright browse-all). */
+  highlightTeamName?: string | null;
+  /** When true, show every matchup in the division (ignore teamName filter). */
+  showAllTeams?: boolean;
   divisionName?: string | null;
   /** Division standings — used for Home/Away rank badges. */
   teamReport?: TableReport | null;
@@ -52,6 +56,8 @@ function formatScheduleDate(value: string): string {
 export function ScheduleList({
   days,
   teamName,
+  highlightTeamName = null,
+  showAllTeams = false,
   divisionName,
   teamReport = null,
   onMatchClick,
@@ -68,7 +74,7 @@ export function ScheduleList({
   );
 
   const teamDays = useMemo(() => {
-    if (!teamName) return days;
+    if (showAllTeams || !teamName) return days;
     return days
       .map((day) => ({
         ...day,
@@ -79,7 +85,7 @@ export function ScheduleList({
         ),
       }))
       .filter((day) => day.matches.length > 0);
-  }, [days, teamName]);
+  }, [days, teamName, showAllTeams]);
 
   const { upcomingMatchups, pastMatchups } = useMemo(() => {
     const upcoming: FlatMatchup[] = [];
@@ -115,14 +121,18 @@ export function ScheduleList({
 
   const visibleMatchups =
     view === "upcoming" ? upcomingMatchups : pastMatchups;
-  const myTeam = teamName ?? null;
+  const myTeam = highlightTeamName ?? teamName ?? null;
 
   if (!teamDays.length) {
     return (
       <EmptyState
-        title={teamName ? "No matches for this team" : "No scheduled matches"}
+        title={
+          !showAllTeams && teamName
+            ? "No matches for this team"
+            : "No scheduled matches"
+        }
         body={
-          teamName
+          !showAllTeams && teamName
             ? "Pick another team or clear the team filter."
             : "Schedule data wasn’t available for this division."
         }
@@ -134,10 +144,23 @@ export function ScheduleList({
     <section className="animate-rise space-y-3">
       <div className="px-3 pt-3 sm:px-4 sm:pt-4">
         <PanelHeader
-          title="Your schedule"
+          title={showAllTeams ? "Division schedule" : "Your schedule"}
           description={
             <>
-              {teamName ? (
+              {showAllTeams ? (
+                <>
+                  Every matchup in the division
+                  {myTeam ? (
+                    <>
+                      {" "}
+                      · following{" "}
+                      <span className="font-medium text-[var(--ink)]">
+                        {myTeam}
+                      </span>
+                    </>
+                  ) : null}
+                </>
+              ) : teamName ? (
                 <>
                   Upcoming and past matchups for{" "}
                   <span className="font-medium text-[var(--ink)]">

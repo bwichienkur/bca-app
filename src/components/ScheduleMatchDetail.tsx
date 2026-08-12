@@ -33,6 +33,8 @@ type ScheduleMatchDetailProps = {
   awayStandingCells: StandingCell[] | null;
   myTeamName?: string | null;
   onClose: () => void;
+  /** Bright / operator: jump to Score with this match’s scoresheet. */
+  onOpenScoresheet?: () => void;
 };
 
 type MatchSide = "home" | "away";
@@ -181,6 +183,7 @@ export function ScheduleMatchDetail({
   awayStandingCells,
   myTeamName,
   onClose,
+  onOpenScoresheet,
 }: ScheduleMatchDetailProps) {
   const homeName = homeTeam?.name ?? displayTeamName(match.home);
   const awayName = awayTeam?.name ?? displayTeamName(match.away);
@@ -236,6 +239,15 @@ export function ScheduleMatchDetail({
         </h3>
         {match.location ? (
           <p className="mt-1 text-sm text-[var(--muted)]">{match.location}</p>
+        ) : null}
+        {onOpenScoresheet && match.matchId ? (
+          <button
+            type="button"
+            onClick={onOpenScoresheet}
+            className="mt-3 inline-flex items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] px-3 py-2 text-sm font-semibold text-white"
+          >
+            Open scoresheet
+          </button>
         ) : null}
       </div>
 

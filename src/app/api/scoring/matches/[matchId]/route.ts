@@ -7,8 +7,18 @@ import {
   normalizeScoringPlayer,
   type ScoringMatchDetail,
 } from "@/lib/scoring";
+import { isSuperadminIdentity } from "@/lib/impersonation";
+import { canAccessLms } from "@/lib/lms-access-server";
 
 export const dynamic = "force-dynamic";
+
+function canonicalizeTeamKey(name: string): string {
+  return name
+    .replace(/^\((H|A)\)\s*/i, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
 
 async function loadTeamPlayers(teamId: string) {
   const response = await lmsAuthFetch(`/api/teams/${teamId}/players`);
@@ -18,7 +28,7 @@ async function loadTeamPlayers(teamId: string) {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ matchId: string }> },
 ) {
   try {
@@ -45,6 +55,41 @@ export async function GET(
     if (teamOnePlayers.some((p) => p.id === session.lmsId)) mySide = 1;
     else if (teamTwoPlayers.some((p) => p.id === session.lmsId)) mySide = 2;
 
+    // Bright / LO following another team: treat that team as "my side" so the
+    // scoresheet opens editable for checkout without being on the roster.
+    if (mySide == null) {
+      const canManage =
+        canAccessLms({
+          email: session.email,
+          lmsId: session.lmsId,
+        }) ||
+        isSuperadminIdentity({
+          email: session.email,
+          lmsId: session.lmsId,
+        });
+      if (canManage) {
+        const followTeamId = request.nextUrl.searchParams.get("teamId")?.trim();
+        const followTeamName =
+          request.nextUrl.searchParams.get("teamName")?.trim() ?? "";
+        if (followTeamId) {
+          if (teamOneId === followTeamId) mySide = 1;
+          else if (teamTwoId === followTeamId) mySide = 2;
+        }
+        if (mySide == null && followTeamName) {
+          const key = canonicalizeTeamKey(followTeamName);
+          if (key) {
+            if (canonicalizeTeamKey(String(match.teamOneName ?? "")) === key) {
+              mySide = 1;
+            } else if (
+              canonicalizeTeamKey(String(match.teamTwoName ?? "")) === key
+            ) {
+              mySide = 2;
+            }
+          }
+        }
+      }
+    }
+
     const detail: ScoringMatchDetail = {
       id: String(match.id ?? matchId),
       divisionId: String(match.divisionId ?? ""),
@@ -66,7 +111,8 @@ export async function GET(
       maximumAllowedHandicap: Number(match.maximumAllowedHandicap ?? 50),
       matchWinCountsAsRound: match.matchWinCountsAsRound !== false,
       mySide,
-      matchFormat: (match.matchFormat as ScoringMatchDetail["matchFormat"]) ?? null,
+      matchFormat:
+        (match.matchFormat as ScoringMatchDetail["matchFormat"]) ?? null,
       teamOnePlayers,
       teamTwoPlayers,
     };
