@@ -11,13 +11,17 @@ import {
   legsStandingFormula,
   normalizeNightLegs,
   standingRawColumnHeadersForLegs,
+  suggestNightNameFromDivision,
   STANDING_METRIC_OPTIONS,
   type DivisionLinkScoringSide,
   type DivisionLinkStandingSide,
   type NightLeg,
   type StandingScoreMetric,
 } from "@/lib/division-link-config";
-import { LEAGUE_SCORING_FORMATS } from "@/lib/scoring-formats";
+import {
+  getScoringFormat,
+  LEAGUE_SCORING_FORMATS,
+} from "@/lib/scoring-formats";
 import { RACE_CHART_OPTIONS, type RaceChartId } from "@/lib/race-charts";
 import {
   IconSubTabs,
@@ -177,18 +181,26 @@ function ScoringSideFields({
         {title}
       </legend>
       <label className="block space-y-1 text-sm">
-        <span className="text-[var(--muted)]">Scoring format override</span>
+        <span className="text-[var(--muted)]">Scoring format</span>
         <select
           className={selectClass}
           value={side.scoringFormatId ?? ""}
-          onChange={(e) =>
+          onChange={(e) => {
+            const formatId = e.target.value || null;
+            const format = formatId ? getScoringFormat(formatId) : null;
             onChange({
               ...side,
-              scoringFormatId: e.target.value || null,
-            })
-          }
+              scoringFormatId: formatId,
+              raceChartId:
+                format?.raceMode === "fargo-race-chart" && format.raceChartId
+                  ? format.raceChartId
+                  : formatId
+                    ? null
+                    : side.raceChartId,
+            });
+          }}
         >
-          <option value="">Infer from division name</option>
+          <option value="">Infer from division name / prefs</option>
           {LEAGUE_SCORING_FORMATS.map((format) => (
             <option key={format.id} value={format.id}>
               {format.label}
@@ -217,8 +229,8 @@ function ScoringSideFields({
         </select>
       </label>
       <p className="text-xs text-[var(--muted)]">
-        Overrides LMS race-tos on the Tableside Score pad only. Does not change
-        LMS settings.
+        Pin format + chart here so Score does not rely on division-name
+        heuristics. Overrides LMS race-tos on the Tableside pad only.
       </p>
     </fieldset>
   );
@@ -226,7 +238,7 @@ function ScoringSideFields({
 
 /**
  * Popup form to create/edit a Tableside Night Format (division link).
- * Never writes to LMS. Supports a configurable number of legs.
+ * Never writes to LMS. Supports 1..N legs (single-leg nights for Tuesday, etc.).
  */
 export function DivisionLinkForm({
   leagueId,
@@ -252,7 +264,7 @@ export function DivisionLinkForm({
   const [legs, setLegs] = useState<NightLeg[]>(() =>
     initialLink?.legs?.length
       ? normalizeNightLegs(initialLink.legs)
-      : [emptyLegDraft(0), emptyLegDraft(1)],
+      : [emptyLegDraft(0)],
   );
   const [validation, setValidation] = useState<DivisionLinkValidation | null>(
     null,
@@ -264,7 +276,7 @@ export function DivisionLinkForm({
     setLegs(
       initialLink?.legs?.length
         ? normalizeNightLegs(initialLink.legs)
-        : [emptyLegDraft(0), emptyLegDraft(1)],
+        : [emptyLegDraft(0)],
     );
     setValidation(null);
   }, [initialLink]);
@@ -297,9 +309,8 @@ export function DivisionLinkForm({
 
   const maybePrefillLinkName = (divisionName: string) => {
     if (linkName.trim()) return;
-    const season =
-      divisionName.match(/\(?\s*(20\d{2}\.\d)\s*\)?/i)?.[1] ?? "";
-    if (season) setLinkName(`Beyond Monday ${season}`);
+    const suggested = suggestNightNameFromDivision(divisionName);
+    if (suggested) setLinkName(suggested);
   };
 
   const applyBeyondDefaults = () => {
@@ -323,8 +334,8 @@ export function DivisionLinkForm({
   };
 
   const runValidate = async () => {
-    if (filledLegs.length < 2) {
-      onError("Add at least two LMS divisions (legs).");
+    if (filledLegs.length < 1) {
+      onError("Add at least one LMS division (leg).");
       return null;
     }
     onBusy(true);
@@ -359,8 +370,8 @@ export function DivisionLinkForm({
       onError("Name the night (players will see this in League).");
       return;
     }
-    if (filledLegs.length < 2) {
-      onError("Add at least two LMS divisions (legs).");
+    if (filledLegs.length < 1) {
+      onError("Add at least one LMS division (leg).");
       return;
     }
     onBusy(true);
@@ -397,8 +408,9 @@ export function DivisionLinkForm({
   return (
     <div className="space-y-4">
       <div className="rounded-[var(--radius)] border border-[var(--amber)]/35 bg-[color-mix(in_srgb,var(--amber)_12%,transparent)] px-3 py-2 text-sm text-[var(--amber)]">
-        Tableside-only Night Format. Add as many LMS divisions (legs) as the
-        night needs. Linking does not change LMS.
+        Tableside-only Night Format. Use one leg for a single LMS division
+        (e.g. Tuesday 9-Ball / R6 Hot), or add more legs for combined nights
+        like Beyond. Linking does not change LMS.
       </div>
 
       <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]">
@@ -423,7 +435,7 @@ export function DivisionLinkForm({
                 <input
                   className={inputClass}
                   value={linkName}
-                  placeholder="e.g. Beyond Monday 2026.2"
+                  placeholder="e.g. Tuesday 9 Ball 2026 · Beyond Monday 2026.2"
                   onChange={(e) => setLinkName(e.target.value)}
                 />
               </label>
@@ -457,7 +469,7 @@ export function DivisionLinkForm({
                       <p className="text-sm font-semibold text-[var(--ink)]">
                         Leg {index + 1}
                       </p>
-                      {legs.length > 2 ? (
+                      {legs.length > 1 ? (
                         <button
                           type="button"
                           className={btnDelete}
@@ -478,7 +490,7 @@ export function DivisionLinkForm({
                       <input
                         className={inputClass}
                         value={leg.label}
-                        placeholder="Singles / Teams / …"
+                        placeholder="Tuesday 9-Ball / Singles / Teams…"
                         onChange={(e) =>
                           updateLeg(index, { label: e.target.value })
                         }
@@ -495,10 +507,16 @@ export function DivisionLinkForm({
                         const nextName = option?.value.name ?? "";
                         if (option) {
                           maybePrefillLinkName(nextName);
+                          const usedRoles = new Set(
+                            legs
+                              .filter((_, i) => i !== index && _.divisionId)
+                              .map((row) => row.standing.role),
+                          );
                           const seeded = defaultNightLeg({
                             divisionId: nextId,
                             divisionName: nextName,
                             index,
+                            usedRoles,
                           });
                           updateLeg(index, {
                             divisionId: nextId,
@@ -539,10 +557,16 @@ export function DivisionLinkForm({
                     className="text-xs font-semibold text-[var(--felt-deep)] underline-offset-2 hover:underline"
                     onClick={() => {
                       const index = legs.findIndex((leg) => !leg.divisionId);
+                      const usedRoles = new Set(
+                        legs
+                          .filter((leg) => leg.divisionId)
+                          .map((leg) => leg.standing.role),
+                      );
                       const seeded = defaultNightLeg({
                         divisionId: sisterSuggestion.id,
                         divisionName: sisterSuggestion.name,
                         index: index >= 0 ? index : legs.length,
+                        usedRoles,
                       });
                       if (index >= 0) {
                         updateLeg(index, seeded);
@@ -616,7 +640,7 @@ export function DivisionLinkForm({
               <button
                 type="button"
                 className={btnGhost}
-                disabled={filledLegs.length < 2}
+                disabled={filledLegs.length < 1}
                 onClick={applyBeyondDefaults}
               >
                 Reset Beyond defaults (SETS×1 + RDS×2)
@@ -627,8 +651,11 @@ export function DivisionLinkForm({
           {tab === "race" ? (
             <div className="space-y-3">
               <p className="text-sm text-[var(--muted)]">
-                Race handicap overrides for the Tableside Score pad, per leg.
-                Beyond Singles should use official{" "}
+                Score-pad play style per leg. Tuesday 9-Ball should use{" "}
+                <span className="font-medium text-[var(--ink)]">
+                  Tuesday 9-Ball (R6 Hot)
+                </span>
+                ; Beyond Singles uses{" "}
                 <span className="font-medium text-[var(--ink)]">R5 Hot</span>;
                 Teams usually stays fixed race / no chart.
               </p>
@@ -656,7 +683,7 @@ export function DivisionLinkForm({
         <button
           type="button"
           className={btnGhost}
-          disabled={busy || filledLegs.length < 2}
+          disabled={busy || filledLegs.length < 1}
           onClick={() => void runValidate()}
         >
           Check match
@@ -664,7 +691,7 @@ export function DivisionLinkForm({
         <button
           type="button"
           className={btnPrimary}
-          disabled={busy || filledLegs.length < 2 || !linkName.trim()}
+          disabled={busy || filledLegs.length < 1 || !linkName.trim()}
           onClick={() => void saveLink()}
         >
           {initialLink ? "Update night" : "Save night"}

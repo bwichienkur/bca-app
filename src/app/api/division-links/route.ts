@@ -59,7 +59,7 @@ function legsFromBody(body: {
   config?: Partial<DivisionLinkConfig> | null;
 }): NightLeg[] {
   const fromLegs = normalizeNightLegs(body.legs);
-  if (fromLegs.length >= 2) return fromLegs;
+  if (fromLegs.length >= 1) return fromLegs;
 
   const primaryDivisionId = body.primaryDivisionId?.trim() ?? "";
   const linkedDivisionId = body.linkedDivisionId?.trim() ?? "";
@@ -140,11 +140,11 @@ export async function PUT(request: NextRequest) {
         { status: 400 },
       );
     }
-    if (legs.length < 2) {
+    if (legs.length < 1) {
       return NextResponse.json(
         {
           error:
-            "Add at least two LMS divisions (legs). You can still send legacy primaryDivisionId + linkedDivisionId.",
+            "Add at least one LMS division (leg). Multi-leg nights still need matching rosters across legs.",
         },
         { status: 400 },
       );
@@ -209,9 +209,9 @@ export async function POST(request: NextRequest) {
     }
 
     const legs = legsFromBody(body);
-    if (legs.length < 2) {
+    if (legs.length < 1) {
       return NextResponse.json(
-        { error: "At least two legs (LMS divisions) are required." },
+        { error: "At least one leg (LMS division) is required." },
         { status: 400 },
       );
     }

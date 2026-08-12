@@ -2,15 +2,36 @@
  * Tableside Night Format config for linked LMS divisions ("legs").
  * LMS still owns each leg’s live sheet; these settings control how Tableside
  * combines standings and how race handicaps are applied on Score.
+ *
+ * A night may have 1..N legs. One-leg nights (e.g. Tuesday 9-Ball) pin an
+ * explicit scoring format + race chart so Score does not rely on name heuristics.
  */
 
 import type { RaceChartId } from "./race-charts";
 import { isRaceChartId } from "./race-charts";
+import {
+  FORMAT_BEYOND_SINGLES,
+  FORMAT_BEYOND_TEAMS,
+  FORMAT_PALM_BEACH_5,
+  FORMAT_TUESDAY_9BALL_R6_HOT,
+  inferScoringFormatFromDivisionName,
+} from "./scoring-formats";
 
 export type DivisionComboRole = "singles" | "teams";
 
 /** LMS standings column used as that leg’s night contribution. */
 export type StandingScoreMetric = "sets" | "rds" | "pts";
+
+/**
+ * Play-style seed used when adding a leg from an LMS division name.
+ * Beyond keeps singles/teams roles; Tuesday / Palm Beach are single-leg styles.
+ */
+export type NightLegPlayStyle =
+  | "beyond-singles"
+  | "beyond-teams"
+  | "tuesday-9ball"
+  | "palm-beach"
+  | "generic";
 
 function roleFromDivisionName(
   name: string | null | undefined,
@@ -20,6 +41,33 @@ function roleFromDivisionName(
   if (/\bsingles?\b/.test(n)) return "singles";
   if (/\bteams?\b/.test(n)) return "teams";
   return null;
+}
+
+function isTuesdayNineBallName(name: string | null | undefined): boolean {
+  const n = (name ?? "").toLowerCase();
+  if (!n) return false;
+  const nine =
+    n.includes("9-ball") || n.includes("9 ball") || n.includes("9ball");
+  return nine && (n.includes("tuesday") || n.includes("tue"));
+}
+
+/** Infer a Tableside play-style seed from an LMS division name. */
+export function inferNightLegPlayStyle(
+  name: string | null | undefined,
+): NightLegPlayStyle {
+  const n = (name ?? "").toLowerCase();
+  if (!n) return "generic";
+  if (n.includes("beyond")) {
+    if (/\bteams?\b/.test(n)) return "beyond-teams";
+    if (/\bsingles?\b/.test(n)) return "beyond-singles";
+  }
+  if (isTuesdayNineBallName(n)) return "tuesday-9ball";
+  const inferred = inferScoringFormatFromDivisionName(name);
+  if (inferred.id === FORMAT_TUESDAY_9BALL_R6_HOT.id) return "tuesday-9ball";
+  if (inferred.id === FORMAT_BEYOND_SINGLES.id) return "beyond-singles";
+  if (inferred.id === FORMAT_BEYOND_TEAMS.id) return "beyond-teams";
+  if (inferred.id === FORMAT_PALM_BEACH_5.id) return "palm-beach";
+  return "generic";
 }
 
 /** Standing contribution for one night leg. */
@@ -102,33 +150,85 @@ export const STANDING_METRIC_OPTIONS: Array<{
 export function defaultStandingSide(
   role: DivisionComboRole,
 ): DivisionLinkStandingSide {
-  if (role === "singles") {
+  return defaultStandingSideForPlayStyle(
+    role === "teams" ? "beyond-teams" : "beyond-singles",
+  );
+}
+
+export function defaultStandingSideForPlayStyle(
+  style: NightLegPlayStyle,
+): DivisionLinkStandingSide {
+  if (style === "beyond-teams") {
+    return {
+      role: "teams",
+      metric: "rds",
+      multiplier: 2,
+      maxNightPoints: 2,
+    };
+  }
+  if (style === "tuesday-9ball") {
     return {
       role: "singles",
       metric: "sets",
       multiplier: 1,
-      maxNightPoints: 3,
+      maxNightPoints: 4,
     };
   }
+  if (style === "palm-beach") {
+    return {
+      role: "singles",
+      metric: "pts",
+      multiplier: 1,
+      maxNightPoints: 6,
+    };
+  }
+  // beyond-singles + generic race nights: SETS-style match wins
   return {
-    role: "teams",
-    metric: "rds",
-    multiplier: 2,
-    maxNightPoints: 2,
+    role: "singles",
+    metric: "sets",
+    multiplier: 1,
+    maxNightPoints: style === "beyond-singles" ? 3 : 4,
   };
 }
 
 export function defaultScoringSide(
   role: DivisionComboRole,
 ): DivisionLinkScoringSide {
-  if (role === "singles") {
+  return defaultScoringSideForPlayStyle(
+    role === "teams" ? "beyond-teams" : "beyond-singles",
+  );
+}
+
+export function defaultScoringSideForPlayStyle(
+  style: NightLegPlayStyle,
+): DivisionLinkScoringSide {
+  if (style === "beyond-teams") {
     return {
-      scoringFormatId: "beyond-singles",
+      scoringFormatId: FORMAT_BEYOND_TEAMS.id,
+      raceChartId: null,
+    };
+  }
+  if (style === "tuesday-9ball") {
+    return {
+      scoringFormatId: FORMAT_TUESDAY_9BALL_R6_HOT.id,
+      raceChartId: "r6-hot",
+    };
+  }
+  if (style === "palm-beach") {
+    return {
+      scoringFormatId: FORMAT_PALM_BEACH_5.id,
+      raceChartId: null,
+    };
+  }
+  if (style === "beyond-singles") {
+    return {
+      scoringFormatId: FORMAT_BEYOND_SINGLES.id,
       raceChartId: "r5-hot",
     };
   }
+  // generic: leave unset so Score can still infer from prefs / LMS signals
   return {
-    scoringFormatId: "beyond-teams",
+    scoringFormatId: null,
     raceChartId: null,
   };
 }
@@ -144,6 +244,38 @@ export function legLabelForRole(role: DivisionComboRole): string {
   return role === "singles" ? "Singles" : "Teams";
 }
 
+export function legLabelForPlayStyle(
+  style: NightLegPlayStyle,
+  divisionName: string,
+): string {
+  if (style === "beyond-singles") return "Singles";
+  if (style === "beyond-teams") return "Teams";
+  if (style === "tuesday-9ball") return "Tuesday 9-Ball";
+  if (style === "palm-beach") return "Palm Beach";
+  const trimmed = divisionName.trim();
+  return trimmed || "Leg";
+}
+
+/** Suggest a player-facing night name from the first LMS division. */
+export function suggestNightNameFromDivision(
+  divisionName: string | null | undefined,
+): string {
+  const name = (divisionName ?? "").trim();
+  if (!name) return "";
+  const style = inferNightLegPlayStyle(name);
+  if (style === "beyond-singles" || style === "beyond-teams") {
+    const season = name.match(/\(?\s*(20\d{2}\.\d)\s*\)?/i)?.[1] ?? "";
+    return season ? `Beyond Monday ${season}` : "Beyond Monday";
+  }
+  if (style === "tuesday-9ball") {
+    return name
+      .replace(/\s*Session\s+\d+/i, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+  return name;
+}
+
 export function slugifyLegId(label: string, fallbackIndex: number): string {
   const slug = label
     .trim()
@@ -153,29 +285,53 @@ export function slugifyLegId(label: string, fallbackIndex: number): string {
   return slug || `leg-${fallbackIndex + 1}`;
 }
 
-/** Build a night leg from an LMS division name (Beyond-aware defaults). */
+/** Build a night leg from an LMS division name (Beyond / Tuesday / Palm Beach aware). */
 export function defaultNightLeg(args: {
   divisionId: string;
   divisionName: string;
   index: number;
   usedRoles?: Set<DivisionComboRole>;
 }): NightLeg {
-  const inferred = roleFromDivisionName(args.divisionName);
-  let role: DivisionComboRole =
-    inferred ?? (args.index === 0 ? "singles" : "teams");
-  if (args.usedRoles?.has(role)) {
-    role = role === "singles" ? "teams" : "singles";
+  let style = inferNightLegPlayStyle(args.divisionName);
+
+  // Beyond sister half: if this name didn't say singles/teams but we're
+  // pairing into a Beyond night, flip to the unused Beyond role.
+  if (style === "generic" && args.usedRoles?.size) {
+    if (!args.usedRoles.has("singles")) style = "beyond-singles";
+    else if (!args.usedRoles.has("teams")) style = "beyond-teams";
   }
-  const label = inferred
-    ? legLabelForRole(inferred)
-    : args.divisionName.trim() || legLabelForRole(role);
+
+  let role: DivisionComboRole =
+    style === "beyond-teams"
+      ? "teams"
+      : style === "beyond-singles" ||
+          style === "tuesday-9ball" ||
+          style === "palm-beach"
+        ? "singles"
+        : (roleFromDivisionName(args.divisionName) ??
+          (args.index === 0 ? "singles" : "teams"));
+
+  if (
+    (style === "beyond-singles" || style === "beyond-teams") &&
+    args.usedRoles?.has(role)
+  ) {
+    role = role === "singles" ? "teams" : "singles";
+    style = role === "teams" ? "beyond-teams" : "beyond-singles";
+  }
+
+  const standing = defaultStandingSideForPlayStyle(style);
+  const scoring = defaultScoringSideForPlayStyle(style);
+  const label = args.divisionName.trim()
+    ? legLabelForPlayStyle(style, args.divisionName)
+    : legLabelForRole(role);
+
   return {
     id: slugifyLegId(label, args.index),
     label,
     divisionId: args.divisionId,
     divisionName: args.divisionName,
-    standing: defaultStandingSide(role),
-    scoring: defaultScoringSide(role),
+    standing: { ...standing, role },
+    scoring,
   };
 }
 
