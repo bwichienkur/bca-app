@@ -1,5 +1,9 @@
 import { getRedis, isRedisConfigured } from "@/lib/redis";
-import type { DivisionLink } from "./division-links";
+import {
+  normalizeDivisionLink,
+  type DivisionLink,
+} from "./division-links";
+import { normalizeDivisionLinkConfig } from "./division-link-config";
 
 const linksKey = (leagueId: string) =>
   `tableside:division-links:v1:${leagueId}`;
@@ -39,12 +43,12 @@ export async function listDivisionLinks(
   if (redis) {
     try {
       const rows = (await redis.get<DivisionLink[]>(linksKey(id))) ?? [];
-      return Array.isArray(rows) ? rows : [];
+      return Array.isArray(rows) ? rows.map(normalizeDivisionLink) : [];
     } catch {
       // fall through
     }
   }
-  return memory().byLeague.get(id) ?? [];
+  return (memory().byLeague.get(id) ?? []).map(normalizeDivisionLink);
 }
 
 async function writeDivisionLinks(
@@ -68,8 +72,9 @@ async function writeDivisionLinks(
 
 export async function upsertDivisionLink(args: {
   leagueId: string;
-  link: Omit<DivisionLink, "id" | "createdAt" | "updatedAt"> & {
+  link: Omit<DivisionLink, "id" | "createdAt" | "updatedAt" | "config"> & {
     id?: string;
+    config?: DivisionLink["config"] | null;
   };
 }): Promise<DivisionLink> {
   const existing = await listDivisionLinks(args.leagueId);
@@ -91,7 +96,7 @@ export async function upsertDivisionLink(args: {
     ? existing.find((link) => link.id === args.link.id)
     : null;
 
-  const next: DivisionLink = {
+  const next: DivisionLink = normalizeDivisionLink({
     id: args.link.id ?? prior?.id ?? newId(),
     name: args.link.name.trim(),
     leagueId: args.leagueId,
@@ -100,10 +105,15 @@ export async function upsertDivisionLink(args: {
     linkedDivisionId: args.link.linkedDivisionId,
     linkedDivisionName: args.link.linkedDivisionName,
     mode: args.link.mode,
+    config: normalizeDivisionLinkConfig(
+      args.link.config ?? prior?.config,
+      args.link.primaryDivisionName,
+      args.link.linkedDivisionName,
+    ),
     createdAt: prior?.createdAt ?? now,
     updatedAt: now,
     updatedBy: args.link.updatedBy ?? prior?.updatedBy ?? null,
-  };
+  });
 
   await writeDivisionLinks(args.leagueId, [...filtered, next]);
   return next;

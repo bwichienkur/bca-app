@@ -3146,7 +3146,7 @@ export function LmsOperator({
         <section className="space-y-3">
           <SectionHeader
             title="Division links"
-            description="Tableside-only. Name a combined night and pair divisions with matching team names (or individuals)."
+            description="Tableside-only. Pair divisions, set standing metrics (SETS/RDS/PTS), and race-chart overrides for Score."
             onAdd={(event) => {
               capturePopupAnchor(event);
               setNotice(null);
@@ -3207,6 +3207,9 @@ export function LmsOperator({
                       </p>
                       <p className="text-xs text-[var(--muted)]">
                         2 divisions · {link.mode}
+                        {link.config
+                          ? ` · STANDING=${link.config.standing.primary.metric}×${link.config.standing.primary.multiplier}+${link.config.standing.linked.metric}×${link.config.standing.linked.multiplier}`
+                          : ""}
                       </p>
                     </button>
                     <div className="flex shrink-0 items-center gap-1.5">

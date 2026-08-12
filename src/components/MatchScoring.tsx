@@ -71,6 +71,8 @@ import {
   comboPartLabel,
   findKnownComboForDivisionName,
 } from "@/lib/division-combos";
+import { scoringSideForDivision } from "@/lib/division-link-config";
+import type { DivisionLink } from "@/lib/division-links";
 import { rankForTeam, teamRanksFromReport } from "@/lib/standings";
 import type { LineupPreset, TableReport } from "@/lib/types";
 import {
@@ -101,6 +103,8 @@ type MatchScoringProps = {
   /** Sister LMS division for a combined night (e.g. Beyond Teams). */
   linkedDivisionId?: string | null;
   linkedDivisionName?: string | null;
+  /** Active Tableside division link (standing + race HC overrides). */
+  divisionLink?: DivisionLink | null;
   teamId: string | null;
   teamName: string | null;
   /** Explicit prefs format id, or null for auto. */
@@ -288,11 +292,33 @@ function resolveScorerName(
   return "Another scorer";
 }
 
+function linkScoringOverrides(
+  link: DivisionLink | null | undefined,
+  matchDivisionId: string | null | undefined,
+): {
+  linkFormatId: string | null;
+  linkRaceChartId: import("@/lib/race-charts").RaceChartId | null;
+} {
+  if (!link || !matchDivisionId) {
+    return { linkFormatId: null, linkRaceChartId: null };
+  }
+  const side = scoringSideForDivision(link.config, {
+    divisionId: matchDivisionId,
+    primaryDivisionId: link.primaryDivisionId,
+    linkedDivisionId: link.linkedDivisionId,
+  });
+  return {
+    linkFormatId: side.scoringFormatId ?? null,
+    linkRaceChartId: side.raceChartId ?? null,
+  };
+}
+
 export function MatchScoring({
   divisionId,
   divisionName,
   linkedDivisionId = null,
   linkedDivisionName = null,
+  divisionLink = null,
   teamId,
   teamName,
   scoringFormatId = null,
@@ -698,15 +724,24 @@ export function MatchScoring({
       const locked = submittedLocked || !canEditSheet;
       sheetLockedRef.current = locked;
 
+      const matchDivisionId =
+        data.match.divisionId ?? divisionId ?? null;
+      const linkOverrides = linkScoringOverrides(
+        divisionLink,
+        matchDivisionId,
+      );
       const formatForMatch = resolveScoringFormat({
         prefsFormatId: scoringFormatId,
-        divisionName: divisionName ?? data.match.divisionName,
+        // Prefer LMS half name over Tableside link display name.
+        divisionName: data.match.divisionName ?? divisionName,
         playersPerTeam:
           data.match.matchFormat?.teamOnePlayers.length ||
           data.match.numberOfSets ||
           null,
         pointsForWin: data.match.pointsForWin ?? null,
         matchWinCountsAsRound: data.match.matchWinCountsAsRound ?? null,
+        linkFormatId: linkOverrides.linkFormatId,
+        linkRaceChartId: linkOverrides.linkRaceChartId,
       });
       // When we load someone else's shared draft, keep their updatedAt so the
       // poll loop and discrepancy checks don't think we just authored it.
@@ -865,28 +900,33 @@ export function MatchScoring({
     return () => window.clearInterval(timer);
   }, [view, match]);
 
-  const scoringFormat = useMemo(
-    () =>
-      resolveScoringFormat({
-        prefsFormatId: scoringFormatId,
-        divisionName: divisionName ?? match?.divisionName,
-        playersPerTeam:
-          match?.matchFormat?.teamOnePlayers.length ||
-          match?.numberOfSets ||
-          null,
-        pointsForWin: match?.pointsForWin ?? null,
-        matchWinCountsAsRound: match?.matchWinCountsAsRound ?? null,
-      }),
-    [
-      scoringFormatId,
-      divisionName,
-      match?.divisionName,
-      match?.matchFormat?.teamOnePlayers.length,
-      match?.numberOfSets,
-      match?.pointsForWin,
-      match?.matchWinCountsAsRound,
-    ],
-  );
+  const scoringFormat = useMemo(() => {
+    const matchDivisionId = match?.divisionId ?? divisionId ?? null;
+    const linkOverrides = linkScoringOverrides(divisionLink, matchDivisionId);
+    return resolveScoringFormat({
+      prefsFormatId: scoringFormatId,
+      divisionName: match?.divisionName ?? divisionName,
+      playersPerTeam:
+        match?.matchFormat?.teamOnePlayers.length ||
+        match?.numberOfSets ||
+        null,
+      pointsForWin: match?.pointsForWin ?? null,
+      matchWinCountsAsRound: match?.matchWinCountsAsRound ?? null,
+      linkFormatId: linkOverrides.linkFormatId,
+      linkRaceChartId: linkOverrides.linkRaceChartId,
+    });
+  }, [
+    scoringFormatId,
+    divisionName,
+    divisionId,
+    divisionLink,
+    match?.divisionId,
+    match?.divisionName,
+    match?.matchFormat?.teamOnePlayers.length,
+    match?.numberOfSets,
+    match?.pointsForWin,
+    match?.matchWinCountsAsRound,
+  ]);
 
   // Keep race-chart targets in sync with lineups / format.
   useEffect(() => {
@@ -2046,12 +2086,14 @@ export function MatchScoring({
   const linkedCombo = linkedDivisionId
     ? findKnownComboForDivisionName(linkedDivisionName) ??
       findKnownComboForDivisionName(
-        matches.find((match) => match.divisionId === divisionId)
-          ?.divisionName,
+        matches.find((item) => item.divisionId === divisionId)?.divisionName,
       ) ??
       findKnownComboForDivisionName(divisionName)
     : null;
-  const nightHint = comboNightHint(linkedCombo);
+  const nightHint = comboNightHint(
+    linkedCombo,
+    divisionLink?.config ?? null,
+  );
   return (
     <section className="animate-rise space-y-3 p-3 sm:p-4">
       <PanelHeader

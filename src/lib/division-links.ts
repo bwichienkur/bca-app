@@ -4,6 +4,10 @@
  */
 
 import { canonicalizeTeamKey } from "./division-combos";
+import {
+  normalizeDivisionLinkConfig,
+  type DivisionLinkConfig,
+} from "./division-link-config";
 
 export type DivisionLinkMode = "teams" | "individuals";
 
@@ -18,10 +22,31 @@ export type DivisionLink = {
   linkedDivisionName: string;
   /** How roster equality was validated when the link was saved. */
   mode: DivisionLinkMode;
+  /**
+   * Standing contribution + race/scoring overrides for each half.
+   * Always present after normalizeDivisionLink(); legacy Redis rows are filled.
+   */
+  config: DivisionLinkConfig;
   createdAt: string;
   updatedAt: string;
   updatedBy?: string | null;
 };
+
+/** Ensure legacy stored links have standing/scoring config. */
+export function normalizeDivisionLink(
+  link: Omit<DivisionLink, "config"> & {
+    config?: DivisionLinkConfig | null;
+  },
+): DivisionLink {
+  return {
+    ...link,
+    config: normalizeDivisionLinkConfig(
+      link.config,
+      link.primaryDivisionName,
+      link.linkedDivisionName,
+    ),
+  };
+}
 
 export type DivisionLinkRosterSide = {
   divisionId: string;

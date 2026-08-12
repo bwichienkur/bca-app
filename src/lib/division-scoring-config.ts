@@ -32,6 +32,13 @@ export type ResolveScoringFormatInput = {
   pointsForWin?: number | null;
   /** LMS matchWinCountsAsRound when known. */
   matchWinCountsAsRound?: boolean | null;
+  /**
+   * Link-level scoring format override for this half (wins over prefs when set).
+   * Used so a combined Beyond night can score Singles as Hot 5 and Teams as RR.
+   */
+  linkFormatId?: string | null;
+  /** Link-level race-chart override. */
+  linkRaceChartId?: RaceChartId | null;
 };
 
 /**
@@ -42,8 +49,17 @@ export type ResolveScoringFormatInput = {
 export function resolveScoringFormat(
   input: ResolveScoringFormatInput,
 ): LeagueScoringFormat {
+  // Link half override beats account prefs so Singles/Teams can differ.
+  if (input.linkFormatId) {
+    const linked = getScoringFormat(input.linkFormatId);
+    return applyRaceChartOverride(linked, input.linkRaceChartId);
+  }
+
   if (input.prefsFormatId) {
-    return getScoringFormat(input.prefsFormatId);
+    return applyRaceChartOverride(
+      getScoringFormat(input.prefsFormatId),
+      input.linkRaceChartId,
+    );
   }
 
   const inferred = inferScoringFormatFromDivisionName(input.divisionName);
@@ -53,23 +69,24 @@ export function resolveScoringFormat(
   const pointsForWin = input.pointsForWin;
   const matchPointsRound = input.matchWinCountsAsRound;
 
+  let resolved: LeagueScoringFormat = inferred;
+
   if (
     inferred.id === FORMAT_TUESDAY_9BALL_R6_HOT.id ||
     (players != null &&
       players > 0 &&
       players <= 4 &&
       pointsForWin === 1 &&
-      matchPointsRound === false)
+      matchPointsRound === false &&
+      !inferred.id.startsWith("beyond-"))
   ) {
-    return {
+    resolved = {
       ...FORMAT_TUESDAY_9BALL_R6_HOT,
       playersPerTeam: players && players > 0 ? players : FORMAT_TUESDAY_9BALL_R6_HOT.playersPerTeam,
       matchesPerNight: players && players > 0 ? players : FORMAT_TUESDAY_9BALL_R6_HOT.matchesPerNight,
     };
-  }
-
-  if (players != null && players > 0 && players !== FORMAT_PALM_BEACH_5.playersPerTeam) {
-    return {
+  } else if (players != null && players > 0 && players !== FORMAT_PALM_BEACH_5.playersPerTeam) {
+    resolved = {
       ...inferred,
       playersPerTeam: players,
       matchesPerNight: players,
@@ -84,10 +101,8 @@ export function resolveScoringFormat(
             ? "17"
             : inferred.pointSystem,
     };
-  }
-
-  if (matchPointsRound != null || pointsForWin != null) {
-    return {
+  } else if (matchPointsRound != null || pointsForWin != null) {
+    resolved = {
       ...inferred,
       matchPointsRound:
         matchPointsRound == null
@@ -102,7 +117,19 @@ export function resolveScoringFormat(
     };
   }
 
-  return inferred;
+  return applyRaceChartOverride(resolved, input.linkRaceChartId);
+}
+
+function applyRaceChartOverride(
+  format: LeagueScoringFormat,
+  raceChartId: RaceChartId | null | undefined,
+): LeagueScoringFormat {
+  if (!raceChartId) return format;
+  return {
+    ...format,
+    raceMode: "fargo-race-chart",
+    raceChartId,
+  };
 }
 
 /** Legal score chips for a race-to target (0 … target). */

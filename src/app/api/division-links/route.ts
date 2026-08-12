@@ -4,6 +4,10 @@ import {
   type DivisionLinkMode,
 } from "@/lib/division-links";
 import {
+  normalizeDivisionLinkConfig,
+  type DivisionLinkConfig,
+} from "@/lib/division-link-config";
+import {
   deleteDivisionLink,
   listDivisionLinks,
   upsertDivisionLink,
@@ -77,6 +81,7 @@ export async function PUT(request: NextRequest) {
       primaryDivisionName?: string;
       linkedDivisionId?: string;
       linkedDivisionName?: string;
+      config?: Partial<DivisionLinkConfig> | null;
       id?: string;
     };
 
@@ -94,15 +99,14 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    const primaryDivisionName =
+      body.primaryDivisionName?.trim() || primaryDivisionId;
+    const linkedDivisionName =
+      body.linkedDivisionName?.trim() || linkedDivisionId;
+
     const [primary, linked] = await Promise.all([
-      loadRosterSide(
-        primaryDivisionId,
-        body.primaryDivisionName?.trim() || primaryDivisionId,
-      ),
-      loadRosterSide(
-        linkedDivisionId,
-        body.linkedDivisionName?.trim() || linkedDivisionId,
-      ),
+      loadRosterSide(primaryDivisionId, primaryDivisionName),
+      loadRosterSide(linkedDivisionId, linkedDivisionName),
     ]);
 
     const validation = validateDivisionLinkRosters(primary, linked);
@@ -116,6 +120,12 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    const config = normalizeDivisionLinkConfig(
+      body.config,
+      primary.divisionName,
+      linked.divisionName,
+    );
+
     const link = await upsertDivisionLink({
       leagueId,
       link: {
@@ -123,12 +133,11 @@ export async function PUT(request: NextRequest) {
         name,
         leagueId,
         primaryDivisionId,
-        primaryDivisionName:
-          body.primaryDivisionName?.trim() || primary.divisionName,
+        primaryDivisionName: primary.divisionName,
         linkedDivisionId,
-        linkedDivisionName:
-          body.linkedDivisionName?.trim() || linked.divisionName,
+        linkedDivisionName: linked.divisionName,
         mode: validation.mode as DivisionLinkMode,
+        config,
         updatedBy: caller.name ?? caller.email ?? caller.lmsId ?? null,
       },
     });

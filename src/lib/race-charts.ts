@@ -65,7 +65,24 @@ const R6_HOT_BANDS: RaceBand[] = [
   { minDiff: 170, maxDiff: Number.POSITIVE_INFINITY, race: { higher: 9, lower: 3 } },
 ];
 
+/**
+ * Official BCAPL printed Hot 5 individual race chart.
+ * Includes the 5–4 and 8–3 bands that LMS Beyond Singles uses; the computed
+ * R5 Hot model omits those bands.
+ */
+const R5_HOT_BANDS: RaceBand[] = [
+  { minDiff: 0, maxDiff: 34, race: { higher: 5, lower: 5 } },
+  { minDiff: 35, maxDiff: 62, race: { higher: 5, lower: 4 } },
+  { minDiff: 63, maxDiff: 108, race: { higher: 6, lower: 4 } },
+  { minDiff: 109, maxDiff: 131, race: { higher: 6, lower: 3 } },
+  { minDiff: 132, maxDiff: 152, race: { higher: 7, lower: 3 } },
+  { minDiff: 153, maxDiff: 199, race: { higher: 8, lower: 3 } },
+  { minDiff: 200, maxDiff: 219, race: { higher: 7, lower: 2 } },
+  { minDiff: 220, maxDiff: Number.POSITIVE_INFINITY, race: { higher: 8, lower: 2 } },
+];
+
 const OFFICIAL_BANDS: Partial<Record<RaceChartId, RaceBand[]>> = {
+  "r5-hot": R5_HOT_BANDS,
   "r6-hot": R6_HOT_BANDS,
 };
 
