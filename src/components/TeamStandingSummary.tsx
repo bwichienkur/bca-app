@@ -16,6 +16,8 @@ type TeamStandingSummaryProps = {
    * Rank becomes the primary header signal when available.
    */
   hideTeamName?: boolean;
+  /** When true, omit the entire name/rank header and show only stats. */
+  hideHeader?: boolean;
   /** Denser layout for narrow / side-by-side contexts. */
   compact?: boolean;
   /**
@@ -239,6 +241,7 @@ export function TeamStandingSummary({
   cells,
   teamName,
   hideTeamName = false,
+  hideHeader = false,
   compact = false,
   splitHeader = !compact,
 }: TeamStandingSummaryProps) {
@@ -313,10 +316,11 @@ export function TeamStandingSummary({
   }
 
   const nameFromCells = cells.find((cell) => isNameLabel(cell.label))?.value;
-  const resolvedTeamName = hideTeamName
+  const resolvedTeamName = hideTeamName || hideHeader
     ? ""
     : teamName?.trim() || nameFromCells?.trim() || "";
-  const hasHeader = Boolean(resolvedTeamName || rankCell);
+  const hasHeader =
+    !hideHeader && Boolean(resolvedTeamName || rankCell);
   const hasBody = Boolean(gamesRatio || chips);
   const headerEyebrow = hideTeamName || !resolvedTeamName ? "Standing" : "Team";
 

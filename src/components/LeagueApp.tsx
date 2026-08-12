@@ -1887,14 +1887,6 @@ export function LeagueApp() {
                           .
                         </>
                       }
-                      action={
-                        myTeam?.players.length ? (
-                          <PanelHeaderCount
-                            label="Players"
-                            value={String(myTeam.players.length)}
-                          />
-                        ) : undefined
-                      }
                     />
                   </div>
                   <SubTabCard
@@ -1910,7 +1902,7 @@ export function LeagueApp() {
                         items={[
                           {
                             id: "standing",
-                            label: "Standing",
+                            label: "Team",
                             icon: StandingSubIcon,
                           },
                           {
@@ -1936,11 +1928,11 @@ export function LeagueApp() {
                       {myStandingCells ? (
                         <TeamStandingSummary
                           cells={myStandingCells}
-                          teamName={prefs.teamName}
+                          hideHeader
                         />
                       ) : (
                         <EmptyState
-                          title="Standing unavailable"
+                          title="Team standing unavailable"
                           body="Team standings will show here once the division report loads."
                         />
                       )}
