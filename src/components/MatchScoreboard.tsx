@@ -8,12 +8,20 @@ export type MatchScoreboardProps = {
   teamOneName: string;
   teamTwoName: string;
   mySide: 1 | 2 | null;
+  /** Round wins, or matchup-win race tally when matchWinTeamPoints. */
   roundWins: { teamOne: number; teamTwo: number };
   roundsAvailable: number;
   includeMatchPointsRound: boolean;
   matchWinTeamPoints?: boolean;
-  /** First-to team match points (e.g. 13). Used for badge + hero hint. */
+  /** First-to team matchup-win target (e.g. Beyond Teams race to 9). */
   teamRaceTo?: number | null;
+  /**
+   * Standing match points for the night (e.g. RDS×2 = 2 when the race is won).
+   * When set with teamRaceTo, these are the hero numbers — not the race tally.
+   */
+  standingMatchPoints?: { teamOne: number; teamTwo: number } | null;
+  /** Short hint under Match pts when standing pts are shown (e.g. "RDS × 2"). */
+  standingPtsHint?: string | null;
   formatHint?: string;
   pointTotals: { teamOne: number; teamTwo: number };
   gameWins: { teamOne: number; teamTwo: number };
@@ -35,6 +43,8 @@ export const MatchScoreboard = memo(function MatchScoreboard({
   includeMatchPointsRound,
   matchWinTeamPoints = false,
   teamRaceTo = null,
+  standingMatchPoints = null,
+  standingPtsHint = null,
   formatHint,
   pointTotals,
   gameWins,
@@ -48,6 +58,8 @@ export const MatchScoreboard = memo(function MatchScoreboard({
     matchWinTeamPoints && teamRaceTo != null && teamRaceTo > 0
       ? teamRaceTo
       : null;
+  const showStandingHero =
+    Boolean(teamRaceTarget) && standingMatchPoints != null;
   const heroAvailable = teamRaceTarget ?? roundsAvailable;
   const progress =
     teamRaceTarget != null
@@ -210,20 +222,46 @@ export const MatchScoreboard = memo(function MatchScoreboard({
       </div>
 
       <div className="mt-3 rounded-[var(--radius)] bg-black/30 px-2.5 py-2.5 ring-1 ring-white/10 sm:px-3.5 sm:py-3">
-        {metricRow({
-          label: matchWinTeamPoints ? "Match pts" : "Rounds",
-          one: roundWins.teamOne,
-          two: roundWins.teamTwo,
-          emphasis: "hero",
-          hint:
-            heroAvailable > 0
-              ? teamRaceTarget
-                ? raceWinner
-                  ? "race complete"
-                  : `first to ${teamRaceTarget}`
-                : `${roundsDecided}/${heroAvailable}`
-              : undefined,
-        })}
+        {showStandingHero ? (
+          <>
+            {metricRow({
+              label: "Match pts",
+              one: standingMatchPoints!.teamOne,
+              two: standingMatchPoints!.teamTwo,
+              emphasis: "hero",
+              hint: raceWinner
+                ? standingPtsHint ?? "standing"
+                : standingPtsHint
+                  ? `pending · ${standingPtsHint}`
+                  : "pending",
+            })}
+            <div className="mx-auto mt-2 h-px w-[min(100%,16rem)] bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+            {metricRow({
+              label: "Race",
+              one: roundWins.teamOne,
+              two: roundWins.teamTwo,
+              emphasis: "secondary",
+              hint: raceWinner
+                ? "race complete"
+                : `first to ${teamRaceTarget}`,
+            })}
+          </>
+        ) : (
+          metricRow({
+            label: matchWinTeamPoints ? "Match pts" : "Rounds",
+            one: roundWins.teamOne,
+            two: roundWins.teamTwo,
+            emphasis: "hero",
+            hint:
+              heroAvailable > 0
+                ? teamRaceTarget
+                  ? raceWinner
+                    ? "race complete"
+                    : `first to ${teamRaceTarget}`
+                  : `${roundsDecided}/${heroAvailable}`
+                : undefined,
+          })
+        )}
 
         {matchWinTeamPoints && !teamRaceTarget ? (
           <>
@@ -259,10 +297,12 @@ export const MatchScoreboard = memo(function MatchScoreboard({
       {winnerName && teamRaceTarget ? (
         <div className="mt-2.5 rounded-[var(--radius)] bg-[color-mix(in_srgb,var(--amber)_22%,transparent)] px-3 py-2 text-center ring-1 ring-[color-mix(in_srgb,var(--amber)_45%,transparent)]">
           <p className="font-[family-name:var(--font-display)] text-base leading-tight text-white">
-            {winnerName} wins
+            {winnerName} wins the round
           </p>
           <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
-            First to {teamRaceTarget} · remaining games don’t count
+            {showStandingHero && standingMatchPoints
+              ? `${Math.max(standingMatchPoints.teamOne, standingMatchPoints.teamTwo)} standing match pts · remaining matchups locked`
+              : `First to ${teamRaceTarget} · remaining matchups locked`}
           </p>
         </div>
       ) : null}
@@ -276,7 +316,7 @@ export const MatchScoreboard = memo(function MatchScoreboard({
         </div>
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-[10px] tabular-nums text-white/55">
           <p>
-            {gamesPlayed}/{gamesTotal} games scored
+            {gamesPlayed}/{gamesTotal} matchups scored
             {raceWinner ? " · clinched" : ""}
           </p>
           {isHandicapped &&

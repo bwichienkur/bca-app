@@ -656,6 +656,26 @@ export type DraftBoardSummary = {
   status: "in_progress" | "submitted";
 };
 
+/**
+ * First-to team race winner from matchup-win totals (Beyond Teams race to 9).
+ * Remaining unscored matchups do not count once a side hits the target.
+ */
+export function teamRaceWinnerSide(
+  homeWins: number,
+  awayWins: number,
+  teamRaceTo: number | null | undefined,
+): 1 | 2 | null {
+  if (teamRaceTo == null || teamRaceTo <= 0) return null;
+  const oneHit = homeWins >= teamRaceTo;
+  const twoHit = awayWins >= teamRaceTo;
+  if (oneHit && !twoHit) return 1;
+  if (twoHit && !oneHit) return 2;
+  if (oneHit && twoHit && homeWins !== awayWins) {
+    return homeWins > awayWins ? 1 : 2;
+  }
+  return null;
+}
+
 /** True when any game has points or a winner (used for night-board Live). */
 export function draftHasStartedPlay(
   draft: ScoringDraft | null | undefined,

@@ -76,15 +76,39 @@ function rawMaxForSide(side: DivisionLinkStandingSide): number {
 /**
  * Match-win / round contribution for RDS-style metrics.
  * Ties count as 0.5 when the half is complete (LMS UseHalfForTiedRound).
+ *
+ * When `teamRaceTo` is set (Beyond Teams), RDS is awarded only after a side
+ * reaches that many matchup wins — not on the first lead in the race.
  */
 export function matchRoundRaw(args: {
   myWins: number;
   oppWins: number;
   complete: boolean;
   started: boolean;
+  /** First-to matchup-win target for the sheet (e.g. 9). */
+  teamRaceTo?: number | null;
 }): number | null {
-  const { myWins, oppWins, complete, started } = args;
+  const { myWins, oppWins, complete, started, teamRaceTo } = args;
   if (!started && !complete) return null;
+
+  if (teamRaceTo != null && teamRaceTo > 0) {
+    const myHit = myWins >= teamRaceTo;
+    const oppHit = oppWins >= teamRaceTo;
+    if (myHit && !oppHit) return 1;
+    if (oppHit && !myHit) return 0;
+    if (myHit && oppHit) {
+      if (myWins > oppWins) return 1;
+      if (oppWins > myWins) return 0;
+      return complete ? 0.5 : null;
+    }
+    if (complete) {
+      if (myWins > oppWins) return 1;
+      if (oppWins > myWins) return 0;
+      return 0.5;
+    }
+    return null;
+  }
+
   if (myWins > oppWins) return 1;
   if (oppWins > myWins) return 0;
   if (complete) return 0.5;
@@ -143,8 +167,10 @@ function contributionForHalf(args: {
   match: ScoringMatchSummary | null;
   summary: DraftBoardSummary | null;
   status: NightHalfStatus;
+  /** Beyond Teams: only award RDS after race-to-N matchup wins. */
+  teamRaceTo?: number | null;
 }): NightHalfContribution {
-  const { side, match, summary, status } = args;
+  const { side, match, summary, status, teamRaceTo } = args;
   const rawMax = rawMaxForSide(side);
   const mySide = match?.mySide ?? null;
   const myScore =
@@ -171,12 +197,13 @@ function contributionForHalf(args: {
     if (started || complete) raw = myScore;
     else raw = null;
   } else {
-    // rds — match/round win for the half
+    // rds — sheet/round win for the half (race-to-N when configured)
     raw = matchRoundRaw({
       myWins: myScore,
       oppWins: oppScore,
       complete,
       started,
+      teamRaceTo: side.role === "teams" ? teamRaceTo : null,
     });
   }
 
@@ -222,6 +249,8 @@ export function computeNightStanding(args: {
   myMatches: ScoringMatchSummary[];
   summaryFor: (matchId: string) => DraftBoardSummary | null;
   statusFor: (match: ScoringMatchSummary) => NightHalfStatus;
+  /** Teams half race-to target (Beyond Monday = 9). */
+  teamsRaceTo?: number | null;
 }): NightStandingSummary {
   const sides = [
     args.config.standing.primary,
@@ -251,6 +280,7 @@ export function computeNightStanding(args: {
       match,
       summary,
       status,
+      teamRaceTo: args.teamsRaceTo ?? 9,
     });
   });
 

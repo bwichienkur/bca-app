@@ -275,15 +275,30 @@ function halfStandingForTeam(args: {
   team: 1 | 2;
   started: boolean;
   complete: boolean;
+  teamRaceTo?: number | null;
 }): { raw: number | null; pts: number; label: string } {
-  const { side, teamOneWins, teamTwoWins, team, started, complete } = args;
+  const {
+    side,
+    teamOneWins,
+    teamTwoWins,
+    team,
+    started,
+    complete,
+    teamRaceTo,
+  } = args;
   const myWins = team === 1 ? teamOneWins : teamTwoWins;
   const oppWins = team === 1 ? teamTwoWins : teamOneWins;
   let raw: number | null = null;
   if (side.metric === "sets" || side.metric === "pts") {
     raw = started || complete ? myWins : null;
   } else {
-    raw = matchRoundRaw({ myWins, oppWins, complete, started });
+    raw = matchRoundRaw({
+      myWins,
+      oppWins,
+      complete,
+      started,
+      teamRaceTo: side.role === "teams" ? (teamRaceTo ?? 9) : null,
+    });
   }
   const pts = raw == null ? 0 : Math.round(raw * side.multiplier * 100) / 100;
   const metric = standingMetricColumnLabel(side.metric);
@@ -349,12 +364,14 @@ export function computeMatchupStandingScores(args: {
       match: half.match,
       summary,
     });
+    const teamRaceTo = kind === "teams" ? 9 : null;
     const home = halfStandingForTeam({
       side,
       ...oriented,
       team: 1,
       started,
       complete,
+      teamRaceTo,
     });
     const away = halfStandingForTeam({
       side,
@@ -362,6 +379,7 @@ export function computeMatchupStandingScores(args: {
       team: 2,
       started,
       complete,
+      teamRaceTo,
     });
     homeStanding += home.pts;
     awayStanding += away.pts;
