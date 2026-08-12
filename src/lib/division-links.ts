@@ -1,7 +1,7 @@
 /**
  * Tableside-only Night Formats (division links) — not saved to LMS.
  * Pair 1..N LMS divisions ("legs") that share a league night
- * (e.g. Beyond Singles + Teams).
+ * (e.g. Beyond Singles + Teams, or a single Tuesday 9-Ball division).
  */
 
 import { canonicalizeTeamKey } from "./division-combos";
@@ -214,15 +214,50 @@ export function validateDivisionLinkRosters(
 /**
  * All legs in a Night Format must share the same team names (or individuals).
  * Compared against the first leg as the roster source of truth.
+ * A single-leg night is always valid when that division has teams or players.
  */
 export function validateNightFormatRosters(
   sides: DivisionLinkRosterSide[],
 ): DivisionLinkValidation {
-  if (sides.length < 2) {
+  if (sides.length < 1) {
     return {
       ok: false,
       mode: null,
-      message: "Add at least two LMS divisions (legs) to this night.",
+      message: "Add at least one LMS division (leg) to this night.",
+      missingInPrimary: [],
+      missingInLinked: [],
+      missingByDivision: {},
+    };
+  }
+
+  if (sides.length === 1) {
+    const side = sides[0]!;
+    const teams = teamKeys(side.teams);
+    const players = playerKeys(side.players);
+    if (teams.length > 0) {
+      return {
+        ok: true,
+        mode: "teams",
+        message: `Single-leg night · ${teams.length} teams.`,
+        missingInPrimary: [],
+        missingInLinked: [],
+        missingByDivision: {},
+      };
+    }
+    if (players.length > 0) {
+      return {
+        ok: true,
+        mode: "individuals",
+        message: `Single-leg night · ${players.length} players.`,
+        missingInPrimary: [],
+        missingInLinked: [],
+        missingByDivision: {},
+      };
+    }
+    return {
+      ok: false,
+      mode: null,
+      message: "That division has no teams or players to score.",
       missingInPrimary: [],
       missingInLinked: [],
       missingByDivision: {},

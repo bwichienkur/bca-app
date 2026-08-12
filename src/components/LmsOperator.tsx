@@ -3245,7 +3245,7 @@ export function LmsOperator({
         <section className="space-y-3">
           <SectionHeader
             title="Division links"
-            description="Tableside-only Night Formats. Pair 2+ LMS divisions (legs), set standing metrics, and race-chart overrides for Score."
+            description="Tableside-only Night Formats. One LMS division (e.g. Tuesday 9-Ball) or multiple legs (Beyond), with standing metrics and race-chart overrides for Score."
             onAdd={(event) => {
               capturePopupAnchor(event);
               setNotice(null);

@@ -1,7 +1,8 @@
 /**
  * Resolve how a division night should be scored/handicapped.
  *
- * Priority: explicit prefs → LMS match signals → division-name heuristic → Palm Beach default.
+ * Priority: Night Format leg override → account prefs → LMS match signals →
+ * division-name heuristic → Palm Beach default.
  */
 
 import {

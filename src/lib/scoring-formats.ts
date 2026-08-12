@@ -3,8 +3,8 @@
  *
  * LMS still owns live match payloads; these presets describe how *this app*
  * should interpret a division’s night (lineup size, race model, how team
- * points are earned). Pick a preset per division in preferences later, or
- * match by division name heuristics.
+ * points are earned). Prefer pinning a format on a Night Format leg (or
+ * account prefs); division-name heuristics are a fallback only.
  */
 
 import type { RaceChartId } from "./race-charts";
@@ -151,8 +151,8 @@ export function getScoringFormat(id: string | null | undefined): LeagueScoringFo
 }
 
 /**
- * Lightweight name heuristic until divisions store an explicit format id.
- * Prefer explicit prefs when wired.
+ * Lightweight name heuristic until a Night Format leg or prefs store an
+ * explicit format id. Prefer Night Format / prefs when wired.
  */
 export function inferScoringFormatFromDivisionName(
   divisionName: string | null | undefined,
