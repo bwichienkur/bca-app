@@ -21,6 +21,7 @@ import {
 import {
   getScoringFormat,
   LEAGUE_SCORING_FORMATS,
+  type LeagueScoringFormat,
 } from "@/lib/scoring-formats";
 import { RACE_CHART_OPTIONS, type RaceChartId } from "@/lib/race-charts";
 import {
@@ -30,6 +31,7 @@ import {
   StatsSubIcon,
   type IconSubTabItem,
 } from "./IconSubTabs";
+import { SelectField } from "./SelectField";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
 const inputClass =
@@ -170,68 +172,85 @@ function ScoringSideFields({
   title,
   side,
   onChange,
+  formats,
 }: {
   title: string;
   side: DivisionLinkScoringSide;
   onChange: (next: DivisionLinkScoringSide) => void;
+  formats: readonly LeagueScoringFormat[];
 }) {
+  const catalog = formats.length ? formats : LEAGUE_SCORING_FORMATS;
+  const playStyleOptions = [
+    { value: "", label: "None (prefs / Palm Beach default)" },
+    ...catalog.map((format) => ({
+      value: format.id,
+      label: format.label,
+    })),
+  ];
+  const raceChartOptions = [
+    { value: "", label: "None / format default" },
+    ...RACE_CHART_OPTIONS.map((chart) => ({
+      value: chart.id,
+      label: chart.label,
+    })),
+  ];
+  const format = side.scoringFormatId
+    ? getScoringFormat(side.scoringFormatId, catalog)
+    : null;
+
   return (
     <fieldset className="space-y-2 rounded-[var(--radius)] border border-[var(--line)] p-3">
       <legend className="px-1 text-sm font-semibold text-[var(--ink)]">
         {title}
       </legend>
       <label className="block space-y-1 text-sm">
-        <span className="text-[var(--muted)]">Scoring format</span>
-        <select
-          className={selectClass}
+        <span className="text-[var(--muted)]">Play style</span>
+        <SelectField
+          aria-label={`${title} play style`}
           value={side.scoringFormatId ?? ""}
-          onChange={(e) => {
-            const formatId = e.target.value || null;
-            const format = formatId ? getScoringFormat(formatId) : null;
+          options={playStyleOptions}
+          onChange={(value) => {
+            const formatId = value || null;
+            const nextFormat = formatId
+              ? getScoringFormat(formatId, catalog)
+              : null;
             onChange({
               ...side,
               scoringFormatId: formatId,
               raceChartId:
-                format?.raceMode === "fargo-race-chart" && format.raceChartId
-                  ? format.raceChartId
+                nextFormat?.raceMode === "fargo-race-chart" &&
+                nextFormat.raceChartId
+                  ? nextFormat.raceChartId
                   : formatId
                     ? null
                     : side.raceChartId,
             });
           }}
-        >
-          <option value="">Infer from division name / prefs</option>
-          {LEAGUE_SCORING_FORMATS.map((format) => (
-            <option key={format.id} value={format.id}>
-              {format.label}
-            </option>
-          ))}
-        </select>
+        />
+        <p className="text-xs text-[var(--muted)]">
+          From Manage → Styles. Required for Tuesday / Beyond — Score no longer
+          guesses from the division name.
+        </p>
       </label>
       <label className="block space-y-1 text-sm">
         <span className="text-[var(--muted)]">Race chart (handicap)</span>
-        <select
-          className={selectClass}
+        <SelectField
+          aria-label={`${title} race chart`}
           value={side.raceChartId ?? ""}
-          onChange={(e) =>
+          options={raceChartOptions}
+          onChange={(value) =>
             onChange({
               ...side,
-              raceChartId: (e.target.value || null) as RaceChartId | null,
+              raceChartId: (value || null) as RaceChartId | null,
             })
           }
-        >
-          <option value="">None / format default</option>
-          {RACE_CHART_OPTIONS.map((chart) => (
-            <option key={chart.id} value={chart.id}>
-              {chart.label}
-            </option>
-          ))}
-        </select>
+        />
+        <p className="text-xs text-[var(--muted)]">
+          {format?.raceMode === "fargo-race-chart"
+            ? "Fargo race-tos stamped on the Score pad (overrides LMS RL placeholders)."
+            : "Only used when play style is a Fargo race-chart format."}
+        </p>
       </label>
-      <p className="text-xs text-[var(--muted)]">
-        Pin format + chart here so Score does not rely on division-name
-        heuristics. Overrides LMS race-tos on the Tableside pad only.
-      </p>
     </fieldset>
   );
 }
@@ -243,6 +262,7 @@ function ScoringSideFields({
 export function DivisionLinkForm({
   leagueId,
   divisions,
+  scoringFormats,
   initialLink = null,
   busy,
   onBusy,
@@ -252,6 +272,8 @@ export function DivisionLinkForm({
 }: {
   leagueId: string;
   divisions: DivisionOption[];
+  /** Optional seed from Manage → Styles; form also fetches the league catalog. */
+  scoringFormats?: readonly LeagueScoringFormat[] | null;
   initialLink?: DivisionLink | null;
   busy: boolean;
   onBusy: (busy: boolean) => void;
@@ -269,6 +291,34 @@ export function DivisionLinkForm({
   const [validation, setValidation] = useState<DivisionLinkValidation | null>(
     null,
   );
+  const [formatCatalog, setFormatCatalog] = useState<LeagueScoringFormat[]>(
+    () =>
+      scoringFormats?.length
+        ? [...scoringFormats]
+        : [...LEAGUE_SCORING_FORMATS],
+  );
+
+  useEffect(() => {
+    if (scoringFormats?.length) {
+      setFormatCatalog([...scoringFormats]);
+    }
+  }, [scoringFormats]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchJson<{ formats: LeagueScoringFormat[] }>(
+      `/api/scoring-formats?leagueId=${encodeURIComponent(leagueId)}`,
+    )
+      .then((data) => {
+        if (!cancelled && data.formats?.length) {
+          setFormatCatalog(data.formats);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [leagueId]);
 
   useEffect(() => {
     setTab("divisions");
@@ -668,6 +718,7 @@ export function DivisionLinkForm({
                     key={leg.divisionId}
                     title={leg.label || leg.divisionName || `Leg ${index + 1}`}
                     side={leg.scoring}
+                    formats={formatCatalog}
                     onChange={(scoring) =>
                       updateLeg(legIndex >= 0 ? legIndex : index, { scoring })
                     }

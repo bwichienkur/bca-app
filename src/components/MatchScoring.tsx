@@ -126,6 +126,8 @@ type MatchScoringProps = {
   teamName: string | null;
   /** Explicit prefs format id, or null for auto. */
   scoringFormatId?: string | null;
+  /** Merged built-in + league play styles from Manage → Styles. */
+  scoringFormats?: LeagueScoringFormat[] | null;
   /** Open this match once the board is ready (e.g. from Schedule). */
   initialMatchId?: string | null;
   onInitialMatchOpened?: () => void;
@@ -379,6 +381,7 @@ function formatForMatchHalf(
     scoringFormatId?: string | null;
     divisionLink?: DivisionLink | null;
     fallbackDivisionName?: string | null;
+    scoringFormats?: readonly LeagueScoringFormat[] | null;
   },
 ): LeagueScoringFormat {
   const linkOverrides = linkScoringOverrides(
@@ -393,6 +396,7 @@ function formatForMatchHalf(
     matchWinCountsAsRound: match.matchWinCountsAsRound ?? null,
     linkFormatId: linkOverrides.linkFormatId,
     linkRaceChartId: linkOverrides.linkRaceChartId,
+    formats: args.scoringFormats,
   });
 }
 
@@ -417,6 +421,7 @@ export function MatchScoring({
   teamId,
   teamName,
   scoringFormatId = null,
+  scoringFormats = null,
   initialMatchId = null,
   onInitialMatchOpened,
   user,
@@ -807,6 +812,7 @@ export function MatchScoring({
       scoringFormatId,
       divisionLink,
       fallbackDivisionName: divisionName,
+      scoringFormats,
     });
     return mergeBoardSummary(
       draftSummaries[item.id],
@@ -877,6 +883,7 @@ export function MatchScoring({
         matchWinCountsAsRound: data.match.matchWinCountsAsRound ?? null,
         linkFormatId: linkOverrides.linkFormatId,
         linkRaceChartId: linkOverrides.linkRaceChartId,
+        formats: scoringFormats,
       });
       const openWinnerOpts = winnerOptionsForFormat(formatForMatch, data.match);
       const chosenScored = chosen
@@ -1120,9 +1127,11 @@ export function MatchScoring({
       matchWinCountsAsRound: match?.matchWinCountsAsRound ?? null,
       linkFormatId: linkOverrides.linkFormatId,
       linkRaceChartId: linkOverrides.linkRaceChartId,
+      formats: scoringFormats,
     });
   }, [
     scoringFormatId,
+    scoringFormats,
     divisionName,
     divisionId,
     divisionLink,
@@ -2630,6 +2639,7 @@ export function MatchScoring({
                             scoringFormatId,
                             divisionLink,
                             fallbackDivisionName: divisionName,
+                            scoringFormats,
                           }),
                         ),
                     })
@@ -2651,6 +2661,7 @@ export function MatchScoring({
                           scoringFormatId,
                           divisionLink,
                           fallbackDivisionName: divisionName,
+                          scoringFormats,
                         }),
                       );
                     })();

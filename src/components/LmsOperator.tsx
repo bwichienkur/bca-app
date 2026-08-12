@@ -40,9 +40,11 @@ import {
   type DivisionSettingsSection,
 } from "./LmsDivisionSettingsForm";
 import { LmsScoresheetStudio } from "./LmsScoresheetStudio";
+import { ScoringFormatForm } from "./ScoringFormatForm";
 import { SectionCard } from "./SectionCard";
 import { SelectField } from "./SelectField";
 import type { DivisionLink } from "@/lib/division-links";
+import type { ScoringFormatListItem } from "@/lib/scoring-formats";
 
 type LmsSubTab =
   | "home"
@@ -53,7 +55,8 @@ type LmsSubTab =
   | "scoresheet"
   | "playoff"
   | "division"
-  | "links";
+  | "links"
+  | "styles";
 
 type Screen =
   | { type: "list" }
@@ -63,6 +66,7 @@ type Screen =
   | { type: "edit-match"; matchId: string | null }
   | { type: "edit-settings"; divisionId: string }
   | { type: "edit-link"; id: string | null }
+  | { type: "edit-style"; id: string | null }
   | { type: "create-division" }
   | { type: "create-playoff" };
 
@@ -281,6 +285,19 @@ function LinksIcon({ className }: { className?: string }) {
     <IconShell className={className}>
       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </IconShell>
+  );
+}
+function StylesIcon({ className }: { className?: string }) {
+  return (
+    <IconShell className={className}>
+      <path d="M4 19h16" />
+      <path d="M7 16V8" />
+      <path d="M12 16V5" />
+      <path d="M17 16v-5" />
+      <circle cx="7" cy="6" r="1.5" />
+      <circle cx="12" cy="3" r="1.5" />
+      <circle cx="17" cy="9" r="1.5" />
     </IconShell>
   );
 }
@@ -565,6 +582,9 @@ export function LmsOperator({
   const [leagues, setLeagues] = useState<OperatorLeague[]>([]);
   const [divisions, setDivisions] = useState<OperatorDivision[]>([]);
   const [divisionLinks, setDivisionLinks] = useState<DivisionLink[]>([]);
+  const [scoringFormats, setScoringFormats] = useState<
+    ScoringFormatListItem[]
+  >([]);
   const [opLeagueId, setOpLeagueId] = useState(seedLeagueId ?? "");
   const [opLeagueName, setOpLeagueName] = useState(seedLeagueName ?? "");
   const [opDivisionId, setOpDivisionId] = useState(seedDivisionId ?? "");
@@ -665,6 +685,7 @@ export function LmsOperator({
       { id: "playoff", label: "Playoff", icon: PlayoffIcon },
       { id: "division", label: "Division", icon: DivisionIcon },
       { id: "links", label: "Links", icon: LinksIcon },
+      { id: "styles", label: "Styles", icon: StylesIcon },
     ],
     [],
   );
@@ -972,6 +993,17 @@ export function LmsOperator({
     setDivisionLinks(data.links ?? []);
   }, [opLeagueId]);
 
+  const refreshScoringFormats = useCallback(async () => {
+    if (!opLeagueId) {
+      setScoringFormats([]);
+      return;
+    }
+    const data = await fetchJson<{ formats: ScoringFormatListItem[] }>(
+      `/api/scoring-formats?leagueId=${encodeURIComponent(opLeagueId)}`,
+    );
+    setScoringFormats(data.formats ?? []);
+  }, [opLeagueId]);
+
   useEffect(() => {
     if (!user || !configured || !opLeagueId) return;
     if (screen.type !== "list") return;
@@ -981,7 +1013,7 @@ export function LmsOperator({
     setSectionError(null);
     void (async () => {
       try {
-        await refreshDivisionLinks();
+        await Promise.all([refreshDivisionLinks(), refreshScoringFormats()]);
       } catch (error) {
         if (!cancelled) {
           setSectionError(
@@ -997,7 +1029,49 @@ export function LmsOperator({
     return () => {
       cancelled = true;
     };
-  }, [user, configured, opLeagueId, subTab, screen.type, refreshDivisionLinks]);
+  }, [
+    user,
+    configured,
+    opLeagueId,
+    subTab,
+    screen.type,
+    refreshDivisionLinks,
+    refreshScoringFormats,
+  ]);
+
+  useEffect(() => {
+    if (!user || !configured || !opLeagueId) return;
+    if (screen.type !== "list") return;
+    if (subTab !== "styles") return;
+    let cancelled = false;
+    setSectionLoading(true);
+    setSectionError(null);
+    void (async () => {
+      try {
+        await refreshScoringFormats();
+      } catch (error) {
+        if (!cancelled) {
+          setSectionError(
+            error instanceof Error
+              ? error.message
+              : "Failed to load play styles.",
+          );
+        }
+      } finally {
+        if (!cancelled) setSectionLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    user,
+    configured,
+    opLeagueId,
+    subTab,
+    screen.type,
+    refreshScoringFormats,
+  ]);
 
   useEffect(() => {
     if (!user || !configured || !opDivisionId) return;
@@ -1170,6 +1244,17 @@ export function LmsOperator({
           link.linkedDivisionName.toLowerCase().includes(q),
       ),
     [divisionLinks, q],
+  );
+  const filteredScoringFormats = useMemo(
+    () =>
+      scoringFormats.filter(
+        (format) =>
+          !q ||
+          format.label.toLowerCase().includes(q) ||
+          format.description.toLowerCase().includes(q) ||
+          format.id.toLowerCase().includes(q),
+      ),
+    [scoringFormats, q],
   );
 
   const scheduleByDate = useMemo(() => {
@@ -1421,6 +1506,7 @@ export function LmsOperator({
     "division",
     "scoresheet",
     "links",
+    "styles",
   ].includes(subTab);
 
   /* ---------- Edit / create popup (not used for division settings page) ---------- */
@@ -1445,11 +1531,15 @@ export function LmsOperator({
               ? screen.id
                 ? "Edit division link"
                 : "Add division link"
-              : screen.type === "create-division"
-                ? "Add division"
-                : screen.type === "create-playoff"
-                  ? "Add playoff"
-                  : "";
+              : screen.type === "edit-style"
+                ? screen.id
+                  ? "Edit play style"
+                  : "Add play style"
+                : screen.type === "create-division"
+                  ? "Add division"
+                  : screen.type === "create-playoff"
+                    ? "Add playoff"
+                    : "";
 
   const editPopup =
     screen.type === "list" || screen.type === "edit-settings" ? null : (
@@ -2207,6 +2297,7 @@ export function LmsOperator({
           <DivisionLinkForm
             leagueId={opLeagueId}
             divisions={divisions}
+            scoringFormats={scoringFormats}
             initialLink={
               screen.id
                 ? (divisionLinks.find((link) => link.id === screen.id) ?? null)
@@ -2230,6 +2321,29 @@ export function LmsOperator({
                   a.name.localeCompare(b.name),
                 );
               });
+              goList();
+            }}
+          />
+        ) : null}
+
+        {screen.type === "edit-style" && opLeagueId ? (
+          <ScoringFormatForm
+            leagueId={opLeagueId}
+            initial={
+              screen.id
+                ? (scoringFormats.find((row) => row.id === screen.id) ?? null)
+                : null
+            }
+            busy={busy}
+            onBusy={setBusy}
+            onNotice={setNotice}
+            onError={setSectionError}
+            onSaved={(formats) => {
+              setScoringFormats(formats);
+              goList();
+            }}
+            onDeleted={(formats) => {
+              setScoringFormats(formats);
               goList();
             }}
           />
@@ -2308,6 +2422,18 @@ export function LmsOperator({
                 setNotice(null);
                 setSectionError(null);
                 setScreen({ type: "edit-link", id: null });
+              },
+            }
+          : null;
+      case "styles":
+        return opLeagueId
+          ? {
+              label: "Add play style",
+              onClick: (event: ReactMouseEvent<HTMLButtonElement>) => {
+                capturePopupAnchor(event);
+                setNotice(null);
+                setSectionError(null);
+                setScreen({ type: "edit-style", id: null });
               },
             }
           : null;
@@ -3396,6 +3522,87 @@ export function LmsOperator({
                       ))}
                     </ul>
                   ) : null}
+                </AccentRecordCard>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
+
+      {subTab === "styles" && opLeagueId ? (
+        <section className="space-y-3">
+          <SectionHeader
+            title="Play styles"
+            description="Tableside scoring presets for this league. Built-ins ship with the app; edit to override, or add custom styles. Pin one on a Night Format (Links → Race HC) or in Account settings."
+            onAdd={(event) => {
+              capturePopupAnchor(event);
+              setNotice(null);
+              setSectionError(null);
+              setScreen({ type: "edit-style", id: null });
+            }}
+          />
+          <SearchField
+            label="Search play styles"
+            placeholder="Search play styles…"
+            value={listQuery}
+            onChange={setListQuery}
+            embedded
+          />
+          {sectionLoading ? <LoadingState label="Loading play styles…" /> : null}
+          {!sectionLoading && filteredScoringFormats.length === 0 ? (
+            <p className="text-sm text-[var(--muted)]">
+              No play styles found.
+            </p>
+          ) : null}
+          <ul className={accentRecordListClass}>
+            {filteredScoringFormats.map((format) => {
+              const sourceLabel =
+                format.source === "built-in"
+                  ? "Built-in"
+                  : format.source === "override"
+                    ? "League override"
+                    : "Custom";
+              return (
+                <AccentRecordCard key={format.id}>
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 text-left"
+                      onClick={(event) => {
+                        capturePopupAnchor(event);
+                        setNotice(null);
+                        setSectionError(null);
+                        setScreen({ type: "edit-style", id: format.id });
+                      }}
+                    >
+                      <p className="text-sm font-semibold text-[var(--ink)]">
+                        {format.label}
+                      </p>
+                      <p className="text-xs text-[var(--muted)]">
+                        {sourceLabel}
+                        {" · "}
+                        {format.playersPerTeam}p
+                        {" · "}
+                        {format.raceMode === "fargo-race-chart"
+                          ? format.raceChartId ?? "chart"
+                          : `race ${format.fixedRaceWin ?? "—"}`}
+                        {" · "}
+                        {format.teamPointMode}
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      className={btnEdit}
+                      onClick={(event) => {
+                        capturePopupAnchor(event);
+                        setNotice(null);
+                        setSectionError(null);
+                        setScreen({ type: "edit-style", id: format.id });
+                      }}
+                    >
+                      Edit
+                    </button>
+                  </div>
                 </AccentRecordCard>
               );
             })}

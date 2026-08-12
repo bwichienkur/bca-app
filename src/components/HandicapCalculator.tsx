@@ -62,6 +62,8 @@ type HandicapCalculatorProps = {
   divisionId: string;
   divisionName: string;
   prefs: UserPreferences;
+  /** Merged built-in + league play styles. */
+  scoringFormats?: LeagueScoringFormat[] | null;
   /** Bumps when LMS cache is manually refreshed. */
   refreshToken?: number;
 };
@@ -292,6 +294,7 @@ export function HandicapCalculator({
   divisionId,
   divisionName,
   prefs,
+  scoringFormats = null,
   refreshToken = 0,
 }: HandicapCalculatorProps) {
   const [data, setData] = useState<CalculatorPayload | null>(null);
@@ -376,6 +379,7 @@ export function HandicapCalculator({
         pointsForWin: data?.format.pointSystem
           ? Number(data.format.pointSystem) || null
           : null,
+        formats: scoringFormats,
       }),
     [
       data?.format.pointSystem,
@@ -383,6 +387,7 @@ export function HandicapCalculator({
       data?.playersPerTeam,
       divisionName,
       prefs.scoringFormatId,
+      scoringFormats,
     ],
   );
 
