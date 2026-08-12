@@ -9,6 +9,7 @@ import {
   operatorCreatePlayer,
   operatorGetPlayer,
   operatorListPlayers,
+  operatorRemovePlayerFromDivision,
   operatorRemovePlayerFromTeam,
   operatorSearchPlayers,
   operatorUpdatePlayer,
@@ -72,8 +73,10 @@ export async function POST(request: NextRequest) {
       teamId?: string;
       playerId?: string;
       readableId?: string;
+      divisionId?: string;
     };
     const action = body.action ?? "create";
+    const divisionId = body.divisionId?.trim() || null;
 
     if (action === "create") {
       if (
@@ -93,7 +96,7 @@ export async function POST(request: NextRequest) {
       const created = await withOperatorSession((session) =>
         operatorCreatePlayer(session, body.player!, body.teamId),
       );
-      await invalidateOperatorCache({});
+      await invalidateOperatorCache({ divisionId });
       return NextResponse.json({ ok: true, ...created });
     }
 
@@ -107,7 +110,7 @@ export async function POST(request: NextRequest) {
       await withOperatorSession((session) =>
         operatorUpdatePlayer(session, body.player!.id!, body.player!),
       );
-      await invalidateOperatorCache({});
+      await invalidateOperatorCache({ divisionId });
       return NextResponse.json({ ok: true });
     }
 
@@ -133,22 +136,43 @@ export async function POST(request: NextRequest) {
           );
         }
       });
-      await invalidateOperatorCache({});
+      await invalidateOperatorCache({ divisionId });
       return NextResponse.json({ ok: true });
     }
 
     if (action === "remove") {
-      if (!body.teamId || !body.playerId) {
+      if (!body.playerId?.trim()) {
         return NextResponse.json(
-          { error: "teamId and playerId are required." },
+          { error: "playerId is required." },
           { status: 400 },
         );
       }
-      await withOperatorSession((session) =>
-        operatorRemovePlayerFromTeam(session, body.teamId!, body.playerId!),
+      if (body.teamId?.trim()) {
+        await withOperatorSession((session) =>
+          operatorRemovePlayerFromTeam(
+            session,
+            body.teamId!.trim(),
+            body.playerId!.trim(),
+          ),
+        );
+        await invalidateOperatorCache({ divisionId });
+        return NextResponse.json({ ok: true });
+      }
+      if (!divisionId) {
+        return NextResponse.json(
+          { error: "teamId or divisionId is required to remove a player." },
+          { status: 400 },
+        );
+      }
+      const removedFrom = await withOperatorSession((session) =>
+        operatorRemovePlayerFromDivision(
+          session,
+          divisionId,
+          body.playerId!.trim(),
+        ),
       );
-      await invalidateOperatorCache({});
-      return NextResponse.json({ ok: true });
+      await invalidateOperatorCache({ divisionId });
+      return NextResponse.json({ ok: true, removedFrom });
     }
 
     return NextResponse.json({ error: "Unknown action." }, { status: 400 });

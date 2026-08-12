@@ -414,9 +414,7 @@ export async function operatorDeleteTeam(
     `/api/teamsinternal/${encodeURIComponent(teamId)}`,
     { method: "DELETE" },
   );
-  if (!response.ok) {
-    throw new Error((await response.text()) || "Could not delete team.");
-  }
+  await readOperatorAction(response, "Could not delete team.");
 }
 
 export type OperatorPlayerRow = {
@@ -656,9 +654,29 @@ export async function operatorRemovePlayerFromTeam(
       body: JSON.stringify({ playerId, teamId }),
     },
   );
-  if (!response.ok) {
-    throw new Error((await response.text()) || "Could not remove player.");
+  await readOperatorAction(response, "Could not remove player from team.");
+}
+
+/**
+ * Remove a player from every team in a division (LMS has no hard-delete
+ * player API — leaving all rosters drops them from the division list).
+ */
+export async function operatorRemovePlayerFromDivision(
+  session: OperatorSession,
+  divisionId: string,
+  playerId: string,
+): Promise<number> {
+  const teams = await operatorListTeams(session, divisionId);
+  const memberships = teams.filter((team) =>
+    team.players.some((player) => player.id === playerId),
+  );
+  if (memberships.length === 0) {
+    throw new Error("Player is not on any team in this division.");
   }
+  for (const team of memberships) {
+    await operatorRemovePlayerFromTeam(session, team.id, playerId);
+  }
+  return memberships.length;
 }
 
 export type PlayerSearchHit = {
