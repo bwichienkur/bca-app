@@ -396,20 +396,10 @@ export function ScoringFormatForm({
         />
       </label>
 
-      <label className="flex items-start gap-2 text-sm text-[var(--ink)]">
-        <input
-          type="checkbox"
-          className="mt-1"
-          checked={draft.matchPointsRound}
-          onChange={(e) =>
-            setDraft({ ...draft, matchPointsRound: e.target.checked })
-          }
-        />
-        <span>
-          Award synthetic match-points round from total game points (Palm Beach
-          R6 style)
-        </span>
-      </label>
+      <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--muted)]">
+        Total-points / R6 round comes from LMS on the match (
+        matchWinCountsAsRound), not from this template.
+      </p>
 
       {!isNew && initial?.source === "built-in" ? (
         <label className="flex items-start gap-2 text-sm text-[var(--ink)]">

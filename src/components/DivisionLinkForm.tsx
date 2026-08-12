@@ -28,7 +28,7 @@ import {
   type TeamPointMode,
 } from "@/lib/scoring-formats";
 import { RACE_CHART_OPTIONS, type RaceChartId } from "@/lib/race-charts";
-import { FieldInfo, FieldLabel } from "./FieldLabel";
+import { FieldLabel } from "./FieldLabel";
 import {
   IconSubTabs,
   OverviewSubIcon,
@@ -336,17 +336,17 @@ function ScoringSideFields({
         <FieldLabel
           info={{
             summary:
-              "How a finished individual race adds to the team night score on the pad.",
+              "How individual results add to the team night score. Not the LMS total-points / R6 round — that comes from LMS matchWinCountsAsRound (division scoring).",
             items: [
               {
                 label: "Round points",
                 description:
-                  "Palm Beach style: each clinched singles round scores for the team; optional R6 match-points round from total game points.",
+                  "Each clinched singles round scores for the team (Palm Beach). Maps to LMS “Division round or match” = Round.",
               },
               {
                 label: "Match win",
                 description:
-                  "Tuesday / Beyond style: winning the individual race (or GAME S matchup) awards team point(s). No synthetic points round.",
+                  "Winning the individual race (or GAME S) awards team point(s) (Tuesday / Beyond). Maps to LMS = Match.",
               },
             ],
           }}
@@ -587,31 +587,13 @@ function ScoringSideFields({
         />
       </label>
 
-      <label className="flex items-start gap-2 text-sm text-[var(--ink)]">
-        <input
-          type="checkbox"
-          className="mt-1"
-          checked={format.matchPointsRound}
-          onChange={(e) =>
-            commitFormat({
-              ...format,
-              matchPointsRound: e.target.checked,
-            })
-          }
-        />
-        <span className="space-y-0.5">
-          <span className="flex items-center gap-1.5 font-medium">
-            Match-points round
-            <FieldInfo
-              label="Match-points round"
-              summary="Palm Beach R6: award a synthetic team round from total game points after the singles races. Leave off for Tuesday / Beyond."
-            />
-          </span>
-          <span className="block text-xs text-[var(--muted)]">
-            Adds an R6-style points round on the Score pad
-          </span>
-        </span>
-      </label>
+      <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--muted)]">
+        Total-points / R6 round is not configured here — Score reads LMS{" "}
+        <span className="font-medium text-[var(--ink)]">
+          matchWinCountsAsRound
+        </span>{" "}
+        on the match (on for Paradise / Hold my Beer).
+      </p>
     </fieldset>
   );
 }

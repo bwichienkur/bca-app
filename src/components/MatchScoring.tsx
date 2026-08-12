@@ -1198,8 +1198,10 @@ export function MatchScoring({
     [match, draft, roundHandicaps],
   );
 
+  // LMS owns this (match.matchWinCountsAsRound) — e.g. Palm Beach total-points
+  // round. Do not gate on a Tableside play-style flag.
   const includeMatchPointsRound =
-    scoringFormat.matchPointsRound && match?.matchWinCountsAsRound !== false;
+    match != null && match.matchWinCountsAsRound !== false;
   const matchWinTeamPoints = scoringFormat.teamPointMode === "match-win";
 
   const matchWinRoundTallies = useMemo(
