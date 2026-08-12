@@ -48,6 +48,10 @@ function friendlyLabel(label: string): string {
   if (h === "rds") return "Rounds";
   if (h === "wks") return "Weeks";
   if (h === "pts" || h === "points") return "Points";
+  if (h === "sets" || h === "set") return "Sets";
+  if (h === "night") return "Night";
+  if (h === "singles") return "Singles";
+  if (h === "teams") return "Teams";
   if (h === "gms" || h === "games") return "Games";
   if (h === "win%" || h === "win %") return "Win %";
   if (h.includes("pts") && h.includes("for") && h.includes("against")) {

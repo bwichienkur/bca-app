@@ -92,21 +92,21 @@ export const FORMAT_TUESDAY_9BALL_R6_HOT: LeagueScoringFormat = {
 };
 
 /**
- * Beyond Monday singles half: 3 players, each race win = 1 team point.
- * Race limits come from the LMS match format (RL17); pointSystem mirrors that.
+ * Beyond Monday singles half: 3 players, each race win = 1 team (set) point.
+ * Race-tos come from the official Fargo Hot 5 chart (LMS fair-match).
+ * RL17 on the LMS sheet is scoresheet capacity, not race-to 17.
  */
 export const FORMAT_BEYOND_SINGLES: LeagueScoringFormat = {
   id: "beyond-singles",
-  label: "Beyond Singles (3 races)",
+  label: "Beyond Singles (Hot 5)",
   description:
-    "Three singles races. Each race win earns 1 team point toward the 5-pt Beyond night.",
+    "Three singles races from the Fargo Hot 5 chart. Each race win = 1 set toward the 5-pt Beyond night.",
   playersPerTeam: 3,
   matchesPerNight: 3,
   teamPointMode: "match-win",
   pointsPerMatchWin: 1,
-  raceMode: "fixed-race",
-  fixedRaceWin: 10,
-  fixedRaceMaxLoss: 7,
+  raceMode: "fargo-race-chart",
+  raceChartId: "r5-hot",
   matchPointsRound: false,
   pointSystem: "17",
 };
