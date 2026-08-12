@@ -3245,7 +3245,7 @@ export function LmsOperator({
         <section className="space-y-3">
           <SectionHeader
             title="Division links"
-            description="Tableside-only. Pair divisions, set standing metrics (SETS/RDS/PTS), and race-chart overrides for Score."
+            description="Tableside-only Night Formats. Pair 2+ LMS divisions (legs), set standing metrics, and race-chart overrides for Score."
             onAdd={(event) => {
               capturePopupAnchor(event);
               setNotice(null);
@@ -3270,16 +3270,22 @@ export function LmsOperator({
           <ul className={accentRecordListClass}>
             {filteredDivisionLinks.map((link) => {
               const open = expandedIds.has(link.id);
-              const halves = [
-                {
-                  id: link.primaryDivisionId,
-                  name: link.primaryDivisionName,
-                },
-                {
-                  id: link.linkedDivisionId,
-                  name: link.linkedDivisionName,
-                },
-              ];
+              const halves =
+                link.legs?.length
+                  ? link.legs.map((leg) => ({
+                      id: leg.divisionId,
+                      name: `${leg.label} · ${leg.divisionName}`,
+                    }))
+                  : [
+                      {
+                        id: link.primaryDivisionId,
+                        name: link.primaryDivisionName,
+                      },
+                      {
+                        id: link.linkedDivisionId,
+                        name: link.linkedDivisionName,
+                      },
+                    ];
               return (
                 <AccentRecordCard key={link.id}>
                   <div className="flex items-center gap-2">
@@ -3305,10 +3311,17 @@ export function LmsOperator({
                         {link.name}
                       </p>
                       <p className="text-xs text-[var(--muted)]">
-                        2 divisions · {link.mode}
-                        {link.config
-                          ? ` · STANDING=${link.config.standing.primary.metric}×${link.config.standing.primary.multiplier}+${link.config.standing.linked.metric}×${link.config.standing.linked.multiplier}`
-                          : ""}
+                        {(link.legs?.length || 2)} legs · {link.mode}
+                        {link.legs?.length
+                          ? ` · ${link.legs
+                              .map(
+                                (leg) =>
+                                  `${leg.standing.metric}×${leg.standing.multiplier}`,
+                              )
+                              .join("+")}`
+                          : link.config
+                            ? ` · STANDING=${link.config.standing.primary.metric}×${link.config.standing.primary.multiplier}+${link.config.standing.linked.metric}×${link.config.standing.linked.multiplier}`
+                            : ""}
                       </p>
                     </button>
                     <div className="flex shrink-0 items-center gap-1.5">

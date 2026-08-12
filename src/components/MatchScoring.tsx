@@ -349,6 +349,13 @@ function linkScoringOverrides(
   if (!link || !matchDivisionId) {
     return { linkFormatId: null, linkRaceChartId: null };
   }
+  const fromLeg = link.legs?.find((leg) => leg.divisionId === matchDivisionId);
+  if (fromLeg) {
+    return {
+      linkFormatId: fromLeg.scoring.scoringFormatId ?? null,
+      linkRaceChartId: fromLeg.scoring.raceChartId ?? null,
+    };
+  }
   const side = scoringSideForDivision(link.config, {
     divisionId: matchDivisionId,
     primaryDivisionId: link.primaryDivisionId,
@@ -467,6 +474,13 @@ export function MatchScoring({
     return `/api/scoring/matches?${params.toString()}`;
   };
 
+  const nightDivisionIds = useMemo(() => {
+    if (divisionLink?.legs?.length) {
+      return divisionLink.legs.map((leg) => leg.divisionId).filter(Boolean);
+    }
+    return [divisionId, linkedDivisionId].filter(Boolean) as string[];
+  }, [divisionLink, divisionId, linkedDivisionId]);
+
   useEffect(() => {
     draftRef.current = draft;
   }, [draft]);
@@ -559,9 +573,11 @@ export function MatchScoring({
       setLoadingMatches(true);
       setListError(null);
       try {
-        const urls = [matchesUrl(divisionId!, teamId, teamName)];
-        if (linkedDivisionId) {
-          urls.push(matchesUrl(linkedDivisionId, null, teamName));
+        const urls = nightDivisionIds.map((divId, index) =>
+          matchesUrl(divId, index === 0 ? teamId : null, teamName),
+        );
+        if (urls.length === 0 && divisionId) {
+          urls.push(matchesUrl(divisionId, teamId, teamName));
         }
         const results = await Promise.all(
           urls.map((url) =>
@@ -600,7 +616,7 @@ export function MatchScoring({
     return () => {
       cancelled = true;
     };
-  }, [user, divisionId, linkedDivisionId, teamId, teamName]);
+  }, [user, divisionId, linkedDivisionId, teamId, teamName, nightDivisionIds]);
 
   useEffect(() => {
     if (!divisionId) {
@@ -610,6 +626,31 @@ export function MatchScoring({
     let cancelled = false;
     void (async () => {
       try {
+        const legs =
+          divisionLink?.legs && divisionLink.legs.length >= 2
+            ? divisionLink.legs
+            : null;
+        if (legs) {
+          const reports = await Promise.all(
+            legs.map((leg) =>
+              fetchJson<TableReport>(
+                `/api/reports/teams?divisionId=${encodeURIComponent(leg.divisionId)}`,
+              ).catch(() => null),
+            ),
+          );
+          if (cancelled) return;
+          setTeamReport(
+            mergeCombinedStandings({
+              legs: legs.map((leg, index) => ({
+                leg,
+                report: reports[index],
+              })),
+              config: divisionLink?.config ?? null,
+            }),
+          );
+          return;
+        }
+
         const primary = await fetchJson<TableReport>(
           `/api/reports/teams?divisionId=${divisionId}`,
         );
@@ -631,8 +672,7 @@ export function MatchScoring({
           comboRoleForDivisionName(divisionLink.primaryDivisionName);
         setTeamReport(
           mergeCombinedStandings({
-            singles:
-              primaryRole === "singles" ? primary : linked,
+            singles: primaryRole === "singles" ? primary : linked,
             teams: primaryRole === "teams" ? primary : linked,
             config: divisionLink.config,
           }),
@@ -713,9 +753,11 @@ export function MatchScoring({
     };
     const refreshMatches = async () => {
       try {
-        const urls = [matchesUrl(divisionId, teamId, teamName)];
-        if (linkedDivisionId) {
-          urls.push(matchesUrl(linkedDivisionId, null, teamName));
+        const urls = nightDivisionIds.map((divId, index) =>
+          matchesUrl(divId, index === 0 ? teamId : null, teamName),
+        );
+        if (urls.length === 0 && divisionId) {
+          urls.push(matchesUrl(divisionId, teamId, teamName));
         }
         const results = await Promise.all(
           urls.map((url) =>
@@ -773,9 +815,10 @@ export function MatchScoring({
     return combineScoreMatchupsForNight({
       nightKey: selectedNightKey,
       matches: nightMatches,
-      linked: Boolean(linkedDivisionId),
+      linked: Boolean(linkedDivisionId) || (divisionLink?.legs?.length ?? 0) >= 2,
+      expectedLegIds: divisionLink?.legs?.map((leg) => leg.id) ?? null,
     });
-  }, [selectedNightKey, nightMatches, linkedDivisionId]);
+  }, [selectedNightKey, nightMatches, linkedDivisionId, divisionLink]);
 
   const openMatch = async (
     matchId: string,
@@ -1198,11 +1241,16 @@ export function MatchScoring({
   const teamsStandingAward = useMemo(() => {
     if (!matchWinTeamPoints || !scoringFormat.teamRaceTo) return null;
     if (divisionLink && match) {
-      const side = standingSideForDivision(divisionLink.config, {
-        divisionId: match.divisionId,
-        primaryDivisionId: divisionLink.primaryDivisionId,
-        linkedDivisionId: divisionLink.linkedDivisionId,
-      });
+      const fromLeg = divisionLink.legs?.find(
+        (leg) => leg.divisionId === match.divisionId,
+      );
+      const side =
+        fromLeg?.standing ??
+        standingSideForDivision(divisionLink.config, {
+          divisionId: match.divisionId,
+          primaryDivisionId: divisionLink.primaryDivisionId,
+          linkedDivisionId: divisionLink.linkedDivisionId,
+        });
       if (side.role === "teams" && side.metric === "rds") {
         return side.multiplier > 0 ? side.multiplier : side.maxNightPoints;
       }
@@ -1341,9 +1389,11 @@ export function MatchScoring({
     setMatch(null);
     setDraft(null);
     if (divisionId) {
-      const urls = [matchesUrl(divisionId, teamId, teamName)];
-      if (linkedDivisionId) {
-        urls.push(matchesUrl(linkedDivisionId, null, teamName));
+      const urls = nightDivisionIds.map((divId, index) =>
+        matchesUrl(divId, index === 0 ? teamId : null, teamName),
+      );
+      if (urls.length === 0 && divisionId) {
+        urls.push(matchesUrl(divisionId, teamId, teamName));
       }
       const results = await Promise.all(
         urls.map((url) =>
@@ -1576,7 +1626,7 @@ export function MatchScoring({
       combinedPair && combinedPair.halves.length > 1
         ? combinedPair.halves.map((half) => ({
             id: half.match.id,
-            label: combinedHalfTabLabel(half.kind),
+            label: half.label || combinedHalfTabLabel(half.kind),
             icon: combinedHalfTabIcon(half.kind),
           }))
         : null;
@@ -1603,14 +1653,14 @@ export function MatchScoring({
         {halfTabs && !reviewMode ? (
           <div className="px-3 sm:px-4">
             <IconSubTabs
-              aria-label="Scoresheet half"
+              aria-label="Scoresheet leg"
               value={match.id}
               onChange={(id) => {
                 if (id === match.id) return;
                 setActiveGame(null);
                 void openMatch(id, { fromCombined });
               }}
-              columns={2}
+              columns={Math.min(4, Math.max(2, halfTabs.length))}
               items={halfTabs}
             />
           </div>
@@ -2544,6 +2594,7 @@ export function MatchScoring({
                   ? computeMatchupStandingScores({
                       config: divisionLink.config,
                       matchup,
+                      legs: divisionLink.legs,
                       summaryFor: (matchId) => {
                         const item = matchup.halves.find(
                           (h) => h.match.id === matchId,
@@ -2601,10 +2652,11 @@ export function MatchScoring({
                     homeName={matchup.homeName}
                     awayName={matchup.awayName}
                     badge={
-                      linkedDivisionId
+                      linkedDivisionId || (divisionLink?.legs?.length ?? 0) >= 2
                         ? matchup.completePair
                           ? "Combined"
-                          : roleLabel(matchup.halves[0]?.kind ?? "singles")
+                          : matchup.halves[0]?.label ||
+                            combinedHalfTabLabel(matchup.halves[0]?.kind ?? "singles")
                         : null
                     }
                     meta={
@@ -2653,7 +2705,13 @@ function formatRawStanding(value: number | null | undefined): string {
 }
 
 function combinedHalfTabLabel(kind: CombinedHalfKind): string {
-  return kind === "singles" ? "Singles" : "Team";
+  if (kind === "singles") return "Singles";
+  if (kind === "teams") return "Team";
+  return kind
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function combinedHalfTabIcon(kind: CombinedHalfKind) {
@@ -2671,7 +2729,7 @@ function CombinedNightHub({
 }) {
   const items = matchup.halves.map((half) => ({
     id: half.match.id,
-    label: combinedHalfTabLabel(half.kind),
+    label: half.label || combinedHalfTabLabel(half.kind),
     icon: combinedHalfTabIcon(half.kind),
   }));
   const [selectedId, setSelectedId] = useState(

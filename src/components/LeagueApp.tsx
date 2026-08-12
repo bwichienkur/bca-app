@@ -860,44 +860,71 @@ export function LeagueApp() {
       setError(null);
       try {
         if (needsTeams) {
-          const linkedId = prefs?.linkedDivisionId ?? null;
           const activeLink =
             findLinkById(divisionLinks, prefs?.divisionLinkId) ??
             findLinkForDivision(divisionLinks, id);
-          const primaryLmsName =
-            activeLink?.primaryDivisionName ?? selectedDivision!.name;
-          const linkedLmsName =
-            activeLink?.linkedDivisionName ?? prefs?.linkedDivisionName ?? null;
-          const [primary, linked] = await Promise.all([
-            fetchJson<TableReport>(`/api/reports/teams?divisionId=${id}`),
-            linkedId
-              ? fetchJson<TableReport>(
-                  `/api/reports/teams?divisionId=${linkedId}`,
-                ).catch(() => null)
-              : Promise.resolve(null),
-          ]);
-          if (!cancelled) {
-            // Use LMS division names (not the Tableside link display name)
-            // so Beyond Singles/Teams roles still resolve.
-            const combo =
-              findKnownComboForDivisionName(primaryLmsName) ??
-              findKnownComboForDivisionName(linkedLmsName);
-            const linkConfig = activeLink?.config ?? null;
-            const primaryRole =
-              linkConfig?.standing.primary.role ??
-              combo?.roleFromName(primaryLmsName) ??
+          const legs =
+            activeLink?.legs && activeLink.legs.length >= 2
+              ? activeLink.legs
+              : null;
+          if (legs) {
+            const reports = await Promise.all(
+              legs.map((leg) =>
+                fetchJson<TableReport>(
+                  `/api/reports/teams?divisionId=${encodeURIComponent(leg.divisionId)}`,
+                ).catch(() => null),
+              ),
+            );
+            if (!cancelled) {
+              setTeamReport(
+                mergeCombinedStandings({
+                  legs: legs.map((leg, index) => ({
+                    leg,
+                    report: reports[index],
+                  })),
+                  config: activeLink?.config ?? null,
+                }),
+              );
+              teamReportKeyRef.current = cacheKey;
+            }
+          } else {
+            const linkedId = prefs?.linkedDivisionId ?? null;
+            const primaryLmsName =
+              activeLink?.primaryDivisionName ?? selectedDivision!.name;
+            const linkedLmsName =
+              activeLink?.linkedDivisionName ??
+              prefs?.linkedDivisionName ??
               null;
-            const data =
-              linked && primaryRole
-                ? mergeCombinedStandings({
-                    singles: primaryRole === "singles" ? primary : linked,
-                    teams: primaryRole === "teams" ? primary : linked,
-                    combo: combo ?? undefined,
-                    config: linkConfig,
-                  })
-                : primary;
-            setTeamReport(data);
-            teamReportKeyRef.current = cacheKey;
+            const [primary, linked] = await Promise.all([
+              fetchJson<TableReport>(`/api/reports/teams?divisionId=${id}`),
+              linkedId
+                ? fetchJson<TableReport>(
+                    `/api/reports/teams?divisionId=${linkedId}`,
+                  ).catch(() => null)
+                : Promise.resolve(null),
+            ]);
+            if (!cancelled) {
+              const combo =
+                findKnownComboForDivisionName(primaryLmsName) ??
+                findKnownComboForDivisionName(linkedLmsName);
+              const linkConfig = activeLink?.config ?? null;
+              const primaryRole =
+                linkConfig?.standing.primary.role ??
+                combo?.roleFromName(primaryLmsName) ??
+                null;
+              const data =
+                linked && primaryRole
+                  ? mergeCombinedStandings({
+                      singles:
+                        primaryRole === "singles" ? primary : linked,
+                      teams: primaryRole === "teams" ? primary : linked,
+                      combo: combo ?? undefined,
+                      config: linkConfig,
+                    })
+                  : primary;
+              setTeamReport(data);
+              teamReportKeyRef.current = cacheKey;
+            }
           }
         } else if (needsPlayers) {
           const [players, ratings] = await Promise.all([
@@ -912,74 +939,132 @@ export function LeagueApp() {
             playerReportKeyRef.current = cacheKey;
           }
         } else if (needsSchedule) {
-          const linkedId = prefs?.linkedDivisionId ?? null;
           const activeLink =
             findLinkById(divisionLinks, prefs?.divisionLinkId) ??
             findLinkForDivision(divisionLinks, id);
-          const primaryLmsName =
-            activeLink?.primaryDivisionName ?? selectedDivision!.name;
-          const linkedLmsName =
-            activeLink?.linkedDivisionName ??
-            prefs?.linkedDivisionName ??
-            "Linked";
-          const [scheduleData, linkedSchedule, primaryTeams, linkedTeams] =
-            await Promise.all([
-              fetchJson<{ days: ScheduleDay[] }>(
-                `/api/reports/schedule?divisionId=${id}`,
+          const legs =
+            activeLink?.legs && activeLink.legs.length >= 2
+              ? activeLink.legs
+              : null;
+
+          if (legs) {
+            const [scheduleParts, teamReports] = await Promise.all([
+              Promise.all(
+                legs.map((leg) =>
+                  fetchJson<{ days: ScheduleDay[] }>(
+                    `/api/reports/schedule?divisionId=${encodeURIComponent(leg.divisionId)}`,
+                  )
+                    .then((data) => ({
+                      divisionId: leg.divisionId,
+                      divisionName: leg.divisionName,
+                      partLabel: leg.label,
+                      days: data.days,
+                    }))
+                    .catch(() => null),
+                ),
               ),
-              linkedId
-                ? fetchJson<{ days: ScheduleDay[] }>(
-                    `/api/reports/schedule?divisionId=${linkedId}`,
-                  ).catch(() => null)
-                : Promise.resolve(null),
-              fetchJson<TableReport>(
-                `/api/reports/teams?divisionId=${id}`,
-              ).catch(() => null),
-              linkedId
-                ? fetchJson<TableReport>(
-                    `/api/reports/teams?divisionId=${linkedId}`,
-                  ).catch(() => null)
-                : Promise.resolve(null),
+              Promise.all(
+                legs.map((leg) =>
+                  fetchJson<TableReport>(
+                    `/api/reports/teams?divisionId=${encodeURIComponent(leg.divisionId)}`,
+                  ).catch(() => null),
+                ),
+              ),
             ]);
-          if (!cancelled) {
-            const days =
-              linkedId && linkedSchedule?.days
-                ? mergeCombinedSchedule({
-                    primary: {
-                      divisionId: id,
-                      divisionName: primaryLmsName,
-                      days: scheduleData.days,
-                    },
-                    linked: {
-                      divisionId: linkedId,
-                      divisionName: linkedLmsName,
-                      days: linkedSchedule.days,
-                    },
-                  })
-                : scheduleData.days;
-            setSchedule(days);
-            scheduleKeyRef.current = cacheKey;
-            // Ranks for schedule cards only — do not mark standings cache fresh
-            // (that previously poisoned Standings with primary-only data).
-            if (primaryTeams) {
-              const linkConfig = activeLink?.config ?? null;
-              const primaryRole =
-                linkConfig?.standing.primary.role ??
-                findKnownComboForDivisionName(primaryLmsName)?.roleFromName(
-                  primaryLmsName,
-                ) ??
-                null;
-              const ranks =
-                linkedId && linkedTeams && primaryRole
-                  ? mergeCombinedStandings({
-                      singles:
-                        primaryRole === "singles" ? primaryTeams : linkedTeams,
-                      teams:
-                        primaryRole === "teams" ? primaryTeams : linkedTeams,
-                      config: linkConfig,
+            if (!cancelled) {
+              const parts = scheduleParts.filter(Boolean) as Array<{
+                divisionId: string;
+                divisionName: string;
+                partLabel: string;
+                days: ScheduleDay[];
+              }>;
+              setSchedule(
+                parts.length
+                  ? mergeCombinedSchedule({ parts })
+                  : [],
+              );
+              scheduleKeyRef.current = cacheKey;
+              if (teamReports.some(Boolean)) {
+                setTeamReport(
+                  mergeCombinedStandings({
+                    legs: legs.map((leg, index) => ({
+                      leg,
+                      report: teamReports[index],
+                    })),
+                    config: activeLink?.config ?? null,
+                  }),
+                );
+              }
+            }
+          } else {
+            const linkedId = prefs?.linkedDivisionId ?? null;
+            const primaryLmsName =
+              activeLink?.primaryDivisionName ?? selectedDivision!.name;
+            const linkedLmsName =
+              activeLink?.linkedDivisionName ??
+              prefs?.linkedDivisionName ??
+              "Linked";
+            const [scheduleData, linkedSchedule, primaryTeams, linkedTeams] =
+              await Promise.all([
+                fetchJson<{ days: ScheduleDay[] }>(
+                  `/api/reports/schedule?divisionId=${id}`,
+                ),
+                linkedId
+                  ? fetchJson<{ days: ScheduleDay[] }>(
+                      `/api/reports/schedule?divisionId=${linkedId}`,
+                    ).catch(() => null)
+                  : Promise.resolve(null),
+                fetchJson<TableReport>(
+                  `/api/reports/teams?divisionId=${id}`,
+                ).catch(() => null),
+                linkedId
+                  ? fetchJson<TableReport>(
+                      `/api/reports/teams?divisionId=${linkedId}`,
+                    ).catch(() => null)
+                  : Promise.resolve(null),
+              ]);
+            if (!cancelled) {
+              const days =
+                linkedId && linkedSchedule?.days
+                  ? mergeCombinedSchedule({
+                      primary: {
+                        divisionId: id,
+                        divisionName: primaryLmsName,
+                        days: scheduleData.days,
+                      },
+                      linked: {
+                        divisionId: linkedId,
+                        divisionName: linkedLmsName,
+                        days: linkedSchedule.days,
+                      },
                     })
-                  : primaryTeams;
-              setTeamReport(ranks);
+                  : scheduleData.days;
+              setSchedule(days);
+              scheduleKeyRef.current = cacheKey;
+              if (primaryTeams) {
+                const linkConfig = activeLink?.config ?? null;
+                const primaryRole =
+                  linkConfig?.standing.primary.role ??
+                  findKnownComboForDivisionName(primaryLmsName)?.roleFromName(
+                    primaryLmsName,
+                  ) ??
+                  null;
+                const ranks =
+                  linkedId && linkedTeams && primaryRole
+                    ? mergeCombinedStandings({
+                        singles:
+                          primaryRole === "singles"
+                            ? primaryTeams
+                            : linkedTeams,
+                        teams:
+                          primaryRole === "teams"
+                            ? primaryTeams
+                            : linkedTeams,
+                        config: linkConfig,
+                      })
+                    : primaryTeams;
+                setTeamReport(ranks);
+              }
             }
           }
         }
@@ -1109,7 +1194,9 @@ export function LeagueApp() {
     };
     const linkDivisionIds = new Set(
       link
-        ? [link.primaryDivisionId, link.linkedDivisionId]
+        ? link.legs?.length
+          ? link.legs.map((leg) => leg.divisionId)
+          : [link.primaryDivisionId, link.linkedDivisionId]
         : [primaryId],
     );
     const membershipTeams =
@@ -1249,7 +1336,10 @@ export function LeagueApp() {
         if (!option.link || !memberDivisionIds) return true;
         return (
           memberDivisionIds.has(option.link.primaryDivisionId) ||
-          memberDivisionIds.has(option.link.linkedDivisionId)
+          memberDivisionIds.has(option.link.linkedDivisionId) ||
+          (option.link.legs ?? []).some((leg) =>
+            memberDivisionIds.has(leg.divisionId),
+          )
         );
       })
       .map((option) => ({
@@ -2098,8 +2188,10 @@ export function LeagueApp() {
                   <PanelHeader
                     title="Team standings"
                     description={
-                      prefs.linkedDivisionId
-                        ? "Combined standings — STANDING ranks the league from each half’s LMS column × multiplier (set on LMS Links). Tap a team for details."
+                      prefs.linkedDivisionId ||
+                      (findLinkById(divisionLinks, prefs.divisionLinkId)?.legs
+                        ?.length ?? 0) >= 2
+                        ? "Combined standings — STANDING ranks the night from each leg’s LMS column × multiplier. Tap a team for details."
                         : "Tap a team to view player statistics. Use back to return to the league grid."
                     }
                     action={

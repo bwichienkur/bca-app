@@ -1,6 +1,6 @@
 /**
- * Pair linked-division Singles + Teams halves into one night matchup.
- * Schedule and Score show one card; standing points come from link config.
+ * Pair linked-division night legs into one night matchup.
+ * Schedule and Score show one card; standing points come from night format legs.
  */
 
 import {
@@ -12,16 +12,22 @@ import {
 import type {
   DivisionLinkConfig,
   DivisionLinkStandingSide,
+  NightLeg,
 } from "./division-link-config";
-import { standingMetricColumnLabel } from "./division-link-config";
+import {
+  nightStandingMax,
+  standingMetricColumnLabel,
+} from "./division-link-config";
 import { matchRoundRaw, type NightHalfStatus } from "./night-standing";
 import type { DraftBoardSummary, ScoringMatchSummary } from "./scoring";
 import type { ScheduleMatch } from "./types";
 
-export type CombinedHalfKind = "singles" | "teams";
+/** Leg key within a combined matchup (e.g. "singles", "teams", or custom). */
+export type CombinedHalfKind = string;
 
 export type CombinedScheduleHalf = {
   kind: CombinedHalfKind;
+  label: string;
   match: ScheduleMatch;
 };
 
@@ -32,12 +38,13 @@ export type CombinedScheduleMatchup = {
   awayName: string;
   location: string | null;
   halves: CombinedScheduleHalf[];
-  /** True when both Singles and Teams sheets are present. */
+  /** True when every expected leg (or ≥2 distinct legs) is present. */
   completePair: boolean;
 };
 
 export type CombinedScoreHalf = {
   kind: CombinedHalfKind;
+  label: string;
   match: ScoringMatchSummary;
 };
 
@@ -73,35 +80,76 @@ function pairKey(teamA: string, teamB: string): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
-function halfKindFromDivisionName(
+function legKeyFromDivisionName(
   divisionName: string | null | undefined,
   partLabel?: string | null,
 ): CombinedHalfKind | null {
-  const fromLabel = (partLabel ?? "").toLowerCase();
-  if (fromLabel === "singles") return "singles";
-  if (fromLabel === "teams") return "teams";
+  const fromLabel = (partLabel ?? "").trim().toLowerCase();
+  if (fromLabel === "singles" || fromLabel === "teams") return fromLabel;
+  if (fromLabel) return fromLabel.replace(/[^a-z0-9]+/g, "-") || null;
   const role = comboRoleForDivisionName(divisionName);
   if (role === "singles" || role === "teams") return role;
   const fromPart = (comboPartLabel(divisionName) ?? "").toLowerCase();
-  if (fromPart === "singles") return "singles";
-  if (fromPart === "teams") return "teams";
+  if (fromPart === "singles" || fromPart === "teams") return fromPart;
+  if (fromPart) return fromPart;
   return null;
+}
+
+function legLabelFromKey(kind: CombinedHalfKind): string {
+  if (kind === "singles") return "Singles";
+  if (kind === "teams") return "Teams";
+  return kind
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function standingSideForKind(
   config: DivisionLinkConfig,
   kind: CombinedHalfKind,
+  legs?: NightLeg[] | null,
 ): DivisionLinkStandingSide {
+  if (legs?.length) {
+    const byId = legs.find((leg) => leg.id === kind);
+    if (byId) return byId.standing;
+    const byRole = legs.find((leg) => leg.standing.role === kind);
+    if (byRole) return byRole.standing;
+  }
   if (config.standing.primary.role === kind) return config.standing.primary;
   if (config.standing.linked.role === kind) return config.standing.linked;
-  return kind === "singles"
-    ? config.standing.primary
-    : config.standing.linked;
+  if (kind === "singles") return config.standing.primary;
+  if (kind === "teams") return config.standing.linked;
+  return config.standing.primary;
 }
 
 function formatPts(value: number): string {
   if (Number.isInteger(value)) return String(value);
   return String(Math.round(value * 10) / 10);
+}
+
+function sortHalves<T extends { kind: CombinedHalfKind }>(halves: T[]): T[] {
+  return [...halves].sort((a, b) => {
+    const order = (kind: string) => {
+      if (kind === "singles") return 0;
+      if (kind === "teams") return 1;
+      return 2;
+    };
+    const byRole = order(a.kind) - order(b.kind);
+    if (byRole !== 0) return byRole;
+    return a.kind.localeCompare(b.kind);
+  });
+}
+
+function isCompleteSet(
+  kindsPresent: string[],
+  expectedLegIds?: string[] | null,
+): boolean {
+  if (expectedLegIds?.length) {
+    return expectedLegIds.every((id) => kindsPresent.includes(id));
+  }
+  // Without an expected set, treat 2+ distinct legs as a complete night card.
+  return kindsPresent.length >= 2;
 }
 
 /**
@@ -111,28 +159,34 @@ export function combineScheduleMatchupsForDay(args: {
   date: string;
   matches: ScheduleMatch[];
   linked: boolean;
+  /** Expected leg ids from the night format (optional). */
+  expectedLegIds?: string[] | null;
 }): CombinedScheduleMatchup[] {
   if (!args.linked) {
-    return args.matches.map((match, index) => ({
-      key: `${args.date}:solo:${match.matchId ?? index}`,
-      date: args.date,
-      homeName: displayTeamName(match.home),
-      awayName: displayTeamName(match.away),
-      location: match.location?.trim() || null,
-      halves: [
-        {
-          kind: halfKindFromDivisionName(match.divisionName, match.partLabel) ?? "singles",
-          match,
-        },
-      ],
-      completePair: false,
-    }));
+    return args.matches.map((match, index) => {
+      const kind =
+        legKeyFromDivisionName(match.divisionName, match.partLabel) ?? "singles";
+      return {
+        key: `${args.date}:solo:${match.matchId ?? index}`,
+        date: args.date,
+        homeName: displayTeamName(match.home),
+        awayName: displayTeamName(match.away),
+        location: match.location?.trim() || null,
+        halves: [
+          {
+            kind,
+            label: match.partLabel?.trim() || legLabelFromKey(kind),
+            match,
+          },
+        ],
+        completePair: false,
+      };
+    });
   }
 
   const byPair = new Map<string, ScheduleMatch[]>();
   for (const match of args.matches) {
     if (/bye/i.test(`${match.home} ${match.away}`)) {
-      // Keep bye rows as solo cards so they don't pair oddly.
       const key = `${args.date}:bye:${canonicalizeTeamKey(match.home)}:${canonicalizeTeamKey(match.away)}:${match.divisionId ?? ""}`;
       byPair.set(key, [...(byPair.get(key) ?? []), match]);
       continue;
@@ -145,28 +199,31 @@ export function combineScheduleMatchupsForDay(args: {
   for (const [key, matches] of byPair) {
     const halves: CombinedScheduleHalf[] = [];
     for (const match of matches) {
-      const kind = halfKindFromDivisionName(match.divisionName, match.partLabel);
+      const kind = legKeyFromDivisionName(match.divisionName, match.partLabel);
       if (!kind) continue;
       if (!halves.some((half) => half.kind === kind)) {
-        halves.push({ kind, match });
+        halves.push({
+          kind,
+          label: match.partLabel?.trim() || legLabelFromKey(kind),
+          match,
+        });
       }
     }
-    halves.sort((a, b) => (a.kind === "singles" ? 0 : 1) - (b.kind === "singles" ? 0 : 1));
-    const anchor = halves.find((h) => h.kind === "singles")?.match ?? matches[0]!;
-    // Orient home/away by the singles sheet when present.
-    const homeName = displayTeamName(anchor.home);
-    const awayName = displayTeamName(anchor.away);
+    const sorted = sortHalves(halves);
+    const anchor =
+      sorted.find((h) => h.kind === "singles")?.match ?? matches[0]!;
     rows.push({
       key,
       date: args.date,
-      homeName,
-      awayName,
+      homeName: displayTeamName(anchor.home),
+      awayName: displayTeamName(anchor.away),
       location:
-        halves.map((h) => h.match.location?.trim()).find(Boolean) ?? null,
-      halves,
-      completePair:
-        halves.some((h) => h.kind === "singles") &&
-        halves.some((h) => h.kind === "teams"),
+        sorted.map((h) => h.match.location?.trim()).find(Boolean) ?? null,
+      halves: sorted,
+      completePair: isCompleteSet(
+        sorted.map((h) => h.kind),
+        args.expectedLegIds,
+      ),
     });
   }
 
@@ -183,26 +240,29 @@ export function combineScoreMatchupsForNight(args: {
   nightKey: string;
   matches: ScoringMatchSummary[];
   linked: boolean;
+  expectedLegIds?: string[] | null;
 }): CombinedScoreMatchup[] {
   if (!args.linked) {
-    return args.matches.map((match) => ({
-      key: `${args.nightKey}:solo:${match.id}`,
-      nightKey: args.nightKey,
-      homeName: displayTeamName(match.teamOneName),
-      awayName: displayTeamName(match.teamTwoName),
-      location: match.location?.trim() || null,
-      halves: [
-        {
-          kind:
-            halfKindFromDivisionName(match.divisionName) ??
-            ("singles" as const),
-          match,
-        },
-      ],
-      completePair: false,
-      isMyMatch: match.mySide != null,
-      mySide: match.mySide,
-    }));
+    return args.matches.map((match) => {
+      const kind = legKeyFromDivisionName(match.divisionName) ?? "singles";
+      return {
+        key: `${args.nightKey}:solo:${match.id}`,
+        nightKey: args.nightKey,
+        homeName: displayTeamName(match.teamOneName),
+        awayName: displayTeamName(match.teamTwoName),
+        location: match.location?.trim() || null,
+        halves: [
+          {
+            kind,
+            label: legLabelFromKey(kind),
+            match,
+          },
+        ],
+        completePair: false,
+        isMyMatch: match.mySide != null,
+        mySide: match.mySide,
+      };
+    });
   }
 
   const byPair = new Map<string, ScoringMatchSummary[]>();
@@ -220,19 +280,24 @@ export function combineScoreMatchupsForNight(args: {
   for (const [key, matches] of byPair) {
     const halves: CombinedScoreHalf[] = [];
     for (const match of matches) {
-      const kind = halfKindFromDivisionName(match.divisionName);
+      const kind = legKeyFromDivisionName(match.divisionName);
       if (!kind) continue;
       if (!halves.some((half) => half.kind === kind)) {
-        halves.push({ kind, match });
+        halves.push({
+          kind,
+          label: legLabelFromKey(kind),
+          match,
+        });
       }
     }
-    halves.sort((a, b) => (a.kind === "singles" ? 0 : 1) - (b.kind === "singles" ? 0 : 1));
-    const anchor = halves.find((h) => h.kind === "singles")?.match ?? matches[0]!;
+    const sorted = sortHalves(halves);
+    const anchor =
+      sorted.find((h) => h.kind === "singles")?.match ?? matches[0]!;
     const homeName = displayTeamName(anchor.teamOneName);
     const awayName = displayTeamName(anchor.teamTwoName);
     const homeKey = canonicalizeTeamKey(homeName);
     const mySide = (() => {
-      for (const half of halves) {
+      for (const half of sorted) {
         if (half.match.mySide == null) continue;
         const myName =
           half.match.mySide === 1
@@ -249,11 +314,12 @@ export function combineScoreMatchupsForNight(args: {
       homeName,
       awayName,
       location:
-        halves.map((h) => h.match.location?.trim()).find(Boolean) ?? null,
-      halves,
-      completePair:
-        halves.some((h) => h.kind === "singles") &&
-        halves.some((h) => h.kind === "teams"),
+        sorted.map((h) => h.match.location?.trim()).find(Boolean) ?? null,
+      halves: sorted,
+      completePair: isCompleteSet(
+        sorted.map((h) => h.kind),
+        args.expectedLegIds,
+      ),
       isMyMatch: mySide != null,
       mySide,
     });
@@ -320,18 +386,18 @@ function orientWinsToMatchupHome(args: {
   if (matchHomeKey === args.matchupHomeKey) {
     return { teamOneWins: one, teamTwoWins: two };
   }
-  // Sheets can flip home/away vs the singles anchor.
   return { teamOneWins: two, teamTwoWins: one };
 }
 
 /**
- * Standing points for both teams in a combined matchup (link metrics×multipliers).
+ * Standing points for both teams in a combined matchup (leg metrics×multipliers).
  */
 export function computeMatchupStandingScores(args: {
   config: DivisionLinkConfig;
   matchup: CombinedScoreMatchup;
   summaryFor: (matchId: string) => DraftBoardSummary | null;
   statusFor: (match: ScoringMatchSummary) => NightHalfStatus;
+  legs?: NightLeg[] | null;
 }): MatchupStandingScores {
   const homeKey = canonicalizeTeamKey(args.matchup.homeName);
   let homeStanding = 0;
@@ -341,8 +407,12 @@ export function computeMatchupStandingScores(args: {
   let anyStarted = false;
   let allComplete = args.matchup.halves.length > 0;
 
-  for (const kind of ["singles", "teams"] as CombinedHalfKind[]) {
-    const side = standingSideForKind(args.config, kind);
+  const kinds =
+    args.legs?.map((leg) => leg.id) ??
+    args.matchup.halves.map((half) => half.kind);
+
+  for (const kind of kinds) {
+    const side = standingSideForKind(args.config, kind, args.legs);
     const half = args.matchup.halves.find((row) => row.kind === kind) ?? null;
     if (!half) {
       allComplete = false;
@@ -364,7 +434,7 @@ export function computeMatchupStandingScores(args: {
       match: half.match,
       summary,
     });
-    const teamRaceTo = kind === "teams" ? 9 : null;
+    const teamRaceTo = side.role === "teams" ? 9 : null;
     const home = halfStandingForTeam({
       side,
       ...oriented,
@@ -387,9 +457,10 @@ export function computeMatchupStandingScores(args: {
     awayBits.push(away.label);
   }
 
-  const standingMax =
-    args.config.standing.primary.maxNightPoints +
-    args.config.standing.linked.maxNightPoints;
+  const standingMax = args.legs?.length
+    ? nightStandingMax(args.legs)
+    : args.config.standing.primary.maxNightPoints +
+      args.config.standing.linked.maxNightPoints;
 
   homeStanding = Math.round(homeStanding * 100) / 100;
   awayStanding = Math.round(awayStanding * 100) / 100;

@@ -2,8 +2,13 @@ import { getRedis, isRedisConfigured } from "@/lib/redis";
 import {
   normalizeDivisionLink,
   type DivisionLink,
+  linkLegDivisionIds,
 } from "./division-links";
-import { normalizeDivisionLinkConfig } from "./division-link-config";
+import {
+  configFromLegs,
+  normalizeNightLegs,
+  type NightLeg,
+} from "./division-link-config";
 
 const linksKey = (leagueId: string) =>
   `tableside:division-links:v1:${leagueId}`;
@@ -72,44 +77,67 @@ async function writeDivisionLinks(
 
 export async function upsertDivisionLink(args: {
   leagueId: string;
-  link: Omit<DivisionLink, "id" | "createdAt" | "updatedAt" | "config"> & {
+  link: {
     id?: string;
+    name: string;
+    leagueId: string;
+    mode: DivisionLink["mode"];
+    legs?: NightLeg[] | null;
     config?: DivisionLink["config"] | null;
+    primaryDivisionId?: string;
+    primaryDivisionName?: string;
+    linkedDivisionId?: string;
+    linkedDivisionName?: string;
+    updatedBy?: string | null;
   };
 }): Promise<DivisionLink> {
   const existing = await listDivisionLinks(args.leagueId);
   const now = new Date().toISOString();
-  const incomingIds = new Set([
-    args.link.primaryDivisionId,
-    args.link.linkedDivisionId,
-  ]);
 
-  // A division may belong to at most one link in the league.
+  const draft = normalizeDivisionLink({
+    id: args.link.id ?? "draft",
+    name: args.link.name.trim(),
+    leagueId: args.leagueId,
+    mode: args.link.mode,
+    legs: args.link.legs,
+    config: args.link.config,
+    primaryDivisionId: args.link.primaryDivisionId ?? "",
+    primaryDivisionName: args.link.primaryDivisionName ?? "",
+    linkedDivisionId: args.link.linkedDivisionId ?? "",
+    linkedDivisionName: args.link.linkedDivisionName ?? "",
+    createdAt: now,
+    updatedAt: now,
+    updatedBy: args.link.updatedBy ?? null,
+  });
+
+  const incomingIds = new Set(linkLegDivisionIds(draft));
+
+  // A division may belong to at most one night format in the league.
   const filtered = existing.filter((link) => {
     if (args.link.id && link.id === args.link.id) return false;
-    if (incomingIds.has(link.primaryDivisionId)) return false;
-    if (incomingIds.has(link.linkedDivisionId)) return false;
-    return true;
+    return !linkLegDivisionIds(link).some((id) => incomingIds.has(id));
   });
 
   const prior = args.link.id
     ? existing.find((link) => link.id === args.link.id)
     : null;
 
+  const legs =
+    draft.legs.length > 0
+      ? draft.legs
+      : normalizeNightLegs(args.link.legs);
+
   const next: DivisionLink = normalizeDivisionLink({
     id: args.link.id ?? prior?.id ?? newId(),
     name: args.link.name.trim(),
     leagueId: args.leagueId,
-    primaryDivisionId: args.link.primaryDivisionId,
-    primaryDivisionName: args.link.primaryDivisionName,
-    linkedDivisionId: args.link.linkedDivisionId,
-    linkedDivisionName: args.link.linkedDivisionName,
+    legs,
+    primaryDivisionId: legs[0]?.divisionId ?? "",
+    primaryDivisionName: legs[0]?.divisionName ?? "",
+    linkedDivisionId: legs[1]?.divisionId ?? "",
+    linkedDivisionName: legs[1]?.divisionName ?? "",
     mode: args.link.mode,
-    config: normalizeDivisionLinkConfig(
-      args.link.config ?? prior?.config,
-      args.link.primaryDivisionName,
-      args.link.linkedDivisionName,
-    ),
+    config: configFromLegs(legs),
     createdAt: prior?.createdAt ?? now,
     updatedAt: now,
     updatedBy: args.link.updatedBy ?? prior?.updatedBy ?? null,
@@ -136,10 +164,6 @@ export async function findDivisionLinkInLeague(
 ): Promise<DivisionLink | null> {
   const links = await listDivisionLinks(leagueId);
   return (
-    links.find(
-      (link) =>
-        link.primaryDivisionId === divisionId ||
-        link.linkedDivisionId === divisionId,
-    ) ?? null
+    links.find((link) => linkLegDivisionIds(link).includes(divisionId)) ?? null
   );
 }

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  validateDivisionLinkRosters,
+  validateNightFormatRosters,
   type DivisionLinkMode,
+  type DivisionLinkRosterSide,
 } from "@/lib/division-links";
 import {
-  normalizeDivisionLinkConfig,
+  normalizeNightLegs,
   type DivisionLinkConfig,
+  type NightLeg,
 } from "@/lib/division-link-config";
 import {
   deleteDivisionLink,
@@ -44,11 +46,52 @@ async function loadRosterSide(divisionId: string, divisionName: string) {
         isBye: team.isBye,
       })),
       players,
-    };
+    } satisfies DivisionLinkRosterSide;
   });
 }
 
-/** Public read — any client can resolve named links for a league. */
+function legsFromBody(body: {
+  legs?: Array<Partial<NightLeg>> | null;
+  primaryDivisionId?: string;
+  primaryDivisionName?: string;
+  linkedDivisionId?: string;
+  linkedDivisionName?: string;
+  config?: Partial<DivisionLinkConfig> | null;
+}): NightLeg[] {
+  const fromLegs = normalizeNightLegs(body.legs);
+  if (fromLegs.length >= 2) return fromLegs;
+
+  const primaryDivisionId = body.primaryDivisionId?.trim() ?? "";
+  const linkedDivisionId = body.linkedDivisionId?.trim() ?? "";
+  if (!primaryDivisionId || !linkedDivisionId) return fromLegs;
+
+  const primaryName =
+    body.primaryDivisionName?.trim() || primaryDivisionId;
+  const linkedName = body.linkedDivisionName?.trim() || linkedDivisionId;
+
+  // Seed two legs from legacy primary/linked (+ optional config overrides).
+  const seeded = normalizeNightLegs([
+    {
+      id: "singles",
+      label: "Singles",
+      divisionId: primaryDivisionId,
+      divisionName: primaryName,
+      standing: body.config?.standing?.primary,
+      scoring: body.config?.scoring?.primary,
+    },
+    {
+      id: "teams",
+      label: "Teams",
+      divisionId: linkedDivisionId,
+      divisionName: linkedName,
+      standing: body.config?.standing?.linked,
+      scoring: body.config?.scoring?.linked,
+    },
+  ]);
+  return seeded;
+}
+
+/** Public read — any client can resolve named nights for a league. */
 export async function GET(request: NextRequest) {
   try {
     const leagueId = request.nextUrl.searchParams.get("leagueId")?.trim();
@@ -68,8 +111,9 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Create/update a Tableside-only division link (never writes to LMS).
- * Body: { leagueId, name, primaryDivisionId, linkedDivisionId, id? }
+ * Create/update a Tableside-only Night Format (never writes to LMS).
+ * Body: { leagueId, name, legs: [{ divisionId, label?, standing?, scoring? }, ...] }
+ * Legacy: { primaryDivisionId, linkedDivisionId, config? }
  */
 export async function PUT(request: NextRequest) {
   try {
@@ -77,6 +121,7 @@ export async function PUT(request: NextRequest) {
     const body = (await request.json()) as {
       leagueId?: string;
       name?: string;
+      legs?: Array<Partial<NightLeg>> | null;
       primaryDivisionId?: string;
       primaryDivisionName?: string;
       linkedDivisionId?: string;
@@ -87,29 +132,35 @@ export async function PUT(request: NextRequest) {
 
     const leagueId = body.leagueId?.trim() ?? "";
     const name = body.name?.trim() ?? "";
-    const primaryDivisionId = body.primaryDivisionId?.trim() ?? "";
-    const linkedDivisionId = body.linkedDivisionId?.trim() ?? "";
-    if (!leagueId || !name || !primaryDivisionId || !linkedDivisionId) {
+    const legs = legsFromBody(body);
+
+    if (!leagueId || !name) {
+      return NextResponse.json(
+        { error: "leagueId and name are required." },
+        { status: 400 },
+      );
+    }
+    if (legs.length < 2) {
       return NextResponse.json(
         {
           error:
-            "leagueId, name, primaryDivisionId, and linkedDivisionId are required.",
+            "Add at least two LMS divisions (legs). You can still send legacy primaryDivisionId + linkedDivisionId.",
         },
         { status: 400 },
       );
     }
 
-    const primaryDivisionName =
-      body.primaryDivisionName?.trim() || primaryDivisionId;
-    const linkedDivisionName =
-      body.linkedDivisionName?.trim() || linkedDivisionId;
+    const sides = await Promise.all(
+      legs.map((leg) => loadRosterSide(leg.divisionId, leg.divisionName)),
+    );
 
-    const [primary, linked] = await Promise.all([
-      loadRosterSide(primaryDivisionId, primaryDivisionName),
-      loadRosterSide(linkedDivisionId, linkedDivisionName),
-    ]);
+    // Refresh division names from LMS roster load.
+    const namedLegs = legs.map((leg, index) => ({
+      ...leg,
+      divisionName: sides[index]?.divisionName || leg.divisionName,
+    }));
 
-    const validation = validateDivisionLinkRosters(primary, linked);
+    const validation = validateNightFormatRosters(sides);
     if (!validation.ok || !validation.mode) {
       return NextResponse.json(
         {
@@ -120,24 +171,14 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const config = normalizeDivisionLinkConfig(
-      body.config,
-      primary.divisionName,
-      linked.divisionName,
-    );
-
     const link = await upsertDivisionLink({
       leagueId,
       link: {
         id: body.id?.trim() || undefined,
         name,
         leagueId,
-        primaryDivisionId,
-        primaryDivisionName: primary.divisionName,
-        linkedDivisionId,
-        linkedDivisionName: linked.divisionName,
+        legs: namedLegs,
         mode: validation.mode as DivisionLinkMode,
-        config,
         updatedBy: caller.name ?? caller.email ?? caller.lmsId ?? null,
       },
     });
@@ -154,6 +195,7 @@ export async function POST(request: NextRequest) {
     await requireOperatorApi();
     const body = (await request.json()) as {
       action?: string;
+      legs?: Array<Partial<NightLeg>> | null;
       primaryDivisionId?: string;
       primaryDivisionName?: string;
       linkedDivisionId?: string;
@@ -165,25 +207,19 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    const primaryDivisionId = body.primaryDivisionId?.trim() ?? "";
-    const linkedDivisionId = body.linkedDivisionId?.trim() ?? "";
-    if (!primaryDivisionId || !linkedDivisionId) {
+
+    const legs = legsFromBody(body);
+    if (legs.length < 2) {
       return NextResponse.json(
-        { error: "primaryDivisionId and linkedDivisionId are required." },
+        { error: "At least two legs (LMS divisions) are required." },
         { status: 400 },
       );
     }
-    const [primary, linked] = await Promise.all([
-      loadRosterSide(
-        primaryDivisionId,
-        body.primaryDivisionName?.trim() || primaryDivisionId,
-      ),
-      loadRosterSide(
-        linkedDivisionId,
-        body.linkedDivisionName?.trim() || linkedDivisionId,
-      ),
-    ]);
-    const validation = validateDivisionLinkRosters(primary, linked);
+
+    const sides = await Promise.all(
+      legs.map((leg) => loadRosterSide(leg.divisionId, leg.divisionName)),
+    );
+    const validation = validateNightFormatRosters(sides);
     return NextResponse.json({ validation });
   } catch (error) {
     return operatorErrorResponse(error);

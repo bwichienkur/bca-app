@@ -4,15 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import type { DivisionLink, DivisionLinkValidation } from "@/lib/division-links";
 import { findSisterDivision } from "@/lib/division-combos";
 import {
-  defaultDivisionLinkConfig,
-  linkConfigNightHint,
-  linkConfigStandingFormula,
-  normalizeDivisionLinkConfig,
-  standingRawColumnHeaders,
+  defaultNightLeg,
+  defaultStandingSide,
+  defaultScoringSide,
+  legsNightHint,
+  legsStandingFormula,
+  normalizeNightLegs,
+  standingRawColumnHeadersForLegs,
   STANDING_METRIC_OPTIONS,
-  type DivisionLinkConfig,
   type DivisionLinkScoringSide,
   type DivisionLinkStandingSide,
+  type NightLeg,
   type StandingScoreMetric,
 } from "@/lib/division-link-config";
 import { LEAGUE_SCORING_FORMATS } from "@/lib/scoring-formats";
@@ -33,6 +35,8 @@ const btnPrimary =
   "inline-flex items-center justify-center rounded-[var(--radius)] bg-[var(--felt)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
 const btnGhost =
   "inline-flex items-center justify-center rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold text-[var(--ink)] disabled:opacity-50";
+const btnDelete =
+  "inline-flex items-center justify-center rounded-[var(--radius)] border border-[var(--danger)]/40 bg-[var(--danger-bg)] px-3 py-2 text-sm font-semibold text-[var(--danger)] disabled:opacity-50";
 
 type DivisionOption = { id: string; name: string };
 type LinkFormTab = "divisions" | "standing" | "race";
@@ -59,6 +63,14 @@ function toOption(
   };
 }
 
+function emptyLegDraft(index: number): NightLeg {
+  return defaultNightLeg({
+    divisionId: "",
+    divisionName: "",
+    index,
+  });
+}
+
 function StandingSideFields({
   title,
   side,
@@ -74,7 +86,7 @@ function StandingSideFields({
         {title}
       </legend>
       <label className="block space-y-1 text-sm">
-        <span className="text-[var(--muted)]">Role</span>
+        <span className="text-[var(--muted)]">Role hint</span>
         <select
           className={selectClass}
           value={side.role}
@@ -213,8 +225,8 @@ function ScoringSideFields({
 }
 
 /**
- * Popup form to create/edit a Tableside-only division link.
- * Never writes to LMS.
+ * Popup form to create/edit a Tableside Night Format (division link).
+ * Never writes to LMS. Supports a configurable number of legs.
  */
 export function DivisionLinkForm({
   leagueId,
@@ -237,18 +249,10 @@ export function DivisionLinkForm({
 }) {
   const [tab, setTab] = useState<LinkFormTab>("divisions");
   const [linkName, setLinkName] = useState(initialLink?.name ?? "");
-  const [primaryDivisionId, setPrimaryDivisionId] = useState(
-    initialLink?.primaryDivisionId ?? "",
-  );
-  const [linkedDivisionId, setLinkedDivisionId] = useState(
-    initialLink?.linkedDivisionId ?? "",
-  );
-  const [config, setConfig] = useState<DivisionLinkConfig>(() =>
-    normalizeDivisionLinkConfig(
-      initialLink?.config,
-      initialLink?.primaryDivisionName ?? "Singles",
-      initialLink?.linkedDivisionName ?? "Teams",
-    ),
+  const [legs, setLegs] = useState<NightLeg[]>(() =>
+    initialLink?.legs?.length
+      ? normalizeNightLegs(initialLink.legs)
+      : [emptyLegDraft(0), emptyLegDraft(1)],
   );
   const [validation, setValidation] = useState<DivisionLinkValidation | null>(
     null,
@@ -257,74 +261,38 @@ export function DivisionLinkForm({
   useEffect(() => {
     setTab("divisions");
     setLinkName(initialLink?.name ?? "");
-    setPrimaryDivisionId(initialLink?.primaryDivisionId ?? "");
-    setLinkedDivisionId(initialLink?.linkedDivisionId ?? "");
-    setConfig(
-      normalizeDivisionLinkConfig(
-        initialLink?.config,
-        initialLink?.primaryDivisionName ?? "Singles",
-        initialLink?.linkedDivisionName ?? "Teams",
-      ),
+    setLegs(
+      initialLink?.legs?.length
+        ? normalizeNightLegs(initialLink.legs)
+        : [emptyLegDraft(0), emptyLegDraft(1)],
     );
     setValidation(null);
   }, [initialLink]);
 
-  const primaryDivision =
-    divisions.find((d) => d.id === primaryDivisionId) ??
-    (initialLink && initialLink.primaryDivisionId === primaryDivisionId
-      ? {
-          id: initialLink.primaryDivisionId,
-          name: initialLink.primaryDivisionName,
-        }
-      : null);
-  const linkedDivision =
-    divisions.find((d) => d.id === linkedDivisionId) ??
-    (initialLink && initialLink.linkedDivisionId === linkedDivisionId
-      ? {
-          id: initialLink.linkedDivisionId,
-          name: initialLink.linkedDivisionName,
-        }
-      : null);
+  const filledLegs = useMemo(
+    () => legs.filter((leg) => leg.divisionId.trim()),
+    [legs],
+  );
 
   const sisterSuggestion = useMemo(() => {
-    if (!primaryDivision) return null;
-    return findSisterDivision(primaryDivision, divisions)?.sister ?? null;
-  }, [primaryDivision, divisions]);
-
-  const primaryOptions = useMemo(
-    () =>
-      divisions
-        .filter((d) => d.id !== linkedDivisionId)
-        .map((d) => ({
-          id: d.id,
-          label: d.name,
-          value: d,
-        })),
-    [divisions, linkedDivisionId],
-  );
-  const linkedOptions = useMemo(
-    () =>
-      divisions
-        .filter((d) => d.id !== primaryDivisionId)
-        .map((d) => ({
-          id: d.id,
-          label: d.name,
-          value: d,
-        })),
-    [divisions, primaryDivisionId],
-  );
+    const first = filledLegs[0];
+    if (!first) return null;
+    const division = divisions.find((d) => d.id === first.divisionId);
+    if (!division) return null;
+    return findSisterDivision(division, divisions)?.sister ?? null;
+  }, [filledLegs, divisions]);
 
   const tabs: IconSubTabItem<LinkFormTab>[] = [
-    { id: "divisions", label: "Divisions", icon: OverviewSubIcon },
+    { id: "divisions", label: "Legs", icon: OverviewSubIcon },
     { id: "standing", label: "Standing", icon: StatsSubIcon },
     { id: "race", label: "Race HC", icon: RoundsSubIcon },
   ];
 
-  const applyDefaultsFromNames = (
-    primaryName: string,
-    linkedName: string,
-  ) => {
-    setConfig(defaultDivisionLinkConfig(primaryName, linkedName));
+  const updateLeg = (index: number, patch: Partial<NightLeg>) => {
+    setLegs((prev) =>
+      prev.map((leg, i) => (i === index ? { ...leg, ...patch } : leg)),
+    );
+    setValidation(null);
   };
 
   const maybePrefillLinkName = (divisionName: string) => {
@@ -334,9 +302,29 @@ export function DivisionLinkForm({
     if (season) setLinkName(`Beyond Monday ${season}`);
   };
 
+  const applyBeyondDefaults = () => {
+    setLegs((prev) =>
+      prev.map((leg, index) => {
+        if (!leg.divisionId) return leg;
+        const seeded = defaultNightLeg({
+          divisionId: leg.divisionId,
+          divisionName: leg.divisionName || leg.label,
+          index,
+        });
+        return {
+          ...leg,
+          id: seeded.id,
+          label: seeded.label,
+          standing: defaultStandingSide(seeded.standing.role),
+          scoring: defaultScoringSide(seeded.standing.role),
+        };
+      }),
+    );
+  };
+
   const runValidate = async () => {
-    if (!primaryDivisionId || !linkedDivisionId) {
-      onError("Pick two divisions to link.");
+    if (filledLegs.length < 2) {
+      onError("Add at least two LMS divisions (legs).");
       return null;
     }
     onBusy(true);
@@ -349,10 +337,7 @@ export function DivisionLinkForm({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "validate",
-            primaryDivisionId,
-            primaryDivisionName: primaryDivision?.name ?? primaryDivisionId,
-            linkedDivisionId,
-            linkedDivisionName: linkedDivision?.name ?? linkedDivisionId,
+            legs: filledLegs,
           }),
         },
       );
@@ -371,11 +356,11 @@ export function DivisionLinkForm({
   const saveLink = async () => {
     const name = linkName.trim();
     if (!name) {
-      onError("Name the link (players will see this in League).");
+      onError("Name the night (players will see this in League).");
       return;
     }
-    if (!primaryDivisionId || !linkedDivisionId) {
-      onError("Pick two divisions to link.");
+    if (filledLegs.length < 2) {
+      onError("Add at least two LMS divisions (legs).");
       return;
     }
     onBusy(true);
@@ -392,36 +377,34 @@ export function DivisionLinkForm({
           id: initialLink?.id,
           leagueId,
           name,
-          primaryDivisionId,
-          primaryDivisionName: primaryDivision?.name ?? primaryDivisionId,
-          linkedDivisionId,
-          linkedDivisionName: linkedDivision?.name ?? linkedDivisionId,
-          config,
+          legs: filledLegs,
         }),
       });
       setValidation(data.validation);
       onNotice(
-        "Division link saved in Tableside only — LMS was not updated.",
+        "Night format saved in Tableside only — LMS was not updated.",
       );
       onSaved(data.link);
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Failed to save link.");
+      onError(error instanceof Error ? error.message : "Failed to save night.");
     } finally {
       onBusy(false);
     }
   };
 
+  const rawHeaders = standingRawColumnHeadersForLegs(filledLegs);
+
   return (
     <div className="space-y-4">
       <div className="rounded-[var(--radius)] border border-[var(--amber)]/35 bg-[color-mix(in_srgb,var(--amber)_12%,transparent)] px-3 py-2 text-sm text-[var(--amber)]">
-        Tableside-only. Linking does not change LMS. Configure how each half
-        feeds combined standings and which race chart Score uses.
+        Tableside-only Night Format. Add as many LMS divisions (legs) as the
+        night needs. Linking does not change LMS.
       </div>
 
       <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]">
         <div className="border-b border-[var(--line)] bg-[var(--surface-2)] p-0.5">
           <IconSubTabs
-            aria-label="Division link settings"
+            aria-label="Night format settings"
             items={tabs}
             value={tab}
             onChange={setTab}
@@ -434,7 +417,9 @@ export function DivisionLinkForm({
           {tab === "divisions" ? (
             <div className="grid gap-3">
               <label className="block space-y-1.5 text-sm">
-                <span className="font-medium text-[var(--ink)]">Link name</span>
+                <span className="font-medium text-[var(--ink)]">
+                  Night name
+                </span>
                 <input
                   className={inputClass}
                   value={linkName}
@@ -443,74 +428,130 @@ export function DivisionLinkForm({
                 />
               </label>
 
-              <Typeahead
-                label="First division"
-                placeholder="Search divisions…"
-                emptyText="No divisions match"
-                value={toOption(primaryDivision)}
-                options={primaryOptions}
-                onChange={(option) => {
-                  const nextId = option?.value.id ?? "";
-                  setPrimaryDivisionId(nextId);
-                  setValidation(null);
-                  if (option) {
-                    maybePrefillLinkName(option.value.name);
-                    if (linkedDivision) {
-                      applyDefaultsFromNames(
-                        option.value.name,
-                        linkedDivision.name,
-                      );
-                    }
-                  }
-                  if (nextId && linkedDivisionId === nextId) {
-                    setLinkedDivisionId("");
-                  }
-                }}
-              />
+              {legs.map((leg, index) => {
+                const selected =
+                  divisions.find((d) => d.id === leg.divisionId) ??
+                  (leg.divisionId
+                    ? { id: leg.divisionId, name: leg.divisionName || leg.label }
+                    : null);
+                const options = divisions
+                  .filter(
+                    (d) =>
+                      d.id === leg.divisionId ||
+                      !legs.some(
+                        (other, otherIndex) =>
+                          otherIndex !== index && other.divisionId === d.id,
+                      ),
+                  )
+                  .map((d) => ({
+                    id: d.id,
+                    label: d.name,
+                    value: d,
+                  }));
+                return (
+                  <div
+                    key={`leg-${index}`}
+                    className="space-y-2 rounded-[var(--radius)] border border-[var(--line)] p-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-[var(--ink)]">
+                        Leg {index + 1}
+                      </p>
+                      {legs.length > 2 ? (
+                        <button
+                          type="button"
+                          className={btnDelete}
+                          disabled={busy}
+                          onClick={() => {
+                            setLegs((prev) =>
+                              prev.filter((_, i) => i !== index),
+                            );
+                            setValidation(null);
+                          }}
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
+                    <label className="block space-y-1 text-sm">
+                      <span className="text-[var(--muted)]">Label</span>
+                      <input
+                        className={inputClass}
+                        value={leg.label}
+                        placeholder="Singles / Teams / …"
+                        onChange={(e) =>
+                          updateLeg(index, { label: e.target.value })
+                        }
+                      />
+                    </label>
+                    <Typeahead
+                      label="LMS division"
+                      placeholder="Search divisions…"
+                      emptyText="No divisions match"
+                      value={toOption(selected)}
+                      options={options}
+                      onChange={(option) => {
+                        const nextId = option?.value.id ?? "";
+                        const nextName = option?.value.name ?? "";
+                        if (option) {
+                          maybePrefillLinkName(nextName);
+                          const seeded = defaultNightLeg({
+                            divisionId: nextId,
+                            divisionName: nextName,
+                            index,
+                          });
+                          updateLeg(index, {
+                            divisionId: nextId,
+                            divisionName: nextName,
+                            id: seeded.id,
+                            label: leg.label.trim() || seeded.label,
+                            standing: seeded.standing,
+                            scoring: seeded.scoring,
+                          });
+                        } else {
+                          updateLeg(index, {
+                            divisionId: "",
+                            divisionName: "",
+                          });
+                        }
+                      }}
+                    />
+                  </div>
+                );
+              })}
 
-              <div className="space-y-1.5">
-                <Typeahead
-                  label="Second division"
-                  placeholder="Search divisions…"
-                  emptyText="No divisions match"
-                  value={toOption(linkedDivision)}
-                  options={linkedOptions}
-                  onChange={(option) => {
-                    setLinkedDivisionId(option?.value.id ?? "");
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={btnGhost}
+                  disabled={busy}
+                  onClick={() => {
+                    setLegs((prev) => [...prev, emptyLegDraft(prev.length)]);
                     setValidation(null);
-                    if (option && primaryDivision) {
-                      applyDefaultsFromNames(
-                        primaryDivision.name,
-                        option.value.name,
-                      );
-                    }
                   }}
-                />
-                {sisterSuggestion && linkedDivisionId !== sisterSuggestion.id ? (
+                >
+                  + Add leg
+                </button>
+                {sisterSuggestion &&
+                !legs.some((leg) => leg.divisionId === sisterSuggestion.id) ? (
                   <button
                     type="button"
                     className="text-xs font-semibold text-[var(--felt-deep)] underline-offset-2 hover:underline"
                     onClick={() => {
-                      setLinkedDivisionId(sisterSuggestion.id);
-                      setValidation(null);
-                      if (primaryDivision) {
-                        maybePrefillLinkName(primaryDivision.name);
-                        applyDefaultsFromNames(
-                          primaryDivision.name,
-                          sisterSuggestion.name,
-                        );
-                        if (!linkName.trim()) {
-                          const season =
-                            primaryDivision.name.match(
-                              /\(?\s*(20\d{2}\.\d)\s*\)?/i,
-                            )?.[1] ?? "";
-                          setLinkName(
-                            season
-                              ? `Beyond Monday ${season}`
-                              : "Beyond Monday",
-                          );
-                        }
+                      const index = legs.findIndex((leg) => !leg.divisionId);
+                      const seeded = defaultNightLeg({
+                        divisionId: sisterSuggestion.id,
+                        divisionName: sisterSuggestion.name,
+                        index: index >= 0 ? index : legs.length,
+                      });
+                      if (index >= 0) {
+                        updateLeg(index, seeded);
+                      } else {
+                        setLegs((prev) => [...prev, seeded]);
                       }
+                      maybePrefillLinkName(
+                        filledLegs[0]?.divisionName || sisterSuggestion.name,
+                      );
                     }}
                   >
                     Suggest {sisterSuggestion.name}
@@ -528,18 +569,6 @@ export function DivisionLinkForm({
                   ].join(" ")}
                 >
                   <p>{validation.message}</p>
-                  {!validation.ok &&
-                  (validation.missingInPrimary.length ||
-                    validation.missingInLinked.length) ? (
-                    <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs">
-                      {validation.missingInPrimary.map((item) => (
-                        <li key={`p-${item}`}>Missing in first: {item}</li>
-                      ))}
-                      {validation.missingInLinked.map((item) => (
-                        <li key={`l-${item}`}>Missing in second: {item}</li>
-                      ))}
-                    </ul>
-                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -548,68 +577,47 @@ export function DivisionLinkForm({
           {tab === "standing" ? (
             <div className="space-y-3">
               <p className="text-sm text-[var(--muted)]">
-                Pick each half’s LMS standings column and a multiplier. League
+                Pick each leg’s LMS standings column and a multiplier. League
                 standings will show those raw columns plus a{" "}
                 <span className="font-medium text-[var(--ink)]">STANDING</span>{" "}
-                total used to rank the combined league.
+                total used to rank the combined night.
               </p>
-              <StandingSideFields
-                title={primaryDivision?.name || "First division"}
-                side={config.standing.primary}
-                onChange={(primary) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    standing: { ...prev.standing, primary },
-                  }))
-                }
-              />
-              <StandingSideFields
-                title={linkedDivision?.name || "Second division"}
-                side={config.standing.linked}
-                onChange={(linked) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    standing: { ...prev.standing, linked },
-                  }))
-                }
-              />
+              {filledLegs.map((leg, index) => {
+                const legIndex = legs.findIndex(
+                  (row) => row.divisionId === leg.divisionId,
+                );
+                return (
+                  <StandingSideFields
+                    key={leg.divisionId}
+                    title={leg.label || leg.divisionName || `Leg ${index + 1}`}
+                    side={leg.standing}
+                    onChange={(standing) =>
+                      updateLeg(legIndex >= 0 ? legIndex : index, { standing })
+                    }
+                  />
+                );
+              })}
               <div className="space-y-1.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--muted)]">
                 <p className="font-semibold text-[var(--ink)]">
-                  {linkConfigStandingFormula(config)}
+                  {legsStandingFormula(filledLegs)}
                 </p>
                 <p>
                   Output columns:{" "}
                   <span className="font-medium text-[var(--ink)]">
-                    # · TEAM · STANDING ·{" "}
-                    {
-                      standingRawColumnHeaders(
-                        config.standing.primary,
-                        config.standing.linked,
-                      )[0]
-                    }{" "}
-                    ·{" "}
-                    {
-                      standingRawColumnHeaders(
-                        config.standing.primary,
-                        config.standing.linked,
-                      )[1]
-                    }{" "}
+                    # · TEAM · STANDING
+                    {rawHeaders.length
+                      ? ` · ${rawHeaders.join(" · ")}`
+                      : ""}{" "}
                     · WKS
                   </span>
                 </p>
-                <p>{linkConfigNightHint(config)}</p>
+                <p>{legsNightHint(filledLegs)}</p>
               </div>
               <button
                 type="button"
                 className={btnGhost}
-                disabled={!primaryDivision || !linkedDivision}
-                onClick={() => {
-                  if (!primaryDivision || !linkedDivision) return;
-                  applyDefaultsFromNames(
-                    primaryDivision.name,
-                    linkedDivision.name,
-                  );
-                }}
+                disabled={filledLegs.length < 2}
+                onClick={applyBeyondDefaults}
               >
                 Reset Beyond defaults (SETS×1 + RDS×2)
               </button>
@@ -619,31 +627,26 @@ export function DivisionLinkForm({
           {tab === "race" ? (
             <div className="space-y-3">
               <p className="text-sm text-[var(--muted)]">
-                Race handicap overrides for the Tableside Score pad. Beyond
-                Singles should use official{" "}
+                Race handicap overrides for the Tableside Score pad, per leg.
+                Beyond Singles should use official{" "}
                 <span className="font-medium text-[var(--ink)]">R5 Hot</span>;
                 Teams usually stays fixed race / no chart.
               </p>
-              <ScoringSideFields
-                title={primaryDivision?.name || "First division"}
-                side={config.scoring.primary}
-                onChange={(primary) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    scoring: { ...prev.scoring, primary },
-                  }))
-                }
-              />
-              <ScoringSideFields
-                title={linkedDivision?.name || "Second division"}
-                side={config.scoring.linked}
-                onChange={(linked) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    scoring: { ...prev.scoring, linked },
-                  }))
-                }
-              />
+              {filledLegs.map((leg, index) => {
+                const legIndex = legs.findIndex(
+                  (row) => row.divisionId === leg.divisionId,
+                );
+                return (
+                  <ScoringSideFields
+                    key={leg.divisionId}
+                    title={leg.label || leg.divisionName || `Leg ${index + 1}`}
+                    side={leg.scoring}
+                    onChange={(scoring) =>
+                      updateLeg(legIndex >= 0 ? legIndex : index, { scoring })
+                    }
+                  />
+                );
+              })}
             </div>
           ) : null}
         </div>
@@ -653,7 +656,7 @@ export function DivisionLinkForm({
         <button
           type="button"
           className={btnGhost}
-          disabled={busy || !primaryDivisionId || !linkedDivisionId}
+          disabled={busy || filledLegs.length < 2}
           onClick={() => void runValidate()}
         >
           Check match
@@ -661,15 +664,10 @@ export function DivisionLinkForm({
         <button
           type="button"
           className={btnPrimary}
-          disabled={
-            busy ||
-            !primaryDivisionId ||
-            !linkedDivisionId ||
-            !linkName.trim()
-          }
+          disabled={busy || filledLegs.length < 2 || !linkName.trim()}
           onClick={() => void saveLink()}
         >
-          {initialLink ? "Update link" : "Save link"}
+          {initialLink ? "Update night" : "Save night"}
         </button>
       </div>
     </div>

@@ -11,12 +11,15 @@ import { normalizeTeamName } from "./matchups";
 import type {
   DivisionLinkConfig,
   DivisionLinkStandingSide,
+  NightLeg,
   StandingScoreMetric,
 } from "./division-link-config";
 import {
   defaultDivisionLinkConfig,
+  legsNightHint,
   linkConfigNightHint,
   standingRawColumnHeaders,
+  standingRawColumnHeadersForLegs,
 } from "./division-link-config";
 import type { ScheduleDay, ScheduleMatch, TableReport } from "./types";
 
@@ -235,58 +238,77 @@ export function standingSidesFromCombo(
 }
 
 /**
- * Merge two LMS team-standings reports by team name into a combined table.
+ * Merge N LMS team-standings reports by team name into a combined table.
  *
  * Output columns:
- * - STANDING — combined rank total (each half’s metric × its multiplier)
- * - raw LMS columns — the metric each half uses (e.g. SETS, RDS)
+ * - STANDING — combined rank total (each leg’s metric × its multiplier)
+ * - raw LMS columns — one per leg (e.g. SETS, RDS, …)
  * - WKS
  *
  * Beyond default: STANDING = SETS×1 + RDS×2.
  */
 export function mergeCombinedStandings(args: {
-  singles: TableReport | null | undefined;
-  teams: TableReport | null | undefined;
+  /** Preferred: ordered legs with their LMS reports. */
+  legs?: Array<{
+    leg: NightLeg | { id: string; standing: DivisionLinkStandingSide };
+    report: TableReport | null | undefined;
+  }>;
+  /** Legacy 2-role API. */
+  singles?: TableReport | null | undefined;
+  teams?: TableReport | null | undefined;
   combo?: KnownDivisionCombo;
-  /** Preferred: link-level standing config (SETS/RDS/PTS + multipliers). */
+  /** Preferred when using singles/teams args: link-level standing config. */
   config?: DivisionLinkConfig | null;
 }): TableReport {
-  const configSides = args.config
-    ? {
-        primary: args.config.standing.primary,
-        linked: args.config.standing.linked,
-      }
-    : null;
-  const roleSides = args.config
-    ? standingSidesFromConfig(args.config)
-    : standingSidesFromCombo(args.combo ?? BEYOND_MONDAY_COMBO);
-  const singlesSide = roleSides.singles;
-  const teamsSide = roleSides.teams;
+  let legRows = args.legs ?? [];
 
-  // Column order follows link primary → linked when config is present.
-  const columnSides: [DivisionLinkStandingSide, DivisionLinkStandingSide] =
-    configSides
-      ? [configSides.primary, configSides.linked]
-      : [singlesSide, teamsSide];
-  const [rawHeaderA, rawHeaderB] = standingRawColumnHeaders(
-    columnSides[0],
-    columnSides[1],
+  if (legRows.length === 0) {
+    const roleSides = args.config
+      ? standingSidesFromConfig(args.config)
+      : standingSidesFromCombo(args.combo ?? BEYOND_MONDAY_COMBO);
+    const columnOrder = args.config
+      ? [args.config.standing.primary, args.config.standing.linked]
+      : [roleSides.singles, roleSides.teams];
+
+    // Map reports onto column order by role.
+    legRows = columnOrder.map((side, index) => {
+      const report =
+        side.role === "singles" ? args.singles : args.teams;
+      return {
+        leg: {
+          id: side.role || `leg-${index + 1}`,
+          standing: side,
+        },
+        report,
+      };
+    });
+  }
+
+  if (legRows.length === 0) {
+    return { headers: ["#", "TEAM", "STANDING", "WKS"], rows: [] };
+  }
+
+  const headers = standingRawColumnHeadersForLegs(
+    legRows.map((row, index) => ({
+      id: row.leg.id,
+      label: "label" in row.leg ? String((row.leg as NightLeg).label ?? row.leg.id) : row.leg.id,
+      divisionId: "divisionId" in row.leg ? String((row.leg as NightLeg).divisionId ?? row.leg.id) : row.leg.id,
+      divisionName: "divisionName" in row.leg ? String((row.leg as NightLeg).divisionName ?? "") : "",
+      standing: row.leg.standing,
+      scoring: "scoring" in row.leg ? (row.leg as NightLeg).scoring : {},
+    })),
   );
 
-  const byKey = new Map<
-    string,
-    {
-      displayName: string;
-      singlesRaw: number;
-      teamsRaw: number;
-      weeks: number;
-    }
-  >();
+  type TeamAgg = {
+    displayName: string;
+    rawByLeg: number[];
+    weeks: number;
+  };
 
-  const ingest = (
-    report: TableReport | null | undefined,
-    side: DivisionLinkStandingSide,
-  ) => {
+  const byKey = new Map<string, TeamAgg>();
+
+  legRows.forEach((legRow, legIndex) => {
+    const report = legRow.report;
     if (!report?.headers.length) return;
     const nameIdx = columnIndex(report.headers, ["team", "name"]);
     const wksIdx = columnIndex(report.headers, ["wks", "weeks"]);
@@ -298,57 +320,42 @@ export function mergeCombinedStandings(args: {
       if (!key || key === "bye") continue;
       const existing = byKey.get(key) ?? {
         displayName: rawName.replace(/^\((H|A)\)\s*/i, "").trim(),
-        singlesRaw: 0,
-        teamsRaw: 0,
+        rawByLeg: legRows.map(() => 0),
         weeks: 0,
       };
-      const raw = readMetric(report.headers, row, side.metric);
-      const wks = parsePts(row[wksIdx]);
-      if (side.role === "singles") {
-        existing.singlesRaw = raw;
-      } else {
-        existing.teamsRaw = raw;
-      }
-      existing.weeks = Math.max(existing.weeks, wks);
+      existing.rawByLeg[legIndex] = readMetric(
+        report.headers,
+        row,
+        legRow.leg.standing.metric,
+      );
+      existing.weeks = Math.max(existing.weeks, parsePts(row[wksIdx]));
       byKey.set(key, existing);
     }
-  };
-
-  ingest(args.singles, singlesSide);
-  ingest(args.teams, teamsSide);
-
-  const rawForSide = (
-    item: { singlesRaw: number; teamsRaw: number },
-    side: DivisionLinkStandingSide,
-  ) => (side.role === "singles" ? item.singlesRaw : item.teamsRaw);
+  });
 
   const rows = Array.from(byKey.values())
     .map((item) => {
-      const singlesPts = item.singlesRaw * singlesSide.multiplier;
-      const teamsPts = item.teamsRaw * teamsSide.multiplier;
-      return {
-        ...item,
-        singlesPts,
-        teamsPts,
-        combinedPts: singlesPts + teamsPts,
-        rawA: rawForSide(item, columnSides[0]),
-        rawB: rawForSide(item, columnSides[1]),
-      };
+      const legPts = item.rawByLeg.map(
+        (raw, i) => raw * legRows[i]!.leg.standing.multiplier,
+      );
+      const combinedPts = legPts.reduce((sum, n) => sum + n, 0);
+      return { ...item, legPts, combinedPts };
     })
     .sort((a, b) => {
       if (b.combinedPts !== a.combinedPts) return b.combinedPts - a.combinedPts;
-      if (b.singlesPts !== a.singlesPts) return b.singlesPts - a.singlesPts;
+      if ((b.legPts[0] ?? 0) !== (a.legPts[0] ?? 0)) {
+        return (b.legPts[0] ?? 0) - (a.legPts[0] ?? 0);
+      }
       return a.displayName.localeCompare(b.displayName);
     });
 
   return {
-    headers: ["#", "TEAM", "STANDING", rawHeaderA, rawHeaderB, "WKS"],
+    headers: ["#", "TEAM", "STANDING", ...headers, "WKS"],
     rows: rows.map((item, index) => [
       String(index + 1),
       item.displayName,
       formatPts(item.combinedPts),
-      formatPts(item.rawA),
-      formatPts(item.rawB),
+      ...item.rawByLeg.map((raw) => formatPts(raw)),
       formatPts(item.weeks),
     ]),
   };
@@ -366,20 +373,44 @@ export type TaggedScheduleMatch = ScheduleMatch & {
 };
 
 /**
- * Merge schedule days from two divisions, tagging each match with its part.
+ * Merge schedule days from N divisions, tagging each match with its leg label.
  */
 export function mergeCombinedSchedule(args: {
-  primary: { divisionId: string; divisionName: string; days: ScheduleDay[] };
-  linked: { divisionId: string; divisionName: string; days: ScheduleDay[] };
-}): ScheduleDay[] {
-  const byDate = new Map<string, TaggedScheduleMatch[]>();
-
-  const ingest = (block: {
+  /** Preferred: one entry per night leg. */
+  parts?: Array<{
     divisionId: string;
     divisionName: string;
     days: ScheduleDay[];
-  }) => {
-    const partLabel = comboPartLabel(block.divisionName);
+    partLabel?: string | null;
+  }>;
+  /** Legacy 2-division API. */
+  primary?: { divisionId: string; divisionName: string; days: ScheduleDay[] };
+  linked?: { divisionId: string; divisionName: string; days: ScheduleDay[] };
+}): ScheduleDay[] {
+  const parts =
+    args.parts ??
+    ([args.primary, args.linked].filter(Boolean) as Array<{
+      divisionId: string;
+      divisionName: string;
+      days: ScheduleDay[];
+      partLabel?: string | null;
+    }>);
+
+  const byDate = new Map<string, TaggedScheduleMatch[]>();
+
+  const ingest = (
+    block: {
+      divisionId: string;
+      divisionName: string;
+      days: ScheduleDay[];
+      partLabel?: string | null;
+    },
+    index: number,
+  ) => {
+    const partLabel =
+      block.partLabel?.trim() ||
+      comboPartLabel(block.divisionName) ||
+      `Leg ${index + 1}`;
     for (const day of block.days) {
       const key = day.date.trim();
       const list = byDate.get(key) ?? [];
@@ -395,8 +426,7 @@ export function mergeCombinedSchedule(args: {
     }
   };
 
-  ingest(args.primary);
-  ingest(args.linked);
+  parts.forEach((part, index) => ingest(part, index));
 
   const roleOrder = (label: string | null | undefined) => {
     const l = (label ?? "").toLowerCase();
@@ -415,7 +445,6 @@ export function mergeCombinedSchedule(args: {
       }),
     }))
     .sort((a, b) => {
-      // Keep LMS schedule order loosely chronological via Date parse when possible.
       const da = Date.parse(a.date);
       const db = Date.parse(b.date);
       if (!Number.isNaN(da) && !Number.isNaN(db) && da !== db) return da - db;
@@ -426,7 +455,9 @@ export function mergeCombinedSchedule(args: {
 export function comboNightHint(
   combo: KnownDivisionCombo | null | undefined,
   config?: DivisionLinkConfig | null,
+  legs?: NightLeg[] | null,
 ): string | null {
+  if (legs?.length) return legsNightHint(legs);
   if (config) return linkConfigNightHint(config);
   if (!combo) return null;
   const singles = combo.parts.singles;
