@@ -1,30 +1,42 @@
 /**
- * Tableside-only division links (not saved to LMS).
- * Pair two LMS divisions that share a night (e.g. Beyond Singles + Teams).
+ * Tableside-only Night Formats (division links) — not saved to LMS.
+ * Pair 1..N LMS divisions ("legs") that share a league night
+ * (e.g. Beyond Singles + Teams).
  */
 
 import { canonicalizeTeamKey } from "./division-combos";
 import {
+  configFromLegs,
+  defaultLegsFromPair,
   normalizeDivisionLinkConfig,
+  normalizeNightLegs,
   type DivisionLinkConfig,
+  type NightLeg,
 } from "./division-link-config";
 
 export type DivisionLinkMode = "teams" | "individuals";
 
 export type DivisionLink = {
   id: string;
-  /** Display name players see in the league context picker. */
+  /** Display name players see in the league context picker (Night Format name). */
   name: string;
   leagueId: string;
+  /**
+   * Ordered scored LMS divisions in this night.
+   * Always present after normalizeDivisionLink().
+   */
+  legs: NightLeg[];
+  /** Mirror of legs[0] for older clients. */
   primaryDivisionId: string;
   primaryDivisionName: string;
+  /** Mirror of legs[1] (or "") for older clients. */
   linkedDivisionId: string;
   linkedDivisionName: string;
   /** How roster equality was validated when the link was saved. */
   mode: DivisionLinkMode;
   /**
-   * Standing contribution + race/scoring overrides for each half.
-   * Always present after normalizeDivisionLink(); legacy Redis rows are filled.
+   * Legacy primary/linked standing+scoring mirrors (from legs[0]/legs[1]).
+   * Prefer reading per-leg standing/scoring on `legs`.
    */
   config: DivisionLinkConfig;
   createdAt: string;
@@ -32,19 +44,105 @@ export type DivisionLink = {
   updatedBy?: string | null;
 };
 
-/** Ensure legacy stored links have standing/scoring config. */
+export type DivisionLinkInput = Omit<
+  DivisionLink,
+  "id" | "createdAt" | "updatedAt" | "legs" | "config" | "primaryDivisionId" | "primaryDivisionName" | "linkedDivisionId" | "linkedDivisionName"
+> & {
+  id?: string;
+  legs?: NightLeg[] | null;
+  config?: DivisionLinkConfig | null;
+  primaryDivisionId?: string;
+  primaryDivisionName?: string;
+  linkedDivisionId?: string;
+  linkedDivisionName?: string;
+};
+
+/** Ensure legacy stored links have legs[] + standing/scoring config. */
 export function normalizeDivisionLink(
-  link: Omit<DivisionLink, "config"> & {
+  link: Omit<DivisionLink, "legs" | "config"> & {
+    legs?: NightLeg[] | null;
     config?: DivisionLinkConfig | null;
+    primaryDivisionId?: string;
+    primaryDivisionName?: string;
+    linkedDivisionId?: string;
+    linkedDivisionName?: string;
   },
 ): DivisionLink {
+  let legs = normalizeNightLegs(link.legs);
+  if (legs.length === 0) {
+    const primaryId = String(link.primaryDivisionId ?? "").trim();
+    const linkedId = String(link.linkedDivisionId ?? "").trim();
+    const primaryName = String(link.primaryDivisionName ?? "").trim() || primaryId;
+    const linkedName = String(link.linkedDivisionName ?? "").trim() || linkedId;
+    if (primaryId && linkedId) {
+      const config = normalizeDivisionLinkConfig(
+        link.config,
+        primaryName,
+        linkedName,
+      );
+      legs = [
+        {
+          id: "singles",
+          label: config.standing.primary.role === "singles" ? "Singles" : "Teams",
+          divisionId: primaryId,
+          divisionName: primaryName,
+          standing: config.standing.primary,
+          scoring: config.scoring.primary,
+        },
+        {
+          id: "teams",
+          label: config.standing.linked.role === "teams" ? "Teams" : "Singles",
+          divisionId: linkedId,
+          divisionName: linkedName,
+          standing: config.standing.linked,
+          scoring: config.scoring.linked,
+        },
+      ];
+      // Fix labels/ids from roles
+      legs = legs.map((leg, index) => ({
+        ...leg,
+        id: leg.standing.role || `leg-${index + 1}`,
+        label:
+          leg.standing.role === "singles"
+            ? "Singles"
+            : leg.standing.role === "teams"
+              ? "Teams"
+              : leg.label,
+      }));
+      // Unique ids if both somehow same role
+      if (legs[0] && legs[1] && legs[0].id === legs[1].id) {
+        legs[1] = { ...legs[1]!, id: `${legs[1]!.id}-2` };
+      }
+    } else if (primaryId) {
+      legs = defaultLegsFromPair(
+        primaryId,
+        primaryName,
+        linkedId || primaryId,
+        linkedName || primaryName,
+      ).slice(0, linkedId ? 2 : 1);
+    }
+  }
+
+  const config = configFromLegs(legs);
+  const primary = legs[0];
+  const linked = legs[1];
+
   return {
-    ...link,
-    config: normalizeDivisionLinkConfig(
-      link.config,
-      link.primaryDivisionName,
-      link.linkedDivisionName,
-    ),
+    id: link.id,
+    name: link.name,
+    leagueId: link.leagueId,
+    legs,
+    primaryDivisionId: primary?.divisionId ?? String(link.primaryDivisionId ?? ""),
+    primaryDivisionName:
+      primary?.divisionName ?? String(link.primaryDivisionName ?? ""),
+    linkedDivisionId: linked?.divisionId ?? String(link.linkedDivisionId ?? ""),
+    linkedDivisionName:
+      linked?.divisionName ?? String(link.linkedDivisionName ?? ""),
+    mode: link.mode,
+    config,
+    createdAt: link.createdAt,
+    updatedAt: link.updatedAt,
+    updatedBy: link.updatedBy ?? null,
   };
 }
 
@@ -60,8 +158,11 @@ export type DivisionLinkValidation = {
   ok: boolean;
   mode: DivisionLinkMode | null;
   message: string;
+  /** @deprecated use missingByDivision */
   missingInPrimary: string[];
+  /** @deprecated use missingByDivision */
   missingInLinked: string[];
+  missingByDivision?: Record<string, string[]>;
 };
 
 function sortedUnique(values: string[]): string[] {
@@ -107,73 +208,146 @@ export function validateDivisionLinkRosters(
   primary: DivisionLinkRosterSide,
   linked: DivisionLinkRosterSide,
 ): DivisionLinkValidation {
-  if (primary.divisionId === linked.divisionId) {
+  return validateNightFormatRosters([primary, linked]);
+}
+
+/**
+ * All legs in a Night Format must share the same team names (or individuals).
+ * Compared against the first leg as the roster source of truth.
+ */
+export function validateNightFormatRosters(
+  sides: DivisionLinkRosterSide[],
+): DivisionLinkValidation {
+  if (sides.length < 2) {
     return {
       ok: false,
       mode: null,
-      message: "Pick two different divisions to link.",
+      message: "Add at least two LMS divisions (legs) to this night.",
       missingInPrimary: [],
       missingInLinked: [],
+      missingByDivision: {},
     };
   }
 
-  const primaryTeams = teamKeys(primary.teams);
-  const linkedTeams = teamKeys(linked.teams);
-  const primaryPlayers = playerKeys(primary.players);
-  const linkedPlayers = playerKeys(linked.players);
-
-  const teamsMatch =
-    primaryTeams.length > 0 &&
-    linkedTeams.length > 0 &&
-    primaryTeams.length === linkedTeams.length &&
-    primaryTeams.every((key, index) => key === linkedTeams[index]);
-
-  if (teamsMatch) {
-    return {
-      ok: true,
-      mode: "teams",
-      message: `Team names match (${primaryTeams.length} teams).`,
-      missingInPrimary: [],
-      missingInLinked: [],
-    };
-  }
-
-  const individualsMatch =
-    primaryPlayers.length > 0 &&
-    linkedPlayers.length > 0 &&
-    primaryPlayers.length === linkedPlayers.length &&
-    primaryPlayers.every((key, index) => key === linkedPlayers[index]);
-
-  if (individualsMatch) {
-    return {
-      ok: true,
-      mode: "individuals",
-      message: `Individuals match (${primaryPlayers.length} players).`,
-      missingInPrimary: [],
-      missingInLinked: [],
-    };
-  }
-
-  // Prefer explaining team mismatches when both sides have teams.
-  if (primaryTeams.length || linkedTeams.length) {
+  const ids = sides.map((side) => side.divisionId);
+  if (new Set(ids).size !== ids.length) {
     return {
       ok: false,
       mode: null,
-      message:
-        "Divisions must have the exact same team names (or the exact same individuals) to link.",
-      missingInPrimary: diffKeys(linkedTeams, primaryTeams),
-      missingInLinked: diffKeys(primaryTeams, linkedTeams),
+      message: "Each leg must use a different LMS division.",
+      missingInPrimary: [],
+      missingInLinked: [],
+      missingByDivision: {},
     };
   }
 
+  const anchor = sides[0]!;
+  const anchorTeams = teamKeys(anchor.teams);
+  const anchorPlayers = playerKeys(anchor.players);
+  const missingByDivision: Record<string, string[]> = {};
+
+  let teamsOk = anchorTeams.length > 0;
+  let playersOk = anchorPlayers.length > 0;
+
+  for (let i = 1; i < sides.length; i += 1) {
+    const side = sides[i]!;
+    const sideTeams = teamKeys(side.teams);
+    const sidePlayers = playerKeys(side.players);
+
+    const teamsMatch =
+      teamsOk &&
+      sideTeams.length > 0 &&
+      anchorTeams.length === sideTeams.length &&
+      anchorTeams.every((key, index) => key === sideTeams[index]);
+
+    const playersMatch =
+      playersOk &&
+      sidePlayers.length > 0 &&
+      anchorPlayers.length === sidePlayers.length &&
+      anchorPlayers.every((key, index) => key === sidePlayers[index]);
+
+    if (teamsMatch) {
+      playersOk = false; // prefer teams mode once confirmed
+      continue;
+    }
+    if (playersMatch && !teamsOk) {
+      teamsOk = false;
+      continue;
+    }
+
+    if (anchorTeams.length || sideTeams.length) {
+      teamsOk = false;
+      missingByDivision[side.divisionId] = diffKeys(anchorTeams, sideTeams);
+      missingByDivision[anchor.divisionId] = [
+        ...(missingByDivision[anchor.divisionId] ?? []),
+        ...diffKeys(sideTeams, anchorTeams),
+      ];
+    } else {
+      playersOk = false;
+      missingByDivision[side.divisionId] = diffKeys(anchorPlayers, sidePlayers);
+      missingByDivision[anchor.divisionId] = [
+        ...(missingByDivision[anchor.divisionId] ?? []),
+        ...diffKeys(sidePlayers, anchorPlayers),
+      ];
+    }
+  }
+
+  if (teamsOk && anchorTeams.length > 0) {
+    // Verify every side still matches (in case early continue left a mismatch)
+    const allTeamsMatch = sides.every((side) => {
+      const keys = teamKeys(side.teams);
+      return (
+        keys.length === anchorTeams.length &&
+        keys.every((key, index) => key === anchorTeams[index])
+      );
+    });
+    if (allTeamsMatch) {
+      return {
+        ok: true,
+        mode: "teams",
+        message: `Team names match across ${sides.length} legs (${anchorTeams.length} teams).`,
+        missingInPrimary: [],
+        missingInLinked: [],
+        missingByDivision: {},
+      };
+    }
+  }
+
+  if (playersOk && anchorPlayers.length > 0) {
+    const allPlayersMatch = sides.every((side) => {
+      const keys = playerKeys(side.players);
+      return (
+        keys.length === anchorPlayers.length &&
+        keys.every((key, index) => key === anchorPlayers[index])
+      );
+    });
+    if (allPlayersMatch) {
+      return {
+        ok: true,
+        mode: "individuals",
+        message: `Individuals match across ${sides.length} legs (${anchorPlayers.length} players).`,
+        missingInPrimary: [],
+        missingInLinked: [],
+        missingByDivision: {},
+      };
+    }
+  }
+
+  const second = sides[1]!;
   return {
     ok: false,
     mode: null,
     message:
-      "Divisions must have the exact same team names (or the exact same individuals) to link.",
-    missingInPrimary: diffKeys(linkedPlayers, primaryPlayers),
-    missingInLinked: diffKeys(primaryPlayers, linkedPlayers),
+      "All legs must have the exact same team names (or the exact same individuals).",
+    missingInPrimary: missingByDivision[anchor.divisionId] ?? [],
+    missingInLinked: missingByDivision[second.divisionId] ?? [],
+    missingByDivision,
   };
+}
+
+export function linkLegDivisionIds(link: DivisionLink): string[] {
+  if (link.legs?.length) return link.legs.map((leg) => leg.divisionId);
+  return [link.primaryDivisionId, link.linkedDivisionId].filter(Boolean);
 }
 
 export function findLinkForDivision(
@@ -182,11 +356,7 @@ export function findLinkForDivision(
 ): DivisionLink | null {
   if (!divisionId) return null;
   return (
-    links.find(
-      (link) =>
-        link.primaryDivisionId === divisionId ||
-        link.linkedDivisionId === divisionId,
-    ) ?? null
+    links.find((link) => linkLegDivisionIds(link).includes(divisionId)) ?? null
   );
 }
 
@@ -198,12 +368,11 @@ export function findLinkById(
   return links.find((link) => link.id === linkId) ?? null;
 }
 
-/** Division ids hidden from the player picker because a named link replaces them. */
+/** Division ids hidden from the player picker because a named night replaces them. */
 export function linkedMemberDivisionIds(links: DivisionLink[]): Set<string> {
   const ids = new Set<string>();
   for (const link of links) {
-    ids.add(link.primaryDivisionId);
-    ids.add(link.linkedDivisionId);
+    for (const id of linkLegDivisionIds(link)) ids.add(id);
   }
   return ids;
 }
@@ -216,13 +385,13 @@ export type PickerDivisionOption = {
   leagueName: string;
   state: string;
   reportUrl: string;
-  /** Present when this option is a Tableside division link. */
+  /** Present when this option is a Tableside Night Format (division link). */
   link?: DivisionLink;
 };
 
 /**
- * Build player-facing division options: named links replace their member
- * divisions so players only pick one entry.
+ * Build player-facing division options: named nights replace their member
+ * LMS divisions so players only pick one entry.
  */
 export function buildLinkedDivisionPickerOptions<
   T extends {
@@ -240,7 +409,9 @@ export function buildLinkedDivisionPickerOptions<
 
   for (const link of links) {
     const primary =
-      divisions.find((d) => d.id === link.primaryDivisionId) ?? null;
+      divisions.find((d) => d.id === link.primaryDivisionId) ??
+      divisions.find((d) => linkLegDivisionIds(link).includes(d.id)) ??
+      null;
     options.push({
       id: `link:${link.id}`,
       name: link.name,

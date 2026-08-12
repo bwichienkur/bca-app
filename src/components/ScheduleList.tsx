@@ -224,7 +224,8 @@ export function ScheduleList({
                     linked
                       ? matchup.completePair
                         ? "Combined"
-                        : (matchup.halves[0]?.kind === "teams"
+                        : matchup.halves[0]?.label ||
+                          (matchup.halves[0]?.kind === "teams"
                             ? "Teams"
                             : "Singles")
                       : null
