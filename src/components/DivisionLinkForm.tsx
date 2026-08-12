@@ -481,7 +481,7 @@ function ScoringSideFields({
                   "Fixed target to finish a contest. Paradise: points to 10 per game. Beyond Teams: 1 (each GAME S is win/lose).",
               }}
             >
-              Race win
+              Win target
             </FieldLabel>
             <input
               type="number"
@@ -551,7 +551,7 @@ function ScoringSideFields({
         <FieldLabel
           info={{
             summary:
-              "Expected-points scale for RoundBased handicap display. Affects HC math, not race-to.",
+              "LMS Points for win — expected-points scale for RoundBased handicap. Affects HC math, not race-to.",
             items: [
               {
                 label: "1",
@@ -569,10 +569,10 @@ function ScoringSideFields({
             ],
           }}
         >
-          HC system
+          Points for win
         </FieldLabel>
         <SelectField
-          aria-label={`${title} HC system`}
+          aria-label={`${title} points for win`}
           value={format.pointSystem}
           options={[
             { value: "1", label: "1" },

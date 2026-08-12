@@ -330,7 +330,7 @@ export function ScoringFormatForm({
       {draft.raceMode === "fixed-race" ? (
         <div className="grid grid-cols-2 gap-2">
           <label className="block space-y-1 text-sm">
-            <span className="text-[var(--muted)]">Race win</span>
+            <span className="text-[var(--muted)]">Win target</span>
             <input
               type="number"
               min={1}
@@ -378,9 +378,9 @@ export function ScoringFormatForm({
       )}
 
       <label className="block space-y-1 text-sm">
-        <span className="text-[var(--muted)]">HC point system</span>
+        <span className="text-[var(--muted)]">Points for win</span>
         <SelectField
-          aria-label="HC point system"
+          aria-label="Points for win"
           value={draft.pointSystem}
           options={[
             { value: "1", label: "1" },

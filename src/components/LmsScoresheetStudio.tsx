@@ -379,7 +379,7 @@ export function LmsScoresheetStudio() {
               info={{
                 summary:
                   picks.fixedRaceTo <= 1
-                    ? "Single-game matchups: mark W/L only (1 game = 1 match point when using match wins)."
+                    ? "Single-game matchups: mark W/L only (1 game = 1 unit when using set/matchup wins)."
                     : picks.gameKind === "S"
                       ? "Points pad length / max race value for fixed-race games."
                       : "Same race length for every matchup (not the team race target).",

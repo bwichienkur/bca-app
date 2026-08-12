@@ -202,13 +202,13 @@ export const TEAM_SCORING_OPTIONS: Array<{
 }> = [
   {
     id: "match-win",
-    label: "Match wins",
-    description: "Individual match winner earns a team point",
+    label: "Set wins",
+    description: "Player race/set winner earns a team point",
   },
   {
     id: "round-points",
-    label: "Round points",
-    description: "Round wins (+ optional match-points round)",
+    label: "Round win",
+    description: "Round wins (+ LMS total-points round when enabled)",
   },
 ];
 
@@ -228,7 +228,7 @@ export const FORMAT_PRESETS: Array<{
   {
     id: "tuesday-r6",
     label: "Tuesday 9-Ball",
-    description: "Slot races · R6 Hot · match wins",
+    description: "Slot races · R6 Hot · set wins",
     picks: {
       playersPerTeam: 4,
       structure: "slot-races",
@@ -387,7 +387,7 @@ function collectWarnings(picks: FormatGeneratorPicks): string[] {
   }
   if (picks.gameKind === "R" && picks.teamScoring === "round-points") {
     warnings.push(
-      "Race nights usually use 1 pt per match win; round-points is more common for points pads.",
+      "Race nights usually use 1 pt per set win; round wins are more common for points pads.",
     );
   }
   if (picks.fargoHc !== "none" && picks.pointSystem === "1" && picks.gameKind === "S") {
