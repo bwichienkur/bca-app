@@ -2147,7 +2147,7 @@ export function MatchScoring({
                     ? `Round won — ${teamsStandingAward ?? 2} standing match pts (RDS × ${teamsStandingAward ?? 2}). Remaining matchups are locked.`
                     : scoringFormat.teamRaceTo && scoringFormat.fixedRaceWin === 1
                       ? `Round-robin matchups · first to ${scoringFormat.teamRaceTo} wins the round (${teamsStandingAward ?? 2} standing match pts).`
-                      : `Each match win is ${scoringFormat.pointsPerMatchWin} team point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}${
+                      : `Each set win is ${scoringFormat.pointsPerMatchWin} team point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}${
                           scoringFormat.teamRaceTo
                             ? ` · first to ${scoringFormat.teamRaceTo}`
                             : ""
@@ -4432,7 +4432,7 @@ function ReviewPanel({
               ? raceClinched
                 ? `Race ${totals.teamOneWins}–${totals.teamTwoWins} (to ${scoringFormat.teamRaceTo}) · round won`
                 : `Race ${totals.teamOneWins}–${totals.teamTwoWins} · first to ${scoringFormat.teamRaceTo}`
-              : `Match wins ${roundWins.teamOne}–${roundWins.teamTwo}`
+              : `Set wins ${roundWins.teamOne}–${roundWins.teamTwo}`
             : `Rounds ${roundWins.teamOne}–${roundWins.teamTwo}`}{" "}
           · {totals.scored} of {totals.total} matchups scored
           {incomplete && !locked ? " · finish the race first" : ""}

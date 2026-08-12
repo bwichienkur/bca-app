@@ -20,7 +20,7 @@ export type MatchScoreboardProps = {
    * When set with teamRaceTo, these are the hero numbers — not the race tally.
    */
   standingMatchPoints?: { teamOne: number; teamTwo: number } | null;
-  /** Short hint under Match pts when standing pts are shown (e.g. "RDS × 2"). */
+  /** Short hint under Standing pts when shown (e.g. "RDS × 2"). */
   standingPtsHint?: string | null;
   formatHint?: string;
   pointTotals: { teamOne: number; teamTwo: number };
@@ -207,7 +207,7 @@ export const MatchScoreboard = memo(function MatchScoreboard({
         </p>
         {matchWinTeamPoints ? (
           <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40">
-            {teamRaceTarget ? `Race to ${teamRaceTarget}` : "Match wins"}
+            {teamRaceTarget ? `Race to ${teamRaceTarget}` : "Set wins"}
           </p>
         ) : includeMatchPointsRound && playedRounds > 0 ? (
           <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40">
@@ -225,7 +225,7 @@ export const MatchScoreboard = memo(function MatchScoreboard({
         {showStandingHero ? (
           <>
             {metricRow({
-              label: "Match pts",
+              label: "Standing pts",
               one: standingMatchPoints!.teamOne,
               two: standingMatchPoints!.teamTwo,
               emphasis: "hero",
@@ -248,7 +248,11 @@ export const MatchScoreboard = memo(function MatchScoreboard({
           </>
         ) : (
           metricRow({
-            label: matchWinTeamPoints ? "Match pts" : "Rounds",
+            label: matchWinTeamPoints
+              ? teamRaceTarget
+                ? "Matchups"
+                : "Set pts"
+              : "Rounds",
             one: roundWins.teamOne,
             two: roundWins.teamTwo,
             emphasis: "hero",

@@ -1068,7 +1068,7 @@ export function FormatScoreSandbox({
                 </div>
                 <div className="text-center">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                    {isMatchPointsRound ? "Match pts" : "Round"}
+                    {isMatchPointsRound ? "Totals" : "Round"}
                   </p>
                 </div>
                 <div className="min-w-0 text-right">
@@ -1103,7 +1103,7 @@ export function FormatScoreSandbox({
                     ? `Round-robin matchups · first to ${scoringFormat.teamRaceTo} wins the round (2 standing match pts). Tap a matchup to score.`
                     : scoringFormat.teamRaceTo
                       ? `Each matchup is one game · first team to ${scoringFormat.teamRaceTo} wins. Tap a matchup to score.`
-                      : `Each individual match win = ${scoringFormat.pointsPerMatchWin} team point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}${
+                      : `Each set win = ${scoringFormat.pointsPerMatchWin} team point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}${
                           scoringFormat.raceMode === "fargo-race-chart"
                             ? ` · ${raceChartMeta(scoringFormat.raceChartId ?? "r6-hot").label}`
                             : (scoringFormat.fixedRaceWin ?? 0) <= 1

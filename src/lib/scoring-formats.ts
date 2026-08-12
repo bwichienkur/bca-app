@@ -60,7 +60,7 @@ export const FORMAT_PALM_BEACH_5: LeagueScoringFormat = {
   id: "palm-beach-5",
   label: "Palm Beach 5-player",
   description:
-    "Five singles matches. Race to 10 (max loss 7). Round wins plus R6 match-points from total points.",
+    "Five players · five rounds. Game points to 10 (max loss 7). Round wins plus LMS total-points round.",
   playersPerTeam: 5,
   matchesPerNight: 5,
   teamPointMode: "round-points",
@@ -73,14 +73,14 @@ export const FORMAT_PALM_BEACH_5: LeagueScoringFormat = {
 };
 
 /**
- * Tuesday 9-Ball sheet style: 4 individual matches, R6 Hot race chart,
- * each match win = 1 team point (no points-per-game team scoring).
+ * Tuesday 9-Ball sheet style: 4 player races, R6 Hot race chart,
+ * each set win = 1 team point (no points-per-game team scoring).
  */
 export const FORMAT_TUESDAY_9BALL_R6_HOT: LeagueScoringFormat = {
   id: "tuesday-9ball-r6-hot",
   label: "Tuesday 9-Ball (R6 Hot)",
   description:
-    "Four singles matches. Race from the R6 Hot chart (each 9-ball game = one race game). Match winner earns 1 team point.",
+    "Four rounds · GAME R from the R6 Hot chart. Each set win earns 1 team point.",
   playersPerTeam: 4,
   matchesPerNight: 4,
   teamPointMode: "match-win",
