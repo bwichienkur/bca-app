@@ -64,30 +64,41 @@ export async function POST(request: NextRequest) {
     const action = body.action ?? "list";
 
     if (action === "generate") {
-      if (
-        !body.divisionId ||
-        !body.startDate ||
-        !body.numberOfRounds ||
-        !body.numberOfWeeks
-      ) {
+      const modeRaw = String(
+        (body as { mode?: string }).mode ?? "",
+      ).toLowerCase();
+      // LMS accepts weeks XOR rounds (the other must be 0). Prefer explicit mode;
+      // fall back to whichever positive count was provided.
+      const weeks = Number(body.numberOfWeeks);
+      const rounds = Number(body.numberOfRounds);
+      const mode =
+        modeRaw === "weeks" || modeRaw === "rounds"
+          ? (modeRaw as "weeks" | "rounds")
+          : weeks > 0 && !(rounds > 0)
+            ? "weeks"
+            : rounds > 0 && !(weeks > 0)
+              ? "rounds"
+              : null;
+      const count = mode === "weeks" ? weeks : mode === "rounds" ? rounds : NaN;
+      if (!body.divisionId || !body.startDate || !mode || !(count > 0)) {
         return NextResponse.json(
           {
             error:
-              "divisionId, startDate, numberOfRounds, and numberOfWeeks are required.",
+              "divisionId, startDate, and either numberOfWeeks or numberOfRounds (not both) are required.",
           },
           { status: 400 },
         );
       }
-      await withOperatorSession((session) =>
+      const result = await withOperatorSession((session) =>
         operatorRegenerateSchedule(session, {
           divisionId: body.divisionId!,
           startDate: body.startDate!,
-          numberOfRounds: Number(body.numberOfRounds),
-          numberOfWeeks: Number(body.numberOfWeeks),
+          mode,
+          count,
         }),
       );
       await invalidateOperatorCache({ divisionId: body.divisionId ?? null });
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, ...result });
     }
 
     if (action === "clear") {

@@ -1,5 +1,6 @@
 import {
   loginLeagueOperator,
+  operatorGetDivisionTeams,
   operatorWebFetch,
   type OperatorSession,
 } from "./lms-operator";
@@ -18,6 +19,70 @@ async function readJsonOrThrow<T>(
   } catch {
     throw new Error(fallbackError);
   }
+}
+
+type OperatorAlert = {
+  AlertType?: number;
+  Message?: string | null;
+};
+
+/**
+ * LMS often returns HTTP 200 with `{ alerts, data:false }` for validation
+ * failures. AlertType >= 3 is an error; data === false also means failure.
+ */
+function assertOperatorActionOk(
+  payload: unknown,
+  fallbackError: string,
+): asserts payload is Record<string, unknown> {
+  if (payload == null || typeof payload !== "object") {
+    throw new Error(fallbackError);
+  }
+  const row = payload as {
+    alerts?: OperatorAlert[];
+    Alerts?: OperatorAlert[];
+    data?: unknown;
+    Data?: unknown;
+  };
+  const alerts = Array.isArray(row.alerts)
+    ? row.alerts
+    : Array.isArray(row.Alerts)
+      ? row.Alerts
+      : [];
+  const errors = alerts.filter((alert) => (alert.AlertType ?? 0) >= 3);
+  if (errors.length > 0) {
+    throw new Error(
+      errors
+        .map((alert) => String(alert.Message ?? "").trim())
+        .filter(Boolean)
+        .join(" ") || fallbackError,
+    );
+  }
+  const data = row.data !== undefined ? row.data : row.Data;
+  if (data === false) {
+    const messages = alerts
+      .map((alert) => String(alert.Message ?? "").trim())
+      .filter(Boolean);
+    throw new Error(messages.join(" ") || fallbackError);
+  }
+}
+
+async function readOperatorAction(
+  response: Response,
+  fallbackError: string,
+): Promise<Record<string, unknown>> {
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(text || `${fallbackError} (${response.status})`);
+  }
+  if (!text.trim()) return {};
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    throw new Error(fallbackError);
+  }
+  assertOperatorActionOk(payload, fallbackError);
+  return payload as Record<string, unknown>;
 }
 
 export async function withOperatorSession<T>(
@@ -718,15 +783,62 @@ function noonIso(date: string): string {
   return d.toISOString();
 }
 
+function addDaysIso(date: string, days: number): string {
+  const d = new Date(noonIso(date));
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString();
+}
+
+type ScheduleSlot = {
+  Week: number;
+  HomeTeam: number;
+  AwayTeam: number;
+  Location: number;
+};
+
+export type ScheduleGenerateMode = "weeks" | "rounds";
+
+export type ScheduleGenerateResult = {
+  mode: ScheduleGenerateMode;
+  weeksOrRounds: number;
+  slotCount: number;
+  matchCount: number;
+};
+
+/**
+ * LMS RegenerateSchedule only returns slot indexes — it does not persist
+ * matches. Also LMS rejects sending both rounds and weeks (>0) together;
+ * the unused dimension must be 0.
+ *
+ * Flow: generate slots → clear unplayed matches → create each slot via newMatch.
+ */
 export async function operatorRegenerateSchedule(
   session: OperatorSession,
   input: {
     divisionId: string;
     startDate: string;
-    numberOfRounds: number;
-    numberOfWeeks: number;
+    mode: ScheduleGenerateMode;
+    count: number;
   },
-): Promise<void> {
+): Promise<ScheduleGenerateResult> {
+  const count = Math.floor(Number(input.count));
+  if (!Number.isFinite(count) || count < 1) {
+    throw new Error("Enter at least 1 week or round.");
+  }
+  const numberOfWeeks = input.mode === "weeks" ? count : 0;
+  const numberOfRounds = input.mode === "rounds" ? count : 0;
+  const startDate = noonIso(input.startDate);
+
+  const teams = await operatorGetDivisionTeams(session, input.divisionId);
+  if (teams.length < 2) {
+    throw new Error("Add at least two teams before generating a schedule.");
+  }
+  if (teams.some((team) => !team.isBye && !team.locationId)) {
+    throw new Error(
+      "Every non-bye team needs a home location before generating a schedule.",
+    );
+  }
+
   const response = await operatorWebFetch(
     session,
     "/Schedule/RegenerateSchedule",
@@ -735,15 +847,91 @@ export async function operatorRegenerateSchedule(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         divisionId: input.divisionId,
-        startDate: noonIso(input.startDate),
-        numberOfRounds: input.numberOfRounds,
-        numberOfWeeks: input.numberOfWeeks,
+        startDate,
+        numberOfRounds,
+        numberOfWeeks,
       }),
     },
   );
-  if (!response.ok) {
-    throw new Error((await response.text()) || "Could not generate schedule.");
+  const payload = await readOperatorAction(
+    response,
+    "Could not generate schedule.",
+  );
+  const data = (payload.data ?? payload.Data ?? {}) as {
+    Slots?: ScheduleSlot[];
+    slots?: ScheduleSlot[];
+  };
+  const slots = Array.isArray(data.Slots)
+    ? data.Slots
+    : Array.isArray(data.slots)
+      ? data.slots
+      : [];
+  if (slots.length === 0) {
+    throw new Error("LMS returned no schedule slots to create.");
   }
+
+  // Replace existing unplayed matches with the new slot sheet.
+  await operatorClearSchedule(session, input.divisionId);
+
+  let matchCount = 0;
+  const errors: string[] = [];
+  const concurrency = 6;
+  for (let i = 0; i < slots.length; i += concurrency) {
+    const batch = slots.slice(i, i + concurrency);
+    const results = await Promise.allSettled(
+      batch.map(async (slot) => {
+        const home = teams[slot.HomeTeam];
+        const away = teams[slot.AwayTeam];
+        const locationTeam = teams[slot.Location] ?? home;
+        if (!home?.id || !away?.id) {
+          throw new Error(
+            `Slot week ${slot.Week} references a missing team index.`,
+          );
+        }
+        const locationId = locationTeam?.locationId ?? home.locationId;
+        if (!locationId) {
+          throw new Error(
+            `No location for ${home.name} vs ${away.name} (week ${slot.Week}).`,
+          );
+        }
+        await operatorCreateMatch(session, {
+          divisionId: input.divisionId,
+          teamOneId: home.id,
+          teamTwoId: away.id,
+          date: addDaysIso(startDate, Math.max(0, slot.Week - 1) * 7),
+          locationId,
+        });
+      }),
+    );
+    for (const result of results) {
+      if (result.status === "fulfilled") matchCount += 1;
+      else {
+        errors.push(
+          result.reason instanceof Error
+            ? result.reason.message
+            : String(result.reason),
+        );
+      }
+    }
+  }
+
+  if (matchCount === 0) {
+    throw new Error(
+      errors[0] || "Could not create any matches from the generated slots.",
+    );
+  }
+  if (errors.length > 0) {
+    throw new Error(
+      `Created ${matchCount} of ${slots.length} matches. ${errors[0]}`,
+    );
+  }
+
+  return {
+    mode: input.mode,
+    weeksOrRounds: count,
+    slotCount: slots.length,
+    matchCount,
+  };
 }
 
 export async function operatorClearSchedule(
@@ -755,9 +943,7 @@ export async function operatorClearSchedule(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ DivisionId: divisionId }),
   });
-  if (!response.ok) {
-    throw new Error((await response.text()) || "Could not clear schedule.");
-  }
+  await readOperatorAction(response, "Could not clear schedule.");
 }
 
 export async function operatorCreateMatch(
@@ -781,9 +967,7 @@ export async function operatorCreateMatch(
       LocationId: input.locationId,
     }),
   });
-  if (!response.ok) {
-    throw new Error((await response.text()) || "Could not create match.");
-  }
+  await readOperatorAction(response, "Could not create match.");
 }
 
 export async function operatorChangeMatch(
