@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   LEAGUE_SCORING_FORMATS,
   getScoringFormat,
-  inferScoringFormatFromDivisionName,
 } from "@/lib/scoring-formats";
 import type {
   DivisionSummary,
@@ -975,7 +974,7 @@ export function SettingsScreen({
               options={[
                 {
                   value: "auto",
-                  label: "Auto (division + scoresheet)",
+                  label: "Auto (Night Format → Palm Beach)",
                 },
                 ...LEAGUE_SCORING_FORMATS.map((format) => ({
                   value: format.id,
@@ -985,9 +984,7 @@ export function SettingsScreen({
             />
             <p className="text-[11px] leading-snug text-[var(--muted)]">
               {scoringFormatId === "auto"
-                ? `${inferScoringFormatFromDivisionName(
-                    selectedDivision?.name ?? prefs.divisionName,
-                  ).description} LMS scoresheet setup (players, race vs points, match-win round) can refine this when you open a match.`
+                ? "Uses the Night Format race HC for this division when one is linked; otherwise Palm Beach 5-player. Pin Tuesday R6 Hot / Beyond on the Night Format (LMS → Division links), or pick a format here."
                 : getScoringFormat(scoringFormatId).description}
             </p>
           </div>

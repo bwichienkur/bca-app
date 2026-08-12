@@ -1,15 +1,16 @@
 /**
  * Resolve how a division night should be scored/handicapped.
  *
- * Priority: Night Format leg override → account prefs → LMS match signals →
- * division-name heuristic → Palm Beach default.
+ * Priority: Night Format leg override → account prefs → Palm Beach default.
+ * LMS match payload still drives live sheet structure; format presets only
+ * control race pad / team-point mode / match-points round. Do not guess
+ * Tuesday R6 Hot or Beyond from division names or LMS numeric signals —
+ * pin those on a Night Format leg (or prefs).
  */
 
 import {
   FORMAT_PALM_BEACH_5,
-  FORMAT_TUESDAY_9BALL_R6_HOT,
   getScoringFormat,
-  inferScoringFormatFromDivisionName,
   type LeagueScoringFormat,
 } from "@/lib/scoring-formats";
 import {
@@ -34,91 +35,73 @@ export type ResolveScoringFormatInput = {
   /** LMS matchWinCountsAsRound when known. */
   matchWinCountsAsRound?: boolean | null;
   /**
-   * Link-level scoring format override for this half (wins over prefs when set).
-   * Used so a combined Beyond night can score Singles as Hot 5 and Teams as RR.
+   * Night Format leg scoring format override (wins over prefs when set).
    */
   linkFormatId?: string | null;
-  /** Link-level race-chart override. */
+  /** Night Format leg race-chart override. */
   linkRaceChartId?: RaceChartId | null;
 };
 
 /**
- * Pick the app scoring preset that best matches prefs + LMS signals.
- * LMS match payload still wins for live structure; this drives race pad /
- * team-point mode / whether to show the synthetic match-points round.
+ * Pick the app scoring preset from Night Format / prefs, else Palm Beach.
+ * Optional LMS numeric fields only tweak the resolved preset’s size/points —
+ * they never switch the preset itself (no Tuesday / Beyond auto-detect).
  */
 export function resolveScoringFormat(
   input: ResolveScoringFormatInput,
 ): LeagueScoringFormat {
-  // Link half override beats account prefs so Singles/Teams can differ.
+  // Night Format leg beats account prefs so Singles/Teams (or Tuesday) can differ.
   if (input.linkFormatId) {
     const linked = getScoringFormat(input.linkFormatId);
-    return applyRaceChartOverride(linked, input.linkRaceChartId);
-  }
-
-  if (input.prefsFormatId) {
-    return applyRaceChartOverride(
-      getScoringFormat(input.prefsFormatId),
-      input.linkRaceChartId,
+    return applyLmsStructureTweaks(
+      applyRaceChartOverride(linked, input.linkRaceChartId),
+      input,
     );
   }
 
-  const inferred = inferScoringFormatFromDivisionName(input.divisionName);
+  if (input.prefsFormatId) {
+    return applyLmsStructureTweaks(
+      applyRaceChartOverride(
+        getScoringFormat(input.prefsFormatId),
+        input.linkRaceChartId,
+      ),
+      input,
+    );
+  }
 
-  // Strengthen inference from LMS numeric signals when name is ambiguous.
+  return applyLmsStructureTweaks(
+    applyRaceChartOverride(FORMAT_PALM_BEACH_5, input.linkRaceChartId),
+    input,
+  );
+}
+
+/** Apply lineup size / point-system hints without changing the format preset. */
+function applyLmsStructureTweaks(
+  format: LeagueScoringFormat,
+  input: ResolveScoringFormatInput,
+): LeagueScoringFormat {
   const players = input.playersPerTeam;
   const pointsForWin = input.pointsForWin;
   const matchPointsRound = input.matchWinCountsAsRound;
 
-  let resolved: LeagueScoringFormat = inferred;
-
-  if (
-    inferred.id === FORMAT_TUESDAY_9BALL_R6_HOT.id ||
-    (players != null &&
-      players > 0 &&
-      players <= 4 &&
-      pointsForWin === 1 &&
-      matchPointsRound === false &&
-      !inferred.id.startsWith("beyond-"))
-  ) {
-    resolved = {
-      ...FORMAT_TUESDAY_9BALL_R6_HOT,
-      playersPerTeam: players && players > 0 ? players : FORMAT_TUESDAY_9BALL_R6_HOT.playersPerTeam,
-      matchesPerNight: players && players > 0 ? players : FORMAT_TUESDAY_9BALL_R6_HOT.matchesPerNight,
-    };
-  } else if (players != null && players > 0 && players !== FORMAT_PALM_BEACH_5.playersPerTeam) {
-    resolved = {
-      ...inferred,
+  let next = format;
+  if (players != null && players > 0 && players !== format.playersPerTeam) {
+    next = {
+      ...next,
       playersPerTeam: players,
       matchesPerNight: players,
-      matchPointsRound:
-        matchPointsRound == null
-          ? inferred.matchPointsRound
-          : Boolean(matchPointsRound),
-      pointSystem:
-        pointsForWin === 1
-          ? "1"
-          : pointsForWin === 17
-            ? "17"
-            : inferred.pointSystem,
-    };
-  } else if (matchPointsRound != null || pointsForWin != null) {
-    resolved = {
-      ...inferred,
-      matchPointsRound:
-        matchPointsRound == null
-          ? inferred.matchPointsRound
-          : Boolean(matchPointsRound),
-      pointSystem:
-        pointsForWin === 1
-          ? "1"
-          : pointsForWin === 17
-            ? "17"
-            : inferred.pointSystem,
     };
   }
-
-  return applyRaceChartOverride(resolved, input.linkRaceChartId);
+  if (matchPointsRound != null) {
+    next = { ...next, matchPointsRound: Boolean(matchPointsRound) };
+  }
+  if (pointsForWin === 1 || pointsForWin === 17 || pointsForWin === 10) {
+    next = {
+      ...next,
+      pointSystem: String(pointsForWin) as "1" | "10" | "17",
+    };
+  }
+  return next;
 }
 
 function applyRaceChartOverride(
