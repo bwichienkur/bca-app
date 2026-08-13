@@ -115,14 +115,14 @@ export const FORMAT_BEYOND_SINGLES: LeagueScoringFormat = {
  * Beyond Monday teams half (LMS TEAMS 2026.2): 3-man round-robin sheet.
  * Each GAME S matchup is win/lose (LMS PointsForWin=1 toward the race).
  * First team to 9 matchup wins takes the round (LMS RDS). Combined night
- * standings award that RDS × 2 = 2 standing match points. Remaining
+ * standings award that RDS × 2 = 2 session points. Remaining
  * matchups need not be scored (AllScoresRequired=0).
  */
 export const FORMAT_BEYOND_TEAMS: LeagueScoringFormat = {
   id: "beyond-teams",
   label: "Beyond Teams (race to 9)",
   description:
-    "3-man round robin. First to 9 matchup wins takes the round (2 standing match pts).",
+    "3-man round robin. First to 9 matchup wins takes the round (2 session pts).",
   playersPerTeam: 3,
   matchesPerNight: 1,
   teamPointMode: "match-win",

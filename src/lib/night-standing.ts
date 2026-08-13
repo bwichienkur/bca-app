@@ -55,7 +55,7 @@ export type NightStandingSummary = {
   standingMax: number;
   /** e.g. "2/3 SETS ×1 + 0/1 RDS ×2 = 2" */
   line: string;
-  /** Short headline e.g. "2 / 5 standing pts" */
+  /** Short headline e.g. "2 / 5 session pts" */
   headline: string;
 };
 
@@ -304,6 +304,6 @@ export function computeNightStanding(args: {
     standingPts,
     standingMax,
     line,
-    headline: `${ptsLabel} / ${maxLabel} standing pts`,
+    headline: `${ptsLabel} / ${maxLabel} session pts`,
   };
 }

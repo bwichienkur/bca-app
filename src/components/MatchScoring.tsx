@@ -1274,7 +1274,7 @@ export function MatchScoring({
     [roundWins.teamOne, roundWins.teamTwo, scoringFormat.teamRaceTo],
   );
 
-  /** Standing match pts for a Teams race sheet (LMS RDS × multiplier, usually 2). */
+  /** Session pts for a Teams race sheet (LMS RDS × multiplier, usually 2). */
   const teamsStandingAward = useMemo(() => {
     if (!matchWinTeamPoints || !scoringFormat.teamRaceTo) return null;
     if (divisionLink && match) {
@@ -2144,9 +2144,9 @@ export function MatchScoring({
               {matchWinTeamPoints && !isMatchPointsRound ? (
                 <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-sm text-[var(--muted)]">
                   {raceClinched
-                    ? `Round won — ${teamsStandingAward ?? 2} standing match pts (RDS × ${teamsStandingAward ?? 2}). Remaining matchups are locked.`
+                    ? `Round won — ${teamsStandingAward ?? 2} session pts (RDS × ${teamsStandingAward ?? 2}). Remaining matchups are locked.`
                     : scoringFormat.teamRaceTo && scoringFormat.fixedRaceWin === 1
-                      ? `Round-robin matchups · first to ${scoringFormat.teamRaceTo} wins the round (${teamsStandingAward ?? 2} standing match pts).`
+                      ? `Round-robin matchups · first to ${scoringFormat.teamRaceTo} wins the round (${teamsStandingAward ?? 2} session pts).`
                       : `Each set win is ${scoringFormat.pointsPerMatchWin} team point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}${
                           scoringFormat.teamRaceTo
                             ? ` · first to ${scoringFormat.teamRaceTo}`
@@ -2700,7 +2700,7 @@ export function MatchScoring({
                     }
                     meta={
                       scores
-                        ? `Standing pts · max ${formatRawStanding(scores.standingMax)}`
+                        ? `Session pts · max ${formatRawStanding(scores.standingMax)}`
                         : undefined
                     }
                     boardStatus={boardStatus}

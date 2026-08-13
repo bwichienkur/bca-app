@@ -163,7 +163,7 @@ export function formatScoringSummary(format: LeagueScoringFormat): string {
   const team =
     format.teamPointMode === "match-win"
       ? format.teamRaceTo && format.fixedRaceWin === 1
-        ? `RR race to ${format.teamRaceTo} · round win = standing pts`
+        ? `RR race to ${format.teamRaceTo} · round win = session pts`
         : format.teamRaceTo
           ? `1 pt per matchup · team race to ${format.teamRaceTo}`
           : `${format.pointsPerMatchWin} pt${format.pointsPerMatchWin === 1 ? "" : "s"} per set win`
