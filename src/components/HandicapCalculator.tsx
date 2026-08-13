@@ -568,7 +568,7 @@ export function HandicapCalculator({
       <section className="animate-rise space-y-4">
         <PanelHeader
           title="Matchup"
-          description="Loading teams, ratings, and format…"
+          info={{ summary: "Loading teams, ratings, and format…" }}
         />
         <ContentCard>
           <LoadingState label="Loading teams, ratings, and format…" />
@@ -582,7 +582,7 @@ export function HandicapCalculator({
       <section className="animate-rise space-y-4">
         <PanelHeader
           title="Matchup"
-          description="Couldn't load the calculator"
+          info={{ summary: "Couldn't load the calculator." }}
         />
         <EmptyState
           title="Couldn't load calculator"
@@ -658,7 +658,9 @@ export function HandicapCalculator({
     <section className="animate-panel space-y-3 p-3 sm:p-4">
       <PanelHeader
         title="Handicap"
-        description={formatMeta}
+        info={{
+          summary: `Fargo league handicap calculator. ${formatMeta}`,
+        }}
         action={<PanelHeaderCount label="Sides" value={String(slots)} />}
       />
 

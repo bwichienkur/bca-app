@@ -2184,18 +2184,16 @@ export function LeagueApp() {
                   <div className="px-3 pt-3 sm:px-4 sm:pt-4">
                     <PanelHeader
                       title="Your team"
-                      description={
-                        <>
-                          Standing, roster, and lineup templates for{" "}
-                          <span className="font-medium text-[var(--ink)]">
-                            {prefs.teamName}
-                          </span>
-                          {selectedDivision?.name || prefs.divisionName
-                            ? <> · {selectedDivision?.name || prefs.divisionName}</>
-                            : null}
-                          .
-                        </>
-                      }
+                      info={{
+                        summary: [
+                          `Standing, roster, and lineup templates for ${prefs.teamName}`,
+                          selectedDivision?.name || prefs.divisionName
+                            ? `in ${selectedDivision?.name || prefs.divisionName}`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" "),
+                      }}
                     />
                   </div>
                   <SubTabCard
@@ -2238,7 +2236,9 @@ export function LeagueApp() {
                     >
                       <PanelHeader
                         title="Standing"
-                        description="Current place in the division"
+                        info={{
+                          summary: "Current place in the division.",
+                        }}
                         action={
                           myStandingRank ? (
                             <PanelHeaderCount
@@ -2271,16 +2271,16 @@ export function LeagueApp() {
                     >
                       <PanelHeader
                         title="Roster"
-                        description={
-                          myTeam?.players.length
+                        info={{
+                          summary: myTeam?.players.length
                             ? `${myTeam.players.length} rostered · avg Fargo ${Math.round(
                                 myTeam.players.reduce(
                                   (sum, player) => sum + player.fargoRating,
                                   0,
                                 ) / myTeam.players.length,
-                              )}`
-                            : "Player statistics and Fargo ratings"
-                        }
+                              )}. Player statistics and Fargo ratings for your team.`
+                            : "Player statistics and Fargo ratings for your team.",
+                        }}
                         action={
                           myTeam?.players.length ? (
                             <PanelHeaderCount
@@ -2316,7 +2316,9 @@ export function LeagueApp() {
                         <div className="space-y-3">
                           <PanelHeader
                             title="Lineups"
-                            description={`Save ${scoringFormat.playersPerTeam}-player orders for league night. Load them from Handicap or Score.`}
+                            info={{
+                              summary: `Save ${scoringFormat.playersPerTeam}-player orders for league night. Load them from Handicap or Score.`,
+                            }}
                           />
                           <EmptyState
                             title="Team roster needed"
@@ -2361,13 +2363,14 @@ export function LeagueApp() {
                 <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
                   <PanelHeader
                     title="Team standings"
-                    description={
-                      prefs.linkedDivisionId ||
-                      (findLinkById(divisionLinks, prefs.divisionLinkId)?.legs
-                        ?.length ?? 0) >= 2
-                        ? "Combined standings — STANDING ranks the night from each leg’s LMS column × multiplier. Tap a team for details."
-                        : "Tap a team to view player statistics. Use back to return to the league grid."
-                    }
+                    info={{
+                      summary:
+                        prefs.linkedDivisionId ||
+                        (findLinkById(divisionLinks, prefs.divisionLinkId)?.legs
+                          ?.length ?? 0) >= 2
+                          ? "Combined standings — STANDING ranks the night from each leg’s LMS column × multiplier. Tap a team for details."
+                          : "Tap a team to view player statistics. Use back to return to the league grid.",
+                    }}
                     action={
                       <PanelHeaderCount
                         label="Teams"
@@ -2416,20 +2419,18 @@ export function LeagueApp() {
               <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
                 <PanelHeader
                   title="Division players"
-                  description={
-                    <>
-                      Standings and Fargo ratings for everyone in{" "}
-                      <span className="font-medium text-[var(--ink)]">
-                        {selectedDivision.name}
-                      </span>
-                      {(findLinkById(divisionLinks, prefs.divisionLinkId)
-                        ?.legs?.length ?? 0) >= 2 ||
-                      prefs.linkedDivisionId
-                        ? " · combined across linked night legs"
-                        : null}
-                      . Filter the grid below to find someone quickly.
-                    </>
-                  }
+                  info={{
+                    summary: [
+                      `Standings and Fargo ratings for everyone in ${selectedDivision.name}`,
+                      (findLinkById(divisionLinks, prefs.divisionLinkId)?.legs
+                        ?.length ?? 0) >= 2 || prefs.linkedDivisionId
+                        ? "combined across linked night legs"
+                        : null,
+                      "Filter the grid below to find someone quickly.",
+                    ]
+                      .filter(Boolean)
+                      .join(" · "),
+                  }}
                   action={
                     <PanelHeaderCount
                       label="Players"

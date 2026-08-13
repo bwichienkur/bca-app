@@ -37,6 +37,8 @@ export function FieldInfo({
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const tipRef = useRef<HTMLSpanElement | null>(null);
   const closeTimer = useRef<number | null>(null);
+  /** Ignore the click that follows a pointerdown close (backdrop / toggle race). */
+  const ignoreClickUntil = useRef(0);
   const tipId = useId();
 
   useEffect(() => {
@@ -48,6 +50,23 @@ export function FieldInfo({
       window.clearTimeout(closeTimer.current);
       closeTimer.current = null;
     }
+  };
+
+  const closeTip = () => {
+    cancelClose();
+    ignoreClickUntil.current = Date.now() + 450;
+    setOpen(false);
+  };
+
+  const toggleTip = () => {
+    cancelClose();
+    setOpen((value) => {
+      if (value) {
+        ignoreClickUntil.current = Date.now() + 450;
+        return false;
+      }
+      return true;
+    });
   };
 
   const scheduleClose = () => {
@@ -103,15 +122,11 @@ export function FieldInfo({
 
     const onPointerDown = (event: Event) => {
       if (isInside(event.target)) return;
-      cancelClose();
-      setOpen(false);
+      closeTip();
     };
 
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        cancelClose();
-        setOpen(false);
-      }
+      if (event.key === "Escape") closeTip();
     };
 
     // Capture so a stopPropagation on a card/button still dismisses the tip.
@@ -135,9 +150,12 @@ export function FieldInfo({
               type="button"
               aria-label="Dismiss info"
               className="fixed inset-0 z-[10055] cursor-default bg-transparent"
-              onClick={() => {
-                cancelClose();
-                setOpen(false);
+              onPointerDown={(event) => {
+                event.preventDefault();
+                closeTip();
+              }}
+              onClick={(event) => {
+                event.preventDefault();
               }}
             />
             <span
@@ -197,17 +215,23 @@ export function FieldInfo({
         className={[
           "inline-flex size-5 items-center justify-center rounded-full transition",
           open
-            ? "bg-[var(--felt)] text-white shadow-sm"
+            ? "relative z-[10065] bg-[var(--felt)] text-white shadow-sm"
             : "bg-[color-mix(in_srgb,var(--felt)_14%,var(--surface))] text-[var(--felt-deep)] ring-1 ring-[color-mix(in_srgb,var(--felt)_35%,var(--line))] hover:bg-[color-mix(in_srgb,var(--felt)_22%,var(--surface))]",
         ].join(" ")}
         aria-label={`About ${label}`}
         aria-expanded={open}
         aria-controls={tipId}
+        onPointerDown={(event) => {
+          // Handle on pointerdown so a backdrop dismiss + ghost click can't
+          // immediately reopen the tip on touch devices.
+          event.preventDefault();
+          event.stopPropagation();
+          toggleTip();
+        }}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          cancelClose();
-          setOpen((value) => !value);
+          if (Date.now() < ignoreClickUntil.current) return;
         }}
       >
         <svg viewBox="0 0 16 16" className="size-3" fill="none" aria-hidden>

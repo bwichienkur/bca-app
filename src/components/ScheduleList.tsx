@@ -182,37 +182,19 @@ export function ScheduleList({
       <div className="px-3 pt-3 sm:px-4 sm:pt-4">
         <PanelHeader
           title={showAllTeams ? "Division schedule" : "Your schedule"}
-          description={
-            <>
-              {showAllTeams ? (
-                <>
-                  Every matchup in the division
-                  {myTeam ? (
-                    <>
-                      {" "}
-                      · following{" "}
-                      <span className="font-medium text-[var(--ink)]">
-                        {myTeam}
-                      </span>
-                    </>
-                  ) : null}
-                </>
-              ) : teamName ? (
-                <>
-                  Upcoming and past matchups for{" "}
-                  <span className="font-medium text-[var(--ink)]">
-                    {teamName}
-                  </span>
-                </>
-              ) : (
-                "Division schedule"
-              )}
-            </>
-          }
           info={{
-            summary: linked
-              ? "One card per night opponent — Singles and Teams share the scoresheet entry on Score. Upcoming and Past counts are combined night cards, not individual LMS sheets."
-              : "Use Score to open a scoresheet.",
+            summary: [
+              showAllTeams
+                ? myTeam
+                  ? `Every matchup in the division · following ${myTeam}`
+                  : "Every matchup in the division"
+                : teamName
+                  ? `Upcoming and past matchups for ${teamName}`
+                  : "Division schedule",
+              linked
+                ? "One card per night opponent — Singles and Teams share the scoresheet entry on Score. Upcoming and Past counts are combined night cards, not individual LMS sheets."
+                : "Use Score to open a scoresheet.",
+            ].join(" "),
             items: divisionName
               ? [{ label: "Division", description: divisionName }]
               : undefined,
