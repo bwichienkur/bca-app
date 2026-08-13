@@ -496,6 +496,7 @@ export function tallyBoardRoundWins(
     total: number;
     oneHc: number;
     twoHc: number;
+    remainingAdds: RemainingGameAdds[];
   };
   const byRound = new Map<number, RoundAcc>();
 
@@ -513,6 +514,7 @@ export function tallyBoardRoundWins(
       total: 0,
       oneHc: 0,
       twoHc: 0,
+      remainingAdds: [],
     };
     row.total += 1;
     row.onePts += game.teamOneScore ?? 0;
@@ -542,6 +544,13 @@ export function tallyBoardRoundWins(
       row.complete += 1;
       if (winner === 1) row.oneWins += 1;
       else row.twoWins += 1;
+    } else {
+      row.remainingAdds.push(
+        remainingPointAddsIfSideWins(game.teamOneScore, game.teamTwoScore, {
+          maxWin,
+          maxLoss,
+        }),
+      );
     }
     byRound.set(game.round, row);
   }
@@ -555,6 +564,7 @@ export function tallyBoardRoundWins(
   let matchTwoWins = 0;
   let matchComplete = 0;
   let matchTotal = 0;
+  const matchRemainingAdds: RemainingGameAdds[] = [];
 
   for (const row of byRound.values()) {
     const oneTotal = row.onePts + row.oneHc;
@@ -566,6 +576,7 @@ export function tallyBoardRoundWins(
       teamOneGameWins: row.oneWins,
       teamTwoGameWins: row.twoWins,
       gamesRemaining: remaining,
+      remainingAdds: row.remainingAdds,
       maxWin,
       maxLoss,
     });
@@ -582,6 +593,7 @@ export function tallyBoardRoundWins(
     matchTwoWins += row.twoWins;
     matchComplete += row.complete;
     matchTotal += row.total;
+    matchRemainingAdds.push(...row.remainingAdds);
   }
 
   let matchPointsWinner: 1 | 2 | null = null;
@@ -592,6 +604,7 @@ export function tallyBoardRoundWins(
       teamOneGameWins: matchOneWins,
       teamTwoGameWins: matchTwoWins,
       gamesRemaining: Math.max(0, matchTotal - matchComplete),
+      remainingAdds: matchRemainingAdds,
       maxWin,
       maxLoss,
     });
@@ -800,6 +813,12 @@ export function decideByPointsThenGames(
   return null;
 }
 
+/** Max points each side can still add if they win an incomplete game. */
+export type RemainingGameAdds = {
+  teamOne: number;
+  teamTwo: number;
+};
+
 type ClinchArgs = {
   /** Current totals — must already include round handicap. */
   teamOnePoints: number;
@@ -809,28 +828,77 @@ type ClinchArgs = {
   gamesRemaining: number;
   maxWin: number;
   maxLoss: number;
+  /**
+   * Per incomplete game: points each side can still add if they win
+   * (opponent stays flat). Required when live scores are already in the
+   * totals — otherwise catch-up would double-count full maxWin on top of
+   * points already scored in an in-progress game.
+   */
+  remainingAdds?: RemainingGameAdds[];
 };
 
 /**
- * Side has clinched when even their worst remaining case (lose all at 0 pts)
- * still beats the opponent's best case (win all at maxWin, us at 0).
+ * Points still available in an incomplete game if that side wins and the
+ * opponent adds nothing more. Live scores are already in round totals, so
+ * clinch/catch-up must use these deltas — not a fresh maxWin per game.
+ */
+export function remainingPointAddsIfSideWins(
+  teamOneScore: number,
+  teamTwoScore: number,
+  options: {
+    maxWin: number;
+    maxLoss: number;
+    raceTargetOne?: number | null;
+    raceTargetTwo?: number | null;
+  },
+): RemainingGameAdds {
+  const curOne = Math.max(0, teamOneScore);
+  const curTwo = Math.max(0, teamTwoScore);
+  const race = resolvedRaceTargets(undefined, {
+    raceTargetOne: options.raceTargetOne,
+    raceTargetTwo: options.raceTargetTwo,
+  });
+  if (race) {
+    return {
+      teamOne: Math.max(0, race.raceOne - curOne),
+      teamTwo: Math.max(0, race.raceTwo - curTwo),
+    };
+  }
+  return {
+    teamOne: Math.max(0, options.maxWin - curOne),
+    teamTwo: Math.max(0, options.maxWin - curTwo),
+  };
+}
+
+function resolvedRemainingAdds(args: ClinchArgs): RemainingGameAdds[] {
+  if (args.remainingAdds) return args.remainingAdds;
+  const rem = Math.max(0, args.gamesRemaining);
+  return Array.from({ length: rem }, () => ({
+    teamOne: args.maxWin,
+    teamTwo: args.maxWin,
+  }));
+}
+
+/**
+ * Side has clinched when even their worst remaining case (add 0 more)
+ * still beats the opponent's best case (sweep remaining point capacity).
  * Totals should already include handicap so HC leads are respected.
  */
 export function hasClinchedRound(args: ClinchArgs & { side: 1 | 2 }): boolean {
-  const rem = Math.max(0, args.gamesRemaining);
+  const games = resolvedRemainingAdds(args);
   let onePts = args.teamOnePoints;
   let twoPts = args.teamTwoPoints;
   let oneWins = args.teamOneGameWins;
   let twoWins = args.teamTwoGameWins;
 
-  if (rem > 0) {
+  if (games.length > 0) {
     if (args.side === 1) {
-      // Worst for us: we take 0; opponent sweeps remaining at maxWin.
-      twoPts += args.maxWin * rem;
-      twoWins += rem;
+      // Worst for us: we add 0; opponent sweeps remaining capacity.
+      for (const game of games) twoPts += game.teamTwo;
+      twoWins += games.length;
     } else {
-      onePts += args.maxWin * rem;
-      oneWins += rem;
+      for (const game of games) onePts += game.teamOne;
+      oneWins += games.length;
     }
   }
 
@@ -846,25 +914,24 @@ export function clinchRoundWinner(args: ClinchArgs): 1 | 2 | null {
 }
 
 /**
- * True when this side can still win by sweeping every remaining game at
- * maxWin–0 (opponent adds 0 pts). Example: 14–32 with 2 games left can still
- * become 34–32. Uses HC-inclusive current totals.
+ * True when this side can still win by sweeping every remaining game's
+ * leftover point capacity (opponent adds 0 more). Uses HC-inclusive totals
+ * that already include any in-progress game scores.
  */
 export function canCatchUpRound(args: ClinchArgs & { side: 1 | 2 }): boolean {
-  const rem = Math.max(0, args.gamesRemaining);
+  const games = resolvedRemainingAdds(args);
   let onePts = args.teamOnePoints;
   let twoPts = args.teamTwoPoints;
   let oneWins = args.teamOneGameWins;
   let twoWins = args.teamTwoGameWins;
 
-  if (rem > 0) {
+  if (games.length > 0) {
     if (args.side === 1) {
-      onePts += args.maxWin * rem;
-      oneWins += rem;
-      // Best catch-up path: we win each remaining game  maxWin–0.
+      for (const game of games) onePts += game.teamOne;
+      oneWins += games.length;
     } else {
-      twoPts += args.maxWin * rem;
-      twoWins += rem;
+      for (const game of games) twoPts += game.teamTwo;
+      twoWins += games.length;
     }
   }
 
@@ -874,13 +941,14 @@ export function canCatchUpRound(args: ClinchArgs & { side: 1 | 2 }): boolean {
 }
 
 /**
- * Chase number assuming we sweep remaining games maxWin–0 (opponent adds 0).
+ * Chase number assuming we sweep remaining leftover capacity (opponent flat).
  * Current point totals must include handicap.
  */
 export function pointsNeededFromRemaining(
   args: ClinchArgs & { side: 1 | 2 },
 ): number | null {
-  const rem = args.gamesRemaining;
+  const games = resolvedRemainingAdds(args);
+  const rem = games.length;
   if (rem <= 0) return null;
   if (!canCatchUpRound(args)) return null;
   if (clinchRoundWinner(args) != null) return null;
@@ -905,13 +973,15 @@ export function pointsNeededFromRemaining(
 }
 
 /**
- * Minimum remaining game wins (each maxWin–0, opponent flat) needed to still
- * win the round. Null when catch-up is impossible or the round is decided.
+ * Minimum remaining game wins needed to still win the round, taking the
+ * highest leftover capacities first (opponent stays flat). Null when
+ * catch-up is impossible or the round is decided.
  */
 export function winsNeededFromRemaining(
   args: ClinchArgs & { side: 1 | 2 },
 ): number | null {
-  const rem = args.gamesRemaining;
+  const games = resolvedRemainingAdds(args);
+  const rem = games.length;
   if (rem <= 0) return null;
   if (!canCatchUpRound(args)) return null;
   if (clinchRoundWinner(args) != null) return null;
@@ -924,9 +994,14 @@ export function winsNeededFromRemaining(
     args.side === 1 ? args.teamOneGameWins : args.teamTwoGameWins;
   const oppWins =
     args.side === 1 ? args.teamTwoGameWins : args.teamOneGameWins;
+  const ourAdds = games
+    .map((game) => (args.side === 1 ? game.teamOne : game.teamTwo))
+    .sort((a, b) => b - a);
 
+  let add = 0;
   for (let wins = 1; wins <= rem; wins += 1) {
-    const nextOur = ourPts + args.maxWin * wins;
+    add += ourAdds[wins - 1] ?? 0;
+    const nextOur = ourPts + add;
     const nextOurWins = ourWins + wins;
     const onePts = args.side === 1 ? nextOur : oppPts;
     const twoPts = args.side === 1 ? oppPts : nextOur;
@@ -947,7 +1022,8 @@ export function winsNeededFromRemaining(
 export function holdOpponentToTotal(
   args: ClinchArgs & { side: 1 | 2 },
 ): number | null {
-  const rem = args.gamesRemaining;
+  const games = resolvedRemainingAdds(args);
+  const rem = games.length;
   if (rem <= 0) return null;
   if (clinchRoundWinner(args) != null) return null;
 
@@ -967,7 +1043,10 @@ export function holdOpponentToTotal(
   const oppSide = args.side === 1 ? 2 : 1;
   if (!canCatchUpRound({ ...args, side: oppSide })) return null;
 
-  const maxAdd = args.maxWin * rem;
+  const maxAdd = games.reduce(
+    (sum, game) => sum + (args.side === 1 ? game.teamTwo : game.teamOne),
+    0,
+  );
   let allowedAdd = -1;
   for (let add = 0; add <= maxAdd; add += 1) {
     const nextOpp = oppPts + add;
@@ -1061,6 +1140,7 @@ export function tallyRoundPoints(args: {
   let teamOneGameWins = 0;
   let teamTwoGameWins = 0;
   let gamesComplete = 0;
+  const remainingAdds: RemainingGameAdds[] = [];
 
   for (const game of games) {
     const state = draft.games[gameKey(roundNumber, game.index)];
@@ -1076,6 +1156,19 @@ export function tallyRoundPoints(args: {
       gamesComplete += 1;
       if (winner === 1) teamOneGameWins += 1;
       if (winner === 2) teamTwoGameWins += 1;
+    } else {
+      remainingAdds.push(
+        remainingPointAddsIfSideWins(
+          state?.teamOneScore ?? 0,
+          state?.teamTwoScore ?? 0,
+          {
+            maxWin,
+            maxLoss,
+            raceTargetOne: state?.raceTargetOne,
+            raceTargetTwo: state?.raceTargetTwo,
+          },
+        ),
+      );
     }
   }
 
@@ -1095,6 +1188,7 @@ export function tallyRoundPoints(args: {
     teamOneGameWins,
     teamTwoGameWins,
     gamesRemaining,
+    remainingAdds,
     maxWin,
     maxLoss,
   });
@@ -1186,12 +1280,38 @@ export function tallyMatchPointsRound(args: {
   const roundComplete = gamesTotal > 0 && gamesRemaining === 0;
   const teamOneTotal = teamOneGamePoints + teamOneHandicap;
   const teamTwoTotal = teamTwoGamePoints + teamTwoHandicap;
+  const remainingAdds: RemainingGameAdds[] = [];
+  for (const round of args.match.matchFormat?.rounds ?? []) {
+    for (const game of round.games) {
+      const state = args.draft.games[gameKey(round.roundNumber, game.index)];
+      const winner = gameWinner(state, {
+        maxScore: maxWin,
+        maxLosingScore: maxLoss,
+        raceTargetOne: state?.raceTargetOne,
+        raceTargetTwo: state?.raceTargetTwo,
+      });
+      if (winner) continue;
+      remainingAdds.push(
+        remainingPointAddsIfSideWins(
+          state?.teamOneScore ?? 0,
+          state?.teamTwoScore ?? 0,
+          {
+            maxWin,
+            maxLoss,
+            raceTargetOne: state?.raceTargetOne,
+            raceTargetTwo: state?.raceTargetTwo,
+          },
+        ),
+      );
+    }
+  }
   const decision = buildRoundDecision({
     teamOnePoints: teamOneTotal,
     teamTwoPoints: teamTwoTotal,
     teamOneGameWins,
     teamTwoGameWins,
     gamesRemaining,
+    remainingAdds,
     maxWin,
     maxLoss,
   });
