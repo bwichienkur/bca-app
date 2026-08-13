@@ -167,7 +167,7 @@ function StandingSideFields({
           <FieldLabel
             info={{
               summary:
-                "Multiplies the LMS column into STANDING. Beyond Teams often uses ×2 so a round win is worth 2 standing points.",
+                "Multiplies the LMS column into STANDING. Beyond Teams often uses ×2 so a round win is worth 2 session points.",
             }}
           >
             Multiplier

@@ -16,11 +16,11 @@ export type MatchScoreboardProps = {
   /** First-to team matchup-win target (e.g. Beyond Teams race to 9). */
   teamRaceTo?: number | null;
   /**
-   * Standing match points for the night (e.g. RDS×2 = 2 when the race is won).
+   * Session points for the night (e.g. RDS×2 = 2 when the race is won).
    * When set with teamRaceTo, these are the hero numbers — not the race tally.
    */
   standingMatchPoints?: { teamOne: number; teamTwo: number } | null;
-  /** Short hint under Standing pts when shown (e.g. "RDS × 2"). */
+  /** Short hint under Session pts when shown (e.g. "RDS × 2"). */
   standingPtsHint?: string | null;
   formatHint?: string;
   pointTotals: { teamOne: number; teamTwo: number };
@@ -225,7 +225,7 @@ export const MatchScoreboard = memo(function MatchScoreboard({
         {showStandingHero ? (
           <>
             {metricRow({
-              label: "Standing pts",
+              label: "Session pts",
               one: standingMatchPoints!.teamOne,
               two: standingMatchPoints!.teamTwo,
               emphasis: "hero",
@@ -305,7 +305,7 @@ export const MatchScoreboard = memo(function MatchScoreboard({
           </p>
           <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
             {showStandingHero && standingMatchPoints
-              ? `${Math.max(standingMatchPoints.teamOne, standingMatchPoints.teamTwo)} standing match pts · remaining matchups locked`
+              ? `${Math.max(standingMatchPoints.teamOne, standingMatchPoints.teamTwo)} session pts · remaining matchups locked`
               : `First to ${teamRaceTarget} · remaining matchups locked`}
           </p>
         </div>

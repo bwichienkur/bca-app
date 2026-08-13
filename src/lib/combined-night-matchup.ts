@@ -476,7 +476,7 @@ export function computeMatchupStandingScores(args: {
     awayStanding,
     standingMax,
     status,
-    line: `${formatPts(homeStanding)}–${formatPts(awayStanding)} standing pts (max ${formatPts(standingMax)})`,
+    line: `${formatPts(homeStanding)}–${formatPts(awayStanding)} session pts (max ${formatPts(standingMax)})`,
     homeBreakdown: homeBits.join(" + ") || "–",
     awayBreakdown: awayBits.join(" + ") || "–",
   };

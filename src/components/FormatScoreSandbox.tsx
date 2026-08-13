@@ -1098,9 +1098,9 @@ export function FormatScoreSandbox({
             {matchWinMode && !isMatchPointsRound ? (
               <p className="text-xs text-[var(--muted)]">
                 {raceClinched
-                  ? `${raceClinched === 1 ? "Home" : "Away"} won the round (2 standing match pts) — remaining unscored matchups are locked.`
+                  ? `${raceClinched === 1 ? "Home" : "Away"} won the round (2 session pts) — remaining unscored matchups are locked.`
                   : scoringFormat.teamRaceTo && scoringFormat.fixedRaceWin === 1
-                    ? `Round-robin matchups · first to ${scoringFormat.teamRaceTo} wins the round (2 standing match pts). Tap a matchup to score.`
+                    ? `Round-robin matchups · first to ${scoringFormat.teamRaceTo} wins the round (2 session pts). Tap a matchup to score.`
                     : scoringFormat.teamRaceTo
                       ? `Each matchup is one game · first team to ${scoringFormat.teamRaceTo} wins. Tap a matchup to score.`
                       : `Each set win = ${scoringFormat.pointsPerMatchWin} team point${scoringFormat.pointsPerMatchWin === 1 ? "" : "s"}${
