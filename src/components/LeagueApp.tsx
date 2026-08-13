@@ -17,7 +17,10 @@ import {
   tabBelongsToPillar,
 } from "@/lib/app-nav";
 import { DEFAULT_LEAGUE_ID } from "@/lib/constants";
-import { mergeCombinedPlayersByTeam } from "@/lib/combined-player-stats";
+import {
+  mergeCombinedPlayersByTeam,
+  mergeCombinedPlayerStandings,
+} from "@/lib/combined-player-stats";
 import {
   findKnownComboForDivisionName,
   mergeCombinedSchedule,
@@ -1035,14 +1038,59 @@ export function LeagueApp() {
             }
           }
         } else if (needsPlayers) {
-          const [players, ratings] = await Promise.all([
-            fetchJson<TableReport>(`/api/reports/players?divisionId=${id}`),
+          const activeLink =
+            findLinkById(divisionLinks, prefs?.divisionLinkId) ??
+            findLinkForDivision(divisionLinks, id);
+          const legs =
+            activeLink?.legs && activeLink.legs.length >= 2
+              ? activeLink.legs
+              : null;
+          const legacyLinkedId =
+            !legs && (prefs?.linkedDivisionId || activeLink?.linkedDivisionId)
+              ? (prefs?.linkedDivisionId ??
+                activeLink?.linkedDivisionId ??
+                null)
+              : null;
+          const playerDivisionIds = legs
+            ? legs.map((leg) => ({
+                id: leg.divisionId,
+                label: leg.label,
+              }))
+            : legacyLinkedId
+              ? [
+                  {
+                    id,
+                    label: activeLink?.primaryDivisionName ?? "Primary",
+                  },
+                  {
+                    id: legacyLinkedId,
+                    label:
+                      activeLink?.linkedDivisionName ??
+                      prefs?.linkedDivisionName ??
+                      "Linked",
+                  },
+                ]
+              : [{ id, label: "Division" }];
+
+          const [playerParts, ratings] = await Promise.all([
+            Promise.all(
+              playerDivisionIds.map((part) =>
+                fetchJson<TableReport>(
+                  `/api/reports/players?divisionId=${encodeURIComponent(part.id)}`,
+                )
+                  .then((report) => ({ label: part.label, report }))
+                  .catch(() => ({
+                    label: part.label,
+                    report: null as TableReport | null,
+                  })),
+              ),
+            ),
             fetchJson<TableReport>(
               `/api/reports/player-list?divisionId=${id}`,
             ).catch(() => null),
           ]);
           if (!cancelled) {
-            setPlayerReport(players);
+            setPlayerReport(mergeCombinedPlayerStandings(playerParts));
             setPlayerList(ratings);
             playerReportKeyRef.current = cacheKey;
           }
@@ -2374,6 +2422,11 @@ export function LeagueApp() {
                       <span className="font-medium text-[var(--ink)]">
                         {selectedDivision.name}
                       </span>
+                      {(findLinkById(divisionLinks, prefs.divisionLinkId)
+                        ?.legs?.length ?? 0) >= 2 ||
+                      prefs.linkedDivisionId
+                        ? " · combined across linked night legs"
+                        : null}
                       . Filter the grid below to find someone quickly.
                     </>
                   }
