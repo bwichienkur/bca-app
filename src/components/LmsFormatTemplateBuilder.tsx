@@ -60,6 +60,164 @@ function parseRef(value: string): FormatPlayerRef {
   return { side, index };
 }
 
+function GameCard({
+  game,
+  gameIndex,
+  roundId,
+  allPlayerOptions,
+  onUpdate,
+  onRemove,
+}: {
+  game: FormatGame;
+  gameIndex: number;
+  roundId: string;
+  allPlayerOptions: Array<{ value: string; label: string }>;
+  onUpdate: (
+    roundId: string,
+    gameId: string,
+    updater: (game: FormatGame) => FormatGame,
+  ) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <li className="space-y-2.5 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-[var(--ink)]">
+          {kindLabel(game.kind)} · Game {gameIndex + 1}
+        </p>
+        <button type="button" className={btnDelete} onClick={onRemove}>
+          Remove
+        </button>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="space-y-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            Game type
+          </span>
+          <SelectField
+            aria-label="Game type"
+            value={game.gameType}
+            options={[...FORMAT_GAME_TYPE_OPTIONS]}
+            onChange={(value) =>
+              onUpdate(roundId, game.id, (g) => ({ ...g, gameType: value }))
+            }
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            Points multiplier
+          </span>
+          <SelectField
+            aria-label="Points multiplier"
+            value={game.multiplier}
+            options={[...FORMAT_MULTIPLIER_OPTIONS]}
+            onChange={(value) =>
+              onUpdate(roundId, game.id, (g) => ({ ...g, multiplier: value }))
+            }
+          />
+        </label>
+        {game.kind === "R" ? (
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+              Race length
+            </span>
+            <SelectField
+              aria-label="Race length"
+              value={game.raceLength}
+              options={FORMAT_RACE_LENGTH_OPTIONS}
+              onChange={(value) =>
+                onUpdate(roundId, game.id, (g) => ({
+                  ...g,
+                  raceLength: value,
+                }))
+              }
+            />
+          </label>
+        ) : null}
+        <label className="space-y-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            Breaking side
+          </span>
+          <SelectField
+            aria-label="Breaking side"
+            value={String(game.breakTeam)}
+            options={[
+              { value: "1", label: "Home breaks" },
+              { value: "2", label: "Away breaks" },
+            ]}
+            onChange={(value) =>
+              onUpdate(roundId, game.id, (g) => ({
+                ...g,
+                breakTeam: value === "2" ? 2 : 1,
+              }))
+            }
+          />
+        </label>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        {(game.kind === "D" ? [0, 1] : [0]).map((slot) => (
+          <label key={`break-${slot}`} className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+              {game.kind === "D"
+                ? `Breaking player ${slot + 1}`
+                : "Breaking player"}
+            </span>
+            <SelectField
+              aria-label={`Breaking player ${slot + 1}`}
+              value={refValue(
+                game.breakPlayers[slot] ?? {
+                  side: game.breakTeam === 1 ? "H" : "A",
+                  index: 1,
+                },
+              )}
+              options={allPlayerOptions}
+              onChange={(value) =>
+                onUpdate(roundId, game.id, (g) => {
+                  const next = [...g.breakPlayers];
+                  next[slot] = parseRef(value);
+                  return { ...g, breakPlayers: next };
+                })
+              }
+            />
+          </label>
+        ))}
+        {(game.kind === "D" ? [0, 1] : [0]).map((slot) => (
+          <label key={`other-${slot}`} className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+              {game.kind === "D"
+                ? `Other player ${slot + 1}`
+                : "Other player"}
+            </span>
+            <SelectField
+              aria-label={`Other player ${slot + 1}`}
+              value={refValue(
+                game.otherPlayers[slot] ?? {
+                  side: game.breakTeam === 1 ? "A" : "H",
+                  index: 1,
+                },
+              )}
+              options={allPlayerOptions}
+              onChange={(value) =>
+                onUpdate(roundId, game.id, (g) => {
+                  const next = [...g.otherPlayers];
+                  next[slot] = parseRef(value);
+                  return { ...g, otherPlayers: next };
+                })
+              }
+            />
+          </label>
+        ))}
+      </div>
+    </li>
+  );
+}
+
+/**
+ * Full-page scoresheet builder: one round at a time via tabs.
+ * Opened from Division → Format (replaces the old stacked modal).
+ */
 export function LmsFormatTemplateBuilder({
   initialTemplate,
   playerCountHint,
@@ -69,27 +227,33 @@ export function LmsFormatTemplateBuilder({
   const [model, setModel] = useState<FormatTemplateModel>(() => {
     const parsed = parseFormatTemplate(initialTemplate);
     if (!initialTemplate.trim() && playerCountHint) {
-      return defaultFormatModel(playerCountHint, Math.max(1, parsed.rounds.length));
+      return defaultFormatModel(
+        playerCountHint,
+        Math.max(1, parsed.rounds.length),
+      );
     }
-    return parsed;
+    return parsed.rounds.length > 0
+      ? parsed
+      : defaultFormatModel(playerCountHint || parsed.playerCount || 3, 1);
   });
+  const [activeRoundId, setActiveRoundId] = useState(
+    () => model.rounds[0]?.id ?? "",
+  );
   const [showDsl, setShowDsl] = useState(false);
 
   useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onCancel();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = previous;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onCancel]);
+    if (!model.rounds.some((round) => round.id === activeRoundId)) {
+      setActiveRoundId(model.rounds[0]?.id ?? "");
+    }
+  }, [model.rounds, activeRoundId]);
 
   const dsl = useMemo(() => serializeFormatTemplate(model), [model]);
   const summary = useMemo(() => summarizeFormatModel(model), [model]);
+  const activeRoundIndex = model.rounds.findIndex(
+    (round) => round.id === activeRoundId,
+  );
+  const activeRound: FormatRound | null =
+    activeRoundIndex >= 0 ? model.rounds[activeRoundIndex]! : null;
 
   const setPlayerCount = (next: number) => {
     const count = clampPlayerCount(next);
@@ -113,7 +277,10 @@ export function LmsFormatTemplateBuilder({
     }));
   };
 
-  const updateRound = (roundId: string, updater: (round: FormatRound) => FormatRound) => {
+  const updateRound = (
+    roundId: string,
+    updater: (round: FormatRound) => FormatRound,
+  ) => {
     setModel((prev) => ({
       ...prev,
       rounds: prev.rounds.map((round) =>
@@ -135,355 +302,216 @@ export function LmsFormatTemplateBuilder({
     }));
   };
 
+  const addRound = () => {
+    const round = emptyRound();
+    setModel((prev) => ({
+      ...prev,
+      rounds: [...prev.rounds, round],
+    }));
+    setActiveRoundId(round.id);
+  };
+
+  const removeActiveRound = () => {
+    if (!activeRound || model.rounds.length <= 1) return;
+    const index = activeRoundIndex;
+    const nextId =
+      model.rounds[index + 1]?.id ?? model.rounds[index - 1]?.id ?? "";
+    setModel((prev) => ({
+      ...prev,
+      rounds: prev.rounds.filter((r) => r.id !== activeRound.id),
+    }));
+    setActiveRoundId(nextId);
+  };
+
+  const addGame = (kind: FormatGameKind) => {
+    if (!activeRound) return;
+    updateRound(activeRound.id, (round) => ({
+      ...round,
+      games: [...round.games, emptyGame(kind)],
+    }));
+  };
+
   const homeOptions = playerOptions(model.playerCount, "H");
   const awayOptions = playerOptions(model.playerCount, "A");
   const allPlayerOptions = [...homeOptions, ...awayOptions];
 
   return (
-    <div
-      className="fixed inset-0 z-[90] overflow-y-auto bg-black/55"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Create scoresheet"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onCancel();
-      }}
-    >
-      <div className="flex min-h-full justify-center px-3 py-6">
-        <div
-          className="w-full max-w-3xl rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className="flex items-start justify-between gap-3 border-b border-[var(--line)] bg-[linear-gradient(145deg,rgba(29,110,158,0.98),rgba(19,78,115,0.96))] px-4 py-3 text-white">
-            <div className="min-w-0">
-              <h2 className="font-[family-name:var(--font-display)] text-xl font-semibold">
-                Create scoresheet
-              </h2>
-              <p className="mt-0.5 text-xs text-white/75">{summary}</p>
-            </div>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-[var(--shadow)] sm:p-4">
+        <label className="min-w-[9rem] flex-1 space-y-1.5 sm:max-w-[12rem]">
+          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+            Players per team
+          </span>
+          <SelectField
+            aria-label="Players per team"
+            value={String(model.playerCount)}
+            options={Array.from({ length: 10 }, (_, i) => ({
+              value: String(i + 1),
+              label: String(i + 1),
+            }))}
+            onChange={(value) => setPlayerCount(Number(value))}
+          />
+        </label>
+        <p className="pb-2 text-xs text-[var(--muted)] sm:ml-auto">
+          {summary}
+        </p>
+      </div>
+
+      <section className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        <div className="border-b border-[var(--line)] bg-[var(--surface-2)] px-2 py-2 sm:px-3">
+          <div
+            role="tablist"
+            aria-label="Scoresheet rounds"
+            className="flex gap-1 overflow-x-auto pb-0.5"
+          >
+            {model.rounds.map((round, index) => {
+              const selected = round.id === activeRoundId;
+              return (
+                <button
+                  key={round.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => setActiveRoundId(round.id)}
+                  className={[
+                    "inline-flex shrink-0 flex-col items-center justify-center rounded-md px-3 py-1.5 transition",
+                    selected
+                      ? "bg-[var(--felt)] text-white shadow-sm"
+                      : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
+                  ].join(" ")}
+                >
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.12em]">
+                    Round
+                  </span>
+                  <span className="font-[family-name:var(--font-display)] text-base font-semibold tabular-nums leading-none">
+                    {index + 1}
+                  </span>
+                  <span
+                    className={[
+                      "mt-0.5 text-[9px] font-semibold tabular-nums",
+                      selected ? "text-white/75" : "text-[var(--muted)]",
+                    ].join(" ")}
+                  >
+                    {round.games.length} game{round.games.length === 1 ? "" : "s"}
+                  </span>
+                </button>
+              );
+            })}
             <button
               type="button"
-              className="rounded-[var(--radius)] border border-white/25 bg-white/10 px-3 py-1.5 text-sm font-semibold text-white"
-              onClick={onCancel}
+              className="inline-flex shrink-0 items-center justify-center rounded-md border border-dashed border-[var(--line-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--felt-deep)] hover:bg-[var(--surface)]"
+              onClick={addRound}
             >
-              Close
+              + Round
             </button>
           </div>
-
-          <div className="space-y-4 p-3 sm:p-4">
-            <div className="flex flex-wrap items-end gap-3">
-              <label className="min-w-[10rem] flex-1 space-y-1.5">
-                <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                  Players per team
-                </span>
-                <SelectField
-                  aria-label="Players per team"
-                  value={String(model.playerCount)}
-                  options={Array.from({ length: 10 }, (_, i) => ({
-                    value: String(i + 1),
-                    label: String(i + 1),
-                  }))}
-                  onChange={(value) => setPlayerCount(Number(value))}
-                />
-              </label>
-              <button
-                type="button"
-                className={btnPrimary}
-                onClick={() =>
-                  setModel((prev) => ({
-                    ...prev,
-                    rounds: [...prev.rounds, emptyRound()],
-                  }))
-                }
-              >
-                + Add round
-              </button>
-            </div>
-
-            <div className="grid gap-2 sm:grid-cols-3">
-              {(
-                [
-                  ["S", "Singles game"],
-                  ["R", "Singles race"],
-                  ["D", "Scotch game"],
-                ] as const
-              ).map(([kind, label]) => (
-                <button
-                  key={kind}
-                  type="button"
-                  className={btnGhost}
-                  disabled={model.rounds.length === 0}
-                  onClick={() => {
-                    const last = model.rounds[model.rounds.length - 1];
-                    if (!last) return;
-                    updateRound(last.id, (round) => ({
-                      ...round,
-                      games: [...round.games, emptyGame(kind)],
-                    }));
-                  }}
-                >
-                  + {label}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-[var(--muted)]">
-              Palette buttons add a game to the last round. Use each round’s own
-              controls to add games there, or rearrange by editing player slots.
-            </p>
-
-            <div className="space-y-3">
-              {model.rounds.map((round, roundIndex) => (
-                <section
-                  key={round.id}
-                  className="space-y-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)]/50 p-3"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-[var(--ink)]">
-                      Round {roundIndex + 1}
-                    </h3>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(
-                        [
-                          ["S", "Singles"],
-                          ["R", "Race"],
-                          ["D", "Scotch"],
-                        ] as const
-                      ).map(([kind, label]) => (
-                        <button
-                          key={kind}
-                          type="button"
-                          className={btnGhost}
-                          onClick={() =>
-                            updateRound(round.id, (current) => ({
-                              ...current,
-                              games: [...current.games, emptyGame(kind)],
-                            }))
-                          }
-                        >
-                          + {label}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        className={btnDelete}
-                        disabled={model.rounds.length <= 1}
-                        onClick={() =>
-                          setModel((prev) => ({
-                            ...prev,
-                            rounds: prev.rounds.filter((r) => r.id !== round.id),
-                          }))
-                        }
-                      >
-                        Remove round
-                      </button>
-                    </div>
-                  </div>
-
-                  {round.games.length === 0 ? (
-                    <p className="text-xs text-[var(--muted)]">
-                      No games yet. Add singles, race, or scotch.
-                    </p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {round.games.map((game, gameIndex) => (
-                        <li
-                          key={game.id}
-                          className="space-y-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <p className="text-sm font-semibold text-[var(--ink)]">
-                              {kindLabel(game.kind)} · Game {gameIndex + 1}
-                            </p>
-                            <button
-                              type="button"
-                              className={btnDelete}
-                              onClick={() =>
-                                updateRound(round.id, (current) => ({
-                                  ...current,
-                                  games: current.games.filter(
-                                    (g) => g.id !== game.id,
-                                  ),
-                                }))
-                              }
-                            >
-                              Remove
-                            </button>
-                          </div>
-
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            <label className="space-y-1">
-                              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                                Game type
-                              </span>
-                              <SelectField
-                                aria-label="Game type"
-                                value={game.gameType}
-                                options={[...FORMAT_GAME_TYPE_OPTIONS]}
-                                onChange={(value) =>
-                                  updateGame(round.id, game.id, (g) => ({
-                                    ...g,
-                                    gameType: value,
-                                  }))
-                                }
-                              />
-                            </label>
-                            <label className="space-y-1">
-                              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                                Points multiplier
-                              </span>
-                              <SelectField
-                                aria-label="Points multiplier"
-                                value={game.multiplier}
-                                options={[...FORMAT_MULTIPLIER_OPTIONS]}
-                                onChange={(value) =>
-                                  updateGame(round.id, game.id, (g) => ({
-                                    ...g,
-                                    multiplier: value,
-                                  }))
-                                }
-                              />
-                            </label>
-                            {game.kind === "R" ? (
-                              <label className="space-y-1">
-                                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                                  Race length
-                                </span>
-                                <SelectField
-                                  aria-label="Race length"
-                                  value={game.raceLength}
-                                  options={FORMAT_RACE_LENGTH_OPTIONS}
-                                  onChange={(value) =>
-                                    updateGame(round.id, game.id, (g) => ({
-                                      ...g,
-                                      raceLength: value,
-                                    }))
-                                  }
-                                />
-                              </label>
-                            ) : null}
-                            <label className="space-y-1">
-                              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                                Breaking side
-                              </span>
-                              <SelectField
-                                aria-label="Breaking side"
-                                value={String(game.breakTeam)}
-                                options={[
-                                  { value: "1", label: "Home breaks" },
-                                  { value: "2", label: "Away breaks" },
-                                ]}
-                                onChange={(value) =>
-                                  updateGame(round.id, game.id, (g) => ({
-                                    ...g,
-                                    breakTeam: value === "2" ? 2 : 1,
-                                  }))
-                                }
-                              />
-                            </label>
-                          </div>
-
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            {(game.kind === "D"
-                              ? [0, 1]
-                              : [0]
-                            ).map((slot) => (
-                              <label key={`break-${slot}`} className="space-y-1">
-                                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                                  {game.kind === "D"
-                                    ? `Breaking player ${slot + 1}`
-                                    : "Breaking player"}
-                                </span>
-                                <SelectField
-                                  aria-label={`Breaking player ${slot + 1}`}
-                                  value={refValue(
-                                    game.breakPlayers[slot] ?? {
-                                      side: game.breakTeam === 1 ? "H" : "A",
-                                      index: 1,
-                                    },
-                                  )}
-                                  options={allPlayerOptions}
-                                  onChange={(value) =>
-                                    updateGame(round.id, game.id, (g) => {
-                                      const next = [...g.breakPlayers];
-                                      next[slot] = parseRef(value);
-                                      return { ...g, breakPlayers: next };
-                                    })
-                                  }
-                                />
-                              </label>
-                            ))}
-                            {(game.kind === "D"
-                              ? [0, 1]
-                              : [0]
-                            ).map((slot) => (
-                              <label key={`other-${slot}`} className="space-y-1">
-                                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                                  {game.kind === "D"
-                                    ? `Other player ${slot + 1}`
-                                    : "Other player"}
-                                </span>
-                                <SelectField
-                                  aria-label={`Other player ${slot + 1}`}
-                                  value={refValue(
-                                    game.otherPlayers[slot] ?? {
-                                      side: game.breakTeam === 1 ? "A" : "H",
-                                      index: 1,
-                                    },
-                                  )}
-                                  options={allPlayerOptions}
-                                  onChange={(value) =>
-                                    updateGame(round.id, game.id, (g) => {
-                                      const next = [...g.otherPlayers];
-                                      next[slot] = parseRef(value);
-                                      return { ...g, otherPlayers: next };
-                                    })
-                                  }
-                                />
-                              </label>
-                            ))}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-              ))}
-            </div>
-
-            <div className="space-y-2 border-t border-[var(--line)] pt-3">
-              <button
-                type="button"
-                className={btnGhost}
-                onClick={() => setShowDsl((v) => !v)}
-              >
-                {showDsl ? "Hide" : "Show"} advanced template text
-              </button>
-              {showDsl ? (
-                <pre className="max-h-56 overflow-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-3 text-[11px] leading-relaxed text-[var(--ink)]">
-                  {dsl}
-                </pre>
-              ) : null}
-            </div>
-
-            <div className="flex flex-wrap justify-end gap-2">
-              <button type="button" className={btnGhost} onClick={onCancel}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className={btnPrimary}
-                onClick={() =>
-                  onApply(dsl, {
-                    playerCount: model.playerCount,
-                    rounds: model.rounds.length,
-                  })
-                }
-              >
-                Use this scoresheet
-              </button>
-            </div>
-          </div>
         </div>
+
+        <div className="space-y-3 p-3 sm:p-4">
+          {!activeRound ? (
+            <p className="text-sm text-[var(--muted)]">
+              No rounds yet. Add a round to start building games.
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-[var(--ink)]">
+                    Round {activeRoundIndex + 1}
+                  </h3>
+                  <p className="text-xs text-[var(--muted)]">
+                    Edit games for this round only. Switch tabs for other rounds.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className={btnDelete}
+                  disabled={model.rounds.length <= 1}
+                  onClick={removeActiveRound}
+                >
+                  Remove round
+                </button>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-3">
+                {(
+                  [
+                    ["S", "Singles"],
+                    ["R", "Race"],
+                    ["D", "Scotch"],
+                  ] as const
+                ).map(([kind, label]) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    className={btnGhost}
+                    onClick={() => addGame(kind)}
+                  >
+                    + {label}
+                  </button>
+                ))}
+              </div>
+
+              {activeRound.games.length === 0 ? (
+                <p className="rounded-[var(--radius)] border border-dashed border-[var(--line)] px-3 py-6 text-center text-sm text-[var(--muted)]">
+                  No games in this round yet. Add singles, race, or scotch.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {activeRound.games.map((game, gameIndex) => (
+                    <GameCard
+                      key={game.id}
+                      game={game}
+                      gameIndex={gameIndex}
+                      roundId={activeRound.id}
+                      allPlayerOptions={allPlayerOptions}
+                      onUpdate={updateGame}
+                      onRemove={() =>
+                        updateRound(activeRound.id, (current) => ({
+                          ...current,
+                          games: current.games.filter((g) => g.id !== game.id),
+                        }))
+                      }
+                    />
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </div>
+      </section>
+
+      <div className="space-y-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-[var(--shadow)] sm:p-4">
+        <button
+          type="button"
+          className={btnGhost}
+          onClick={() => setShowDsl((v) => !v)}
+        >
+          {showDsl ? "Hide" : "Show"} advanced template text
+        </button>
+        {showDsl ? (
+          <pre className="max-h-56 overflow-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] p-3 text-[11px] leading-relaxed text-[var(--ink)]">
+            {dsl}
+          </pre>
+        ) : null}
+      </div>
+
+      <div className="sticky bottom-3 z-10 flex flex-wrap justify-end gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)]/95 p-3 shadow-[var(--shadow)] backdrop-blur">
+        <button type="button" className={btnGhost} onClick={onCancel}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className={btnPrimary}
+          onClick={() =>
+            onApply(dsl, {
+              playerCount: model.playerCount,
+              rounds: model.rounds.length,
+            })
+          }
+        >
+          Use this scoresheet
+        </button>
       </div>
     </div>
   );
