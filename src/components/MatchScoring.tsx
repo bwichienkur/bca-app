@@ -1198,11 +1198,14 @@ export function MatchScoring({
     [match, draft, roundHandicaps],
   );
 
-  // LMS owns this (match.matchWinCountsAsRound) — e.g. Palm Beach total-points
-  // round. Do not gate on a Tableside play-style flag.
-  const includeMatchPointsRound =
-    match != null && match.matchWinCountsAsRound !== false;
   const matchWinTeamPoints = scoringFormat.teamPointMode === "match-win";
+  // Totals/R6 is Palm Beach expected-points only. Set-win sheets (Beyond
+  // Singles, Tuesday, Beyond Teams) never show a Tot tab — even when LMS
+  // omits matchWinCountsAsRound (API defaults that field to true).
+  const includeMatchPointsRound =
+    match != null &&
+    !matchWinTeamPoints &&
+    match.matchWinCountsAsRound !== false;
 
   const matchWinRoundTallies = useMemo(
     () =>
@@ -1222,6 +1225,12 @@ export function MatchScoring({
   }, [draft, includeMatchPointsRound, match, roundPointTallies]);
 
   const isMatchPointsRound = activeRound === MATCH_POINTS_ROUND;
+
+  useEffect(() => {
+    if (!includeMatchPointsRound && activeRound === MATCH_POINTS_ROUND) {
+      setActiveRound(match?.matchFormat?.rounds[0]?.roundNumber ?? 1);
+    }
+  }, [includeMatchPointsRound, activeRound, match?.matchFormat?.rounds]);
 
   const activeRoundPoints = useMemo(() => {
     if (isMatchPointsRound) return matchPointsTally;
