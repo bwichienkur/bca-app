@@ -2817,6 +2817,12 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
       ? "text-[var(--amber)]"
       : "text-[var(--muted)]";
 
+  const remainingWinsLine = (winsNeed: number) => {
+    if (winsNeed === 1 && gamesLeft === 1) return "Must win this game";
+    if (winsNeed === gamesLeft) return `Win all ${gamesLeft} remaining`;
+    return `Win ${winsNeed} of ${gamesLeft} remaining`;
+  };
+
   const sideCard = (
     side: 1 | 2,
     name: string,
@@ -2831,8 +2837,6 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
       side === 1 ? tally.pointsNeeded.teamOne : tally.pointsNeeded.teamTwo;
     const winsNeed =
       side === 1 ? tally.winsNeeded.teamOne : tally.winsNeeded.teamTwo;
-    const holdTo =
-      side === 1 ? tally.holdOpponentTo.teamOne : tally.holdOpponentTo.teamTwo;
     const canCatch =
       side === 1 ? tally.canCatchUp.teamOne : tally.canCatchUp.teamTwo;
     const otherCanCatch =
@@ -2850,32 +2854,19 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
       if (!canCatch) return ["Can’t catch up"];
       if (aheadAndVulnerable) {
         const lines = ["Can still be caught"];
-        if (holdTo != null) {
-          const allow = Math.max(0, holdTo - theirTotal);
-          lines.push(
-            allow === 0
-              ? "Keep them scoreless in remaining games"
-              : `Keep them to ≤${holdTo} pts (≤${allow} more)`,
-          );
+        if (winsNeed != null && winsNeed > 0) {
+          lines.push(remainingWinsLine(winsNeed));
         }
         return lines;
       }
       if (need == null || need === 0) {
         return winsNeed != null && winsNeed > 0
-          ? [
-              winsNeed === gamesLeft
-                ? `Win all ${gamesLeft} remaining`
-                : `Win ${winsNeed} of ${gamesLeft} remaining`,
-            ]
+          ? [remainingWinsLine(winsNeed)]
           : ["On track"];
       }
       const lines = [`Need ${need} pt${need === 1 ? "" : "s"}`];
       if (winsNeed != null && winsNeed > 0) {
-        lines.push(
-          winsNeed === gamesLeft
-            ? `Win all ${gamesLeft} remaining`
-            : `Win ${winsNeed} of ${gamesLeft} remaining`,
-        );
+        lines.push(remainingWinsLine(winsNeed));
       }
       return lines;
     })();
