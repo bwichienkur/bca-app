@@ -13,6 +13,13 @@ import { createPortal } from "react-dom";
 
 export type FieldInfoItem = { label: string; description: string };
 
+function canHover(): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return false;
+  }
+  return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+}
+
 export function FieldInfo({
   label,
   summary,
@@ -44,6 +51,7 @@ export function FieldInfo({
   };
 
   const scheduleClose = () => {
+    if (!canHover()) return;
     cancelClose();
     closeTimer.current = window.setTimeout(() => setOpen(false), 140);
   };
@@ -85,19 +93,36 @@ export function FieldInfo({
 
   useEffect(() => {
     if (!open) return;
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (rootRef.current?.contains(target)) return;
-      if (tipRef.current?.contains(target)) return;
+
+    const isInside = (target: EventTarget | null) => {
+      if (!(target instanceof Node)) return false;
+      if (rootRef.current?.contains(target)) return true;
+      if (tipRef.current?.contains(target)) return true;
+      return false;
+    };
+
+    const onPointerDown = (event: Event) => {
+      if (isInside(event.target)) return;
+      cancelClose();
       setOpen(false);
     };
+
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        cancelClose();
+        setOpen(false);
+      }
     };
-    window.addEventListener("pointerdown", onPointerDown);
+
+    // Capture so a stopPropagation on a card/button still dismisses the tip.
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("mousedown", onPointerDown, true);
+    document.addEventListener("touchstart", onPointerDown, true);
     window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("mousedown", onPointerDown, true);
+      document.removeEventListener("touchstart", onPointerDown, true);
       window.removeEventListener("keydown", onKey);
     };
   }, [open]);
@@ -105,39 +130,52 @@ export function FieldInfo({
   const tip =
     open && mounted
       ? createPortal(
-          <span
-            ref={tipRef}
-            id={tipId}
-            role="tooltip"
-            style={tipStyle}
-            className="overflow-y-auto rounded-[var(--radius)] border border-[var(--line-strong)] bg-[var(--surface)] p-3 text-left shadow-[var(--shadow)]"
-            onMouseEnter={cancelClose}
-            onMouseLeave={scheduleClose}
-          >
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--felt-deep)]">
-              {label}
-            </p>
-            {summary ? (
-              <p className="mt-1.5 text-xs leading-relaxed text-[var(--ink)]">
-                {summary}
+          <>
+            <button
+              type="button"
+              aria-label="Dismiss info"
+              className="fixed inset-0 z-[10055] cursor-default bg-transparent"
+              onClick={() => {
+                cancelClose();
+                setOpen(false);
+              }}
+            />
+            <span
+              ref={tipRef}
+              id={tipId}
+              role="tooltip"
+              style={tipStyle}
+              className="overflow-y-auto rounded-[var(--radius)] border border-[var(--line-strong)] bg-[var(--surface)] p-3 text-left shadow-[var(--shadow)]"
+              onMouseEnter={cancelClose}
+              onMouseLeave={scheduleClose}
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--felt-deep)]">
+                {label}
               </p>
-            ) : null}
-            {items?.length ? (
-              <ul className={summary ? "mt-2.5 space-y-2" : "mt-1.5 space-y-2"}>
-                {items.map((item) => (
-                  <li key={item.label} className="text-xs leading-snug">
-                    <span className="font-semibold text-[var(--ink)]">
-                      {item.label}
-                    </span>
-                    <span className="text-[var(--muted)]">
-                      {" "}
-                      — {item.description}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </span>,
+              {summary ? (
+                <p className="mt-1.5 text-xs leading-relaxed text-[var(--ink)]">
+                  {summary}
+                </p>
+              ) : null}
+              {items?.length ? (
+                <ul
+                  className={summary ? "mt-2.5 space-y-2" : "mt-1.5 space-y-2"}
+                >
+                  {items.map((item) => (
+                    <li key={item.label} className="text-xs leading-snug">
+                      <span className="font-semibold text-[var(--ink)]">
+                        {item.label}
+                      </span>
+                      <span className="text-[var(--muted)]">
+                        {" "}
+                        — {item.description}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </span>
+          </>,
           document.body,
         )
       : null;
@@ -147,6 +185,7 @@ export function FieldInfo({
       ref={rootRef}
       className="relative inline-flex"
       onMouseEnter={() => {
+        if (!canHover()) return;
         cancelClose();
         setOpen(true);
       }}
@@ -167,6 +206,7 @@ export function FieldInfo({
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
+          cancelClose();
           setOpen((value) => !value);
         }}
       >

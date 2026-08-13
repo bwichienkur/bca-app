@@ -2495,7 +2495,18 @@ export function MatchScoring({
   const nightHint = comboNightHint(
     linkedCombo,
     divisionLink?.config ?? null,
+    divisionLink?.legs ?? null,
   );
+  const nightInfoParts = [
+    linkedDivisionId || (divisionLink?.legs?.length ?? 0) >= 2
+      ? "Combined night — Singles and Teams share one card; score each LMS sheet separately."
+      : null,
+    linkedDivisionId || (divisionLink?.legs?.length ?? 0) >= 2
+      ? null
+      : formatScoringSummary(scoringFormat),
+    sharedDrafts ? "Live sync on for shared draft scores." : null,
+    nightHint,
+  ].filter(Boolean) as string[];
 
   return (
     <section className="animate-rise space-y-3 p-3 sm:p-4">
@@ -2509,7 +2520,6 @@ export function MatchScoring({
             ) : (
               "your division"
             )}
-            {linkedDivisionId ? " · combined night" : null}
             {teamName ? (
               <>
                 {" "}
@@ -2517,20 +2527,12 @@ export function MatchScoring({
                 <span className="font-medium text-[var(--ink)]">{teamName}</span>
               </>
             ) : null}
-            {linkedDivisionId ? null : (
-              <>
-                {" · "}
-                {formatScoringSummary(scoringFormat)}
-              </>
-            )}
-            {sharedDrafts ? " · live sync on" : null}
-            {nightHint ? (
-              <>
-                <br />
-                <span className="text-[var(--muted)]">{nightHint}</span>
-              </>
-            ) : null}
           </>
+        }
+        info={
+          nightInfoParts.length
+            ? { summary: nightInfoParts.join(" ") }
+            : undefined
         }
         action={
           loadingMatches ? undefined : (
