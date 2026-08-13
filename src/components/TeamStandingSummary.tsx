@@ -351,11 +351,11 @@ export function TeamStandingSummary({
   const panelHeader = hasHeader ? (
     <PanelHeader
       title={panelTitle}
-      description={
-        resolvedTeamName
-          ? `${headerEyebrow} · current place in the division`
-          : "Current place in the division"
-      }
+      info={{
+        summary: resolvedTeamName
+          ? `${headerEyebrow} · current place in the division.`
+          : "Current place in the division.",
+      }}
       action={
         resolvedTeamName && rankCell ? (
           <PanelHeaderCount

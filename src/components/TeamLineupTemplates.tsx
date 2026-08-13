@@ -406,7 +406,9 @@ export function TeamLineupTemplates({
   const header = (
     <PanelHeader
       title="Lineups"
-      description={`Save ${slots}-player orders for league night. Load them from Handicap or Score.`}
+      info={{
+        summary: `Save ${slots}-player orders for league night. Load them from Handicap or Score. Default is used first; add more for alternate nights.`,
+      }}
       action={
         mode === "library" ? (
           <IconAddButton label="Add lineup" onClick={openNew} />
@@ -419,10 +421,6 @@ export function TeamLineupTemplates({
 
   const library = (
     <div className="space-y-3">
-      <p className="text-xs text-[var(--muted)]">
-        Default is used first; add more for alternate nights.
-      </p>
-
       {status && mode === "library" ? (
         <p className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--felt-deep)]">
           {status}

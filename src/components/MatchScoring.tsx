@@ -1941,11 +1941,14 @@ export function MatchScoring({
           >
             {sheetTab === "lineup" ? (
               <div className="space-y-3">
-                <p className="text-xs text-[var(--muted)]">
-                  {sheetLocked
-                    ? "View lineups for both teams."
-                    : "Set Home and Away lineups — drag to reorder, or load a saved team lineup."}
-                </p>
+                <PanelHeader
+                  title="Lineup"
+                  info={{
+                    summary: sheetLocked
+                      ? "View lineups for both teams."
+                      : "Set Home and Away lineups — drag to reorder, or load a saved team lineup.",
+                  }}
+                />
                 <LineupEditor
                   match={match}
                   draft={draft}
@@ -2521,28 +2524,15 @@ export function MatchScoring({
     <section className="animate-rise space-y-3 p-3 sm:p-4">
       <PanelHeader
         title="Night board"
-        description={
-          <>
-            Live scores for every match in{" "}
-            {divisionName ? (
-              <span className="font-medium text-[var(--ink)]">{divisionName}</span>
-            ) : (
-              "your division"
-            )}
-            {teamName ? (
-              <>
-                {" "}
-                · your team{" "}
-                <span className="font-medium text-[var(--ink)]">{teamName}</span>
-              </>
-            ) : null}
-          </>
-        }
-        info={
-          nightInfoParts.length
-            ? { summary: nightInfoParts.join(" ") }
-            : undefined
-        }
+        info={{
+          summary: [
+            `Live scores for every match in ${divisionName || "your division"}`,
+            teamName ? `your team ${teamName}` : null,
+            ...nightInfoParts,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        }}
         action={
           loadingMatches ? undefined : (
             <PanelHeaderCount
@@ -3064,9 +3054,12 @@ function ScoringPerformanceBoard({
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-[var(--muted)]">
-        Player W-L and points from scored games on this sheet.
-      </p>
+      <PanelHeader
+        title="Performance"
+        info={{
+          summary: "Player W-L and points from scored games on this sheet.",
+        }}
+      />
       <div className="grid gap-4 sm:grid-cols-2">
         {column(homeName, home)}
         {column(awayName, away)}

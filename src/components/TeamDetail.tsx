@@ -96,13 +96,13 @@ export function TeamDetail({
 
       <PanelHeader
         title={teamName}
-        description={
-          team
-            ? `${isMyTeam ? "My team · " : ""}${team.players.length} rostered${avg != null ? ` · avg Fargo ${avg}` : ""}`
+        info={{
+          summary: team
+            ? `${isMyTeam ? "My team · " : ""}${team.players.length} rostered${avg != null ? ` · avg Fargo ${avg}` : ""}. Player statistics for this team.`
             : isMyTeam
-              ? "My team"
-              : "Team detail"
-        }
+              ? "My team — standing and roster details."
+              : "Team detail — player statistics for this team.",
+        }}
         action={
           team?.players.length ? (
             <PanelHeaderCount
