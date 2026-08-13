@@ -1,13 +1,13 @@
 import type { TableReport } from "./types";
 
-function normalizePerson(value: string): string {
+export function normalizePerson(value: string): string {
   return value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
 
-function personKeys(name: string): string[] {
+export function personKeys(name: string): string[] {
   const normalized = normalizePerson(name);
   if (!normalized) return [];
 

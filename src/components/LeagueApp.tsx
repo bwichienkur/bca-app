@@ -17,6 +17,7 @@ import {
   tabBelongsToPillar,
 } from "@/lib/app-nav";
 import { DEFAULT_LEAGUE_ID } from "@/lib/constants";
+import { mergeCombinedPlayersByTeam } from "@/lib/combined-player-stats";
 import {
   findKnownComboForDivisionName,
   mergeCombinedSchedule,
@@ -822,16 +823,58 @@ export function LeagueApp() {
       setPlayersByTeam(null);
       setDivisionTeams([]);
       try {
-        const [byTeam, calculator] = await Promise.all([
-          fetchJson<PlayersByTeamReport>(
-            `/api/reports/players-by-team?divisionId=${selectedDivision!.id}`,
+        const activeLink =
+          findLinkById(divisionLinks, prefs?.divisionLinkId) ??
+          findLinkForDivision(divisionLinks, selectedDivision!.id);
+        const legs =
+          activeLink?.legs && activeLink.legs.length >= 2
+            ? activeLink.legs
+            : null;
+        const legacyLinkedId =
+          !legs && (prefs?.linkedDivisionId || activeLink?.linkedDivisionId)
+            ? (prefs?.linkedDivisionId ?? activeLink?.linkedDivisionId ?? null)
+            : null;
+
+        const playerDivisionIds = legs
+          ? legs.map((leg) => ({
+              id: leg.divisionId,
+              label: leg.label,
+            }))
+          : legacyLinkedId
+            ? [
+                {
+                  id: selectedDivision!.id,
+                  label: activeLink?.primaryDivisionName ?? "Primary",
+                },
+                {
+                  id: legacyLinkedId,
+                  label:
+                    activeLink?.linkedDivisionName ??
+                    prefs?.linkedDivisionName ??
+                    "Linked",
+                },
+              ]
+            : [{ id: selectedDivision!.id, label: "Division" }];
+
+        const [byTeamParts, calculator] = await Promise.all([
+          Promise.all(
+            playerDivisionIds.map((part) =>
+              fetchJson<PlayersByTeamReport>(
+                `/api/reports/players-by-team?divisionId=${encodeURIComponent(part.id)}`,
+              )
+                .then((report) => ({ label: part.label, report }))
+                .catch(() => ({
+                  label: part.label,
+                  report: null as PlayersByTeamReport | null,
+                })),
+            ),
           ),
           fetchJson<{ teams: DivisionTeam[] }>(
             `/api/divisions/${selectedDivision!.id}/calculator`,
           ),
         ]);
         if (cancelled) return;
-        setPlayersByTeam(byTeam);
+        setPlayersByTeam(mergeCombinedPlayersByTeam(byTeamParts));
         setDivisionTeams(calculator.teams);
 
         // Bright: if following a team by name, rebind to this division's team id.
@@ -866,7 +909,16 @@ export function LeagueApp() {
     return () => {
       cancelled = true;
     };
-  }, [selectedDivision, prefs?.teamId, prefs?.teamName, refreshToken, brightBrowseAll]);
+  }, [
+    selectedDivision,
+    prefs?.teamId,
+    prefs?.teamName,
+    prefs?.divisionLinkId,
+    prefs?.linkedDivisionId,
+    divisionLinks,
+    refreshToken,
+    brightBrowseAll,
+  ]);
 
   useEffect(() => {
     if (!selectedDivision) return;
