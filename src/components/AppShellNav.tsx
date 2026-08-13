@@ -6,6 +6,7 @@ import {
   LEAGUE_SECTIONS,
   sectionUsesLeafIcon,
 } from "@/lib/app-nav";
+import { useVirtualKeyboardOpen } from "@/lib/use-virtual-keyboard";
 import { PillarIcon, NavTabIcon } from "./NavIcons";
 
 type PillarNavProps = {
@@ -35,9 +36,11 @@ export function PillarBottomNav({
   showManage,
   onSelectPillar,
 }: PillarNavProps) {
+  const keyboardOpen = useVirtualKeyboardOpen();
   const pillars = APP_PILLARS.filter(
     (item) => item.id !== "manage" || showManage,
   );
+  if (keyboardOpen) return null;
   return (
     <nav
       aria-label="Main"
