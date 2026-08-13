@@ -82,7 +82,7 @@ export function ScheduleList({
   teamName,
   highlightTeamName = null,
   showAllTeams = false,
-  divisionName,
+  divisionName: _divisionName,
   teamReport = null,
   onMatchClick,
 }: ScheduleListProps) {
@@ -182,23 +182,11 @@ export function ScheduleList({
       <div className="px-3 pt-3 sm:px-4 sm:pt-4">
         <PanelHeader
           title={showAllTeams ? "Division schedule" : "Your schedule"}
-          info={{
-            summary: [
-              showAllTeams
-                ? myTeam
-                  ? `Every matchup in the division · following ${myTeam}`
-                  : "Every matchup in the division"
-                : teamName
-                  ? `Upcoming and past matchups for ${teamName}`
-                  : "Division schedule",
-              linked
-                ? "One card per night opponent — Singles and Teams share the scoresheet entry on Score. Upcoming and Past counts are combined night cards, not individual LMS sheets."
-                : "Use Score to open a scoresheet.",
-            ].join(" "),
-            items: divisionName
-              ? [{ label: "Division", description: divisionName }]
-              : undefined,
-          }}
+          description={
+            showAllTeams
+              ? "Every matchup in the division."
+              : "Upcoming and past matchups."
+          }
           action={
             <PanelHeaderCount
               label={view === "upcoming" ? "Upcoming" : "Past"}

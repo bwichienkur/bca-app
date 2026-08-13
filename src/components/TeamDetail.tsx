@@ -38,14 +38,6 @@ export function TeamDetail({
       normalizeTeamName(item.team) === normalizeTeamName(teamName),
   );
 
-  const avg =
-    team && team.players.length
-      ? Math.round(
-          team.players.reduce((sum, player) => sum + player.fargoRating, 0) /
-            team.players.length,
-        )
-      : null;
-
   const stats = (
     <div className="min-w-0">
       {statsTeam && playersByTeam ? (
@@ -96,13 +88,7 @@ export function TeamDetail({
 
       <PanelHeader
         title={teamName}
-        info={{
-          summary: team
-            ? `${isMyTeam ? "My team · " : ""}${team.players.length} rostered${avg != null ? ` · avg Fargo ${avg}` : ""}. Player statistics for this team.`
-            : isMyTeam
-              ? "My team — standing and roster details."
-              : "Team detail — player statistics for this team.",
-        }}
+        description="Player statistics for this team."
         action={
           team?.players.length ? (
             <PanelHeaderCount

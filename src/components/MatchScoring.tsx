@@ -76,10 +76,8 @@ import {
   type CombinedScoreMatchup,
 } from "@/lib/combined-night-matchup";
 import {
-  comboNightHint,
   comboPartLabel,
   comboRoleForDivisionName,
-  findKnownComboForDivisionName,
   mergeCombinedStandings,
 } from "@/lib/division-combos";
 import {
@@ -1943,11 +1941,11 @@ export function MatchScoring({
               <div className="space-y-3">
                 <PanelHeader
                   title="Lineup"
-                  info={{
-                    summary: sheetLocked
-                      ? "View lineups for both teams."
-                      : "Set Home and Away lineups — drag to reorder, or load a saved team lineup.",
-                  }}
+                  description={
+                    sheetLocked
+                      ? "View Home and Away lineups."
+                      : "Set Home and Away lineups."
+                  }
                 />
                 <LineupEditor
                   match={match}
@@ -2497,42 +2495,11 @@ export function MatchScoring({
       : nightVenues.length > 1
         ? `${nightVenues.length} venues`
         : null;
-  const linkedCombo = linkedDivisionId
-    ? findKnownComboForDivisionName(linkedDivisionName) ??
-      findKnownComboForDivisionName(
-        matches.find((item) => item.divisionId === divisionId)?.divisionName,
-      ) ??
-      findKnownComboForDivisionName(divisionName)
-    : null;
-  const nightHint = comboNightHint(
-    linkedCombo,
-    divisionLink?.config ?? null,
-    divisionLink?.legs ?? null,
-  );
-  const nightInfoParts = [
-    linkedDivisionId || (divisionLink?.legs?.length ?? 0) >= 2
-      ? "Combined night — Singles and Teams share one card; score each LMS sheet separately."
-      : null,
-    linkedDivisionId || (divisionLink?.legs?.length ?? 0) >= 2
-      ? null
-      : formatScoringSummary(scoringFormat),
-    sharedDrafts ? "Live sync on for shared draft scores." : null,
-    nightHint,
-  ].filter(Boolean) as string[];
-
   return (
     <section className="animate-rise space-y-3 p-3 sm:p-4">
       <PanelHeader
         title="Night board"
-        info={{
-          summary: [
-            `Live scores for every match in ${divisionName || "your division"}`,
-            teamName ? `your team ${teamName}` : null,
-            ...nightInfoParts,
-          ]
-            .filter(Boolean)
-            .join(" · "),
-        }}
+        description="Live scores for tonight’s matches."
         action={
           loadingMatches ? undefined : (
             <PanelHeaderCount
@@ -3056,9 +3023,7 @@ function ScoringPerformanceBoard({
     <div className="space-y-3">
       <PanelHeader
         title="Performance"
-        info={{
-          summary: "Player W-L and points from scored games on this sheet.",
-        }}
+        description="Player W-L and points from this sheet."
       />
       <div className="grid gap-4 sm:grid-cols-2">
         {column(homeName, home)}

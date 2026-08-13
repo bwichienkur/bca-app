@@ -14,7 +14,6 @@ import { createPortal } from "react-dom";
 import { DEFAULT_PLAYERS_PER_TEAM } from "@/lib/constants";
 import {
   chartRaceTargets,
-  formatScoringSummary,
   resolveScoringFormat,
 } from "@/lib/division-scoring-config";
 import {
@@ -40,7 +39,7 @@ import { EmptyState } from "./EmptyState";
 import { LoadLineupMenu } from "./LoadLineupMenu";
 import { LoadingState } from "./LoadingState";
 import { PlayerSelect } from "./PlayerSelect";
-import { PanelHeader, PanelHeaderCount } from "./PanelHeader";
+import { PanelHeader } from "./PanelHeader";
 import { Typeahead, type TypeaheadOption } from "./Typeahead";
 
 type CalculatorPayload = {
@@ -568,7 +567,7 @@ export function HandicapCalculator({
       <section className="animate-rise space-y-4">
         <PanelHeader
           title="Matchup"
-          info={{ summary: "Loading teams, ratings, and format…" }}
+          description="Loading teams, ratings, and format…"
         />
         <ContentCard>
           <LoadingState label="Loading teams, ratings, and format…" />
@@ -582,7 +581,7 @@ export function HandicapCalculator({
       <section className="animate-rise space-y-4">
         <PanelHeader
           title="Matchup"
-          info={{ summary: "Couldn't load the calculator." }}
+          description="Couldn't load the calculator."
         />
         <EmptyState
           title="Couldn't load calculator"
@@ -621,9 +620,6 @@ export function HandicapCalculator({
       )
     : null;
 
-  const formatMeta = `${formatScoringSummary(scoringFormat)} · ${handicapTypeLabel(
-    data.format.fargoRateHandicapType,
-  )}`;
   const homeFilled = filledCount(
     homeLineup.length === slots ? homeLineup : emptyLineup(slots),
   );
@@ -658,10 +654,7 @@ export function HandicapCalculator({
     <section className="animate-panel space-y-3 p-3 sm:p-4">
       <PanelHeader
         title="Handicap"
-        info={{
-          summary: `Fargo league handicap calculator. ${formatMeta}`,
-        }}
-        action={<PanelHeaderCount label="Sides" value={String(slots)} />}
+        description="Fargo league handicap calculator."
       />
 
       <StepSection

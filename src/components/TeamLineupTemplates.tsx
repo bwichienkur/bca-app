@@ -406,9 +406,7 @@ export function TeamLineupTemplates({
   const header = (
     <PanelHeader
       title="Lineups"
-      info={{
-        summary: `Save ${slots}-player orders for league night. Load them from Handicap or Score. Default is used first; add more for alternate nights.`,
-      }}
+      description="Saved player orders for league night."
       action={
         mode === "library" ? (
           <IconAddButton label="Add lineup" onClick={openNew} />

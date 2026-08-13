@@ -330,7 +330,6 @@ export function TeamStandingSummary({
   const hasHeader =
     !hideHeader && Boolean(resolvedTeamName || rankCell);
   const hasBody = Boolean(gamesRatio || chips);
-  const headerEyebrow = hideTeamName || !resolvedTeamName ? "Standing" : "Team";
 
   const statsBody = (
     <>
@@ -351,11 +350,7 @@ export function TeamStandingSummary({
   const panelHeader = hasHeader ? (
     <PanelHeader
       title={panelTitle}
-      info={{
-        summary: resolvedTeamName
-          ? `${headerEyebrow} · current place in the division.`
-          : "Current place in the division.",
-      }}
+      description="Current place in the division."
       action={
         resolvedTeamName && rankCell ? (
           <PanelHeaderCount
