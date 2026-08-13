@@ -1,14 +1,18 @@
 import type { MouseEvent, ReactNode } from "react";
+import { FieldInfo, type FieldInfoItem } from "./FieldLabel";
 
 /** Events-style muted subheader used inside subtab cards (not the blue hero band). */
 export function PanelHeader({
   title,
   description,
+  info,
   action,
   className = "",
 }: {
   title: string;
   description?: ReactNode;
+  /** Extra detail shown via the info icon (keeps the description short). */
+  info?: { summary?: string; items?: FieldInfoItem[] };
   /** Right-aligned control (e.g. + icon, count). Vertically centered with the text block. */
   action?: ReactNode;
   className?: string;
@@ -23,9 +27,18 @@ export function PanelHeader({
         .join(" ")}
     >
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-          {title}
-        </p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+            {title}
+          </p>
+          {info ? (
+            <FieldInfo
+              label={title}
+              summary={info.summary}
+              items={info.items}
+            />
+          ) : null}
+        </div>
         {description ? (
           <div className="mt-0.5 text-xs text-[var(--muted)]">{description}</div>
         ) : null}

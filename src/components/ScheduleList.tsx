@@ -53,6 +53,30 @@ function formatScheduleDate(value: string): string {
   });
 }
 
+/** Linked night when a day (or the set) has multiple legs / LMS divisions. */
+function scheduleDaysAreLinked(days: ScheduleDay[]): boolean {
+  const partLabels = new Set<string>();
+  const divisionIds = new Set<string>();
+  for (const day of days) {
+    const dayParts = new Set<string>();
+    const dayDivs = new Set<string>();
+    for (const match of day.matches) {
+      const part = match.partLabel?.trim().toLowerCase();
+      if (part) {
+        partLabels.add(part);
+        dayParts.add(part);
+      }
+      const divisionId = match.divisionId?.trim();
+      if (divisionId) {
+        divisionIds.add(divisionId);
+        dayDivs.add(divisionId);
+      }
+    }
+    if (dayParts.size >= 2 || dayDivs.size >= 2) return true;
+  }
+  return partLabels.size >= 2 || divisionIds.size >= 2;
+}
+
 export function ScheduleList({
   days,
   teamName,
@@ -68,10 +92,19 @@ export function ScheduleList({
     [teamReport],
   );
 
-  const linked = useMemo(
-    () => days.some((day) => day.matches.some((match) => match.partLabel)),
-    [days],
-  );
+  /** True when a night can pair Singles+Teams (or other legs) into one card. */
+  const linked = useMemo(() => scheduleDaysAreLinked(days), [days]);
+
+  const expectedLegIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const day of days) {
+      for (const match of day.matches) {
+        const label = match.partLabel?.trim().toLowerCase();
+        if (label === "singles" || label === "teams") ids.add(label);
+      }
+    }
+    return ids.size >= 2 ? Array.from(ids) : null;
+  }, [days]);
 
   const teamDays = useMemo(() => {
     if (showAllTeams || !teamName) return days;
@@ -92,12 +125,16 @@ export function ScheduleList({
     const past: FlatMatchup[] = [];
     for (const day of teamDays) {
       const isUpcoming = isUpcomingScheduleDate(day.date);
+      // Always collapse linked legs so upcoming/past counts are night cards
+      // (Singles+Teams for the same opponent = 1), not raw LMS sheets.
       const matchups = combineScheduleMatchupsForDay({
         date: day.date,
         matches: day.matches,
         linked,
+        expectedLegIds,
       });
       for (const matchup of matchups) {
+        if (matchup.halves.length === 0) continue;
         const match =
           matchup.halves.find((half) => half.kind === "singles")?.match ??
           matchup.halves[0]?.match;
@@ -117,7 +154,7 @@ export function ScheduleList({
       upcomingMatchups: upcoming,
       pastMatchups: [...past].reverse(),
     };
-  }, [teamDays, linked]);
+  }, [teamDays, linked, expectedLegIds]);
 
   const visibleMatchups =
     view === "upcoming" ? upcomingMatchups : pastMatchups;
@@ -170,17 +207,16 @@ export function ScheduleList({
               ) : (
                 "Division schedule"
               )}
-              {divisionName ? <> · {divisionName}</> : null}
-              {linked ? (
-                <>
-                  . One card per night opponent — Singles and Teams share the
-                  scoresheet entry on Score.
-                </>
-              ) : (
-                <>. Use Score to open a scoresheet.</>
-              )}
             </>
           }
+          info={{
+            summary: linked
+              ? "One card per night opponent — Singles and Teams share the scoresheet entry on Score. Upcoming and Past counts are combined night cards, not individual LMS sheets."
+              : "Use Score to open a scoresheet.",
+            items: divisionName
+              ? [{ label: "Division", description: divisionName }]
+              : undefined,
+          }}
           action={
             <PanelHeaderCount
               label={view === "upcoming" ? "Upcoming" : "Past"}
