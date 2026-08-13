@@ -1417,8 +1417,8 @@ export function MatchScoring({
     setResubmitUnlocked(false);
     setSubmitMessage(
       via === "operator"
-        ? "Match submitted via league operator score entry."
-        : "Match submitted to LMS.",
+        ? "Match submitted via league operator (LMS won’t list a player scorer)."
+        : "Match submitted to LMS — you should show as the scorer.",
     );
     setSubmitNeedsReview(false);
     setDraftSummaries((prev) => ({
@@ -1492,13 +1492,10 @@ export function MatchScoring({
     setSubmitNeedsReview(false);
     const currentMatch = match;
     const currentDraft = draft;
-    // Resubmits must go through league operator entry — player verticalmatch
-    // rejects already-scored matches. LO / Bright editing another team's sheet
-    // also uses operator entry.
-    const preferOperator =
-      Boolean(options?.preferOperator) ||
-      isResubmit ||
-      match.mySide == null;
+    // Always prefer player verticalmatch so LMS attributes "Scored by".
+    // Operator is only used when the user explicitly chooses it (stuck /
+    // already-scored overwrite) — LO writes do not show a player scorer.
+    const preferOperator = Boolean(options?.preferOperator);
     try {
       const payload = buildVerticalMatchPayload({
         match: currentMatch,
@@ -1537,18 +1534,26 @@ export function MatchScoring({
       }
 
       setSubmitNeedsReview(true);
-      if (result?.stuck || preferOperator) {
+      const opAvailable =
+        operatorSubmitAvailable || Boolean(result?.operatorConfigured);
+      if (preferOperator) {
         setSubmitMessage(
-          operatorSubmitAvailable || result?.operatorConfigured
-            ? "Player submit is stuck in LMS (scores not recorded). Try league operator submit, or keep this draft."
-            : "Player submit is stuck in LMS (scores not recorded). Ask a league operator to enter scores, or keep this draft.",
+          "League operator submit did not mark the match played. Keep this draft and verify in LMS.",
+        );
+      } else if (result?.stuck || !response.ok) {
+        setSubmitMessage(
+          opAvailable
+            ? isResubmit
+              ? "Player submit can’t overwrite an already-scored match. Retry, or use league operator submit (no player scorer in LMS)."
+              : "Player submit didn’t record in LMS. Retry so you show as the scorer, or use league operator submit (no player scorer)."
+            : "Player submit didn’t record in LMS. Retry submit, or ask a league operator to enter scores.",
         );
       } else {
         setSubmitMessage(
           "LMS accepted the request, but the match still shows as unscored. Keep this draft open and verify in LMS before leaving the table.",
         );
       }
-      if (!response.ok) {
+      if (!response.ok || result?.verifiedPlayed === false) {
         setSheetError(result?.error || `Submit failed (${response.status}).`);
       }
     } catch (err) {

@@ -23,6 +23,7 @@ export const dynamic = "force-dynamic";
 async function tryOperatorFallback(args: {
   accessToken: string;
   lmsId: string;
+  lmsName?: string | null;
   matchId: string;
   payload: Record<string, unknown>;
 }): Promise<{ verifiedPlayed: boolean; used: boolean; error?: string }> {
@@ -49,7 +50,11 @@ async function tryOperatorFallback(args: {
       ),
     );
     if (verifiedPlayed && isDraftStoreConfigured()) {
-      await markSharedDraftSubmitted(args.matchId, args.lmsId);
+      await markSharedDraftSubmitted(
+        args.matchId,
+        args.lmsId,
+        args.lmsName,
+      );
     }
     return { verifiedPlayed, used: true };
   } catch (error) {
@@ -70,9 +75,13 @@ export async function POST(request: NextRequest) {
     const session = await requireScoringSession();
     const body = (await request.json()) as {
       payload?: Record<string, unknown>;
-      /** When true, skip player verticalmatch and go straight to LO entry. */
+      /**
+       * When true, skip player verticalmatch and use LO entry.
+       * Only for the explicit "Submit via league operator" action —
+       * operator writes do not attribute a player scorer in LMS.
+       */
       preferOperator?: boolean;
-      /** When true, overwrite scores already recorded in LMS (operator path). */
+      /** Informational: sheet is overwriting scores already in LMS. */
       resubmit?: boolean;
     };
 
@@ -83,7 +92,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Prefer scoreKeeper = LMS player id (official app uses identity).
+    // scoreKeeper = LMS player id so verticalmatch attributes "Scored by".
     const payload: Record<string, unknown> = {
       ...body.payload,
       scoreKeeper:
@@ -98,7 +107,9 @@ export async function POST(request: NextRequest) {
 
     const matchId = String(payload.matchId ?? payload.MatchId ?? "");
     const operatorConfigured = isOperatorConfigured();
-    const forceOperator = Boolean(body.preferOperator) || Boolean(body.resubmit);
+    // Never auto-route to operator — that path cannot set ScoredMatches /
+    // HasBeenScoredByPlayer. Only the explicit UI action may use it.
+    const forceOperator = Boolean(body.preferOperator);
 
     if (forceOperator) {
       if (!matchId) {
@@ -110,6 +121,7 @@ export async function POST(request: NextRequest) {
       const fallback = await tryOperatorFallback({
         accessToken: session.accessToken,
         lmsId: session.lmsId,
+        lmsName: session.name,
         matchId,
         payload,
       });
@@ -165,31 +177,15 @@ export async function POST(request: NextRequest) {
         await clearSharedDraftSubmitted(matchId);
       }
 
-      const stuck = isAlreadyScoredMessage(message);
-      if (stuck && matchId && operatorConfigured) {
-        const fallback = await tryOperatorFallback({
-          accessToken: session.accessToken,
-          lmsId: session.lmsId,
-          matchId,
-          payload,
-        });
-        if (fallback.verifiedPlayed) {
-          return NextResponse.json({
-            ok: true,
-            verifiedPlayed: true,
-            via: "operator",
-            operatorConfigured,
-            playerError: message,
-          });
-        }
-      }
-
+      // Do not auto-fallback to operator — that loses player scorer attribution.
+      // Client can offer an explicit "Submit via league operator" retry.
       return NextResponse.json(
         {
           error: message,
           details: parsed,
-          stuck,
+          stuck: isAlreadyScoredMessage(message),
           operatorConfigured,
+          via: "player",
         },
         { status: response.status },
       );
@@ -203,26 +199,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Player POST can return 200/201 without flipping hasBeenPlayed (ghost lock).
-    if (matchId && verifiedPlayed === false && operatorConfigured) {
-      const fallback = await tryOperatorFallback({
-        accessToken: session.accessToken,
-        lmsId: session.lmsId,
-        matchId,
-        payload,
-      });
-      if (fallback.verifiedPlayed) {
-        return NextResponse.json({
-          ok: true,
-          verifiedPlayed: true,
-          via: "operator",
-          operatorConfigured,
-          result: parsed,
-        });
-      }
-    }
-
     // Only lock the sheet when LMS actually shows the match as played.
+    // Ghost locks (200/201 but unscored) stay unlocked so the player can retry
+    // or explicitly choose operator submit.
     if (matchId && isDraftStoreConfigured()) {
       if (verifiedPlayed) {
         await markSharedDraftSubmitted(
@@ -236,12 +215,18 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({
-      ok: true,
+      ok: Boolean(verifiedPlayed),
       verifiedPlayed,
       via: "player",
       stuck: verifiedPlayed === false,
       operatorConfigured,
       result: parsed,
+      ...(verifiedPlayed === false
+        ? {
+            error:
+              "LMS accepted the player submit, but the match still shows as unscored.",
+          }
+        : {}),
     });
   } catch (error) {
     const message =
