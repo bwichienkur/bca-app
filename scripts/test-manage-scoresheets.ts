@@ -19,8 +19,8 @@ const DIV_ID = "62124038-aea7-42f2-8c82-b4a5000d8532";
 const DIV_NAME = "Test Bright 8 Ball";
 
 async function main() {
-  const op = await import("../src/lib/lms-operator.ts");
-  const manage = await import("../src/lib/lms-operator-manage.ts");
+  const op = await import("../src/lib/lms-operator");
+  const manage = await import("../src/lib/lms-operator-manage");
   const session = await op.loginLeagueOperator();
 
   const listed = await manage.operatorListScoresheets(session, DIV_ID);
