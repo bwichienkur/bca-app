@@ -50,6 +50,7 @@ export async function invalidateOperatorCache(options?: {
       `${OP_PREFIX}teams:${d}`,
       `${OP_PREFIX}players:${d}`,
       `${OP_PREFIX}schedule:${d}`,
+      `${OP_PREFIX}scoresheets:${d}`,
       `${OP_PREFIX}settings:${d}`,
     ];
     try {
@@ -74,6 +75,7 @@ export async function invalidateOperatorCache(options?: {
     patterns.add(`${OP_PREFIX}teams:${d}`);
     patterns.add(`${OP_PREFIX}players:${d}`);
     patterns.add(`${OP_PREFIX}schedule:${d}`);
+    patterns.add(`${OP_PREFIX}scoresheets:${d}`);
     patterns.add(`${OP_PREFIX}settings:${d}`);
     patterns.add(`${OP_PREFIX}matches:${d}:*`);
   } else {
@@ -81,6 +83,7 @@ export async function invalidateOperatorCache(options?: {
     patterns.add(`${OP_PREFIX}teams:*`);
     patterns.add(`${OP_PREFIX}players:*`);
     patterns.add(`${OP_PREFIX}schedule:*`);
+    patterns.add(`${OP_PREFIX}scoresheets:*`);
     patterns.add(`${OP_PREFIX}settings:*`);
     patterns.add(`${OP_PREFIX}matches:*`);
   }

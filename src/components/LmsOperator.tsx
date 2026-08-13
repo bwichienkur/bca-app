@@ -53,6 +53,7 @@ type LmsSubTab =
   | "players"
   | "locations"
   | "schedule"
+  | "scoresheets"
   | "scoresheet"
   | "playoff"
   | "division"
@@ -141,6 +142,15 @@ type ScheduleMatch = {
   location: string | null;
   locationId: string | null;
 };
+type ScoresheetMatch = {
+  matchId: string;
+  homeTeamName: string;
+  awayTeamName: string;
+  date: string;
+  hasBeenPlayed: boolean;
+  hasBeenScoredByPlayer: boolean;
+  scoredByNames: string[];
+};
 type PlayoffTeam = {
   id: string;
   name: string;
@@ -162,6 +172,14 @@ type LmsOperatorProps = {
   user: AuthUser | null;
   authLoading: boolean;
   onRequestLogin: () => void;
+  /** Open a match in the Score tab (view / edit / resubmit). */
+  onOpenScoresheet?: (args: {
+    matchId: string;
+    divisionId: string;
+    divisionName: string;
+    leagueId: string;
+    leagueName: string;
+  }) => void;
 };
 
 const CONTEXT_KEY = "tableside.lmsOperator.context.v1";
@@ -247,6 +265,16 @@ function ScheduleIcon({ className }: { className?: string }) {
       <path d="M3 10h18" />
       <path d="M8 3v4" />
       <path d="M16 3v4" />
+    </IconShell>
+  );
+}
+function ScoresheetsIcon({ className }: { className?: string }) {
+  return (
+    <IconShell className={className}>
+      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+      <rect x="9" y="3" width="6" height="4" rx="1" />
+      <path d="M9 12h6" />
+      <path d="M9 16h4" />
     </IconShell>
   );
 }
@@ -572,6 +600,7 @@ export function LmsOperator({
   user,
   authLoading,
   onRequestLogin,
+  onOpenScoresheet,
 }: LmsOperatorProps) {
   const [subTab, setSubTab] = useState<LmsSubTab>("home");
   const [screen, setScreen] = useState<Screen>({ type: "list" });
@@ -605,6 +634,7 @@ export function LmsOperator({
   const [teams, setTeams] = useState<OperatorTeam[]>([]);
   const [players, setPlayers] = useState<OperatorPlayerRow[]>([]);
   const [schedule, setSchedule] = useState<ScheduleMatch[]>([]);
+  const [scoresheets, setScoresheets] = useState<ScoresheetMatch[]>([]);
   const [sectionLoading, setSectionLoading] = useState(false);
   const [sectionError, setSectionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -684,6 +714,7 @@ export function LmsOperator({
       { id: "players", label: "Players", icon: PlayersIcon },
       { id: "locations", label: "Locations", icon: LocationsIcon },
       { id: "schedule", label: "Schedule", icon: ScheduleIcon },
+      { id: "scoresheets", label: "Scoresheets", icon: ScoresheetsIcon },
       { id: "scoresheet", label: "Format", icon: ScoresheetIcon },
       { id: "playoff", label: "Playoff", icon: PlayoffIcon },
       { id: "division", label: "Division", icon: DivisionIcon },
@@ -914,6 +945,15 @@ export function LmsOperator({
     setSchedule(data.matches ?? []);
   }, [opDivisionId]);
 
+  const refreshScoresheets = useCallback(async (force = false) => {
+    if (!opDivisionId) return;
+    const q = force ? "&refresh=1" : "";
+    const data = await fetchJson<{ matches: ScoresheetMatch[] }>(
+      `/api/lms/operator/scoresheets?divisionId=${encodeURIComponent(opDivisionId)}${q}`,
+    );
+    setScoresheets(data.matches ?? []);
+  }, [opDivisionId]);
+
   const refreshSettings = useCallback(async (divisionId: string, force = false) => {
     const q = force ? "&refresh=1" : "";
     const data = await fetchJson<{
@@ -948,6 +988,7 @@ export function LmsOperator({
           refreshTeams(true),
           refreshPlayers(true),
           refreshSchedule(true),
+          refreshScoresheets(true),
           refreshSettings(opDivisionId, true),
         ]);
       }
@@ -969,6 +1010,7 @@ export function LmsOperator({
     refreshTeams,
     refreshPlayers,
     refreshSchedule,
+    refreshScoresheets,
     refreshSettings,
   ]);
 
@@ -1079,7 +1121,11 @@ export function LmsOperator({
   useEffect(() => {
     if (!user || !configured || !opDivisionId) return;
     if (screen.type !== "list") return;
-    if (!["teams", "players", "locations", "schedule"].includes(subTab))
+    if (
+      !["teams", "players", "locations", "schedule", "scoresheets"].includes(
+        subTab,
+      )
+    )
       return;
 
     let cancelled = false;
@@ -1098,6 +1144,8 @@ export function LmsOperator({
             refreshTeams(),
             refreshLocations(),
           ]);
+        } else if (subTab === "scoresheets") {
+          await refreshScoresheets();
         }
       } catch (error) {
         if (!cancelled) {
@@ -1122,6 +1170,7 @@ export function LmsOperator({
     refreshTeams,
     refreshPlayers,
     refreshSchedule,
+    refreshScoresheets,
     refreshSettings,
   ]);
 
@@ -1274,6 +1323,42 @@ export function LmsOperator({
     }
     return [...map.entries()];
   }, [schedule, q]);
+
+  const scoresheetsByDate = useMemo(() => {
+    const map = new Map<string, ScoresheetMatch[]>();
+    for (const match of scoresheets) {
+      const key = toDateInput(match.date) || match.date;
+      if (q) {
+        const hay =
+          `${match.homeTeamName} ${match.awayTeamName} ${key}`.toLowerCase();
+        if (!hay.includes(q)) continue;
+      }
+      const list = map.get(key) ?? [];
+      list.push(match);
+      map.set(key, list);
+    }
+    return [...map.entries()];
+  }, [scoresheets, q]);
+
+  const openManageScoresheet = useCallback(
+    (matchId: string) => {
+      if (!onOpenScoresheet || !opDivisionId) return;
+      onOpenScoresheet({
+        matchId,
+        divisionId: opDivisionId,
+        divisionName: opDivisionName || "Division",
+        leagueId: opLeagueId || "",
+        leagueName: opLeagueName || "",
+      });
+    },
+    [
+      onOpenScoresheet,
+      opDivisionId,
+      opDivisionName,
+      opLeagueId,
+      opLeagueName,
+    ],
+  );
 
   const selectedPlayoffTeams = useMemo(() => {
     const out: PlayoffTeam[] = [];
@@ -3382,6 +3467,177 @@ export function LmsOperator({
           </ul>
           {!sectionLoading && scheduleByDate.length === 0 ? (
             <p className="text-sm text-[var(--muted)]">No matches scheduled.</p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {subTab === "scoresheets" && opDivisionId ? (
+        <section className="space-y-3">
+          <SectionHeader
+            title="Scoresheets"
+            description="View or edit a sheet in Score, or clear recorded LMS results for a match."
+            onRefresh={() => void refreshScoresheets(true)}
+            refreshing={sectionLoading || busy}
+          />
+          <SearchField
+            label="Search scoresheets"
+            placeholder="Search teams or dates…"
+            value={listQuery}
+            onChange={setListQuery}
+            embedded
+          />
+          {sectionLoading ? (
+            <LoadingState label="Loading scoresheets…" />
+          ) : null}
+          <ul className={accentRecordListClass}>
+            {scoresheetsByDate.map(([date, matches]) => {
+              const open = expandedIds.has(`scoresheet-date-${date}`);
+              const playedCount = matches.filter((m) => m.hasBeenPlayed).length;
+              return (
+                <AccentRecordCard key={date}>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 text-left"
+                    aria-expanded={open}
+                    onClick={() =>
+                      toggleExpanded(`scoresheet-date-${date}`)
+                    }
+                  >
+                    <span className="inline-flex shrink-0 items-center self-center text-[var(--muted)]">
+                      <ChevronIcon open={open} className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-[var(--ink)]">
+                        {formatMatchDate(date)}
+                      </p>
+                      <p className="text-xs text-[var(--muted)]">
+                        {matches.length} match
+                        {matches.length === 1 ? "" : "es"}
+                        {playedCount > 0
+                          ? ` · ${playedCount} scored`
+                          : " · none scored"}
+                      </p>
+                    </div>
+                  </button>
+                  {open ? (
+                    <ul
+                      className={`${accentRecordListClass} mt-3 border-t border-[var(--line)] pt-3`}
+                    >
+                      {matches.map((match) => {
+                        const statusLabel = match.hasBeenPlayed
+                          ? match.hasBeenScoredByPlayer &&
+                            match.scoredByNames.length > 0
+                            ? `Scored by ${match.scoredByNames.join(", ")}`
+                            : "Scores recorded"
+                          : match.hasBeenScoredByPlayer &&
+                              match.scoredByNames.length > 0
+                            ? `Draft by ${match.scoredByNames.join(", ")}`
+                            : "No scores recorded";
+                        return (
+                          <li key={match.matchId}>
+                            <AccentRecordCard>
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-[var(--ink)]">
+                                    {match.homeTeamName}{" "}
+                                    <span className="font-medium text-[var(--muted)]">
+                                      vs
+                                    </span>{" "}
+                                    {match.awayTeamName}
+                                  </p>
+                                  <p className="text-xs text-[var(--muted)]">
+                                    {statusLabel}
+                                  </p>
+                                </div>
+                                <span
+                                  className={`shrink-0 rounded-[var(--radius)] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                                    match.hasBeenPlayed
+                                      ? "bg-[var(--felt)]/15 text-[var(--felt)]"
+                                      : "bg-[var(--line)] text-[var(--muted)]"
+                                  }`}
+                                >
+                                  {match.hasBeenPlayed ? "Played" : "Open"}
+                                </span>
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                <button
+                                  type="button"
+                                  className={btnGhost}
+                                  disabled={!onOpenScoresheet}
+                                  onClick={() =>
+                                    openManageScoresheet(match.matchId)
+                                  }
+                                >
+                                  View
+                                </button>
+                                <button
+                                  type="button"
+                                  className={btnEdit}
+                                  disabled={!onOpenScoresheet}
+                                  onClick={() =>
+                                    openManageScoresheet(match.matchId)
+                                  }
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className={btnDelete}
+                                  disabled={busy || !match.hasBeenPlayed}
+                                  title={
+                                    match.hasBeenPlayed
+                                      ? "Clear LMS scores for this match"
+                                      : "No scores to clear"
+                                  }
+                                  onClick={(event) => {
+                                    askConfirm(
+                                      {
+                                        title: "Clear scoresheet",
+                                        body: `Clear LMS scores for ${match.homeTeamName} vs ${match.awayTeamName}? Standings points for this match are removed.`,
+                                        confirmLabel: "Clear scores",
+                                        onConfirm: async () => {
+                                          setPendingConfirm(null);
+                                          await runAction(async () => {
+                                            await fetchJson(
+                                              "/api/lms/operator/scoresheets",
+                                              {
+                                                method: "POST",
+                                                headers: {
+                                                  "Content-Type":
+                                                    "application/json",
+                                                },
+                                                body: JSON.stringify({
+                                                  action: "clear",
+                                                  matchId: match.matchId,
+                                                  divisionId: opDivisionId,
+                                                }),
+                                              },
+                                            );
+                                            await refreshScoresheets(true);
+                                          }, "Scoresheet cleared.");
+                                        },
+                                      },
+                                      event,
+                                    );
+                                  }}
+                                >
+                                  Clear
+                                </button>
+                              </div>
+                            </AccentRecordCard>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+                </AccentRecordCard>
+              );
+            })}
+          </ul>
+          {!sectionLoading && scoresheetsByDate.length === 0 ? (
+            <p className="text-sm text-[var(--muted)]">
+              No scoresheets for this division yet.
+            </p>
           ) : null}
         </section>
       ) : null}

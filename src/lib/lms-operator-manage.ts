@@ -727,6 +727,16 @@ export type ScheduleMatch = {
   locationId: string | null;
 };
 
+export type ScoresheetMatch = {
+  matchId: string;
+  homeTeamName: string;
+  awayTeamName: string;
+  date: string;
+  hasBeenPlayed: boolean;
+  hasBeenScoredByPlayer: boolean;
+  scoredByNames: string[];
+};
+
 export async function operatorListSchedule(
   session: OperatorSession,
   divisionId: string,
@@ -792,6 +802,103 @@ export async function operatorListSchedule(
   );
 
   return batches.flat().sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** LMS Division Score Entry list (includes played / player-scored status). */
+export async function operatorListScoresheets(
+  session: OperatorSession,
+  divisionId: string,
+): Promise<ScoresheetMatch[]> {
+  const datesRes = await operatorWebFetch(
+    session,
+    `/DivisionScoreEntry/GetAllDatesForDivision?divisionId=${encodeURIComponent(divisionId)}`,
+  );
+  const dates = await readJsonOrThrow<unknown[]>(
+    datesRes,
+    "Could not load scoresheet dates.",
+  );
+  const dateValues = (Array.isArray(dates) ? dates : [])
+    .map((row) => {
+      if (typeof row === "string" || typeof row === "number") {
+        return String(row).trim();
+      }
+      const r = (row ?? {}) as Record<string, unknown>;
+      return String(r.Date ?? r.date ?? row ?? "").trim();
+    })
+    .filter(Boolean);
+
+  const batches = await Promise.all(
+    dateValues.map(async (date) => {
+      const response = await operatorWebFetch(
+        session,
+        `/DivisionScoreEntry/GetMatchesForDate?divisionId=${encodeURIComponent(divisionId)}&selectedDate=${encodeURIComponent(date)}`,
+      );
+      const data = await readJsonOrThrow<unknown[]>(
+        response,
+        "Could not load scoresheets for date.",
+      );
+      return (Array.isArray(data) ? data : [])
+        .map((row) => {
+          const r = (row ?? {}) as Record<string, unknown>;
+          const matchId = String(r.MatchId ?? r.matchId ?? "").trim();
+          if (!matchId) return null;
+          const scoredRaw = r.ScoredMatches ?? r.scoredMatches;
+          const scoredByNames = Array.isArray(scoredRaw)
+            ? scoredRaw
+                .map((entry) => {
+                  const e = (entry ?? {}) as Record<string, unknown>;
+                  return String(e.ScorerName ?? e.scorerName ?? "").trim();
+                })
+                .filter(Boolean)
+            : [];
+          return {
+            matchId,
+            homeTeamName: String(r.TeamOne ?? r.teamOne ?? "").trim(),
+            awayTeamName: String(r.TeamTwo ?? r.teamTwo ?? "").trim(),
+            date,
+            hasBeenPlayed: Boolean(r.HasBeenPlayed ?? r.hasBeenPlayed),
+            hasBeenScoredByPlayer: Boolean(
+              r.HasBeenScoredByPlayer ?? r.hasBeenScoredByPlayer,
+            ),
+            scoredByNames,
+          } satisfies ScoresheetMatch;
+        })
+        .filter((row): row is ScoresheetMatch => row != null);
+    }),
+  );
+
+  return batches.flat().sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Clear LMS scores for a match (Division Score Entry → Reset Scoresheet). */
+export async function operatorResetMatchResults(
+  session: OperatorSession,
+  matchId: string,
+): Promise<void> {
+  const response = await operatorWebFetch(
+    session,
+    "/DivisionScoreEntry/ResetMatchResultsBCAPL",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ matchId }),
+    },
+  );
+  const text = await response.text();
+  if (!response.ok) {
+    if (response.status === 400) {
+      throw new Error("No scores to clear for this match.");
+    }
+    throw new Error(text || `Could not clear scoresheet (${response.status}).`);
+  }
+  if (!text.trim()) return;
+  try {
+    const payload = JSON.parse(text) as unknown;
+    assertOperatorActionOk(payload, "Could not clear scoresheet.");
+  } catch (error) {
+    if (error instanceof SyntaxError) return;
+    throw error;
+  }
 }
 
 function noonIso(date: string): string {

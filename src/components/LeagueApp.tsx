@@ -2658,6 +2658,39 @@ export function LeagueApp() {
                   user={user}
                   authLoading={authLoading}
                   onRequestLogin={() => setScreen("login")}
+                  onOpenScoresheet={({
+                    matchId,
+                    divisionId,
+                    divisionName,
+                    leagueId,
+                    leagueName,
+                  }) => {
+                    const base = prefs ?? loadPreferences();
+                    const nextPrefs = {
+                      ...base,
+                      leagueId: leagueId || base.leagueId,
+                      leagueName: leagueName || base.leagueName,
+                      divisionId,
+                      divisionName,
+                    };
+                    persist(nextPrefs);
+                    const fromMembership = membership?.divisions.find(
+                      (d) => d.id === divisionId,
+                    );
+                    setSelectedDivision(
+                      fromMembership ?? {
+                        id: divisionId,
+                        name: divisionName,
+                        year: "",
+                        leagueId: leagueId || base.leagueId,
+                        leagueName: leagueName || base.leagueName,
+                        state: "",
+                        reportUrl: "",
+                      },
+                    );
+                    setPendingScoreMatchId(matchId);
+                    startTransition(() => setTab("score"));
+                  }}
                 />
               ) : (
                 <EmptyState
