@@ -1677,7 +1677,7 @@ export function MatchScoring({
 
     return (
       <section className="animate-panel w-full min-w-0 space-y-2.5 overflow-x-hidden">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 px-3 pt-3 sm:px-4 sm:pt-4">
           <BackButton
             onClick={() => {
               if (reviewMode) {
@@ -2744,7 +2744,7 @@ function CombinedNightHub({
   );
 
   return (
-    <section className="animate-panel w-full min-w-0 space-y-3 overflow-x-hidden p-3 sm:p-4">
+    <section className="animate-panel w-full min-w-0 space-y-3 overflow-x-hidden px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
       <BackButton onClick={onBack} />
       {items.length > 0 ? (
         <IconSubTabs
@@ -2829,6 +2829,10 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
     const isMine = mySide === side;
     const need =
       side === 1 ? tally.pointsNeeded.teamOne : tally.pointsNeeded.teamTwo;
+    const winsNeed =
+      side === 1 ? tally.winsNeeded.teamOne : tally.winsNeeded.teamTwo;
+    const holdTo =
+      side === 1 ? tally.holdOpponentTo.teamOne : tally.holdOpponentTo.teamTwo;
     const canCatch =
       side === 1 ? tally.canCatchUp.teamOne : tally.canCatchUp.teamTwo;
     const otherCanCatch =
@@ -2841,6 +2845,40 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
       canCatch &&
       total > theirTotal &&
       otherCanCatch;
+    const chaseLines = (() => {
+      if (tally.roundWinner || gamesLeft <= 0) return null;
+      if (!canCatch) return ["Can’t catch up"];
+      if (aheadAndVulnerable) {
+        const lines = ["Can still be caught"];
+        if (holdTo != null) {
+          const allow = Math.max(0, holdTo - theirTotal);
+          lines.push(
+            allow === 0
+              ? "Keep them scoreless in remaining games"
+              : `Keep them to ≤${holdTo} pts (≤${allow} more)`,
+          );
+        }
+        return lines;
+      }
+      if (need == null || need === 0) {
+        return winsNeed != null && winsNeed > 0
+          ? [
+              winsNeed === gamesLeft
+                ? `Win all ${gamesLeft} remaining`
+                : `Win ${winsNeed} of ${gamesLeft} remaining`,
+            ]
+          : ["On track"];
+      }
+      const lines = [`Need ${need} pt${need === 1 ? "" : "s"}`];
+      if (winsNeed != null && winsNeed > 0) {
+        lines.push(
+          winsNeed === gamesLeft
+            ? `Win all ${gamesLeft} remaining`
+            : `Win ${winsNeed} of ${gamesLeft} remaining`,
+        );
+      }
+      return lines;
+    })();
     return (
       <div
         className={[
@@ -2870,10 +2908,10 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
           ) : null}
           <span className="text-[var(--muted)]"> · {gameWins}g</span>
         </p>
-        {!tally.roundWinner && gamesLeft > 0 ? (
-          <p
+        {chaseLines ? (
+          <div
             className={[
-              "mt-1 text-[11px] font-semibold",
+              "mt-1 space-y-0.5 text-[11px] font-semibold",
               !canCatch
                 ? "text-[var(--danger)]"
                 : aheadAndVulnerable
@@ -2881,14 +2919,10 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
                   : "text-[var(--felt-deep)]",
             ].join(" ")}
           >
-            {!canCatch
-              ? "Can’t catch up"
-              : aheadAndVulnerable
-                ? "Can still be caught"
-                : need == null || need === 0
-                  ? "On track"
-                  : `Need ${need} pt${need === 1 ? "" : "s"}`}
-          </p>
+            {chaseLines.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+          </div>
         ) : null}
       </div>
     );
@@ -2907,20 +2941,15 @@ const RoundPointsBoard = memo(function RoundPointsBoard({
           : "border-[var(--line)] bg-[var(--surface)]",
       ].join(" ")}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
-            {matchPointsRound
-              ? "Match points (totals)"
-              : `Round ${tally.roundNumber} points`}
-          </p>
-          <p className={["mt-0.5 text-sm font-semibold", resultTone].join(" ")}>
-            {resultLabel}
-          </p>
-        </div>
-        <div className="rounded-full bg-[var(--surface-2)] px-3 py-1 text-sm font-semibold tabular-nums text-[var(--ink)]">
-          {tally.teamOneTotal}–{tally.teamTwoTotal}
-        </div>
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--amber)]">
+          {matchPointsRound
+            ? "Match points (totals)"
+            : `Round ${tally.roundNumber} points`}
+        </p>
+        <p className={["mt-0.5 text-sm font-semibold", resultTone].join(" ")}>
+          {resultLabel}
+        </p>
       </div>
 
       <div className="mt-2 grid grid-cols-2 gap-2">
