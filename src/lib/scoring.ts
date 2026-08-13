@@ -764,6 +764,13 @@ export type RoundPointsTally = {
   clinchedEarly: boolean;
   /** Points still needed from remaining games to win; null if decided/N/A. */
   pointsNeeded: { teamOne: number | null; teamTwo: number | null };
+  /** Min remaining game wins needed to still win; null if decided/N/A. */
+  winsNeeded: { teamOne: number | null; teamTwo: number | null };
+  /**
+   * Max opponent total this side can allow and still win (side scores 0 more).
+   * Null when not ahead-and-vulnerable.
+   */
+  holdOpponentTo: { teamOne: number | null; teamTwo: number | null };
   /** False when the opponent has already clinched (HC included in totals). */
   canCatchUp: { teamOne: boolean; teamTwo: boolean };
   maxWinPoints: number;
@@ -897,6 +904,88 @@ export function pointsNeededFromRemaining(
   return Math.max(0, needed);
 }
 
+/**
+ * Minimum remaining game wins (each maxWin–0, opponent flat) needed to still
+ * win the round. Null when catch-up is impossible or the round is decided.
+ */
+export function winsNeededFromRemaining(
+  args: ClinchArgs & { side: 1 | 2 },
+): number | null {
+  const rem = args.gamesRemaining;
+  if (rem <= 0) return null;
+  if (!canCatchUpRound(args)) return null;
+  if (clinchRoundWinner(args) != null) return null;
+
+  const ourPts =
+    args.side === 1 ? args.teamOnePoints : args.teamTwoPoints;
+  const oppPts =
+    args.side === 1 ? args.teamTwoPoints : args.teamOnePoints;
+  const ourWins =
+    args.side === 1 ? args.teamOneGameWins : args.teamTwoGameWins;
+  const oppWins =
+    args.side === 1 ? args.teamTwoGameWins : args.teamOneGameWins;
+
+  for (let wins = 1; wins <= rem; wins += 1) {
+    const nextOur = ourPts + args.maxWin * wins;
+    const nextOurWins = ourWins + wins;
+    const onePts = args.side === 1 ? nextOur : oppPts;
+    const twoPts = args.side === 1 ? oppPts : nextOur;
+    const oneWins = args.side === 1 ? nextOurWins : oppWins;
+    const twoWins = args.side === 1 ? oppWins : nextOurWins;
+    if (decideByPointsThenGames(onePts, twoPts, oneWins, twoWins) === args.side) {
+      return wins;
+    }
+  }
+  return rem;
+}
+
+/**
+ * Max opponent point total this side can allow and still win, assuming this
+ * side scores 0 more and the opponent takes every remaining game win.
+ * Null when the side is not ahead-and-vulnerable.
+ */
+export function holdOpponentToTotal(
+  args: ClinchArgs & { side: 1 | 2 },
+): number | null {
+  const rem = args.gamesRemaining;
+  if (rem <= 0) return null;
+  if (clinchRoundWinner(args) != null) return null;
+
+  const ourPts =
+    args.side === 1 ? args.teamOnePoints : args.teamTwoPoints;
+  const oppPts =
+    args.side === 1 ? args.teamTwoPoints : args.teamOnePoints;
+  const ourWins =
+    args.side === 1 ? args.teamOneGameWins : args.teamTwoGameWins;
+  const oppWins =
+    args.side === 1 ? args.teamTwoGameWins : args.teamOneGameWins;
+
+  // Only meaningful when we're ahead on current totals.
+  if (ourPts < oppPts) return null;
+  if (ourPts === oppPts && ourWins <= oppWins) return null;
+  // Opponent can still catch up — otherwise the round is already safe.
+  const oppSide = args.side === 1 ? 2 : 1;
+  if (!canCatchUpRound({ ...args, side: oppSide })) return null;
+
+  const maxAdd = args.maxWin * rem;
+  let allowedAdd = -1;
+  for (let add = 0; add <= maxAdd; add += 1) {
+    const nextOpp = oppPts + add;
+    const nextOppWins = oppWins + rem;
+    const onePts = args.side === 1 ? ourPts : nextOpp;
+    const twoPts = args.side === 1 ? nextOpp : ourPts;
+    const oneWins = args.side === 1 ? ourWins : nextOppWins;
+    const twoWins = args.side === 1 ? nextOppWins : ourWins;
+    if (decideByPointsThenGames(onePts, twoPts, oneWins, twoWins) === args.side) {
+      allowedAdd = add;
+    } else {
+      break;
+    }
+  }
+  if (allowedAdd < 0) return null;
+  return oppPts + allowedAdd;
+}
+
 /** Card status for a game in the round list. */
 export function gamePlayStatus(
   game: GameScoreState | undefined,
@@ -922,6 +1011,8 @@ function buildRoundDecision(args: ClinchArgs): {
   roundWinner: 1 | 2 | null;
   clinchedEarly: boolean;
   pointsNeeded: { teamOne: number | null; teamTwo: number | null };
+  winsNeeded: { teamOne: number | null; teamTwo: number | null };
+  holdOpponentTo: { teamOne: number | null; teamTwo: number | null };
   canCatchUp: { teamOne: boolean; teamTwo: boolean };
 } {
   const roundComplete = args.gamesRemaining <= 0;
@@ -932,6 +1023,14 @@ function buildRoundDecision(args: ClinchArgs): {
     pointsNeeded: {
       teamOne: pointsNeededFromRemaining({ ...args, side: 1 }),
       teamTwo: pointsNeededFromRemaining({ ...args, side: 2 }),
+    },
+    winsNeeded: {
+      teamOne: winsNeededFromRemaining({ ...args, side: 1 }),
+      teamTwo: winsNeededFromRemaining({ ...args, side: 2 }),
+    },
+    holdOpponentTo: {
+      teamOne: holdOpponentToTotal({ ...args, side: 1 }),
+      teamTwo: holdOpponentToTotal({ ...args, side: 2 }),
     },
     canCatchUp: {
       teamOne: canCatchUpRound({ ...args, side: 1 }),
@@ -1017,6 +1116,8 @@ export function tallyRoundPoints(args: {
     roundWinner: decision.roundWinner,
     clinchedEarly: decision.clinchedEarly,
     pointsNeeded: decision.pointsNeeded,
+    winsNeeded: decision.winsNeeded,
+    holdOpponentTo: decision.holdOpponentTo,
     canCatchUp: decision.canCatchUp,
     maxWinPoints: maxWin,
     maxLossPoints: maxLoss,
@@ -1112,6 +1213,8 @@ export function tallyMatchPointsRound(args: {
     roundWinner: decision.roundWinner,
     clinchedEarly: decision.clinchedEarly,
     pointsNeeded: decision.pointsNeeded,
+    winsNeeded: decision.winsNeeded,
+    holdOpponentTo: decision.holdOpponentTo,
     canCatchUp: decision.canCatchUp,
     maxWinPoints: maxWin,
     maxLossPoints: maxLoss,

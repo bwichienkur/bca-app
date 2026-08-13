@@ -40,7 +40,7 @@ export const MatchScoreboard = memo(function MatchScoreboard({
   mySide,
   roundWins,
   roundsAvailable,
-  includeMatchPointsRound,
+  includeMatchPointsRound: _includeMatchPointsRound,
   matchWinTeamPoints = false,
   teamRaceTo = null,
   standingMatchPoints = null,
@@ -70,9 +70,6 @@ export const MatchScoreboard = memo(function MatchScoreboard({
       : gamesTotal > 0
         ? Math.min(1, gamesPlayed / gamesTotal)
         : 0;
-  const playedRounds = includeMatchPointsRound
-    ? Math.max(0, roundsAvailable - 1)
-    : roundsAvailable;
 
   const raceWinner: 1 | 2 | null = (() => {
     if (teamRaceTarget == null) return null;
@@ -208,10 +205,6 @@ export const MatchScoreboard = memo(function MatchScoreboard({
         {matchWinTeamPoints ? (
           <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40">
             {teamRaceTarget ? `Race to ${teamRaceTarget}` : "Set wins"}
-          </p>
-        ) : includeMatchPointsRound && playedRounds > 0 ? (
-          <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40">
-            R1–{playedRounds} + pts
           </p>
         ) : null}
       </div>
