@@ -39,6 +39,7 @@ import {
   LmsDivisionSettingsForm,
   type DivisionSettingsSection,
 } from "./LmsDivisionSettingsForm";
+import { LmsFormatTemplateBuilder } from "./LmsFormatTemplateBuilder";
 import { LmsScoresheetStudio } from "./LmsScoresheetStudio";
 import { ScoringFormatForm } from "./ScoringFormatForm";
 import { SectionCard } from "./SectionCard";
@@ -576,6 +577,8 @@ export function LmsOperator({
   const [screen, setScreen] = useState<Screen>({ type: "list" });
   const [settingsTab, setSettingsTab] =
     useState<DivisionSettingsSection>("general");
+  /** Full-page Create scoresheet (opened from Division → Format). */
+  const [scoresheetBuilderOpen, setScoresheetBuilderOpen] = useState(false);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
 
@@ -1330,6 +1333,7 @@ export function LmsOperator({
 
   function goList() {
     setScreen({ type: "list" });
+    setScoresheetBuilderOpen(false);
     setPopupAnchorY(null);
     setLocationDraft(null);
     setTeamDraft(null);
@@ -1346,6 +1350,7 @@ export function LmsOperator({
     setNotice(null);
     setSectionError(null);
     setSettings(null);
+    setScoresheetBuilderOpen(false);
     setSectionLoading(true);
     setSettingsTab("general");
     setOpDivisionId(division.id);
@@ -2472,6 +2477,56 @@ export function LmsOperator({
 
   /* ---------- Edit division full page (not a modal) ---------- */
   if (screen.type === "edit-settings") {
+    if (scoresheetBuilderOpen && settings) {
+      return (
+        <div className="space-y-3">
+          <BackButton
+            onClick={() => setScoresheetBuilderOpen(false)}
+            label="Back to division"
+          />
+          <PanelHeader
+            title="Create scoresheet"
+            description="Edit one round at a time. Apply writes the template into this division’s Format settings — save to LMS when you’re done."
+            info={{
+              summary:
+                "Rounds are LMS scoresheet rounds (not league nights). Each tab holds that round’s games, player slots, and break side.",
+            }}
+          />
+          {notice ? (
+            <p className="text-sm font-medium text-[var(--felt)]">{notice}</p>
+          ) : null}
+          <LmsFormatTemplateBuilder
+            initialTemplate={
+              typeof settings.FormatTemplate === "string"
+                ? settings.FormatTemplate
+                : ""
+            }
+            playerCountHint={
+              Number(settings.NumberOfPlayers) || undefined
+            }
+            onCancel={() => setScoresheetBuilderOpen(false)}
+            onApply={(template, meta) => {
+              setSettings((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      FormatTemplate: template,
+                      NumberOfPlayers: String(meta.playerCount),
+                      NumberOfRounds: String(meta.rounds),
+                    }
+                  : prev,
+              );
+              setScoresheetBuilderOpen(false);
+              setSettingsTab("format");
+              setNotice(
+                "Scoresheet applied to Format settings. Save to LMS to publish.",
+              );
+            }}
+          />
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-3">
         <BackButton onClick={goList} label="Back to divisions" />
@@ -2508,6 +2563,10 @@ export function LmsOperator({
                 busy={busy}
                 section={settingsTab}
                 onChange={setSettings}
+                onOpenScoresheetBuilder={() => {
+                  setNotice(null);
+                  setScoresheetBuilderOpen(true);
+                }}
                 onSave={() =>
                   void runAction(async () => {
                     await fetchJson("/api/lms/operator/settings", {

@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
-import { LmsFormatTemplateBuilder } from "./LmsFormatTemplateBuilder";
+import { useMemo, type ReactNode } from "react";
 import { SelectField } from "./SelectField";
 
 const inputClass =
@@ -287,6 +286,7 @@ export function LmsDivisionSettingsForm({
   section = null,
   onChange,
   onSave,
+  onOpenScoresheetBuilder,
 }: {
   settings: Record<string, unknown>;
   templates: FormatTemplate[];
@@ -295,8 +295,9 @@ export function LmsDivisionSettingsForm({
   section?: DivisionSettingsSection | null;
   onChange: (next: Record<string, unknown>) => void;
   onSave: () => void;
+  /** Opens the full-page Create scoresheet builder (Manage shell). */
+  onOpenScoresheetBuilder?: () => void;
 }) {
-  const [builderOpen, setBuilderOpen] = useState(false);
   const nameLen = asStr(settings.Name).length;
 
   const teamSelected = useMemo(
@@ -654,15 +655,16 @@ export function LmsDivisionSettingsForm({
               Scoresheet builder
             </p>
             <p className="mt-1 text-xs text-[var(--muted)]">
-              Build rounds and games here, or generate a consistent night on the
-              Format tab (size × style × handicap) and paste the DSL below.
+              Opens a full page to edit one round at a time. Or generate a night
+              on Manage → Format and paste the DSL below.
             </p>
             <button
               type="button"
               className={`${btnPrimary} mt-3 w-full sm:w-auto`}
-              onClick={() => setBuilderOpen(true)}
+              onClick={() => onOpenScoresheetBuilder?.()}
+              disabled={!onOpenScoresheetBuilder}
             >
-              Open quick builder
+              Create scoresheet
             </button>
           </div>
 
@@ -742,21 +744,6 @@ export function LmsDivisionSettingsForm({
         </div>
       </SettingsBlock>
 
-      {builderOpen ? (
-        <LmsFormatTemplateBuilder
-          initialTemplate={asStr(settings.FormatTemplate)}
-          playerCountHint={Number(settings.NumberOfPlayers) || undefined}
-          onCancel={() => setBuilderOpen(false)}
-          onApply={(template, meta) => {
-            patch({
-              FormatTemplate: template,
-              NumberOfPlayers: String(meta.playerCount),
-              NumberOfRounds: String(meta.rounds),
-            });
-            setBuilderOpen(false);
-          }}
-        />
-      ) : null}
       </>
       ) : null}
 
