@@ -3370,7 +3370,7 @@ export function LmsOperator({
                             `${match.homeTeamId}-${match.awayTeamId}-${match.date}`
                           }
                         >
-                          <AccentRecordCard>
+                          <AccentRecordCard showRail={false}>
                             <p className="text-sm font-semibold text-[var(--ink)]">
                               {match.homeTeamName}{" "}
                               <span className="font-medium text-[var(--muted)]">
