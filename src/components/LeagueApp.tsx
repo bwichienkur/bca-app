@@ -2184,16 +2184,7 @@ export function LeagueApp() {
                   <div className="px-3 pt-3 sm:px-4 sm:pt-4">
                     <PanelHeader
                       title="Your team"
-                      info={{
-                        summary: [
-                          `Standing, roster, and lineup templates for ${prefs.teamName}`,
-                          selectedDivision?.name || prefs.divisionName
-                            ? `in ${selectedDivision?.name || prefs.divisionName}`
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" "),
-                      }}
+                      description="Standing, roster, and lineup templates."
                     />
                   </div>
                   <SubTabCard
@@ -2236,9 +2227,7 @@ export function LeagueApp() {
                     >
                       <PanelHeader
                         title="Standing"
-                        info={{
-                          summary: "Current place in the division.",
-                        }}
+                        description="Current place in the division."
                         action={
                           myStandingRank ? (
                             <PanelHeaderCount
@@ -2271,16 +2260,7 @@ export function LeagueApp() {
                     >
                       <PanelHeader
                         title="Roster"
-                        info={{
-                          summary: myTeam?.players.length
-                            ? `${myTeam.players.length} rostered · avg Fargo ${Math.round(
-                                myTeam.players.reduce(
-                                  (sum, player) => sum + player.fargoRating,
-                                  0,
-                                ) / myTeam.players.length,
-                              )}. Player statistics and Fargo ratings for your team.`
-                            : "Player statistics and Fargo ratings for your team.",
-                        }}
+                        description="Player statistics and Fargo ratings."
                         action={
                           myTeam?.players.length ? (
                             <PanelHeaderCount
@@ -2316,9 +2296,7 @@ export function LeagueApp() {
                         <div className="space-y-3">
                           <PanelHeader
                             title="Lineups"
-                            info={{
-                              summary: `Save ${scoringFormat.playersPerTeam}-player orders for league night. Load them from Handicap or Score.`,
-                            }}
+                            description="Saved player orders for league night."
                           />
                           <EmptyState
                             title="Team roster needed"
@@ -2363,14 +2341,13 @@ export function LeagueApp() {
                 <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
                   <PanelHeader
                     title="Team standings"
-                    info={{
-                      summary:
-                        prefs.linkedDivisionId ||
-                        (findLinkById(divisionLinks, prefs.divisionLinkId)?.legs
-                          ?.length ?? 0) >= 2
-                          ? "Combined standings — STANDING ranks the night from each leg’s LMS column × multiplier. Tap a team for details."
-                          : "Tap a team to view player statistics. Use back to return to the league grid.",
-                    }}
+                    description={
+                      prefs.linkedDivisionId ||
+                      (findLinkById(divisionLinks, prefs.divisionLinkId)?.legs
+                        ?.length ?? 0) >= 2
+                        ? "Combined standings across linked night legs."
+                        : "Division team standings."
+                    }
                     action={
                       <PanelHeaderCount
                         label="Teams"
@@ -2419,18 +2396,12 @@ export function LeagueApp() {
               <section className="min-h-[min(50dvh,24rem)] space-y-3 [overflow-anchor:none]">
                 <PanelHeader
                   title="Division players"
-                  info={{
-                    summary: [
-                      `Standings and Fargo ratings for everyone in ${selectedDivision.name}`,
-                      (findLinkById(divisionLinks, prefs.divisionLinkId)?.legs
-                        ?.length ?? 0) >= 2 || prefs.linkedDivisionId
-                        ? "combined across linked night legs"
-                        : null,
-                      "Filter the grid below to find someone quickly.",
-                    ]
-                      .filter(Boolean)
-                      .join(" · "),
-                  }}
+                  description={
+                    (findLinkById(divisionLinks, prefs.divisionLinkId)?.legs
+                      ?.length ?? 0) >= 2 || prefs.linkedDivisionId
+                      ? "Player standings and Fargo ratings across linked night legs."
+                      : "Player standings and Fargo ratings."
+                  }
                   action={
                     <PanelHeaderCount
                       label="Players"
