@@ -230,7 +230,7 @@ export const MatchScoreboard = memo(function MatchScoreboard({
               two: standingMatchPoints!.teamTwo,
               emphasis: "hero",
               hint: raceWinner
-                ? standingPtsHint ?? "standing"
+                ? standingPtsHint ?? "session"
                 : standingPtsHint
                   ? `pending · ${standingPtsHint}`
                   : "pending",
