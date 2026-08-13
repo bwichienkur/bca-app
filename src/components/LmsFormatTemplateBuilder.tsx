@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   clampPlayerCount,
+  clampRoundCount,
   defaultFormatModel,
   emptyGame,
   emptyRound,
@@ -18,6 +19,11 @@ import {
   type FormatRound,
   type FormatTemplateModel,
 } from "@/lib/lms-format-template";
+import {
+  SCORESHEET_PRESETS,
+  getScoresheetPreset,
+  type ScoresheetPresetId,
+} from "@/lib/lms-scoresheet-presets";
 import { SelectField } from "./SelectField";
 
 const btnPrimary =
@@ -239,6 +245,7 @@ export function LmsFormatTemplateBuilder({
   const [activeRoundId, setActiveRoundId] = useState(
     () => model.rounds[0]?.id ?? "",
   );
+  const [presetId, setPresetId] = useState<string>("");
   const [showDsl, setShowDsl] = useState(false);
 
   useEffect(() => {
@@ -309,6 +316,28 @@ export function LmsFormatTemplateBuilder({
       rounds: [...prev.rounds, round],
     }));
     setActiveRoundId(round.id);
+    setPresetId("");
+  };
+
+  /** Grow/shrink rounds for Paradise (5), Tuesday (4), Beyond Singles (3), Teams (1), etc. */
+  const setRoundCount = (nextCount: number) => {
+    const count = clampRoundCount(nextCount);
+    setModel((prev) => {
+      const rounds = [...prev.rounds];
+      while (rounds.length < count) rounds.push(emptyRound());
+      if (rounds.length > count) rounds.length = count;
+      return { ...prev, rounds };
+    });
+    setPresetId("");
+  };
+
+  const applyPreset = (id: ScoresheetPresetId) => {
+    const preset = getScoresheetPreset(id);
+    if (!preset) return;
+    const next = preset.build();
+    setModel(next);
+    setActiveRoundId(next.rounds[0]?.id ?? "");
+    setPresetId(id);
   };
 
   const removeActiveRound = () => {
@@ -321,6 +350,7 @@ export function LmsFormatTemplateBuilder({
       rounds: prev.rounds.filter((r) => r.id !== activeRound.id),
     }));
     setActiveRoundId(nextId);
+    setPresetId("");
   };
 
   const addGame = (kind: FormatGameKind) => {
@@ -337,24 +367,73 @@ export function LmsFormatTemplateBuilder({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-[var(--shadow)] sm:p-4">
-        <label className="min-w-[9rem] flex-1 space-y-1.5 sm:max-w-[12rem]">
+      <div className="space-y-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-[var(--shadow)] sm:p-4">
+        <label className="block space-y-1.5">
           <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-            Players per team
+            Start from division style
           </span>
           <SelectField
-            aria-label="Players per team"
-            value={String(model.playerCount)}
-            options={Array.from({ length: 10 }, (_, i) => ({
-              value: String(i + 1),
-              label: String(i + 1),
-            }))}
-            onChange={(value) => setPlayerCount(Number(value))}
+            aria-label="Start from division style"
+            value={presetId}
+            options={[
+              { value: "", label: "Keep current / custom…" },
+              ...SCORESHEET_PRESETS.map((preset) => ({
+                value: preset.id,
+                label: preset.label,
+              })),
+            ]}
+            onChange={(value) => {
+              if (!value) {
+                setPresetId("");
+                return;
+              }
+              applyPreset(value as ScoresheetPresetId);
+            }}
           />
+          <p className="text-xs text-[var(--muted)]">
+            {presetId
+              ? (SCORESHEET_PRESETS.find((p) => p.id === presetId)?.description ??
+                "")
+              : "Load Paradise (5 rounds), Tuesday (4), Beyond Singles (3), or Beyond Teams (1), then edit tabs."}
+          </p>
         </label>
-        <p className="pb-2 text-xs text-[var(--muted)] sm:ml-auto">
-          {summary}
-        </p>
+
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="min-w-[9rem] flex-1 space-y-1.5 sm:max-w-[12rem]">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+              Players per team
+            </span>
+            <SelectField
+              aria-label="Players per team"
+              value={String(model.playerCount)}
+              options={Array.from({ length: 10 }, (_, i) => ({
+                value: String(i + 1),
+                label: String(i + 1),
+              }))}
+              onChange={(value) => {
+                setPlayerCount(Number(value));
+                setPresetId("");
+              }}
+            />
+          </label>
+          <label className="min-w-[9rem] flex-1 space-y-1.5 sm:max-w-[12rem]">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+              Rounds
+            </span>
+            <SelectField
+              aria-label="Number of rounds"
+              value={String(model.rounds.length)}
+              options={Array.from({ length: 20 }, (_, i) => ({
+                value: String(i + 1),
+                label: String(i + 1),
+              }))}
+              onChange={(value) => setRoundCount(Number(value))}
+            />
+          </label>
+          <p className="pb-2 text-xs text-[var(--muted)] sm:ml-auto">
+            {summary}
+          </p>
+        </div>
       </div>
 
       <section className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">

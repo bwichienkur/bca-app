@@ -167,8 +167,11 @@ export function parseFormatTemplate(raw: string | null | undefined): FormatTempl
       if (player) players.push(player);
     }
 
+    // Singles: one per side. Scotch / multi-slot races: split evenly.
     const maxSlots =
-      kind === "D" ? Math.max(2, Math.ceil(players.length / 2)) : 1;
+      kind === "D"
+        ? Math.max(2, Math.ceil(players.length / 2))
+        : Math.max(1, Math.floor(players.length / 2) || 1);
     const breakPlayers = players.slice(0, maxSlots);
     const otherPlayers = players.slice(maxSlots, maxSlots * 2);
 
@@ -228,7 +231,11 @@ function normalizePlayers(
   kind: FormatGameKind,
   playerCount: number,
 ): FormatPlayerRef[] {
-  const needed = kind === "D" ? Math.max(2, players.length || 2) : 1;
+  // Scotch needs 2+; doubles races (kind R with two slots) keep both players.
+  const needed =
+    kind === "D"
+      ? Math.max(2, players.length || 2)
+      : Math.max(1, players.length || 1);
   const out: FormatPlayerRef[] = [];
   for (let i = 0; i < needed; i += 1) {
     const src = players[i];
@@ -267,16 +274,29 @@ export const FORMAT_MULTIPLIER_OPTIONS = [
   { value: "3.00", label: "300%" },
 ] as const;
 
+/** Includes even lengths (RL6 Tuesday chart capacity, RL4, …). */
 export const FORMAT_RACE_LENGTH_OPTIONS = [
   "1",
+  "2",
   "3",
+  "4",
   "5",
+  "6",
   "7",
+  "8",
   "9",
+  "10",
   "11",
+  "12",
   "13",
   "15",
   "17",
   "19",
   "21",
 ].map((value) => ({ value, label: `Race to ${value}` }));
+
+/** Soft UI bound for round count (LMS sheets vary: 1, 3, 4, 5, …). */
+export function clampRoundCount(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(20, Math.max(1, Math.round(value)));
+}

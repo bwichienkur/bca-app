@@ -2486,10 +2486,10 @@ export function LmsOperator({
           />
           <PanelHeader
             title="Create scoresheet"
-            description="Edit one round at a time. Apply writes the template into this division’s Format settings — save to LMS when you’re done."
+            description="Load a division style or set the round count, then edit one round at a time. Apply writes Format settings — save to LMS when you’re done."
             info={{
               summary:
-                "Rounds are LMS scoresheet rounds (not league nights). Each tab holds that round’s games, player slots, and break side.",
+                "Rounds are LMS scoresheet rounds (not league nights). Paradise uses 5, Tuesday 4, Beyond Singles 3, Beyond Teams 1 (with many GAME S matchups). Each tab holds that round’s games and break side.",
             }}
           />
           {notice ? (
