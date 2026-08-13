@@ -12,6 +12,7 @@ import {
   type FormatTemplateModel,
 } from "@/lib/lms-format-template";
 import {
+  buildBeyondTeamsTemplate,
   buildDoublesRaceTemplate,
   buildRoundRobinTemplate,
   buildTuesdayRacesTemplate,
@@ -214,7 +215,10 @@ export const TEAM_SCORING_OPTIONS: Array<{
 
 /** Common bundles — optional shortcuts, not separate systems. */
 export type FormatPresetId =
+  | "palm-beach-5"
   | "tuesday-r6"
+  | "beyond-singles"
+  | "beyond-teams"
   | "matrix-round-hc"
   | "team-race-fixed"
   | "doubles-race";
@@ -226,11 +230,31 @@ export const FORMAT_PRESETS: Array<{
   picks: Partial<FormatGeneratorPicks>;
 }> = [
   {
+    id: "palm-beach-5",
+    label: "Paradise / Palm Beach",
+    description: "5×5 matrix · round wins + total-points round",
+    picks: {
+      playersPerTeam: 5,
+      rounds: 5,
+      structure: "round-robin",
+      gameKind: "S",
+      gameBall: "8",
+      raceModel: "fixed",
+      fixedRaceTo: 10,
+      fargoHc: "RoundBased",
+      teamScoring: "round-points",
+      teamRaceTo: null,
+      pointSystem: "10",
+      matchPointsRound: true,
+    },
+  },
+  {
     id: "tuesday-r6",
     label: "Tuesday 9-Ball",
-    description: "Slot races · R6 Hot · set wins",
+    description: "4 slot races · R6 Hot · set wins",
     picks: {
       playersPerTeam: 4,
+      rounds: 4,
       structure: "slot-races",
       gameKind: "R",
       gameBall: "9",
@@ -244,11 +268,50 @@ export const FORMAT_PRESETS: Array<{
     },
   },
   {
+    id: "beyond-singles",
+    label: "Beyond Singles",
+    description: "3 slot races · Hot 5 · set wins",
+    picks: {
+      playersPerTeam: 3,
+      rounds: 3,
+      structure: "slot-races",
+      gameKind: "R",
+      gameBall: "9",
+      raceModel: "fargo-chart",
+      raceChartId: "r5-hot",
+      fargoHc: "none",
+      teamScoring: "match-win",
+      teamRaceTo: null,
+      pointSystem: "17",
+      matchPointsRound: false,
+    },
+  },
+  {
+    id: "beyond-teams",
+    label: "Beyond Teams",
+    description: "1 RR round · GAME S · first team to 9",
+    picks: {
+      playersPerTeam: 3,
+      rounds: 1,
+      structure: "round-robin",
+      gameKind: "S",
+      gameBall: "any",
+      raceModel: "fixed",
+      fixedRaceTo: 1,
+      teamRaceTo: 9,
+      fargoHc: "none",
+      teamScoring: "match-win",
+      pointSystem: "1",
+      matchPointsRound: false,
+    },
+  },
+  {
     id: "matrix-round-hc",
     label: "Matrix + round HC",
     description: "Round-robin · points · round-based Fargo HC",
     picks: {
       playersPerTeam: 5,
+      rounds: 5,
       structure: "round-robin",
       gameKind: "S",
       gameBall: "8",
@@ -267,6 +330,7 @@ export const FORMAT_PRESETS: Array<{
     description: "Full RR · single-game matchups · first team to 13",
     picks: {
       playersPerTeam: 5,
+      rounds: 5,
       structure: "round-robin",
       gameKind: "S",
       gameBall: "any",
@@ -340,7 +404,7 @@ function normalizePicks(picks: FormatGeneratorPicks): FormatGeneratorPicks {
       : picks.raceModel;
 
   const rounds = Math.min(
-    10,
+    20,
     Math.max(1, Math.round(picks.rounds ?? players) || players),
   );
 
@@ -443,6 +507,19 @@ function buildModel(picks: FormatGeneratorPicks): FormatTemplateModel {
         })),
       })),
     };
+  }
+
+  // Team race sheets (Beyond Teams): one LMS ROUND with enough GAME S
+  // matchups for race-to-N, not a short single RR cycle.
+  if (
+    picks.structure === "round-robin" &&
+    picks.teamScoring === "match-win" &&
+    picks.teamRaceTo &&
+    picks.teamRaceTo > n &&
+    rounds <= 1 &&
+    picks.gameKind === "S"
+  ) {
+    return buildBeyondTeamsTemplate(n, picks.teamRaceTo);
   }
 
   // round-robin

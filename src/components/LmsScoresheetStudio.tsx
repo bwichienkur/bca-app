@@ -279,9 +279,9 @@ export function LmsScoresheetStudio() {
               <SelectField
                 aria-label="Rounds"
                 value={String(picks.rounds ?? picks.playersPerTeam)}
-                options={[1, 2, 3, 4, 5, 6].map((n) => ({
-                  value: String(n),
-                  label: String(n),
+                options={Array.from({ length: 20 }, (_, i) => ({
+                  value: String(i + 1),
+                  label: String(i + 1),
                 }))}
                 onChange={(value) =>
                   patch({ rounds: Number(value) || picks.playersPerTeam })
